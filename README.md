@@ -73,7 +73,12 @@ var/                        # gitignored: device-sensitive inventory/assessment 
 
 ## Next step
 
-`atlas-phase-1-hermes-baseline` (install Hermes). Blocked on decisions in
-[docs/decisions.md](docs/decisions.md) "Still open": LLM provider/model (Q7),
-whether conversations may leave the Pi for a hosted model (Q9), and monthly
-budget/latency (Q8).
+`atlas-phase-1-hermes-baseline` (install Hermes). All Phase 0/1 decisions are
+now resolved in [docs/decisions.md](docs/decisions.md) (2026-07-11): hosted
+models allowed, first candidate **Grok via X OAuth** (~$20/mo, interactive
+latency), LAN-only, all telemetry disabled, backup target restic/rsync to a
+LAN machine (manual; restore test still owed before production).
+
+**Install mode:** the operator runs the Hermes install and interactive setup
+manually on the Pi. The OpenSpec change ships only a read-only post-install
+verification script for the ATLAS-HERMES-005 acceptance baseline.
