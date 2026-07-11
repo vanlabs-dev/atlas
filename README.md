@@ -61,6 +61,7 @@ hardening/apply/           # hardening-apply scripts (the ONLY device-mutating c
 hermes/                    # Hermes baseline verifier (read-only) + MCP test tool
 hermes/memory/             # memory/session-recall verifier + scripted procedure (read-only)
 hermes/modelval/           # ATLAS-HERMES-003 battery, runner, and read-only scorer
+knowledge/                 # Phase 2 knowledge base: corpus snapshot, store, MCP tools, benchmark
 openspec/specs/            # accepted capability specs
 openspec/changes/          # active changes + archive/
 var/                        # gitignored: device-sensitive inventory/assessment outputs
