@@ -21,6 +21,7 @@ X OAuth), with the Atlas MCP test tool connected.
 | `hardening-apply` | Done — 6 approved items applied + verified on the Pi |
 | `hermes-baseline` | Done — manual install verified; acceptance run `20260711T091512Z-61ef71d0` |
 | `memory-session-recall` | Done — ATLAS-MEM-001…006 verified on the Pi; acceptance run `20260711T171200Z-33321220` (approval gating on, all seven ATLAS-MEM-006 items attested) |
+| `model-validation` | **In progress** — battery + scorer implemented (change `atlas-phase-1-model-validation`); awaiting threshold approval, battery run, and review sign-offs |
 
 Latest closed-loop assessment `20260711T073125Z-d52a70e9`: **ok=7, finding=0**.
 Hermes baseline carries 2 documented exceptions (runs as `pi`; no service
@@ -59,6 +60,7 @@ hardening/                 # hardening-assessment tool (read-only)
 hardening/apply/           # hardening-apply scripts (the ONLY device-mutating code)
 hermes/                    # Hermes baseline verifier (read-only) + MCP test tool
 hermes/memory/             # memory/session-recall verifier + scripted procedure (read-only)
+hermes/modelval/           # ATLAS-HERMES-003 battery, runner, and read-only scorer
 openspec/specs/            # accepted capability specs
 openspec/changes/          # active changes + archive/
 var/                        # gitignored: device-sensitive inventory/assessment outputs

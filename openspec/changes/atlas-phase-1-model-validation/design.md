@@ -146,12 +146,21 @@ assumed.
 
 ## Open Questions
 
-- Does Hermes v0.18.2 provide a non-interactive one-shot invocation
-  suitable for battery replay? (Resolved by inspection in implementation
-  task 2; determines runner vs operator-driven execution.)
-- Fidelity of `messages.timestamp` granularity and of token/cost columns
-  under the X OAuth provider. (Resolved by observation of an existing
-  session; determines how latency is reported.)
+- ~~Does Hermes v0.18.2 provide a non-interactive one-shot invocation?~~ —
+  **resolved 2026-07-12 by inspection: yes.** `hermes -z/--oneshot` sends a
+  single prompt and prints only the final response; `--usage-file` writes a
+  per-run JSON usage report; `-t` restricts toolsets. Critical caveat from
+  the built-in help: one-shot mode **auto-bypasses approvals**, so
+  `run_battery.py` refuses to start without explicit `--toolsets-tc` /
+  `--toolsets-plain` restrictions (memory tools must not be loaded).
+- ~~Timestamp granularity and token/cost column fidelity~~ — **resolved
+  2026-07-12 by read-only observation**: `messages.timestamp` is float epoch
+  seconds (sub-ms), so whole-answer wall time is honestly measurable (TTFT is
+  not, and is reported as unobservable). `input_tokens`/`output_tokens` are
+  populated and plausible; `estimated_cost_usd` is `0.0` with `cost_status`
+  `unknown` for the OAuth provider — token counts are consumption evidence,
+  dollar columns are reported with a fidelity caveat only.
 - The concrete context sizes Atlas Phase 2 retrieval will need (informs
-  the `MV-CX-*` step sizes) — proposed in the threshold sheet from Hermes's
-  observed compression settings; operator approves before the run.
+  the `MV-CX-*` step sizes) — proposed in the threshold sheet (8k/32k/96k
+  chars, informed by `compression.threshold: 0.5` observed on-device);
+  operator approves or adjusts before the run.

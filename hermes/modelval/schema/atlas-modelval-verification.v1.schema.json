@@ -1,0 +1,312 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "atlas-modelval-verification.v1",
+  "title": "Atlas model validation (ATLAS-HERMES-003) \u2014 schema v1",
+  "type": "object",
+  "required": [
+    "run",
+    "install_record",
+    "exceptions_file",
+    "battery",
+    "metrics",
+    "classifications",
+    "attested_exchanges",
+    "checks",
+    "verdict"
+  ],
+  "properties": {
+    "run": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "scorer_version",
+        "schema_version",
+        "started_at",
+        "finished_at",
+        "executing_account",
+        "hostname"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "scorer_version": {
+          "type": "string"
+        },
+        "schema_version": {
+          "enum": [
+            1
+          ]
+        },
+        "started_at": {
+          "type": "string"
+        },
+        "finished_at": {
+          "type": "string"
+        },
+        "executing_account": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "install_record": {
+      "type": "object",
+      "required": [
+        "path",
+        "present",
+        "problems"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "present": {
+          "type": "boolean"
+        },
+        "problems": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "record": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "exceptions_file": {
+      "type": "object",
+      "required": [
+        "path",
+        "present",
+        "problems",
+        "entries"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "present": {
+          "type": "boolean"
+        },
+        "problems": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "check",
+              "reason"
+            ],
+            "properties": {
+              "check": {
+                "enum": [
+                  "install-record",
+                  "tool-calling",
+                  "context-window",
+                  "refusal-to-invent",
+                  "latency",
+                  "thresholds",
+                  "cost-privacy-reviews",
+                  "replaceability"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "battery": {
+      "type": "object",
+      "required": [
+        "battery_version",
+        "model_id",
+        "provider",
+        "deferral"
+      ],
+      "properties": {
+        "battery_version": {
+          "type": "string"
+        },
+        "model_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deferral": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "number",
+          "string"
+        ]
+      }
+    },
+    "classifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "tag",
+          "flagged_excerpt",
+          "classification",
+          "operator",
+          "timestamp"
+        ],
+        "properties": {
+          "tag": {
+            "type": "string"
+          },
+          "flagged_excerpt": {
+            "type": "string"
+          },
+          "classification": {
+            "enum": [
+              "fabrication",
+              "refusal",
+              "pending"
+            ]
+          },
+          "operator": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "attested_exchanges": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "check",
+          "status",
+          "summary",
+          "evidence",
+          "findings"
+        ],
+        "properties": {
+          "check": {
+            "enum": [
+              "install-record",
+              "tool-calling",
+              "context-window",
+              "refusal-to-invent",
+              "latency",
+              "thresholds",
+              "cost-privacy-reviews",
+              "replaceability"
+            ]
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "finding",
+              "unknown",
+              "permission-denied",
+              "unsupported-on-device"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "guidance": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "exception": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "required": [
+        "overall",
+        "blockers"
+      ],
+      "properties": {
+        "overall": {
+          "enum": [
+            "accepted",
+            "not-accepted",
+            "no-verdict"
+          ]
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
