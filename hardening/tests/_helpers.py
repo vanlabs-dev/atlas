@@ -87,6 +87,11 @@ def pi_baseline_inventory():
                 {"path": "/etc/ssl/certs/ssl-cert-snakeoil.pem",
                  "type": "file", "mode": "0o644", "uid": 0, "gid": 0,
                  "size": 1000, "mtime": "2026-07-11T00:00:00+00:00"},
+                # visible only under a privileged inventory; Debian placeholder,
+                # group-readable by ssl-cert by design -> must NOT be flagged
+                {"path": "/etc/ssl/private/ssl-cert-snakeoil.key",
+                 "type": "file", "mode": "0o640", "uid": 0, "gid": 116,
+                 "size": 1700, "mtime": "2026-07-11T00:00:00+00:00"},
             ]}),
         },
         "cpu_memory_storage": {

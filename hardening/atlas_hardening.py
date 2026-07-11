@@ -606,7 +606,11 @@ def _eval_unattended_updates(ev: Evidence) -> AreaResult:
             rollback="Re-run and disable.")])
 
 
-_PUBLIC_PATH_MARKERS = ("/etc/ssl/certs/", "/etc/xdg/", ".desktop")
+# Paths excluded from the "secret file readable beyond owner" check:
+# public certificate stores, autostart entries, and the Debian self-signed
+# "snakeoil" placeholder key (a regenerable throwaway, group-readable by the
+# ssl-cert group by distro design — not a real secret).
+_PUBLIC_PATH_MARKERS = ("/etc/ssl/certs/", "/etc/xdg/", ".desktop", "snakeoil")
 
 
 def _eval_secret_file_permissions(ev: Evidence) -> AreaResult:
