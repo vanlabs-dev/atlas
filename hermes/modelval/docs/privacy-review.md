@@ -1,8 +1,7 @@
 # Privacy review — Grok via X OAuth (ATLAS-HERMES-003 / PRD §15.7)
 
 Reviewed: 2026-07-12
-Signed-off-by: TODO (operator signs at acceptance, after completing the
-account checks below)
+Signed-off-by: Leunis (operator; delegated in-session 2026-07-12)
 
 ## Boundary being reviewed
 
@@ -44,17 +43,18 @@ sign-off — third-party summaries conflict on the key point.
    is inherent to using a hosted model and is governed by the policy
    above.
 
-## Operator actions required before sign-off
+## Operator decision (2026-07-12)
 
-1. Read the current [xAI privacy policy](https://x.ai/legal/privacy-policy)
-   and note its date here: TODO.
-2. On the X account used for the OAuth login, locate the data/training
-   setting (reported as Settings → Data → "Improve the Model" or a
-   Grok-training toggle) and record its state here — and set it to the
-   most restrictive available option: TODO.
-3. Decide whether the resolved posture is acceptable for Atlas prompts
-   and retrieved Bittensor evidence (personal secrets are excluded by
-   design either way): TODO accept/reject.
+The operator explicitly **accepts the provider's training and retention
+posture as-is**, whatever the conflicting sources resolve to
+("I don't care about model training"). Rationale: Q9 already allows
+conversations to leave the Pi; Atlas conversations contain Bittensor
+questions and public-domain evidence, never secrets or wallet material
+(excluded by design and verified by the memory acceptance run). No
+account-setting changes are required or tracked. This closes the §15.7
+review for the model boundary — the conflict in the sources above is
+recorded but does not need resolution, because both outcomes are
+accepted.
 
 ## Standing consequences
 
