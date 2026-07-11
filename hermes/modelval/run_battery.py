@@ -31,23 +31,44 @@ Usage (on the Pi, from the repo root):
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import subprocess
 import sys
 import time
-from typing import List, Optional
+from typing import Any, List, Optional
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _MODULE_DIR)
 
-import atlas_modelval_battery as battery_mod  # noqa: E402
-
+DEFAULT_BATTERY = os.path.join(_MODULE_DIR, "atlas_modelval_battery.py")
 EXCHANGE_TIMEOUT_S = 600
+
+
+def load_battery_module(path: str) -> Any:
+    """Load a battery module (battery()/tags_by_set()/BATTERY_VERSION)
+    from a file path, so other capabilities can reuse this runner."""
+    spec = importlib.util.spec_from_file_location("battery_module", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for required in ("battery", "tags_by_set", "BATTERY_VERSION"):
+        if not hasattr(module, required):
+            raise SystemExit("FATAL: battery module %s lacks %r"
+                             % (path, required))
+    return module
 
 
 def run_battery(hermes: str, toolsets_tc: str, toolsets_plain: str,
                 output_dir: str, only: Optional[str],
-                pause_seconds: float) -> int:
+                pause_seconds: float,
+                battery_mod: Any = None,
+                tool_sets: Optional[List[str]] = None) -> int:
+    """`tool_sets` names the battery sets that run with the tool-enabled
+    toolset (--toolsets-tc); everything else uses --toolsets-plain."""
+    if battery_mod is None:
+        battery_mod = load_battery_module(DEFAULT_BATTERY)
+    tool_sets = tool_sets if tool_sets is not None else ["tool-calling"]
     usage_dir = os.path.join(output_dir, "usage")
     os.makedirs(usage_dir, exist_ok=True)
     manifest_path = os.path.join(output_dir, "run-manifest.jsonl")
@@ -59,7 +80,7 @@ def run_battery(hermes: str, toolsets_tc: str, toolsets_plain: str,
     failures = 0
     for index, exchange in enumerate(exchanges, 1):
         tag = exchange["tag"]
-        toolsets = (toolsets_tc if exchange["set"] == "tool-calling"
+        toolsets = (toolsets_tc if exchange["set"] in tool_sets
                     else toolsets_plain)
         usage_file = os.path.join(usage_dir, "%s.json" % tag)
         argv = [hermes, "-z", exchange["prompt"], "-t", toolsets,
@@ -118,12 +139,27 @@ def main(argv: Optional[List[str]] = None) -> int:
                         default=os.path.expanduser("~/.local/bin/hermes"))
     parser.add_argument("--output-dir",
                         default=os.path.join("var", "modelval"))
-    parser.add_argument("--only", default=None,
-                        choices=sorted(battery_mod.tags_by_set()))
+    parser.add_argument("--battery", default=DEFAULT_BATTERY,
+                        help="path to a battery module file "
+                             "(battery()/tags_by_set()/BATTERY_VERSION)")
+    parser.add_argument("--tool-sets", default="tool-calling",
+                        help="comma-separated set names that use "
+                             "--toolsets-tc; all others use "
+                             "--toolsets-plain")
+    parser.add_argument("--only", default=None)
     parser.add_argument("--pause-seconds", type=float, default=2.0)
     args = parser.parse_args(argv)
+    battery_mod = load_battery_module(args.battery)
+    if args.only and args.only not in battery_mod.tags_by_set():
+        raise SystemExit("FATAL: --only %r not a battery set (valid: %s)"
+                         % (args.only,
+                            ", ".join(sorted(battery_mod.tags_by_set()))))
     return run_battery(args.hermes, args.toolsets_tc, args.toolsets_plain,
-                       args.output_dir, args.only, args.pause_seconds)
+                       args.output_dir, args.only, args.pause_seconds,
+                       battery_mod=battery_mod,
+                       tool_sets=[name.strip() for name
+                                  in args.tool_sets.split(",")
+                                  if name.strip()])
 
 
 if __name__ == "__main__":

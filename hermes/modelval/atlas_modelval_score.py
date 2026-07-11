@@ -231,10 +231,12 @@ VERIFICATION_SCHEMA: Dict[str, Any] = {
 # ---------------------------------------------------------------------------
 
 
-def load_exceptions(path: str) -> Tuple[List[Dict[str, str]],
-                                        List[str], bool]:
-    """Same contract as the memory verifier's, scoped to THIS module's
-    check names (each verifier owns its exception vocabulary)."""
+def load_exceptions(path: str,
+                    valid_checks: Optional[Tuple[str, ...]] = None
+                    ) -> Tuple[List[Dict[str, str]], List[str], bool]:
+    """Same contract as the memory verifier's, scoped to a check
+    vocabulary (defaults to THIS module's; other scorers pass theirs)."""
+    valid_checks = valid_checks or CHECKS
     if not os.path.exists(path):
         return [], [], False
     try:
@@ -257,9 +259,10 @@ def load_exceptions(path: str) -> Tuple[List[Dict[str, str]],
                 or set(entry) - {"check", "reason"}):
             problems.append("exceptions[%d] must be "
                             "{\"check\": ..., \"reason\": ...}" % index)
-        elif entry["check"] not in CHECKS:
+        elif entry["check"] not in valid_checks:
             problems.append("exceptions[%d].check unknown: %s (valid: %s)"
-                            % (index, entry["check"], ", ".join(CHECKS)))
+                            % (index, entry["check"],
+                               ", ".join(valid_checks)))
     if problems:
         return [], problems, True
     return entries, [], True
@@ -295,10 +298,14 @@ def _connect_ro(path: str) -> sqlite3.Connection:
     return sqlite3.connect(uri, uri=True, timeout=_SQLITE_TIMEOUT_S)
 
 
-def extract_exchanges(store_path: str) -> Dict[str, Any]:
+def extract_exchanges(store_path: str,
+                      battery: Optional[List[Dict[str, str]]] = None
+                      ) -> Dict[str, Any]:
     """Locate every battery exchange by tag: the LATEST user message
     containing `[tag]`, plus all following rows in its session up to the
-    next user message. Returns {status, exchanges: {tag: {...}}}."""
+    next user message. Returns {status, exchanges: {tag: {...}}}.
+    `battery` defaults to this module's; other scorers pass theirs."""
+    battery = battery if battery is not None else battery_mod.battery()
     if not os.path.exists(store_path):
         return {"status": inv.STATUS_UNSUPPORTED, "path": store_path,
                 "error": "no such file", "exchanges": {}}
@@ -309,7 +316,7 @@ def extract_exchanges(store_path: str) -> Dict[str, Any]:
     try:
         connection = _connect_ro(store_path)
         try:
-            for exchange in battery_mod.battery():
+            for exchange in battery:
                 tag = exchange["tag"]
                 row = connection.execute(
                     "SELECT id, session_id, timestamp FROM messages "
