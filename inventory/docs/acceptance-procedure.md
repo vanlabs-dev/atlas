@@ -10,38 +10,29 @@ This is the acceptance step for the change: the implementation is complete and
 tested off-device (unit suite + WSL integration run); executing it on the Pi
 and reviewing the outputs is the operator's decision and action.
 
-## 1. Transfer the script (agreed method: paste over SSH)
+## 1. Transfer the script (current method: git pull)
 
-1. On the PC, record the checksum of the repo copy:
-   ```sh
-   sha256sum inventory/atlas_inventory.py     # (Git Bash / WSL)
-   ```
-2. SSH into the Pi as your normal (non-root) user.
-3. Create the file and paste the full script text into it, e.g.:
-   ```sh
-   mkdir -p ~/atlas && nano ~/atlas/atlas_inventory.py
-   # paste, save, exit
-   ```
-4. Verify the paste was lossless — the checksums MUST match:
-   ```sh
-   sha256sum ~/atlas/atlas_inventory.py
-   ```
-   If they differ, delete and re-paste (editors can mangle long lines; if that
-   persists, use `cat > ~/atlas/atlas_inventory.py` then paste and press
-   Ctrl-D).
-5. Confirm Python is available: `python3 --version` (needs 3.9+, stdlib only).
+The repo is cloned on the Pi (user `pi`, access via SSH), so:
+
+1. SSH into the Pi as `pi` (non-root).
+2. In the repo checkout: `git pull` — git guarantees content integrity.
+3. Confirm Python is available: `python3 --version` (needs 3.9+, stdlib only).
+
+> Historical note: the original transfer plan was pasting the single file over
+> SSH with a `sha256sum` check; git supersedes it, but the script remains
+> self-contained so that fallback still works.
 
 ## 2. Run unprivileged
 
 ```sh
-cd ~/atlas
-python3 atlas_inventory.py run --output-dir var/inventory
+cd <repo-checkout>
+python3 inventory/atlas_inventory.py run --output-dir var/inventory
 ```
 
 - Do **not** use sudo for the first run. The script never self-elevates.
 - Expect exit code `0` (complete) or `3` (partial). Partial is normal
   unprivileged — firewall rules and `/root` typically need privilege.
-- Outputs (all mode 0600, owned by you) in `~/atlas/var/inventory/`:
+- Outputs (all mode 0600, owned by you) in `var/inventory/` under the checkout:
   - `report-<run-id>.json`
   - `classification-worksheet-<run-id>.md`
   - `audit-<run-id>.json`
@@ -86,11 +77,13 @@ sudo python3 atlas_inventory.py run --output-dir var/inventory
 
 ## 6. Storage
 
-- Keep reports in `~/atlas/var/inventory/` for now. This location is
-  provisional: the backup change (ATLAS-BACKUP-001) will decide whether and
+- Keep reports in `var/inventory/` under the checkout for now. This location
+  is provisional: the backup change (ATLAS-BACKUP-001) will decide whether and
   how inventory artifacts are included in backups.
 - Do not commit reports to the repo and do not paste them into chats or
   issues — they describe your device in detail (users, ports, versions).
+  `var/` is in the repo's `.gitignore` as a safeguard, since the Pi checkout
+  is itself the git working tree.
 
 ## 7. Acceptance checklist
 

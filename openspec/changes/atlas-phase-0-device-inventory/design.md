@@ -46,6 +46,13 @@ is generated from it (`dump-schema`), with a unit test asserting they never
 diverge. The acceptance procedure requires a `sha256sum` comparison after
 pasting to catch transfer corruption.
 
+*Superseded 2026-07-11 (same day, before first Pi run):* the operator formatted
+the Pi to a clean OS install and cloned this repo on it, so transfer is now
+`git pull` on the Pi; the checksum step is unnecessary (git guarantees
+integrity). The single-file design stays — it keeps the tool dependency-free
+and the paste method remains a fallback. `var/` is gitignored so device
+reports can never be committed from the Pi's checkout.
+
 ### D2: Every probe is declared, read-only, and individually wrapped
 
 Each inventory item maps to a declared probe: the exact command line, a parser, and a status. Probes run independently; one failure never aborts the run (spec: collection failure does not trigger remediation). The probe table doubles as the review surface for the "commands must be individually reviewable, no mutating flags" requirement — reviewers audit one table, not scattered call sites. Commands are executed without a shell-interpolation path from collected data (no command built from prior command output), which also addresses prompt-injection-style content in file names.

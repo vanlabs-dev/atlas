@@ -1,0 +1,13 @@
+# Inventory outputs describe the device in detail (users, ports, versions)
+# and must never be committed — the Pi's checkout is the live working tree.
+var/
+inventory/var/
+
+# Python
+__pycache__/
+*.pyc
+
+# Local environment / secrets (secrets never belong in this repo at all)
+.env
+.env.*
+*.local
