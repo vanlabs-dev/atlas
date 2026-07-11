@@ -36,8 +36,8 @@
 
 ## 7. On-device acceptance (operator + scorer on the Pi)
 
-- [ ] 7.1 Operator approves the threshold sheet (and adjusts values first where wanted)
-- [ ] 7.2 Run the battery through live Hermes (runner script if 2.1 found one-shot support, otherwise operator-driven per `battery.md`) *(runner it is: discover toolset identifiers with `hermes tools list`, then `run_battery.py --toolsets-tc ... --toolsets-plain ...`)*
-- [ ] 7.3 Run the scorer, perform the refusal-to-invent classifications, and re-run after fixing any evidence gaps
-- [ ] 7.4 Operator signs off the cost and privacy reviews *(cost review needs tier/price filled in; privacy review needs the policy read + the account training-toggle checked and recorded)*
-- [ ] 7.5 Record the verdict, run id, pinned model id, and the retrieval-benchmark deferral in `docs/decisions.md`; update root `README.md`; archive the change
+- [x] 7.1 Operator approves the threshold sheet (and adjusts values first where wanted)
+- [x] 7.2 Run the battery through live Hermes (runner script if 2.1 found one-shot support, otherwise operator-driven per `battery.md`) *(runner it is: discover toolset identifiers with `hermes tools list`, then `run_battery.py --toolsets-tc ... --toolsets-plain ...`)*
+- [x] 7.3 Run the scorer, perform the refusal-to-invent classifications, and re-run after fixing any evidence gaps
+- [x] 7.4 Operator signs off the cost and privacy reviews *(cost review needs tier/price filled in; privacy review needs the policy read + the account training-toggle checked and recorded)*
+- [x] 7.5 Record the verdict, run id, pinned model id, and the retrieval-benchmark deferral in `docs/decisions.md`; update root `README.md`; archive the change
