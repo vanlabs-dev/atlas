@@ -41,6 +41,12 @@ unit) — both to close before production acceptance.
 - **Applied hardening:** SSH key-only + X11Forwarding off; rpcbind and avahi
   disabled; nftables default-deny inbound (SSH allowed), enabled at boot;
   unattended security updates on (no auto-reboot).
+- **Hermes on the Pi:** runs as user `pi`, started manually (no service unit
+  yet). CLI `~/.local/bin/hermes`, data/config in `~/.hermes/`, code clone at
+  `~/.hermes/hermes-agent`, model Grok via X OAuth. MCP test tool registered
+  as stdio server `atlas-test`. Install record: `var/hermes/install-record.json`
+  (on the Pi only). Full facts in the acceptance entry in
+  [docs/decisions.md](docs/decisions.md).
 
 ## Repo layout
 
@@ -61,9 +67,9 @@ var/                        # gitignored: device-sensitive inventory/assessment 
 - **OpenSpec workflow:** propose (`/opsx:propose`) → apply (`/opsx:apply`) →
   archive (`/opsx:archive`). One change per narrowly-scoped capability; see
   PRD §22 for the recommended sequence.
-- **Read-only vs mutating:** `inventory/` and `hardening/` (except
-  `hardening/apply/`) never change the device. `hardening/apply/` is the only
-  code that mutates, and only applies operator-approved items.
+- **Read-only vs mutating:** `inventory/`, `hardening/` (except
+  `hardening/apply/`), and `hermes/` never change the device. `hardening/apply/`
+  is the only code that mutates, and only applies operator-approved items.
 - **Fail closed / no assumptions:** tools report explicit unknowns
   (`permission-denied`, `unsupported-on-device`) rather than guessing.
 - **Secrets never enter the repo, logs, or chat.** Outputs are redacted and
