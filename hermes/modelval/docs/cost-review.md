@@ -1,7 +1,7 @@
 # Operating-cost review — Grok via X OAuth (ATLAS-HERMES-003 / Q8)
 
 Reviewed: 2026-07-12
-Signed-off-by: TODO (operator signs at acceptance)
+Signed-off-by: Leunis (operator; delegated in-session 2026-07-12)
 
 ## Cost model
 
@@ -11,11 +11,10 @@ API key** (decision Q7, 2026-07-11). There is no per-token bill:
 - The operating cost is the **X subscription fee** itself, fixed per
   month regardless of Atlas usage, subject to the subscription tier's
   usage allowances (rate/quota limits enforced by the provider).
-- The Q8 budget is **~$20/month**. The operator's subscription tier and
-  its actual monthly price must be filled in here at sign-off:
-  - Tier: TODO (operator)
-  - Monthly price: TODO (operator)
-  - Within Q8 budget: TODO yes/no (operator)
+- The Q8 budget is **~$20/month**. The operator confirmed at sign-off
+  (2026-07-12) that the existing X subscription already in use is the
+  cost — no new spend is introduced by Atlas — and accepts it as within
+  the Q8 budget.
 
 ## What the session store can and cannot evidence
 

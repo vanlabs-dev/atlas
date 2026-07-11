@@ -11,12 +11,12 @@ OP one of `>=`, `<=`, `==`.
 
 ## Proposed thresholds
 
-- [ ] approved `tool-call-success >= 0.95`
-- [ ] approved `fabrications == 0`
-- [ ] approved `context-recall-MV-CX-1 == pass`
-- [ ] approved `context-recall-MV-CX-2 == pass`
-- [ ] approved `context-recall-MV-CX-3 == pass`
-- [ ] approved `latency-median-la <= 20`
+- [x] approved `tool-call-success >= 0.95`
+- [x] approved `fabrications == 0`
+- [x] approved `context-recall-MV-CX-1 == pass`
+- [x] approved `context-recall-MV-CX-2 == pass`
+- [x] approved `context-recall-MV-CX-3 == pass`
+- [x] approved `latency-median-la <= 20`
 
 ## Rationale (not machine-parsed)
 
