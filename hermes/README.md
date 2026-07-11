@@ -77,6 +77,13 @@ args: ["/home/pi/atlas/hermes/testtool/atlas_test_tool.py"]
 It will be **replaced** (not extended) by the production Atlas tool
 interface in a later phase.
 
+## Related module
+
+[`memory/`](memory/README.md) verifies Hermes memory and session recall
+behavior (ATLAS-MEM-001…006) after this baseline is accepted — same
+read-only, fail-closed, attestation-based approach, reusing this
+verifier's record/check/verdict machinery.
+
 ## Tests
 
 ```sh
