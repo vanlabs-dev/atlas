@@ -15,6 +15,8 @@ full list. Per PRD §5.5, nothing here may be assumed before it is recorded.
 | 5 | How is the Pi accessed? | SSH, as user `pi`. | 2026-07-11 | Operator |
 | — | Code transfer to the Pi (change `atlas-phase-0-device-inventory`, design D1a) | Git: this repo has a remote (`github.com/vanlabs-dev/atlas`) and is cloned on the Pi; `git pull` transfers code. Paste-over-SSH remains a fallback. | 2026-07-11 | Operator |
 | — | Classification worksheet resolution (run `20260711T062206Z-5be02d8f`) | Fresh OS install — **preserve everything, nothing to remove**. All worksheet rows are stock Debian 13 components; no stale Atlas/Hermes/Bittensor material exists. The ATLAS-ENV-002 removal plan is therefore formally empty. | 2026-07-11 | Operator |
+| — | Hardening plan approval (assessment run `20260711T065352Z-0190074a`) | **All 6 proposed items approved**: SSH key-only auth, X11Forwarding off, disable rpcbind, disable avahi/mDNS, nftables default-deny inbound (SSH allowed), unattended security updates. Annotated plan on the Pi at `var/hardening/hardening-plan-20260711T065352Z-0190074a.md`; application via `atlas-phase-1-apply-hardening`. | 2026-07-11 | Operator |
+| 10 | External backup target? | **Explicitly deferred (TBD).** Must be resolved before production acceptance (ATLAS-BACKUP-002); does not block the approved hardening items. | 2026-07-11 | Operator |
 
 ## Consequences already applied
 
@@ -40,5 +42,9 @@ present.
 7. Acceptable LLM provider and model candidates.
 8. Monthly LLM budget and latency tolerance.
 9. May conversations leave the Pi to a hosted model?
-10. External backup target.
+10. External backup target — explicitly deferred TBD (see Resolved table);
+    listed here as a reminder that it must precede production acceptance.
 11. Acceptable telemetry settings for Hermes and OpenSpec.
+12. Disk thresholds: assessor's 80% warn / 90% stop-nonessential stand as
+    working values; confirm or adjust before they become service
+    configuration (ATLAS-BACKUP-005).
