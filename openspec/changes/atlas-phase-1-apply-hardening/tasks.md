@@ -20,8 +20,8 @@
 
 ## 4. Gated Pi execution (the acceptance run)
 
-- [ ] 4.1 Preflight on the Pi: `git pull`, `sudo -n` capability check (determines agent-driven vs operator-driven), all six `check` subcommands pass and report current state
-- [ ] 4.2 Apply and verify low-risk items in order: 02 X11, 03 rpcbind, 04 avahi, 06 unattended-upgrades — one at a time, stop on any verify failure
-- [ ] 4.3 Apply 05 nftables through all three gates (syntax → non-persistent load + NEW SSH connection verified → persist); dead-man timer cancelled only after the gate passes
-- [ ] 4.4 Re-verify fresh key-auth SSH, then apply 01 password-off; verify key login works and password auth is refused
-- [ ] 4.5 Closed-loop acceptance: re-run the hardening assessor — ssh-authentication-and-exposed-ports, firewall-rules, unattended-security-updates flip to `ok` with no regressions; record the run id and outcome in docs/decisions.md
+- [x] 4.1 Preflight on the Pi: `git pull`, `sudo -n` capability check (determines agent-driven vs operator-driven), all six `check` subcommands pass and report current state
+- [x] 4.2 Apply and verify low-risk items in order: 02 X11, 03 rpcbind, 04 avahi, 06 unattended-upgrades — one at a time, stop on any verify failure
+- [x] 4.3 Apply 05 nftables through all three gates (syntax → non-persistent load + NEW SSH connection verified → persist); dead-man timer cancelled only after the gate passes
+- [x] 4.4 Re-verify fresh key-auth SSH, then apply 01 password-off; verify key login works and password auth is refused
+- [x] 4.5 Closed-loop acceptance: re-run the hardening assessor — ssh-authentication-and-exposed-ports, firewall-rules, unattended-security-updates flip to `ok` with no regressions; record the run id and outcome in docs/decisions.md
