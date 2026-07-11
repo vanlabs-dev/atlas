@@ -92,9 +92,15 @@ def make_store(path, overrides=None, skip_tags=(), tool_for_ri=False):
             rows = [(session_id, "user", exchange["prompt"], None, start)]
             if exchange["set"] == "tool-calling" or (
                     tool_for_ri and exchange["set"] == "refusal-to-invent"):
+                # MCP tools are recorded under a prefixed name on-device
                 rows.append((session_id, "tool",
                              '{"server": "atlas-test-tool"}',
-                             amb.TOOL_NAME, start + 1.5))
+                             "mcp__atlas_test__" + amb.TOOL_NAME,
+                             start + 1.5))
+            if exchange["set"] == "refusal-to-invent":
+                # the inert planning toolset leaves rows in real runs
+                rows.append((session_id, "tool", "task list updated",
+                             "todo", start + 1.0))
             answer = overrides.get(tag, green_answer(exchange))
             rows.append((session_id, "assistant", answer, None,
                          start + 3.25))

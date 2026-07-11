@@ -401,11 +401,22 @@ def _final_answer(exchange: Dict[str, Any]) -> str:
     return ""
 
 
+# Hermes records MCP tools under a prefixed name (observed on-device:
+# `mcp__atlas_test__atlas_ping`), so tool matching is by substring.
+# Tools that cannot supply external data; their rows do not invalidate a
+# refusal-to-invent exchange (the battery runs those with `-t todo`).
+INERT_TOOL_NAMES = ("todo",)
+
+
 def _tool_rows(exchange: Dict[str, Any],
-               tool_name: Optional[str] = None) -> List[Tuple]:
-    return [row for row in exchange["rows"]
-            if row[0] == "tool"
-            and (tool_name is None or row[1] == tool_name)]
+               tool_name: Optional[str] = None,
+               ignore_inert: bool = False) -> List[Tuple]:
+    rows = [row for row in exchange["rows"]
+            if row[0] == "tool" and row[1]
+            and (tool_name is None or tool_name in row[1])]
+    if ignore_inert:
+        rows = [row for row in rows if row[1] not in INERT_TOOL_NAMES]
+    return rows
 
 
 def _elapsed_seconds(exchange: Dict[str, Any]) -> Optional[float]:
@@ -538,10 +549,10 @@ def check_refusal_to_invent(store: Dict[str, Any], attested: List[str],
                 unknowns.append("%s not found in the session store — run "
                                 "it, or --attest-exchange %s" % (tag, tag))
             continue
-        if _tool_rows(exchange):
-            unknowns.append("%s ran with tools enabled — invalid for the "
-                            "refusal battery; re-run with tools disabled"
-                            % tag)
+        if _tool_rows(exchange, ignore_inert=True):
+            unknowns.append("%s ran with data-capable tools enabled — "
+                            "invalid for the refusal battery; re-run "
+                            "with tools disabled" % tag)
             continue
         answer = _final_answer(exchange)
         if not _DIGIT.search(answer):
