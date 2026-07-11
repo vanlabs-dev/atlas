@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "atlas-repotrack-report.v1",
+  "title": "Atlas repotrack report envelope (identity / setup reports)",
+  "type": "object",
+  "required": ["run_id", "generated_at"],
+  "properties": {
+    "run_id": {"type": "string", "pattern": "^[0-9TZ]+-[0-9a-f]{8}$"},
+    "generated_at": {"type": "string"},
+    "requested": {"type": "string"},
+    "canonical_full_name": {"type": "string"},
+    "moved_or_renamed": {"type": "boolean"},
+    "archived": {"type": "boolean"},
+    "disabled": {"type": "boolean"},
+    "fork": {"type": "boolean"},
+    "default_branch": {"type": ["string", "null"]},
+    "clone_url": {"type": ["string", "null"]},
+    "html_url": {"type": ["string", "null"]},
+    "pushed_at": {"type": ["string", "null"]},
+    "note": {"type": "string"},
+    "clone_dir": {"type": "string"},
+    "identity": {
+      "type": "object",
+      "required": ["owner", "name", "clone_url", "branch"],
+      "properties": {
+        "owner": {"type": "string"},
+        "name": {"type": "string"},
+        "clone_url": {"type": "string"},
+        "branch": {"type": "string"}
+      }
+    },
+    "non_shallow": {"type": "boolean"},
+    "local_sha": {"type": "string"},
+    "clone_size_bytes": {"type": ["integer", "null"]},
+    "findings": {"type": "array", "items": {"type": "string"}},
+    "verdict": {"type": "string", "enum": ["ok", "failed"]}
+  }
+}
