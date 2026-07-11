@@ -17,6 +17,7 @@ full list. Per PRD §5.5, nothing here may be assumed before it is recorded.
 | — | Classification worksheet resolution (run `20260711T062206Z-5be02d8f`) | Fresh OS install — **preserve everything, nothing to remove**. All worksheet rows are stock Debian 13 components; no stale Atlas/Hermes/Bittensor material exists. The ATLAS-ENV-002 removal plan is therefore formally empty. | 2026-07-11 | Operator |
 | — | Hardening plan approval (assessment run `20260711T065352Z-0190074a`) | **All 6 proposed items approved**: SSH key-only auth, X11Forwarding off, disable rpcbind, disable avahi/mDNS, nftables default-deny inbound (SSH allowed), unattended security updates. Annotated plan on the Pi at `var/hardening/hardening-plan-20260711T065352Z-0190074a.md`; application via `atlas-phase-1-apply-hardening`. | 2026-07-11 | Operator |
 | 10 | External backup target? | **Explicitly deferred (TBD).** Must be resolved before production acceptance (ATLAS-BACKUP-002); does not block the approved hardening items. | 2026-07-11 | Operator |
+| — | Hardening apply acceptance (change `atlas-phase-1-apply-hardening`) | **All 6 items applied and verified on the Pi.** Independent checks: fresh key login works, password auth refused (`Permission denied (publickey)`), ports 111/5353 closed, nftables default-deny active and persistent. Closed-loop re-assessment `20260711T073125Z-d52a70e9`: ok=7, finding=0 (ssh/firewall/unattended-updates flipped to ok; remaining non-ok are the 2 deferred decisions + 2 future-phase items). | 2026-07-11 | Operator + assessment |
 
 ## Consequences already applied
 
@@ -35,6 +36,16 @@ sshd config leaves `PasswordAuthentication` at its default (yes — operator
 plans key-only after rotation); `X11Forwarding yes`; rpcbind listening on
 0.0.0.0:111; mDNS (avahi) active. No Hermes, containers, or user software
 present.
+
+## Operational notes
+
+- **Firewall/secret-file assessment needs a privileged inventory.** Reading the
+  nftables ruleset and `/etc/ssl/private` requires root, so full hardening
+  acceptance runs `sudo python3 inventory/atlas_inventory.py run` then
+  `sudo python3 hardening/atlas_hardening.py assess`. These produce root-owned
+  0600 outputs in `var/`; an unprivileged assessor cannot read a root-owned
+  report (it fails closed rather than guessing). Routine, non-firewall checks
+  remain fine unprivileged.
 
 ## Still open (blocking Phase 0/1 — from PRD §21)
 
