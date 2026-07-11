@@ -22,9 +22,9 @@
 
 ## 4. Retrieval benchmark
 
-- [ ] 4.1 Tagged battery module (KB-EX exact, KB-PA paraphrase, KB-HI historical-vs-current emission eras, KB-CF conviction conflict, KB-UN unsupported, KB-AD adversarial current-data / MV-RI-4 re-test) with expected-evidence markers pinned against the corpus snapshot by test
-- [ ] 4.2 Runner over `hermes -z` with the knowledge toolset (reuse modelval runner pattern; toolset identifier pinned on device)
-- [ ] 4.3 Read-only scorer: tag location in `state.db`, expected-evidence + tool-called metrics (ATLAS-RET-001 evidence), digit-flag classification flow for KB-UN/KB-AD, threshold-sheet gate, exceptions file, fail-closed verdict, 0600 reports (exit 0/3/4/1)
+- [ ] 4.1 Generalize the modelval machinery with backward-compatible parameters — `extract_exchanges(battery=...)`, `load_exceptions(path, valid_checks=...)`, `run_battery.py --battery-module` — keeping all 46 modelval tests green and pinning the widened signatures
+- [ ] 4.2 Tagged battery module (KB-EX exact, KB-PA paraphrase, KB-HI historical-vs-current emission eras, KB-CF conviction conflict, KB-UN unsupported, KB-AD adversarial current-data / MV-RI-4 re-test; small sets) with expected-evidence markers pinned against the corpus snapshot by test
+- [ ] 4.3 Read-only scorer importing the generalized machinery: expected-evidence + tool-called metrics (ATLAS-RET-001 evidence), bounded classification flow for KB-UN/KB-AD (auto-pass on refusal/as-of markers without live-claim phrasing; flag the rest), threshold-sheet gate, exceptions file, fail-closed verdict, 0600 reports (exit 0/3/4/1)
 - [ ] 4.4 `docs/thresholds.md` with proposed values (correct-with-evidence ≥ 0.9, fabrications == 0, tool-call rate ≥ 0.9) behind approval markers
 
 ## 5. Off-device verification (WSL)
