@@ -389,17 +389,25 @@ _SSHD_DIRECTIVES = {
 
 
 def _parse_sshd_config(files: List[Tuple[str, str]]) -> Dict[str, Any]:
+    # Files arrive in sshd precedence order (drop-ins first, then main config).
+    # sshd honours the FIRST value obtained for each keyword, so keep first-wins
+    # across all files. Result stays a single-element list per directive for
+    # backward-compatible consumers.
     directives: Dict[str, List[str]] = {}
-    for line in files[0][1].splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        key, _, value = stripped.partition(" ")
-        if key.lower() in _SSHD_DIRECTIVES:
-            directives.setdefault(key.lower(), []).append(value.strip())
+    for _, content in files:
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            key, _, value = stripped.partition(" ")
+            key = key.lower()
+            if key in _SSHD_DIRECTIVES and key not in directives:
+                directives[key] = [value.strip()]
     return {
         "directives": directives,
-        "note": "selected security-relevant directives only; defaults apply when absent",
+        "sources": [path for path, _ in files],
+        "note": "effective directives across main config + drop-ins (first-wins); "
+                "defaults apply when absent",
     }
 
 
@@ -606,16 +614,23 @@ PROBES: Tuple[Probe, ...] = (
            "~/.config/rclone/*", "/etc/duplicity*"),
           notes="backup configuration locations; metadata only"),
     # -- firewall --------------------------------------------------------------
-    Probe("ufw_status", "firewall", "cmd", ("ufw", "status", "verbose"),
+    # Absolute sbin paths: these tools live in /usr/sbin, which is not on an
+    # unprivileged user's PATH — a bare name yields a false "not present".
+    # Reading rules still needs root (unprivileged -> permission-denied).
+    Probe("ufw_status", "firewall", "cmd", ("/usr/sbin/ufw", "status", "verbose"),
           parser="lines", notes="ufw state; status subcommand is read-only (may need root)"),
-    Probe("nftables_ruleset", "firewall", "cmd", ("nft", "list", "ruleset"),
+    Probe("nftables_ruleset", "firewall", "cmd", ("/usr/sbin/nft", "list", "ruleset"),
           parser="lines", notes="nftables rules; list is read-only (may need root)"),
-    Probe("iptables_rules", "firewall", "cmd", ("iptables", "-S"),
+    Probe("iptables_rules", "firewall", "cmd", ("/usr/sbin/iptables", "-S"),
           parser="lines", notes="iptables rules; -S prints, never modifies (may need root)"),
     # -- remote_access ---------------------------------------------------------
-    Probe("sshd_config", "remote_access", "read", ("/etc/ssh/sshd_config",),
+    # Read drop-ins BEFORE the main file: sshd uses the first value obtained for
+    # most keywords, and Debian Includes sshd_config.d/*.conf at the top of the
+    # main config, so drop-ins take precedence. The parser keeps first-wins.
+    Probe("sshd_config", "remote_access", "read",
+          ("/etc/ssh/sshd_config.d/*.conf", "/etc/ssh/sshd_config"),
           parser="sshd_config",
-          notes="selected sshd security directives; contains no key material"),
+          notes="effective sshd directives (drop-ins first, first-wins); no key material"),
     Probe("vpn_tools", "remote_access", "which",
           ("tailscale", "wg", "zerotier-cli", "openvpn"),
           notes="remote-access tool presence via PATH lookup only"),
@@ -647,8 +662,13 @@ class Executor:
     """Runs an argv (no shell). Swappable in tests."""
 
     def __call__(self, argv: Tuple[str, ...], timeout: int) -> Tuple[int, bytes, bytes]:
+        # Ensure sbin dirs are on PATH so system tools (nft, ufw, iptables,
+        # ss) resolve even when an unprivileged login PATH omits them.
+        env = dict(os.environ)
+        sbin = os.pathsep.join(("/usr/sbin", "/sbin"))
+        env["PATH"] = sbin + os.pathsep + env.get("PATH", "")
         completed = subprocess.run(  # noqa: S603 — argv list, no shell, declared table
-            list(argv), capture_output=True, timeout=timeout
+            list(argv), capture_output=True, timeout=timeout, env=env
         )
         return completed.returncode, completed.stdout, completed.stderr
 

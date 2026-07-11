@@ -74,6 +74,19 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(data["directives"]["passwordauthentication"], ["no"])
         self.assertNotIn("subsystem", data["directives"])
 
+    def test_sshd_dropins_take_precedence(self):
+        # drop-ins are read first; sshd honours the first value obtained, so a
+        # drop-in override must win over the main config (Debian default layout)
+        main = "X11Forwarding yes\nPasswordAuthentication yes\n"
+        dropin = "PasswordAuthentication no\nX11Forwarding no\n"
+        data = ai.PARSERS["sshd_config"]([
+            ("/etc/ssh/sshd_config.d/10-atlas.conf", dropin),
+            ("/etc/ssh/sshd_config", main),
+        ])
+        self.assertEqual(data["directives"]["passwordauthentication"], ["no"])
+        self.assertEqual(data["directives"]["x11forwarding"], ["no"])
+        self.assertIn("/etc/ssh/sshd_config.d/10-atlas.conf", data["sources"])
+
     def test_df(self):
         data = ai.PARSERS["df"](DF)
         self.assertEqual(len(data["filesystems"]), 2)
