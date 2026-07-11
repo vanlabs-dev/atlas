@@ -1,0 +1,19 @@
+{
+  "_comment": "Pinned repository identity + policy. `identity` is the operator's CLAIM until `confirmed_decision` references the recorded ATLAS-REPO-001 confirmation in docs/decisions.md — setup/update refuse to run while it is null. `update_interval_hours` feeds the staleness policy only; scheduled execution stays gated on PRD §21 Q20.",
+  "identity": {
+    "owner": "RaoFoundation",
+    "name": "subtensor",
+    "clone_url": "https://github.com/RaoFoundation/subtensor.git",
+    "branch": "main"
+  },
+  "confirmed_decision": "docs/decisions.md — ATLAS-REPO-001 confirmation 2026-07-12 (RaoFoundation/subtensor @ main; identity runs 20260711T205255Z-6aaa1c02 / 20260711T205312Z-26b97e1e)",
+  "access": "anonymous",
+  "update_interval_hours": 24,
+  "stale_multiplier": 2,
+  "clone_dir": "var/repotrack/subtensor",
+  "db": "var/repotrack/repotrack.db",
+  "index": {
+    "extensions": [".rs", ".toml", ".md", ".py", ".yml", ".yaml", ".sh", ".json", ".txt"],
+    "max_file_bytes": 524288
+  }
+}
