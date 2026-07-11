@@ -14,6 +14,7 @@ full list. Per PRD §5.5, nothing here may be assumed before it is recorded.
 | 4 | Clean OS reinstall permitted, or only in-place cleanup? | Clean reinstall — already performed. The Pi is a fresh OS install. | 2026-07-11 | Operator |
 | 5 | How is the Pi accessed? | SSH, as user `pi`. | 2026-07-11 | Operator |
 | — | Code transfer to the Pi (change `atlas-phase-0-device-inventory`, design D1a) | Git: this repo has a remote (`github.com/vanlabs-dev/atlas`) and is cloned on the Pi; `git pull` transfers code. Paste-over-SSH remains a fallback. | 2026-07-11 | Operator |
+| — | Classification worksheet resolution (run `20260711T062206Z-5be02d8f`) | Fresh OS install — **preserve everything, nothing to remove**. All worksheet rows are stock Debian 13 components; no stale Atlas/Hermes/Bittensor material exists. The ATLAS-ENV-002 removal plan is therefore formally empty. | 2026-07-11 | Operator |
 
 ## Consequences already applied
 
