@@ -62,13 +62,15 @@ the script itself never asks for or acquires elevation.
 
 ## Transferring to the Pi
 
-The deliverable is the single file `atlas_inventory.py`. The agreed low-impact
-transfer method is: SSH into the Pi, create a new file, and paste the script text
-into it. Then verify integrity before running:
+The repo is on a git remote and cloned on the Pi, so transfer is simply:
 
 ```sh
-sha256sum atlas_inventory.py   # compare against the checksum recorded from the repo copy
+git pull   # on the Pi, in the repo checkout
 ```
+
+Git guarantees content integrity; no manual checksum step is needed.
+(The original plan of pasting the single file over SSH remains a viable
+fallback — the script is deliberately self-contained.)
 
 See `docs/acceptance-procedure.md` for the full first-run procedure.
 
