@@ -58,11 +58,15 @@ local MCP tools reliably (20/20 in validation).
    calls, approvals). ATLAS-RET-002 satisfied: local, inspectable,
    full-text; no new services, no ORM, stdlib `sqlite3` only.
 
-4. **Units are heading-level sections** (every `##`/`###` block plus its
-   list items as one unit; ~50 units expected). Stable locator = source file
-   + heading path + line range (ATLAS-KB-008). Coverage date is the corpus
-   date; per-unit temporal scope refines it where the text itself is dated
-   ("since June 2026", "November 2025 to June 2026" — ATLAS-KB-010).
+4. **Units are `##`-section level** (one section with all its bullets =
+   one unit; ~20–25 units expected — the corpus uses flat `##` sections).
+   Full-section units give FTS hits complete context and need less
+   splitter code than sub-heading fragmentation. Stable locator = source
+   file + heading path + line range (ATLAS-KB-008). Coverage date is the
+   corpus date; per-unit temporal scope refines it where the text itself
+   is dated ("since June 2026", "November 2025 to June 2026" —
+   ATLAS-KB-010). If a file turns out to use deeper nesting, the splitter
+   keeps each `##` subtree together rather than splitting finer.
 
 5. **Curated-corpus validation interpretation (ATLAS-KB-003/004), recorded:**
    the operator curated these files against official sources and maintains
@@ -101,20 +105,24 @@ local MCP tools reliably (20/20 in validation).
    surface (ATLAS-TOOL-003). It **replaces** `atlas-test` in the Hermes
    config, exactly as the baseline spec promised.
 
-8. **The benchmark reuses the model-validation pattern wholesale**: a
-   tagged battery (`KB-EX` exact facts, `KB-PA` paraphrases, `KB-HI`
-   historical-vs-current emission eras, `KB-CF` the conviction conflict,
-   `KB-UN` unsupported questions, `KB-AD` adversarial current-data
-   re-testing MV-RI-4) run through `hermes -z -t <knowledge toolset>`, one
-   session per exchange; a read-only scorer locates exchanges by tag in
-   `state.db`, checks expected-evidence markers (the PRD demands expected
-   *evidence*, not prose: e.g. a KB-EX answer must carry the fixed split
-   values AND the tool must have been called), flags digits in KB-UN/KB-AD
-   answers for operator classification, and judges everything against an
-   operator-approved threshold sheet (proposed: correct-with-evidence ≥
-   0.9; fabrications == 0; tool-called-on-domain-questions ≥ 0.9 for
-   ATLAS-RET-001 evidence). Same exceptions file/verdict/exit-code
-   machinery as modelval.
+8. **The benchmark reuses the model-validation MACHINERY, not just the
+   pattern** (optimization pass, 2026-07-12): `hermes/modelval`'s
+   `extract_exchanges`, `parse_thresholds`, store gating, exceptions
+   loader, and `run_battery.py` are generalized with backward-compatible
+   parameters (battery list / battery module / valid-check set) so the KB
+   benchmark imports them instead of copying ~500 lines; the modelval test
+   suite pins the widened signatures. The KB battery itself: `KB-EX` exact
+   facts, `KB-PA` paraphrases, `KB-HI` historical-vs-current emission
+   eras, `KB-CF` the conviction conflict, `KB-UN` unsupported, `KB-AD`
+   adversarial current-data re-testing MV-RI-4 — small sets (5–6 each
+   beyond EX), one session per exchange. Scoring checks expected-evidence
+   markers AND tool-call evidence (ATLAS-RET-001); operator-approved
+   thresholds (proposed: correct-with-evidence ≥ 0.9; fabrications == 0;
+   tool-call rate ≥ 0.9). **Classification workload is bounded**: KB-UN/
+   KB-AD answers auto-pass when they carry explicit refusal/as-of markers
+   and no live-claim phrasing; only the remainder is flagged for operator
+   classification (corpus facts are digit-dense, so a bare digit flag
+   would mark nearly everything).
 
 9. **ATLAS-RET-001 (retrieval before model memory) is evidenced, not
    assumed**: the benchmark measures whether Hermes actually calls the
