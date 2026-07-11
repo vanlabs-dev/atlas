@@ -1,0 +1,14 @@
+{
+  "install_source": "TODO e.g. github.com/<org>/hermes-agent official installer, cloned to /home/pi/.hermes/hermes-agent",
+  "installed_version": "TODO version string or `git -C /home/pi/.hermes/hermes-agent rev-parse HEAD`",
+  "install_date": "TODO ISO date, e.g. 2026-07-11",
+  "update_method": "TODO e.g. git pull in /home/pi/.hermes/hermes-agent + re-run installer",
+  "rollback_method": "TODO e.g. git checkout <previous commit> + re-run installer; config/data preserved in /home/pi/.hermes",
+  "service_user": "TODO e.g. pi",
+  "data_dir": "TODO e.g. /home/pi/.hermes",
+  "config_path": "TODO e.g. /home/pi/.hermes/config.yaml",
+  "diagnostics_command": null,
+  "service_unit": null,
+  "exceptions": [],
+  "notes": null
+}
