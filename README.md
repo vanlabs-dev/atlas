@@ -10,17 +10,20 @@ running on a Raspberry Pi. Built methodically in gated phases via OpenSpec.
 
 ## Current status (2026-07-11)
 
-Phase 0 and the Phase 1 hardening are **complete and accepted on the device**.
-No active OpenSpec changes. Next up: installing Hermes.
+Phase 0, the Phase 1 hardening, and the **Hermes baseline are complete and
+accepted on the device**. Hermes Agent v0.18.2 runs on the Pi (Grok via
+X OAuth), with the Atlas MCP test tool connected.
 
 | Capability (accepted spec) | State |
 |---|---|
 | `device-inventory` | Done — read-only Pi inventory tool + clean baseline captured |
 | `hardening-assessment` | Done — read-only posture assessor (11 ATLAS-ENV-003 areas) |
 | `hardening-apply` | Done — 6 approved items applied + verified on the Pi |
+| `hermes-baseline` | Done — manual install verified; acceptance run `20260711T091512Z-61ef71d0` |
 
-Latest closed-loop assessment `20260711T073125Z-d52a70e9`: **ok=7, finding=0**
-(remaining non-ok are 2 deferred decisions + 2 future-phase items).
+Latest closed-loop assessment `20260711T073125Z-d52a70e9`: **ok=7, finding=0**.
+Hermes baseline carries 2 documented exceptions (runs as `pi`; no service
+unit) — both to close before production acceptance.
 
 ## The device
 
@@ -74,18 +77,9 @@ var/                        # gitignored: device-sensitive inventory/assessment 
 
 ## Next step
 
-`atlas-phase-1-hermes-baseline` is **active**: Hermes is installed on the Pi
-(manually, by the operator, with X OAuth connected — decisions of 2026-07-11:
-hosted models allowed, Grok via X OAuth, LAN-only, telemetry disabled). The
-repo now ships the read-only acceptance tooling in `hermes/`; what remains is
-the on-device acceptance run:
-
-1. Operator fills `var/hermes/install-record.json` on the Pi
-   ([template](hermes/docs/install-record.template.json),
-   [what to capture](hermes/docs/manual-install-notes.md)).
-2. Operator performs the interactive checks (chat, memory + session search,
-   `atlas_ping` tool call) and restarts Hermes once.
-3. Run `python3 hermes/atlas_hermes_verify.py verify --attest ...` —
-   see [hermes/README.md](hermes/README.md).
-4. Record the verdict in [docs/decisions.md](docs/decisions.md); archive the
-   change. ATLAS-HERMES-003 model validation (Grok) is the next gate after.
+Per PRD §22, the next changes are the Phase 1 memory/recall verification
+(ATLAS-MEM-*) and then ATLAS-HERMES-003 model validation (Grok benchmark:
+tool-calling reliability, context, cost, latency, Bittensor retrieval) before
+any Phase 2 corpus work. Standing debts before production acceptance, from
+[docs/decisions.md](docs/decisions.md): backup restore test, dedicated
+service account, service unit for boot persistence.

@@ -41,8 +41,8 @@
 
 ## 7. On-device acceptance (after the operator's manual install)
 
-- [ ] 7.1 Operator completes `var/hermes/install-record.json` from the template
-- [ ] 7.2 Operator performs interactive checks in Hermes (chat, memory write + cross-session search, discover and call `atlas_ping`) and restarts the service once
-- [ ] 7.3 Run the verifier on the Pi (unprivileged; sudo rerun only if journal checks report `permission-denied`) with the three attestations
-- [ ] 7.4 If Hermes's observed shape diverged from assumptions (config keys, diagnostics, unit), pin the observed facts into checks/fixtures and rerun
-- [ ] 7.5 Record the acceptance verdict and install-record summary in `docs/decisions.md`; archive the change
+- [x] 7.1 Operator completes `var/hermes/install-record.json` from the template
+- [x] 7.2 Operator performs interactive checks in Hermes (chat, memory write + cross-session search, discover and call `atlas_ping`) and restarts the service once
+- [x] 7.3 Run the verifier on the Pi (unprivileged; sudo rerun only if journal checks report `permission-denied`) with the three attestations
+- [x] 7.4 If Hermes's observed shape diverged from assumptions (config keys, diagnostics, unit), pin the observed facts into checks/fixtures and rerun
+- [x] 7.5 Record the acceptance verdict and install-record summary in `docs/decisions.md`; archive the change

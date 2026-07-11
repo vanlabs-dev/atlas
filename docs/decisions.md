@@ -25,6 +25,7 @@ full list. Per PRD §5.5, nothing here may be assumed before it is recorded.
 | 11 | Telemetry settings for Hermes and OpenSpec? | **Disable all telemetry** (usage analytics and crash reporting) at install time. The only traffic leaving the Pi should be the LLM API itself. Verified as part of the ATLAS-HERMES-005 diagnostic baseline. | 2026-07-11 | Operator |
 | 12 | Disk thresholds (assessor working values) | **Confirmed: 80% warn / 90% stop-nonessential.** These become the service-configuration values (ATLAS-BACKUP-005 context). Root fs is at 3% today. | 2026-07-11 | Operator |
 | — | Hermes install mode (change `atlas-phase-1-hermes-baseline`) | **Operator runs the Hermes install and interactive setup manually on the Pi.** The repo change ships only a read-only post-install verification script covering the ATLAS-HERMES-005 baseline (service user, no general sudo, diagnostics, chat, tool discovery, memory/session search, restart, no secrets in logs). The ATLAS-HERMES-001 install record (source, version, date, update/rollback method, service user, data dir, config path) is captured by the operator and checked by the verifier where readable. | 2026-07-11 | Operator |
+| — | Hermes baseline acceptance (change `atlas-phase-1-hermes-baseline`) | **Accepted.** Verification run `20260711T091512Z-61ef71d0` on the Pi: install-record, telemetry-disabled, diagnostics (`hermes doctor` exit 0), and secret-free-logs (3 sources) all ok; chat, memory-session-search, and tool-call (`atlas_ping` over stdio MCP) attested by the operator. **Installed:** Hermes Agent v0.18.2 (2026.7.7.2), commit `3b2ef789`, git method, CLI `~/.local/bin/hermes`, data `/home/pi/.hermes`, config `config.yaml` (0600, as is `.env`); `CUA_DRIVER_RS_TELEMETRY_ENABLED=0` set — v0.18.2 has no other external telemetry facility (source-verified). **Two documented exceptions, both to revisit before production acceptance:** runs as login user `pi` (sudo-capable; dedicated service account deferred) and no systemd unit (started manually; boot persistence deferred). Grok (`grok-4.5`) via X OAuth works including tool calls — compatibility evidence only; full ATLAS-HERMES-003 validation remains a separate gate. | 2026-07-11 | Operator + verifier |
 
 ## Consequences already applied
 
@@ -65,7 +66,11 @@ Standing reminders carried forward:
 - **Backup restore test** (ATLAS-BACKUP-002): target is chosen (restic/rsync
   to a LAN machine, manual), but the backup is not accepted until a restore
   test succeeds — required before production acceptance.
-- **ATLAS-HERMES-003 validation**: Grok via X OAuth is a *candidate*, not
-  validated. Hermes compatibility, tool-calling reliability, context window,
-  cost, latency, and the Bittensor retrieval benchmark must pass before
-  production use.
+- **ATLAS-HERMES-003 validation**: Grok via X OAuth is confirmed *working*
+  (chat + tool calls, baseline acceptance 2026-07-11) but not *validated*:
+  tool-calling reliability, context window, cost, latency, and the Bittensor
+  retrieval benchmark must still pass before production use.
+- **Hermes baseline exceptions to close before production acceptance**
+  (recorded in the acceptance entry): dedicated unprivileged service account
+  (currently runs as `pi`), and a service unit for boot persistence
+  (currently started manually).

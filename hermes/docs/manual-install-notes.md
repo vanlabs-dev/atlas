@@ -27,8 +27,9 @@ or fixes anything.
 ## The install record (ATLAS-HERMES-001)
 
 Copy [install-record.template.json](install-record.template.json) to
-`var/hermes/install-record.json` **on the Pi** (it is device-sensitive and
-gitignored — never commit it) and replace every TODO. Required fields:
+`var/hermes/install-record.json` **on the Pi** (`mkdir -p var/hermes` first;
+the file is device-sensitive and gitignored — never commit it) and replace
+every TODO. Required fields:
 
 | field | what to record |
 |---|---|
