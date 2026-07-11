@@ -63,24 +63,31 @@ present.
 
 ## Still open
 
-**No Phase 0/1 blockers remain** — PRD §21 items 1–11 (and the disk-threshold
-follow-up) are all resolved above as of 2026-07-11. Later-phase questions
-(PRD §21 items 12+) stay open until their phase.
+**No Phase 0/1/2 blockers remain** — PRD §21 items 1–11 (and the
+disk-threshold follow-up) were resolved 2026-07-11; items 12–15 (the corpus)
+2026-07-12. Q18 (retrieval benchmark threshold) was effectively resolved by
+the operator-approved threshold sheet of the accepted benchmark
+(correct-with-evidence ≥ 0.9 etc.). Remaining later-phase questions
+(16–17, 20+) stay open until their phase.
 
 Standing reminders carried forward:
 
 - **Backup restore test** (ATLAS-BACKUP-002): target is chosen (restic/rsync
   to a LAN machine, manual), but the backup is not accepted until a restore
   test succeeds — required before production acceptance.
-- **ATLAS-HERMES-003 validation**: ~~pending~~ **done 2026-07-12** (see the
-  model-validation acceptance entry) except the **Bittensor retrieval
-  benchmark, deferred to Phase 2** — a named Phase 2 acceptance gate, which
-  must also re-test the MV-RI-4 fabrication failure mode adversarially.
+- **ATLAS-HERMES-003 validation**: **fully closed 2026-07-12** — model
+  validation run `20260711T182926Z-b1eef1c6` plus the retrieval benchmark
+  run `20260711T192206Z-af3fa274` (deferred criterion closed; MV-RI-4
+  re-test passed with retrieval available). A model change invalidates it.
 - **Hermes baseline exceptions to close before production acceptance**
   (recorded in the acceptance entry): dedicated unprivileged service account
   (currently runs as `pi`), and a service unit for boot persistence
   (currently started manually).
 - **PRD §21 Q19 (memory writes: keep approval-gated permanently?)**: the
-  ATLAS-MEM-006 evidence base now exists (acceptance run
-  `20260711T171200Z-33321220`); writes remain approval-gated until the
-  operator explicitly decides otherwise — a Phase 2 gate.
+  ATLAS-MEM-006 evidence base exists (run `20260711T171200Z-33321220`);
+  writes remain approval-gated until the operator explicitly decides
+  otherwise. Open operator decision, no phase blocks on it.
+- **Conviction-activation conflict**: the knowledge base's one
+  `conflicting` unit (operator-reported activation ~2026-07-10/11,
+  unverified) — resolved by Phase 3 repo/chain evidence, then the corpus
+  re-sync flow updates the unit.

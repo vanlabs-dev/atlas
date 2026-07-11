@@ -65,7 +65,10 @@ Optional fields:
    - write a memory, then find it and the conversation again in a *new*
      session (memory + session search);
    - register the test tool (see [../README.md](../README.md)) and have
-     Hermes discover and call `atlas_ping`.
+     Hermes discover and call `atlas_ping`. *(Since 2026-07-12 the
+     production `atlas-kb` knowledge server exists — for a reinstall,
+     discovering and calling `knowledge_status` on it is the equivalent,
+     stronger check.)*
 3. Run the verifier with the matching `--attest` flags — see the README.
 
 ## After acceptance

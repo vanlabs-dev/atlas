@@ -8,11 +8,12 @@ running on a Raspberry Pi. Built methodically in gated phases via OpenSpec.
 (resolved/open decisions), `openspec/specs/` (accepted capability specs), and
 `openspec/changes/archive/` (completed changes with their proposal/design/tasks).
 
-## Current status (2026-07-11)
+## Current status (2026-07-12)
 
-Phase 0, the Phase 1 hardening, and the **Hermes baseline are complete and
-accepted on the device**. Hermes Agent v0.18.2 runs on the Pi (Grok via
-X OAuth), with the Atlas MCP test tool connected.
+**Phases 0–2 are complete and accepted on the device.** Hermes Agent
+v0.18.2 runs on the Pi (Grok via X OAuth, validated), answering Bittensor
+questions from the validated local knowledge base through the `atlas-kb`
+MCP tools — source-bound, dated, fail-closed.
 
 | Capability (accepted spec) | State |
 |---|---|
@@ -46,10 +47,15 @@ unit) — both to close before production acceptance.
   unattended security updates on (no auto-reboot).
 - **Hermes on the Pi:** runs as user `pi`, started manually (no service unit
   yet). CLI `~/.local/bin/hermes`, data/config in `~/.hermes/`, code clone at
-  `~/.hermes/hermes-agent`, model Grok via X OAuth. MCP test tool registered
-  as stdio server `atlas-test`. Install record: `var/hermes/install-record.json`
-  (on the Pi only). Full facts in the acceptance entry in
-  [docs/decisions.md](docs/decisions.md).
+  `~/.hermes/hermes-agent`, model Grok (`grok-4.5`) via X OAuth — validated
+  per ATLAS-HERMES-003. Memory and skill writes are **approval-gated**
+  (`memory.write_approval` / `skills.write_approval: on`). The production
+  knowledge tools are registered as stdio MCP server **`atlas-kb`**
+  (`knowledge/atlas_kb_server.py`; it replaced the baseline `atlas-test`
+  test tool on 2026-07-12). Knowledge store + reports live in gitignored
+  `var/knowledge/` on the Pi. Install record:
+  `var/hermes/install-record.json` (on the Pi only). Full facts in the
+  acceptance entries in [docs/decisions.md](docs/decisions.md).
 
 ## Repo layout
 
