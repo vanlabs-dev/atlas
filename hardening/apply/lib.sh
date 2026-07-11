@@ -58,8 +58,8 @@ have_priv() {
 unit_enabled() { systemctl is-enabled "$1" 2>/dev/null || true; }
 unit_active() { systemctl is-active "$1" 2>/dev/null || true; }
 unit_exists() {
-    systemctl list-unit-files --no-legend --no-pager "$1" 2>/dev/null | grep -q . \
-        || systemctl status "$1" >/dev/null 2>&1
+    local out; out="$(systemctl list-unit-files --no-legend --no-pager "$1" 2>/dev/null || true)"
+    [ -n "$out" ] || systemctl status "$1" >/dev/null 2>&1
 }
 
 # sshd_effective <key> — effective sshd config value (needs privilege)
@@ -68,8 +68,11 @@ sshd_effective() {
 }
 
 # port_listening <port> — any listener on the TCP/UDP port?
+# Capture first, then match on a here-string: grep -q closes early on a match,
+# which under `set -o pipefail` would SIGPIPE the producer and mis-report.
 port_listening() {
-    ss -tuln 2>/dev/null | awk '{print $5}' | grep -Eq "[:.]$1\$"
+    local addrs; addrs="$(ss -tuln 2>/dev/null | awk 'NR>1 {print $5}')"
+    grep -Eq "[:.]$1\$" <<<"$addrs"
 }
 
 # audit_has_ok <item> <action> — has this item+action succeeded before?
