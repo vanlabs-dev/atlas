@@ -9,7 +9,8 @@ AUTOCONF="/etc/apt/apt.conf.d/20auto-upgrades"
 ITEM_ACTION="${1:-}"
 
 periodic_enabled() {
-  apt-config dump APT::Periodic::Unattended-Upgrade 2>/dev/null | grep -q '"1"'
+  local v; v="$(apt-config dump APT::Periodic::Unattended-Upgrade 2>/dev/null || true)"
+  grep -q '"1"' <<<"$v"
 }
 
 case "${1:-}" in
@@ -35,7 +36,8 @@ case "${1:-}" in
   verify)
     dpkg -s unattended-upgrades >/dev/null 2>&1 || die "$ITEM" verify "package not installed"
     periodic_enabled || die "$ITEM" verify "APT::Periodic::Unattended-Upgrade not 1"
-    if apt-config dump Unattended-Upgrade::Automatic-Reboot 2>/dev/null | grep -q '"true"'; then
+    REBOOT="$(apt-config dump Unattended-Upgrade::Automatic-Reboot 2>/dev/null || true)"
+    if grep -q '"true"' <<<"$REBOOT"; then
       die "$ITEM" verify "Automatic-Reboot is enabled — plan requires it OFF"
     fi
     ok "$ITEM" verify "enabled, no automatic reboot"

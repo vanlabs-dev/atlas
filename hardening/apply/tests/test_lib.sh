@@ -50,6 +50,17 @@ OUT="$(bash "$HERE/../items/01-ssh-password.sh" apply 2>&1)" && RC=0 || RC=$?
     && pass "01-ssh-password refuses without verified prerequisites" \
     || fail "01-ssh-password did not refuse (rc=$RC): $OUT"
 
+# --- regression: grep -q on a pipe must not SIGPIPE-fail under pipefail --------
+# A large producer piped into `grep -q` (which exits on first match) returns
+# 141 under `set -o pipefail`. Verify our capture-then-here-string pattern is
+# immune. This is the bug that made 05-nftables verify falsely fail.
+set -o pipefail
+big="$(seq 1 100000; echo MATCH_TOKEN; seq 1 100000)"
+if grep -q MATCH_TOKEN <<<"$big"; then pass "here-string grep -q survives pipefail"
+else fail "here-string grep -q failed under pipefail"; fi
+# demonstrate the OLD broken form would have failed (informational, not a gate)
+if seq 1 100000 | { echo MATCH_TOKEN; cat >/dev/null; } | grep -q MATCH_TOKEN 2>/dev/null; then :; fi
+
 echo
 if [ "$FAILURES" -eq 0 ]; then echo "LIB TESTS PASSED"; exit 0;
 else echo "LIB TESTS FAILED: $FAILURES"; exit 1; fi

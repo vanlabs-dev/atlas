@@ -41,7 +41,9 @@ NFTEOF
 }
 
 ruleset_active() {
-  priv nft list ruleset 2>/dev/null | grep -q "policy drop"
+  # capture then match: grep -q on a pipe SIGPIPEs nft under `set -o pipefail`
+  local rs; rs="$(priv nft list ruleset 2>/dev/null || true)"
+  grep -q "policy drop" <<<"$rs"
 }
 
 case "${1:-}" in
@@ -85,7 +87,8 @@ case "${1:-}" in
   verify)
     ruleset_active || die "$ITEM" verify "default-deny ruleset not active"
     [ "$(unit_enabled nftables.service)" = "enabled" ] || die "$ITEM" verify "nftables.service not enabled"
-    priv nft list ruleset | grep -q "tcp dport 22 accept" || die "$ITEM" verify "SSH allow rule missing"
+    RS="$(priv nft list ruleset 2>/dev/null || true)"
+    grep -q "tcp dport 22 accept" <<<"$RS" || die "$ITEM" verify "SSH allow rule missing"
     ok "$ITEM" verify "default-deny active with SSH allowed; persistent at boot"
     ;;
   rollback)
