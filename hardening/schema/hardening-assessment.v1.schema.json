@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "atlas-hardening-assessment.v1",
+  "title": "Atlas hardening assessment (schema v1)",
+  "type": "object",
+  "required": [
+    "run",
+    "consumed_inventory",
+    "areas"
+  ],
+  "properties": {
+    "run": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "assessor_version",
+        "schema_version",
+        "started_at",
+        "finished_at",
+        "executing_account",
+        "hostname",
+        "complete"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "assessor_version": {
+          "type": "string"
+        },
+        "schema_version": {
+          "enum": [
+            1
+          ]
+        },
+        "started_at": {
+          "type": "string"
+        },
+        "finished_at": {
+          "type": "string"
+        },
+        "executing_account": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "consumed_inventory": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "path",
+        "age_hours",
+        "stale"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "age_hours": {
+          "type": "number"
+        },
+        "stale": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "supplementary_probes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "status",
+          "command"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "collected",
+              "unsupported-on-device",
+              "permission-denied",
+              "error"
+            ]
+          },
+          "command": {
+            "type": "string"
+          },
+          "data": {},
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration_ms": {
+            "type": "number"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "areas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "area",
+          "verdict",
+          "summary",
+          "expectation",
+          "evidence",
+          "evidence_complete",
+          "issues"
+        ],
+        "properties": {
+          "area": {
+            "enum": [
+              "unprivileged-service-execution",
+              "ssh-authentication-and-exposed-ports",
+              "firewall-rules",
+              "unattended-security-updates",
+              "secret-file-permissions",
+              "log-permissions",
+              "backup-encryption-and-destination",
+              "service-restart-policy",
+              "time-synchronization",
+              "disk-space-thresholds",
+              "remote-frontend-exposure"
+            ]
+          },
+          "verdict": {
+            "enum": [
+              "ok",
+              "finding",
+              "decision-required",
+              "not-applicable-yet"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "expectation": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidence_complete": {
+            "type": "boolean"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "issue",
+                "evidence",
+                "remediation"
+              ],
+              "properties": {
+                "issue": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "remediation": {
+                  "type": "object",
+                  "required": [
+                    "proposal",
+                    "why",
+                    "commands",
+                    "impact",
+                    "rollback"
+                  ],
+                  "properties": {
+                    "proposal": {
+                      "type": "string"
+                    },
+                    "why": {
+                      "type": "string"
+                    },
+                    "commands": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "impact": {
+                      "type": "string"
+                    },
+                    "rollback": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "decision": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reassess_when": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
