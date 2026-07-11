@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "atlas-hermes-baseline-verification.v1",
+  "title": "Atlas Hermes baseline verification (schema v1)",
+  "type": "object",
+  "required": [
+    "run",
+    "install_record",
+    "checks",
+    "attestations",
+    "verdict"
+  ],
+  "properties": {
+    "run": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "verifier_version",
+        "schema_version",
+        "started_at",
+        "finished_at",
+        "executing_account",
+        "hostname"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "verifier_version": {
+          "type": "string"
+        },
+        "schema_version": {
+          "enum": [
+            1
+          ]
+        },
+        "started_at": {
+          "type": "string"
+        },
+        "finished_at": {
+          "type": "string"
+        },
+        "executing_account": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "install_record": {
+      "type": "object",
+      "required": [
+        "path",
+        "present",
+        "problems"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "present": {
+          "type": "boolean"
+        },
+        "problems": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "record": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "check",
+          "status",
+          "summary",
+          "evidence",
+          "findings"
+        ],
+        "properties": {
+          "check": {
+            "enum": [
+              "install-record",
+              "unprivileged-execution",
+              "telemetry-disabled",
+              "diagnostics",
+              "service-persistence",
+              "secret-free-logs"
+            ]
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "finding",
+              "unknown",
+              "permission-denied",
+              "unsupported-on-device"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "guidance": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "exception": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "attestations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "check",
+          "attested",
+          "operator",
+          "timestamp"
+        ],
+        "properties": {
+          "check": {
+            "enum": [
+              "chat",
+              "memory-session-search",
+              "tool-call"
+            ]
+          },
+          "attested": {
+            "type": "boolean"
+          },
+          "operator": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "required": [
+        "overall",
+        "blockers"
+      ],
+      "properties": {
+        "overall": {
+          "enum": [
+            "accepted",
+            "not-accepted",
+            "no-verdict"
+          ]
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
