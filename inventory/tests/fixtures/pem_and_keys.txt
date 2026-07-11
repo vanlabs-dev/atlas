@@ -1,0 +1,13 @@
+config dump follows
+-----BEGIN OPENSSH PRIVATE KEY-----
+PLANTED0009b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB
+AAAAMwAAAAtzc2gtZWQyNTUxOQAAACBPLANTEDMOREKEYMATERIALhere000000
+-----END OPENSSH PRIVATE KEY-----
+openai_key=sk-PLANTED0010abcdefghij
+github token ghp_PLANTED0011abcdefghijklm
+fine grained github_pat_PLANTED0012abcdefghijklm
+aws AKIAPLANTED012345678
+slack xoxb-1234567890-PLANTED0013
+google AIzaPLANTED0014abcdefghijklmnopqrstuvwxy
+jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJQTEFOVEVEMDAxNSJ9.PLANTED0016sig
+plain text after

@@ -1,0 +1,867 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "atlas-inventory-report.v1",
+  "title": "Atlas device inventory report (schema v1)",
+  "type": "object",
+  "required": [
+    "run",
+    "categories"
+  ],
+  "properties": {
+    "run": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "script_version",
+        "schema_version",
+        "started_at",
+        "finished_at",
+        "executing_account",
+        "hostname",
+        "privileged",
+        "complete"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "script_version": {
+          "type": "string"
+        },
+        "schema_version": {
+          "enum": [
+            1
+          ]
+        },
+        "started_at": {
+          "type": "string"
+        },
+        "finished_at": {
+          "type": "string"
+        },
+        "executing_account": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "privileged": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "categories": {
+      "type": "object",
+      "required": [
+        "hardware",
+        "cpu_memory_storage",
+        "os_kernel",
+        "users_and_service_accounts",
+        "packages",
+        "containers",
+        "systemd_services",
+        "listening_ports",
+        "scheduled_jobs",
+        "hermes_installation",
+        "repositories_and_app_dirs",
+        "secret_file_locations",
+        "backup_configuration",
+        "firewall",
+        "remote_access",
+        "device_health"
+      ],
+      "properties": {
+        "hardware": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "cpu_memory_storage": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "os_kernel": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "users_and_service_accounts": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "packages": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "containers": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "systemd_services": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "listening_ports": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "scheduled_jobs": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "hermes_installation": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "repositories_and_app_dirs": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "secret_file_locations": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "backup_configuration": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "firewall": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "remote_access": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "device_health": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "command"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "collected",
+                      "unsupported-on-device",
+                      "permission-denied",
+                      "error"
+                    ]
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "data": {},
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number"
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

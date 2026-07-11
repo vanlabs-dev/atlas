@@ -1,0 +1,7 @@
+  PID TTY      STAT   TIME COMMAND
+  612 ?        Ss     0:01 /usr/sbin/sshd -D
+  801 ?        Sl     0:12 /usr/bin/restic --password PLANTED0005 backup /data
+  845 ?        S      0:00 curl -H "Authorization: Bearer PLANTED0006tokenvalue" https://api.example.com
+  902 ?        S      0:00 psql postgres://svc:PLANTED0007@localhost:5432/appdb
+  933 ?        S      0:00 python3 worker.py --api-key=PLANTED0008
+  977 ?        S      0:00 git log 4f2a9c1d8e3b5a7f6c0d2e4b8a1f3c5d7e9b0a2c
