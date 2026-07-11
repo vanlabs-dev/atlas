@@ -20,7 +20,7 @@ X OAuth), with the Atlas MCP test tool connected.
 | `hardening-assessment` | Done — read-only posture assessor (11 ATLAS-ENV-003 areas) |
 | `hardening-apply` | Done — 6 approved items applied + verified on the Pi |
 | `hermes-baseline` | Done — manual install verified; acceptance run `20260711T091512Z-61ef71d0` |
-| `memory-session-recall` | **In progress** — verifier + scripted procedure implemented (change `atlas-phase-1-memory-and-session-recall`); awaiting the operator's procedure run and on-device acceptance |
+| `memory-session-recall` | Done — ATLAS-MEM-001…006 verified on the Pi; acceptance run `20260711T171200Z-33321220` (approval gating on, all seven ATLAS-MEM-006 items attested) |
 
 Latest closed-loop assessment `20260711T073125Z-d52a70e9`: **ok=7, finding=0**.
 Hermes baseline carries 2 documented exceptions (runs as `pi`; no service
@@ -85,13 +85,11 @@ var/                        # gitignored: device-sensitive inventory/assessment 
 
 ## Next step
 
-The Phase 1 memory/recall verification (ATLAS-MEM-*) is implemented and
-awaiting on-device acceptance: the operator enables approval gating
-(`memory.write_approval` / `skills.write_approval` — currently OFF on the
-device), performs [hermes/memory/docs/procedure.md](hermes/memory/docs/procedure.md),
-and runs the verifier with the earned attestations. After that, per PRD §22:
-ATLAS-HERMES-003 model validation (Grok benchmark: tool-calling reliability,
-context, cost, latency, Bittensor retrieval) before any Phase 2 corpus work.
-Standing debts before production acceptance, from
-[docs/decisions.md](docs/decisions.md): backup restore test, dedicated
-service account, service unit for boot persistence.
+Per PRD §22, the next change is ATLAS-HERMES-003 model validation (Grok
+benchmark: tool-calling reliability, context, cost, latency, Bittensor
+retrieval — the retrieval part may need to defer to Phase 2 retrieval
+existing) before any Phase 2 corpus work. Standing debts before production
+acceptance, from [docs/decisions.md](docs/decisions.md): backup restore
+test, dedicated service account, service unit for boot persistence, and
+the PRD §21 Q19 gating decision (evidence recorded; default stays
+approval-gated).

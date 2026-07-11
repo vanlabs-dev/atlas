@@ -39,6 +39,6 @@
 ## 7. On-device acceptance (after the operator's procedure)
 
 - [x] 7.1 Operator confirms approval gating is enabled in the Hermes config (fixing it manually first if off — outside repo code) *(done 2026-07-12 at operator request: both keys were absent → inserted `write_approval: on` under `memory:` and `skills:`, config kept 0600, backup `config.yaml.bak-gates-*`; Hermes was not running, so the gates apply on next start. Dry-run verifier on the Pi: approval-gating `ok`; only the unplanted recall marker and the 7 attestations block, as expected)*
-- [ ] 7.2 Operator performs the scripted procedure in live Hermes sessions, recording any deviations
-- [ ] 7.3 Run the verifier on the Pi with the earned `--attest` flags; if observed v0.18.2 shapes diverge from the pinned facts, update checks/fixtures and rerun
-- [ ] 7.4 Record the verdict, run id, and ATLAS-MEM-006 evidence summary in `docs/decisions.md` (this is the evidence base for PRD §21 Q19); archive the change
+- [x] 7.2 Operator performs the scripted procedure in live Hermes sessions, recording any deviations *(done 2026-07-12; deviation: the recall marker was initially saved as a memory and removed before the lookup test — recorded in docs/decisions.md)*
+- [x] 7.3 Run the verifier on the Pi with the earned `--attest` flags; if observed v0.18.2 shapes diverge from the pinned facts, update checks/fixtures and rerun *(run `20260711T171200Z-33321220`: ACCEPTED, exit 0 — no divergence from pinned facts)*
+- [x] 7.4 Record the verdict, run id, and ATLAS-MEM-006 evidence summary in `docs/decisions.md` (this is the evidence base for PRD §21 Q19); archive the change
