@@ -121,10 +121,11 @@ EXPECTATIONS: Dict[str, str] = {
 
 SUPPLEMENTARY_PROBES: Tuple[inv.Probe, ...] = (
     inv.Probe("time_sync", "device_health", "cmd",
-              ("timedatectl", "show",
-               "--property=NTP,NTPSynchronized,Timezone"),
+              ("timedatectl", "show"),
               parser="lines",
-              notes="'show' prints properties; read-only"),
+              notes="'show' prints properties; read-only. Unfiltered form: "
+                    "comma-separated --property lists print nothing on some "
+                    "systemd versions (observed on the Pi, Debian 13)"),
     inv.Probe("auto_upgrades_config", "os_kernel", "read",
               ("/etc/apt/apt.conf.d/20auto-upgrades",
                "/etc/apt/apt.conf.d/50unattended-upgrades"),
@@ -735,6 +736,10 @@ def _eval_time_sync(ev: Evidence) -> AreaResult:
     for line in data.get("text_lines", []):
         key, _, value = line.partition("=")
         props[key.strip()] = value.strip()
+    if "NTP" not in props:
+        return _missing_evidence(
+            "time-synchronization",
+            "timedatectl produced no NTP properties", refs)
     if props.get("NTP") == "yes" and props.get("NTPSynchronized") == "yes":
         return AreaResult("time-synchronization", VERDICT_OK,
                           "NTP is active and synchronized (timezone: %s)."
