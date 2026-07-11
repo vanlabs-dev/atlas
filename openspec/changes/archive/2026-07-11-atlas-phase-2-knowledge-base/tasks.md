@@ -35,7 +35,7 @@
 
 ## 6. On-device acceptance
 
-- [ ] 6.1 Ingest + review the validation report on the Pi; operator activates (delegation per keep-it-simple decision unless he objects)
-- [ ] 6.2 Replace `atlas-test` with the knowledge server in the Hermes config; verify discovery + a live `knowledge_search` call in a real session; pin the `-t` toolset identifier
-- [ ] 6.3 Approve thresholds; run the benchmark battery; score, classify flagged answers; fix evidence gaps and re-run as needed (if tool-call rate is low, apply the minimal ATLAS-RET-001 mitigation — tool descriptions, then one rules-file line — and record it)
-- [ ] 6.4 Record in `docs/decisions.md`: benchmark verdict + run id, closure of the deferred ATLAS-HERMES-003 retrieval criterion, MV-RI-4 re-test outcome, and the §22 scope-consolidation deviation; update root `README.md`; archive the change
+- [x] 6.1 Ingest + review the validation report on the Pi; operator activates (delegation per keep-it-simple decision unless he objects)
+- [x] 6.2 Replace `atlas-test` with the knowledge server in the Hermes config; verify discovery + a live `knowledge_search` call in a real session; pin the `-t` toolset identifier
+- [x] 6.3 Approve thresholds; run the benchmark battery; score, classify flagged answers; fix evidence gaps and re-run as needed (if tool-call rate is low, apply the minimal ATLAS-RET-001 mitigation — tool descriptions, then one rules-file line — and record it)
+- [x] 6.4 Record in `docs/decisions.md`: benchmark verdict + run id, closure of the deferred ATLAS-HERMES-003 retrieval criterion, MV-RI-4 re-test outcome, and the §22 scope-consolidation deviation; update root `README.md`; archive the change

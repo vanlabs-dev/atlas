@@ -21,7 +21,8 @@ X OAuth), with the Atlas MCP test tool connected.
 | `hardening-apply` | Done — 6 approved items applied + verified on the Pi |
 | `hermes-baseline` | Done — manual install verified; acceptance run `20260711T091512Z-61ef71d0` |
 | `memory-session-recall` | Done — ATLAS-MEM-001…006 verified on the Pi; acceptance run `20260711T171200Z-33321220` (approval gating on, all seven ATLAS-MEM-006 items attested) |
-| `model-validation` | Done — ATLAS-HERMES-003 validated on the Pi; run `20260711T182926Z-b1eef1c6` (tool calls 20/20, context to 96k chars, 3.19s median latency; one documented refusal exception; retrieval benchmark deferred to Phase 2) |
+| `model-validation` | Done — ATLAS-HERMES-003 validated on the Pi; run `20260711T182926Z-b1eef1c6` (tool calls 20/20, context to 96k chars, 3.19s median latency; one documented refusal exception; retrieval criterion closed by the Phase 2 benchmark) |
+| `knowledge-base` | Done — 22 units active (1 marked conflicting: conviction), `atlas-kb` tools live in Hermes; benchmark run `20260711T192206Z-af3fa274` perfect (17/17 grounded, 9/9 refusals, 0 fabrications — MV-RI-4 re-test passed) |
 
 Latest closed-loop assessment `20260711T073125Z-d52a70e9`: **ok=7, finding=0**.
 Hermes baseline carries 2 documented exceptions (runs as `pi`; no service
@@ -88,11 +89,14 @@ var/                        # gitignored: device-sensitive inventory/assessment 
 
 ## Next step
 
-Phase 1 is complete. Per PRD §22, next is **Phase 2**: corpus intake,
-knowledge validation, and grounded retrieval (`atlas-phase-2-corpus-intake`
-first) — its acceptance gates now also carry the deferred ATLAS-HERMES-003
-retrieval benchmark and the MV-RI-4 refusal re-test. Standing debts before
-production acceptance, from [docs/decisions.md](docs/decisions.md): backup
-restore test, dedicated service account, service unit for boot persistence,
-and the PRD §21 Q19 gating decision (evidence recorded; default stays
-approval-gated).
+Phases 0–2 are complete: Atlas answers Bittensor questions from validated,
+source-bound local knowledge through Hermes. Per PRD §22, next is
+**Phase 3**: `atlas-phase-3-subtensor-repository-tracking` — full local
+clone of `RaoFoundation/subtensor` on the Pi, safe update/fetch process,
+change records, and repository-evidence retrieval (ATLAS-REPO-001…009).
+Phase 3 also resolves the recorded **conviction-activation conflict**
+(the knowledge base's one `conflicting` unit) with repo/chain evidence.
+Standing debts before production acceptance, from
+[docs/decisions.md](docs/decisions.md): backup restore test, dedicated
+service account, service unit for boot persistence, and the PRD §21 Q19
+gating decision (evidence recorded; default stays approval-gated).
