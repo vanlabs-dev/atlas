@@ -14,7 +14,7 @@ area/evaluator tables stay total.
 
 | # | Item | Kind | Command | Read-only verdict |
 |---|---|---|---|---|
-| 1 | time_sync | cmd | `timedatectl show --property=NTP,NTPSynchronized,Timezone` | ✅ `show` prints properties; the mutating verbs (`set-ntp`, `set-time`) are absent |
+| 1 | time_sync | cmd | `timedatectl show` | ✅ `show` prints properties; the mutating verbs (`set-ntp`, `set-time`) are absent. (Unfiltered on purpose: comma-separated `--property=` lists print nothing on the Pi's systemd version.) |
 | 2 | auto_upgrades_config | read | `/etc/apt/apt.conf.d/20auto-upgrades`, `.../50unattended-upgrades` | ✅ config file read (`missing_ok`); contains no secrets |
 | 3 | var_log_perms | stat-glob | `/var/log`, `/var/log/*` | ✅ lstat only — log *contents* are never read |
 | 4 | sshd_restart_policy | cmd | `systemctl show ssh.service -p Restart --no-pager` | ✅ `show` prints unit properties; no start/stop/edit verbs |
