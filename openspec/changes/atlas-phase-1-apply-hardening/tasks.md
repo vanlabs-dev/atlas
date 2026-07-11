@@ -2,21 +2,21 @@
 
 ## 1. Shared library and scaffolding
 
-- [ ] 1.1 Create `hardening/apply/` layout with `lib.sh` (JSONL audit append to `var/hardening/apply-log.jsonl`, `sudo -n` detection, already-compliant helpers, stop-on-failure conventions) and a runbook README stating the safe execution order (02→03→04→06→05→01), the lockout-prevention protocol, and the no-credential rule
+- [x] 1.1 Create `hardening/apply/` layout with `lib.sh` (JSONL audit append to `var/hardening/apply-log.jsonl`, `sudo -n` detection, already-compliant helpers, stop-on-failure conventions) and a runbook README stating the safe execution order (02→03→04→06→05→01), the lockout-prevention protocol, and the no-credential rule
 
 ## 2. Item scripts (each: check | apply | verify | rollback, idempotent, plan-cited)
 
-- [ ] 2.1 `02-x11-forwarding.sh` — sshd drop-in `X11Forwarding no`, `sshd -t` check, reload (not restart), verify via `sshd -T`
-- [ ] 2.2 `03-rpcbind.sh` — disable rpcbind socket+service, verify port 111 no longer listening
-- [ ] 2.3 `04-avahi.sh` — disable avahi socket+service, verify port 5353 no longer bound by avahi
-- [ ] 2.4 `06-unattended-upgrades.sh` — install (`--no-install-recommends`) and enable periodic security updates; assert auto-reboot is NOT enabled; verify via apt config
-- [ ] 2.5 `05-nftables.sh` — write `/etc/nftables.conf` (input policy drop; accept lo, established/related, tcp 22), `nft -c` syntax gate, dead-man flush timer, non-persistent load, new-SSH-connection gate, then persist via `systemctl enable nftables`
-- [ ] 2.6 `01-ssh-password.sh` — sshd drop-in `PasswordAuthentication no`, refuses to run while other items lack verified audit records (unless `--force`), `sshd -t` + reload, verify fresh key-auth login succeeds and password auth is refused
+- [x] 2.1 `02-x11-forwarding.sh` — sshd drop-in `X11Forwarding no`, `sshd -t` check, reload (not restart), verify via `sshd -T`
+- [x] 2.2 `03-rpcbind.sh` — disable rpcbind socket+service, verify port 111 no longer listening
+- [x] 2.3 `04-avahi.sh` — disable avahi socket+service, verify port 5353 no longer bound by avahi
+- [x] 2.4 `06-unattended-upgrades.sh` — install (`--no-install-recommends`) and enable periodic security updates; assert auto-reboot is NOT enabled; verify via apt config
+- [x] 2.5 `05-nftables.sh` — write `/etc/nftables.conf` (input policy drop; accept lo, established/related, tcp 22), `nft -c` syntax gate, dead-man flush timer, non-persistent load, new-SSH-connection gate, then persist via `systemctl enable nftables`
+- [x] 2.6 `01-ssh-password.sh` — sshd drop-in `PasswordAuthentication no`, refuses to run while other items lack verified audit records (unless `--force`), `sshd -t` + reload, verify fresh key-auth login succeeds and password auth is refused
 
 ## 3. Off-device verification (no dev-environment mutation)
 
-- [ ] 3.1 `bash -n` all scripts; lib helper tests (audit record shape, compliant-detection) runnable in WSL against temp dirs and stubs only
-- [ ] 3.2 Review pass: line-by-line comparison of every mutating command against the approved plan items (run `20260711T065352Z-0190074a`); record the review in the change
+- [x] 3.1 `bash -n` all scripts; lib helper tests (audit record shape, compliant-detection) runnable in WSL against temp dirs and stubs only
+- [x] 3.2 Review pass: line-by-line comparison of every mutating command against the approved plan items (run `20260711T065352Z-0190074a`); record the review in the change
 
 ## 4. Gated Pi execution (the acceptance run)
 
