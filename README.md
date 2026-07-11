@@ -10,10 +10,11 @@ running on a Raspberry Pi. Built methodically in gated phases via OpenSpec.
 
 ## Current status (2026-07-12)
 
-**Phases 0–2 are complete and accepted on the device.** Hermes Agent
+**Phases 0–3 are complete and accepted on the device.** Hermes Agent
 v0.18.2 runs on the Pi (Grok via X OAuth, validated), answering Bittensor
-questions from the validated local knowledge base through the `atlas-kb`
-MCP tools — source-bound, dated, fail-closed.
+questions from the validated local knowledge base (`atlas-kb`) and from
+the tracked subtensor repository clone (`atlas-repo`) — source-bound,
+dated, commit-cited, fail-closed.
 
 | Capability (accepted spec) | State |
 |---|---|
@@ -24,6 +25,7 @@ MCP tools — source-bound, dated, fail-closed.
 | `memory-session-recall` | Done — ATLAS-MEM-001…006 verified on the Pi; acceptance run `20260711T171200Z-33321220` (approval gating on, all seven ATLAS-MEM-006 items attested) |
 | `model-validation` | Done — ATLAS-HERMES-003 validated on the Pi; run `20260711T182926Z-b1eef1c6` (tool calls 20/20, context to 96k chars, 3.19s median latency; one documented refusal exception; retrieval criterion closed by the Phase 2 benchmark) |
 | `knowledge-base` | Done — 22 units active (1 marked conflicting: conviction), `atlas-kb` tools live in Hermes; benchmark run `20260711T192206Z-af3fa274` perfect (17/17 grounded, 9/9 refusals, 0 fabrications — MV-RI-4 re-test passed) |
+| `subtensor-repo-tracking` | Done — identity-validated full clone of `RaoFoundation/subtensor` on the Pi (non-shallow, push disabled, @ `14bc6f9f964b`), safe journaled updates, 581-file FTS index, `atlas-repo` tools live in Hermes (commit-and-file-cited answers; honest stale/no-evidence); conviction-activation conflict resolved at source level (PR #2800, spec 425) |
 
 Latest closed-loop assessment `20260711T073125Z-d52a70e9`: **ok=7, finding=0**.
 Hermes baseline carries 2 documented exceptions (runs as `pi`; no service
@@ -52,8 +54,11 @@ unit) — both to close before production acceptance.
   (`memory.write_approval` / `skills.write_approval: on`). The production
   knowledge tools are registered as stdio MCP server **`atlas-kb`**
   (`knowledge/atlas_kb_server.py`; it replaced the baseline `atlas-test`
-  test tool on 2026-07-12). Knowledge store + reports live in gitignored
-  `var/knowledge/` on the Pi. Install record:
+  test tool on 2026-07-12), joined by **`atlas-repo`**
+  (`repotrack/atlas_repo_server.py`, registered 2026-07-12) for
+  repository evidence. Knowledge store + reports live in gitignored
+  `var/knowledge/`, the subtensor clone + repo index in gitignored
+  `var/repotrack/` on the Pi. Install record:
   `var/hermes/install-record.json` (on the Pi only). Full facts in the
   acceptance entries in [docs/decisions.md](docs/decisions.md).
 
@@ -69,6 +74,7 @@ hermes/                    # Hermes baseline verifier (read-only) + MCP test too
 hermes/memory/             # memory/session-recall verifier + scripted procedure (read-only)
 hermes/modelval/           # ATLAS-HERMES-003 battery, runner, and read-only scorer
 knowledge/                 # Phase 2 knowledge base: corpus snapshot, store, MCP tools, benchmark
+repotrack/                 # Phase 3 subtensor repo tracking: clone/update/index CLI + MCP tools
 openspec/specs/            # accepted capability specs
 openspec/changes/          # active changes + archive/
 var/                        # gitignored: device-sensitive inventory/assessment outputs
@@ -95,14 +101,15 @@ var/                        # gitignored: device-sensitive inventory/assessment 
 
 ## Next step
 
-Phases 0–2 are complete: Atlas answers Bittensor questions from validated,
-source-bound local knowledge through Hermes. Per PRD §22, next is
-**Phase 3**: `atlas-phase-3-subtensor-repository-tracking` — full local
-clone of `RaoFoundation/subtensor` on the Pi, safe update/fetch process,
-change records, and repository-evidence retrieval (ATLAS-REPO-001…009).
-Phase 3 also resolves the recorded **conviction-activation conflict**
-(the knowledge base's one `conflicting` unit) with repo/chain evidence.
-Standing debts before production acceptance, from
+Phases 0–3 are complete: Atlas answers Bittensor questions from validated
+local knowledge and cites subtensor source with commit and file references
+through Hermes. Per PRD §22, next is **Phase 4**: TaoStats/TaoSwap live
+data (ATLAS-API/LIVE) — blocked on PRD §21 Q24–30 (API docs, base URLs,
+key provisioning). Also open: **Q20** (repo update polling interval — the
+scheduled-update mechanism is ready but deliberately not activated; see
+`repotrack/README.md`), the corpus re-sync to update the conviction
+`conflicting` unit now that repo evidence is recorded, and the standing
+debts before production acceptance from
 [docs/decisions.md](docs/decisions.md): backup restore test, dedicated
 service account, service unit for boot persistence, and the PRD §21 Q19
 gating decision (evidence recorded; default stays approval-gated).

@@ -71,21 +71,21 @@ in [docs/decisions.md](../../../docs/decisions.md).
 
 ## 5. On-device acceptance (Pi)
 
-- [ ] 5.1 `git pull` on the Pi; run `setup` with the pinned identity;
+- [x] 5.1 `git pull` on the Pi; run `setup` with the pinned identity;
       verify non-shallow, pinned branch, disabled push URL; run the
       initial index and record duration/size (bounds check)
-- [ ] 5.2 Run a real `update` cycle (normal case) and verify the run
+- [x] 5.2 Run a real `update` cycle (normal case) and verify the run
       record, change record, and incremental index outcome; verify
       `status` answers every ATLAS-REPO-007 field and reports honest
       staleness with the network deliberately unavailable (ATLAS-REPO-008
       check)
-- [ ] 5.3 **Operator action**: register `atlas-repo` in the Hermes config
+- [x] 5.3 **Operator action**: register `atlas-repo` in the Hermes config
       (alongside `atlas-kb`), pin the toolset identifier, restart Hermes
-- [ ] 5.4 Exit-criteria check through live Hermes: a repository evidence
+- [x] 5.4 Exit-criteria check through live Hermes: a repository evidence
       question answered with commit SHA and file reference from tool
       results; unsupported repo question yields the structured no-evidence
       behavior
-- [ ] 5.5 Conviction-activation evidence check (design D9): search the
+- [x] 5.5 Conviction-activation evidence check (design D9): search the
       validated history v3.4.0-411 → July 2026, judge
       confirmed / refuted / repo-inconclusive, record the finding in
       `docs/decisions.md` (corpus unit update goes through the existing
@@ -97,6 +97,6 @@ in [docs/decisions.md](../../../docs/decisions.md).
       setup/update/status usage, re-sync of pinned identity, the systemd
       timer template with the explicit Q20 activation gate (not installed
       in this change)
-- [ ] 6.2 Update `README.md` / `docs/decisions.md` phase status; record
+- [x] 6.2 Update `README.md` / `docs/decisions.md` phase status; record
       the acceptance entry (runs, SHAs, exit criteria) and any deviations;
       confirm Q20 remains open with the scheduling gate documented
