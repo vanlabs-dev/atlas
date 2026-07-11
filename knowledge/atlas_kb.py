@@ -134,14 +134,18 @@ def _run_id() -> str:
 
 def load_corpus(corpus_dir: str = CORPUS_DIR,
                 hashes_file: str = HASHES_FILE) -> Dict[str, Any]:
-    """Load the snapshot, verifying every recorded hash first."""
+    """Load the snapshot, verifying every recorded hash first.
+
+    Hashes are computed over newline-normalized bytes (CRLF→LF): git
+    normalizes line endings between the Windows dev checkout and the Pi,
+    so byte-exact hashing would reject identical content."""
     with open(hashes_file, "r", encoding="utf-8") as handle:
         manifest = json.load(handle)
     files: Dict[str, Dict[str, Any]] = {}
     for filename, expected in manifest["files"].items():
         path = os.path.join(corpus_dir, filename)
         with open(path, "rb") as handle:
-            raw = handle.read()
+            raw = handle.read().replace(b"\r\n", b"\n")
         actual = hashlib.sha256(raw).hexdigest()
         if actual != expected:
             raise FatalKbError(
