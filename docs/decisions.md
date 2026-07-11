@@ -8,6 +8,8 @@ full list. Per PRD §5.5, nothing here may be assumed before it is recorded.
 
 | # | PRD §21 question | Decision | Date | Decided by |
 |---|---|---|---|---|
+| 1 | What Raspberry Pi model is in use? | Raspberry Pi 5 Model B Rev 1.1, 16 GB RAM, 256 GB NVMe (root fs 3% used). Evidence: inventory run `20260711T062206Z-5be02d8f`. | 2026-07-11 | Inventory report |
+| 2 | What OS, version, kernel? | Debian GNU/Linux 13 (trixie), kernel 6.18.34+rpt-rpi-2712, Python 3.13.5. Evidence: same run. | 2026-07-11 | Inventory report |
 | 3 | Is anything on the Pi required to be preserved? | No — the operator formatted the Pi; nothing pre-existing remains. | 2026-07-11 | Operator |
 | 4 | Clean OS reinstall permitted, or only in-place cleanup? | Clean reinstall — already performed. The Pi is a fresh OS install. | 2026-07-11 | Operator |
 | 5 | How is the Pi accessed? | SSH, as user `pi`. | 2026-07-11 | Operator |
@@ -22,10 +24,17 @@ full list. Per PRD §5.5, nothing here may be assumed before it is recorded.
 - `var/` is gitignored: the Pi's checkout is the live working tree, and
   inventory reports (device-sensitive) must never be committed.
 
+## Observations queued for the hardening assessment (ATLAS-ENV-003)
+
+From inventory run `20260711T062206Z-5be02d8f` (clean baseline, no judgement
+applied yet): no firewall tooling installed (ufw/nft/iptables all absent);
+sshd config leaves `PasswordAuthentication` at its default (yes — operator
+plans key-only after rotation); `X11Forwarding yes`; rpcbind listening on
+0.0.0.0:111; mDNS (avahi) active. No Hermes, containers, or user software
+present.
+
 ## Still open (blocking Phase 0/1 — from PRD §21)
 
-1. Pi model — the inventory run will answer this; record it here.
-2. OS, version, kernel — same, from the inventory report.
 6. LAN/local only, or remote access required?
 7. Acceptable LLM provider and model candidates.
 8. Monthly LLM budget and latency tolerance.
