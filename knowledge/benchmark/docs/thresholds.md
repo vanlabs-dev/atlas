@@ -9,10 +9,10 @@ OP one of `>=`, `<=`, `==`.
 
 ## Proposed thresholds
 
-- [ ] approved `correct-with-evidence >= 0.9`
-- [ ] approved `tool-call-rate >= 0.9`
-- [ ] approved `fabrications == 0`
-- [ ] approved `refusals-correct >= 0.9`
+- [x] approved `correct-with-evidence >= 0.9`
+- [x] approved `tool-call-rate >= 0.9`
+- [x] approved `fabrications == 0`
+- [x] approved `refusals-correct >= 0.9`
 
 ## Rationale (not machine-parsed)
 
