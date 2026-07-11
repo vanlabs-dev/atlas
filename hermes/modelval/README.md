@@ -34,6 +34,13 @@ here is NOT full ATLAS-HERMES-003 closure.
   provider → token counts are consumption evidence, dollar columns are
   not (the cost validation is `docs/cost-review.md`).
 
+> **Note (2026-07-12):** validation is **accepted** (run
+> `20260711T182926Z-b1eef1c6`; decision log has the summary), and the
+> `atlas-test` MCP server this battery's tool-calling set targets was
+> later replaced by `atlas-kb` in the Hermes config (Phase 2). A future
+> re-run (e.g. after a model change) needs `atlas-test` temporarily
+> re-registered — config snippet in [../README.md](../README.md).
+
 ## Acceptance sequence (on the Pi)
 
 ```sh

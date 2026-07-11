@@ -74,15 +74,23 @@ command: python3
 args: ["/home/pi/atlas/hermes/testtool/atlas_test_tool.py"]
 ```
 
-It will be **replaced** (not extended) by the production Atlas tool
-interface in a later phase.
+It was **replaced** (not extended) by the production Atlas knowledge
+tools on 2026-07-12: the `atlas-kb` stdio MCP server
+([../knowledge/atlas_kb_server.py](../knowledge/atlas_kb_server.py)) now
+holds the Hermes registration. The test tool file remains in the repo as
+the accepted baseline artifact (and for temporary re-registration if the
+baseline or model-validation battery ever needs a re-run).
 
-## Related module
+## Related modules
 
-[`memory/`](memory/README.md) verifies Hermes memory and session recall
-behavior (ATLAS-MEM-001…006) after this baseline is accepted — same
-read-only, fail-closed, attestation-based approach, reusing this
-verifier's record/check/verdict machinery.
+- [`memory/`](memory/README.md) verifies Hermes memory and session recall
+  behavior (ATLAS-MEM-001…006) — same read-only, fail-closed,
+  attestation-based approach, reusing this verifier's record/check/verdict
+  machinery.
+- [`modelval/`](modelval/README.md) validates the selected model
+  (ATLAS-HERMES-003) with a tagged battery through live Hermes; its
+  runner/scoring machinery is generalized and reused by the Phase 2
+  retrieval benchmark ([`../knowledge/benchmark/`](../knowledge/benchmark/)).
 
 ## Tests
 
