@@ -1,0 +1,50 @@
+{
+  "_comment": "Live-data provider policy. Values marked *_unconfirmed are placeholders pending the discovery-report operator gates (tasks 2.3/4.3/5.3) — adapters refuse to serve an operation whose envelope is unconfirmed. Quota design target: TaoStats FREE tier; self-cap strictly below the provider 5/min (operator refinement 2026-07-12). Window kind starts at the stricter 'month' reading until discovery confirms day-vs-month.",
+  "providers": {
+    "taoswap": {
+      "base_url": "https://api.taoswap.org",
+      "auth": "none",
+      "quota": {
+        "per_minute_cap": 20,
+        "min_spacing_seconds": 1.0
+      }
+    },
+    "taostats": {
+      "base_url": "https://api.taostats.io",
+      "auth": "header",
+      "auth_header": "Authorization",
+      "key_env": "TAOSTATS_API_KEY",
+      "quota": {
+        "per_minute_cap": 2,
+        "per_minute_cap_unconfirmed": "proposed self-cap below provider 5/min — operator gate 5.3",
+        "window_kind": "month",
+        "window_kind_unconfirmed": "day vs month confirmed by discovery (task 4.1)",
+        "window_limit": 10000,
+        "interactive_reserve_fraction": 0.8,
+        "min_spacing_seconds": 15.0
+      }
+    },
+    "coingecko": {
+      "base_url": "https://api.coingecko.com",
+      "auth": "none",
+      "quota": {
+        "per_minute_cap": 5,
+        "min_spacing_seconds": 2.0
+      }
+    }
+  },
+  "db": "var/livedata/livedata.db",
+  "output_dir": "var/livedata",
+  "cache_max_rows": 200,
+  "request_timeout_seconds": 20,
+  "retry": {
+    "default_attempts": 2,
+    "retry_on_status": [500, 502, 503, 504],
+    "never_retry_on_status": [429],
+    "jitter_seconds": [0.5, 2.0]
+  },
+  "price_tolerance_pairwise_unconfirmed": 0.02,
+  "endpoints": {
+    "_comment": "Filled from approved discovery reports (gates 2.3/4.3). Shape per operation: provider, path, params, schema, freshness envelope {max_upstream_age_s, max_local_age_s, expected_cadence}."
+  }
+}
