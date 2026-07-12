@@ -1,0 +1,14 @@
+# Atlas subtensor repository update timer — hourly per the recorded Q20
+# decision (docs/decisions.md, 2026-07-12). Staleness policy: config.json
+# update_interval_hours=1 × stale_multiplier=3 → status reports stale
+# after 3h without a successful fetch.
+[Unit]
+Description=Atlas subtensor repository update timer
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

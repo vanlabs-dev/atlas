@@ -1,0 +1,14 @@
+# Atlas subtensor repository update (PRD §21 Q20: hourly, decided 2026-07-12)
+# Install (operator, needs sudo):
+#   sudo cp ~/atlas/repotrack/systemd/atlas-repotrack-update.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now atlas-repotrack-update.timer
+[Unit]
+Description=Atlas subtensor repository update
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=pi
+ExecStart=/usr/bin/python3 /home/pi/atlas/repotrack/atlas_repo.py update

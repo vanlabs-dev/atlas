@@ -103,13 +103,14 @@ var/                        # gitignored: device-sensitive inventory/assessment 
 
 Phases 0–3 are complete: Atlas answers Bittensor questions from validated
 local knowledge and cites subtensor source with commit and file references
-through Hermes. Per PRD §22, next is **Phase 4**: TaoStats/TaoSwap live
-data (ATLAS-API/LIVE) — blocked on PRD §21 Q24–30 (API docs, base URLs,
-key provisioning). Also open: **Q20** (repo update polling interval — the
-scheduled-update mechanism is ready but deliberately not activated; see
-`repotrack/README.md`), the corpus re-sync to update the conviction
-`conflicting` unit now that repo evidence is recorded, and the standing
-debts before production acceptance from
+through Hermes. Per PRD §22, next is **Phase 4**: live data, **TaoSwap
+first** (keyless, contract confirmed 2026-07-12), then TaoStats where it
+adds data (Q24–30 all decided 2026-07-12 — see the decision log; the
+TaoStats key still needs installing per `env.example`). Q20 is decided
+(hourly): repo-update timer files in `repotrack/systemd/` await the
+operator's sudo install. Also open: the corpus re-sync to update the
+conviction `conflicting` unit now that repo evidence is recorded, and the
+standing debts before production acceptance from
 [docs/decisions.md](docs/decisions.md): backup restore test, dedicated
 service account, service unit for boot persistence, and the PRD §21 Q19
 gating decision (evidence recorded; default stays approval-gated).

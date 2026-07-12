@@ -73,36 +73,21 @@ atlas-repo:
   args: ["/home/pi/atlas/repotrack/atlas_repo_server.py"]
 ```
 
-## Scheduling — gated on PRD §21 Q20 (open)
+## Scheduling — PRD §21 Q20 decided 2026-07-12: hourly
 
-`update` is manual until the operator records a polling interval. When
-Q20 is decided: record it in `docs/decisions.md`, set
-`update_interval_hours` in config.json, and install the timer
-(template below — **not installed by this change**):
+`config.json` pins `update_interval_hours: 1`, `stale_multiplier: 3`
+(status reports `stale` after 3h without a successful fetch — tolerates
+one missed cycle without flapping). Unit files live in
+[systemd/](systemd/); installation needs sudo, so the operator runs:
 
-```ini
-# /etc/systemd/system/atlas-repotrack-update.service
-[Unit]
-Description=Atlas subtensor repository update
-[Service]
-Type=oneshot
-User=pi
-ExecStart=/usr/bin/python3 /home/pi/atlas/repotrack/atlas_repo.py update
-
-# /etc/systemd/system/atlas-repotrack-update.timer
-[Unit]
-Description=Atlas subtensor repository update timer
-[Timer]
-OnCalendar=daily        # ← replace per the recorded Q20 decision
-RandomizedDelaySec=15m
-Persistent=true
-[Install]
-WantedBy=timers.target
+```
+sudo cp ~/atlas/repotrack/systemd/atlas-repotrack-update.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now atlas-repotrack-update.timer
 ```
 
-Until then, `update_interval_hours` × `stale_multiplier` only drives
-the honesty policy: `status`/`repo_status` report `stale` when the last
-successful fetch is older than that window.
+Verify with `systemctl list-timers atlas-repotrack-update.timer` and
+`python3 repotrack/atlas_repo.py status` after the first firing.
 
 ## Re-pinning / re-sync
 
