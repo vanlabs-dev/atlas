@@ -63,7 +63,8 @@ class DiscoverySession:
               params: Optional[Dict[str, Any]] = None,
               headers: Optional[Dict[str, str]] = None,
               expect: str = "success",
-              note: str = "") -> Dict[str, Any]:
+              note: str = "",
+              timeout: Optional[float] = None) -> Dict[str, Any]:
         """One observed call. `expect` is 'success' or 'error' (safe
         negative tests). Respects the provider budget hard."""
         if self.max_calls is not None and self.calls_made >= self.max_calls:
@@ -83,7 +84,8 @@ class DiscoverySession:
         merged_headers = dict(self.headers)
         merged_headers.update(headers or {})
         result = al.http_get(self.config, self.provider, path,
-                             params=params, headers=merged_headers)
+                             params=params, headers=merged_headers,
+                             timeout=timeout)
         self.ledger.record_reported_limits(self.provider,
                                            result.get("headers", {}))
         for key, value in result.get("headers", {}).items():
@@ -154,12 +156,14 @@ def write_report(config: Dict[str, Any], provider: str,
     root = repo_root or al._REPO_ROOT
     output_dir = al.resolve(config["output_dir"], root)
     os.makedirs(output_dir, exist_ok=True)
+    # redact string values inside the tree, never the serialized JSON —
+    # a redaction pattern spanning a closing quote corrupts the document
+    report = al.redact_tree(report)
     path = os.path.join(output_dir, "contract-%s-%s.json"
                         % (provider, report["run_id"]))
-    al.write_private(path, al.redact(
-        json.dumps(report, indent=2, sort_keys=True)))
+    al.write_private(path, json.dumps(report, indent=2, sort_keys=True))
     md_path = path[:-5] + ".md"
-    al.write_private(md_path, al.redact(render_report(report)))
+    al.write_private(md_path, render_report(report))
     return md_path
 
 
