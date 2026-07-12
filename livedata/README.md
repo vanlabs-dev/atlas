@@ -1,38 +1,96 @@
-# livedata — TaoSwap/TaoStats live data (Phase 4, IN PROGRESS)
+# livedata — TaoSwap/TaoStats/CoinGecko live data (Phase 4)
 
-Fail-closed live Bittensor data (PRD §12.7 ATLAS-API-001…008, §12.8
-ATLAS-LIVE-001…009; decisions Q24–30 incl. the 2026-07-12 refinements:
-TaoSwap-first, no TaoStats spend on price checking, pacing headroom).
+Fail-closed current Bittensor data for Hermes (PRD §12.7
+ATLAS-API-001…008, §12.8 ATLAS-LIVE-001…009; decisions Q24–30 and the
+Phase 4 discovery gates, all 2026-07-12). Providers: **TaoSwap first**
+(keyless), **TaoStats** where it adds data (keyed, quota-budgeted),
+**CoinGecko** as the TAO/USD spot reference. Production price checking
+spends **no TaoStats quota** (Q30).
 
-Status: plumbing + contract discovery. Adapters, schemas, and the
-`atlas-live` MCP server land after the discovery operator gates
-(tasks 2.3/4.3/5.3) — ATLAS-API-002 forbids building adapters before
-real validated calls, and ATLAS-LIVE-002 forbids invented freshness
-thresholds.
-
-## Discovery
+## Module map
 
 ```
-python3 livedata/discover_taoswap.py         # keyless, first
-python3 livedata/discover_taostats.py \      # on the Pi (key in .env),
-    --taoswap-report var/livedata/contract-taoswap-<run>.json
+discover_taoswap.py    contract discovery, keyless (budget 30 calls)
+discover_taostats.py   contract discovery, keyed (hard budget 40 calls,
+                       paced through the ledger; run on the Pi)
+discovery_common.py    shared probe/report machinery (ATLAS-API-003/004/005)
+atlas_live.py          store, quota ledger, HTTP, pinned-schema validation,
+                       per-operation adapters, the fail-closed pipeline
+atlas_live_server.py   `atlas-live` stdio MCP server (six tools)
+schemas/               pinned per-endpoint schemas (drift = missing or
+                       mistyped required field; extras tolerated)
+config.json            operator-approved contract: endpoints, freshness
+                       envelopes, budgets, tolerance (gates 2.3/4.3/5.3)
+tests/                 fixture-provider suite (32 tests, off-device)
 ```
 
-Both write ATLAS-API-003 contract reports (JSON + MD, 0600) to
-`var/livedata/`. TaoStats discovery runs under a hard ≤ 40-call budget
-through the persisted quota ledger (self-cap 2/min, 15s spacing — the
-free-tier design target with headroom). The TaoStats report includes the
-Q25/Q27 comparison the operator picks endpoints from.
+## The pipeline (every live call)
 
-## Store
+quota/pacing acquire → HTTP GET (bounded retries: 1 retry on
+connect/5xx, **never** on 429; per-provider timeout — TaoStats 45s,
+observed spiky) → JSON parse → pinned-schema validation → typed
+post-processing → ATLAS-LIVE-003 envelope (provider, operation, request
+time, upstream timestamp, block reference, units, validation +
+freshness status) → audit record (Q29 field set) + labelled cache.
 
-`var/livedata/livedata.db`: `calls` (quota ledger), `audit` (the
-Q29/LIVE-009 per-call record), `integration_health`, `response_cache`
-(size-capped, labelled `historical-snapshot`), `provider_limits`
-(provider-reported vs local estimates).
+Failures return structured `live-unavailable`. A cached value is
+returned ONLY on explicit `include_last_known: true`, labelled
+`historical-snapshot` with its age (ATLAS-LIVE-004). Schema drift fails
+closed and writes an `integration_health` event (ATLAS-API-007).
+
+## Quota (ATLAS-LIVE-006/007)
+
+TaoStats free tier: 5/min, 10,000/**month**. Atlas self-caps at
+**2/min** with 15s spacing (headroom by design — never fills the
+provider limit) and refuses non-interactive use above **80%** of the
+month. The ledger (`var/livedata/livedata.db`) persists across
+restarts and distinguishes local estimates from provider-reported
+headers. TaoSwap/CoinGecko have no documented limits — recorded as
+UNKNOWN, politeness budgets applied (never assumed unlimited).
+
+## Tools (`atlas-live`)
+
+`live_price` (CoinGecko spot + TaoSwap daily close, cross-checked at 5%
+pairwise tolerance; conflicts surfaced, never averaged, never
+TaoStats), `live_subnets` (TaoSwap incl. conviction/ownership state;
+optional TaoStats protocol params), `live_metagraph` (TaoStats),
+`live_network_stats` (TaoSwap), `live_chain_head` (TaoStats — block,
+timestamp, **spec_version: ≥ 425 = conviction ownership enacted**),
+`live_status` (health events, quota, last successes; no provider
+calls).
+
+Hermes registration (done 2026-07-12, alongside atlas-kb/atlas-repo):
+
+```yaml
+atlas-live:
+  command: python3
+  args: ["/home/pi/atlas/livedata/atlas_live_server.py"]
+```
 
 ## Secrets
 
 `TAOSTATS_API_KEY` from the repo-root `.env` (0600; template
-`env.example`). Every error/report/audit path passes through redaction;
-the key never appears in any output (ATLAS-API-008).
+`env.example`; os.environ fallback for tests). Every error/report/audit
+path passes through redaction — including redaction of the key value
+itself; reports are redacted tree-wise (never on serialized JSON).
+
+## Re-discovery after drift
+
+When a pinned schema drifts (health event + `live_status`): re-run the
+provider's discovery script, review the new report, update the pinned
+schema with a version bump, and record the change in
+`docs/decisions.md`. TaoStats re-discovery stays inside the 40-call
+budget.
+
+## Tests
+
+```
+cd livedata/tests && python3 -m unittest discover -s .
+```
+
+A stdlib fixture provider replays schema-conformant responses and
+exercises: envelopes, freshness (fresh/aged-upstream), drift, the
+currency-echo guard (TaoSwap ignores bad params), 429 never-retry, 5xx
+single-retry, quota exhaustion before HTTP, restart persistence,
+snapshot opt-in labelling, disagreement marking, secret-leak
+regression, and the server surface scan.

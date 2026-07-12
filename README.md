@@ -10,11 +10,12 @@ running on a Raspberry Pi. Built methodically in gated phases via OpenSpec.
 
 ## Current status (2026-07-12)
 
-**Phases 0–3 are complete and accepted on the device.** Hermes Agent
+**Phases 0–4 are complete and accepted on the device.** Hermes Agent
 v0.18.2 runs on the Pi (Grok via X OAuth, validated), answering Bittensor
-questions from the validated local knowledge base (`atlas-kb`) and from
-the tracked subtensor repository clone (`atlas-repo`) — source-bound,
-dated, commit-cited, fail-closed.
+questions from the validated local knowledge base (`atlas-kb`), the
+tracked subtensor repository clone (`atlas-repo`), and live provider
+data (`atlas-live`: TaoSwap/TaoStats/CoinGecko) — source-bound, dated,
+commit-cited, provenance-enveloped, fail-closed.
 
 | Capability (accepted spec) | State |
 |---|---|
@@ -25,7 +26,8 @@ dated, commit-cited, fail-closed.
 | `memory-session-recall` | Done — ATLAS-MEM-001…006 verified on the Pi; acceptance run `20260711T171200Z-33321220` (approval gating on, all seven ATLAS-MEM-006 items attested) |
 | `model-validation` | Done — ATLAS-HERMES-003 validated on the Pi; run `20260711T182926Z-b1eef1c6` (tool calls 20/20, context to 96k chars, 3.19s median latency; one documented refusal exception; retrieval criterion closed by the Phase 2 benchmark) |
 | `knowledge-base` | Done — 22 units active (1 marked conflicting: conviction), `atlas-kb` tools live in Hermes; benchmark run `20260711T192206Z-af3fa274` perfect (17/17 grounded, 9/9 refusals, 0 fabrications — MV-RI-4 re-test passed) |
-| `subtensor-repo-tracking` | Done — identity-validated full clone of `RaoFoundation/subtensor` on the Pi (non-shallow, push disabled, @ `14bc6f9f964b`), safe journaled updates, 581-file FTS index, `atlas-repo` tools live in Hermes (commit-and-file-cited answers; honest stale/no-evidence); conviction-activation conflict resolved at source level (PR #2800, spec 425) |
+| `subtensor-repo-tracking` | Done — identity-validated full clone of `RaoFoundation/subtensor` on the Pi (non-shallow, push disabled, @ `14bc6f9f964b`), safe journaled updates (hourly timer), 581-file FTS index, `atlas-repo` tools live in Hermes (commit-and-file-cited answers; honest stale/no-evidence) |
+| `live-data` | Done — contract-validated TaoSwap (keyless, first) + TaoStats (2/min self-cap, 10k/month ledger) + CoinGecko adapters; pinned schemas, freshness envelopes, `atlas-live` tools live in Hermes; outage battery proved honest unavailability (MV-RI-4 class closed); chain head watch: spec 424, conviction ownership NOT yet enacted (announced 2026-07-02, pending spec ≥ 425) |
 
 Latest closed-loop assessment `20260711T073125Z-d52a70e9`: **ok=7, finding=0**.
 Hermes baseline carries 2 documented exceptions (runs as `pi`; no service
@@ -55,10 +57,12 @@ unit) — both to close before production acceptance.
   knowledge tools are registered as stdio MCP server **`atlas-kb`**
   (`knowledge/atlas_kb_server.py`; it replaced the baseline `atlas-test`
   test tool on 2026-07-12), joined by **`atlas-repo`**
-  (`repotrack/atlas_repo_server.py`, registered 2026-07-12) for
-  repository evidence. Knowledge store + reports live in gitignored
-  `var/knowledge/`, the subtensor clone + repo index in gitignored
-  `var/repotrack/` on the Pi. Install record:
+  (`repotrack/atlas_repo_server.py`) for repository evidence and
+  **`atlas-live`** (`livedata/atlas_live_server.py`) for current
+  provider data (all registered 2026-07-12; `TAOSTATS_API_KEY` in the
+  Pi's 0600 `.env`). Stores live in gitignored `var/knowledge/`,
+  `var/repotrack/` (clone + index), and `var/livedata/` (quota ledger,
+  audit, health) on the Pi. Install record:
   `var/hermes/install-record.json` (on the Pi only). Full facts in the
   acceptance entries in [docs/decisions.md](docs/decisions.md).
 
@@ -75,6 +79,7 @@ hermes/memory/             # memory/session-recall verifier + scripted procedure
 hermes/modelval/           # ATLAS-HERMES-003 battery, runner, and read-only scorer
 knowledge/                 # Phase 2 knowledge base: corpus snapshot, store, MCP tools, benchmark
 repotrack/                 # Phase 3 subtensor repo tracking: clone/update/index CLI + MCP tools
+livedata/                  # Phase 4 live data: discovery, adapters, quota, MCP tools
 openspec/specs/            # accepted capability specs
 openspec/changes/          # active changes + archive/
 var/                        # gitignored: device-sensitive inventory/assessment outputs
@@ -101,16 +106,16 @@ var/                        # gitignored: device-sensitive inventory/assessment 
 
 ## Next step
 
-Phases 0–3 are complete: Atlas answers Bittensor questions from validated
-local knowledge and cites subtensor source with commit and file references
-through Hermes. Per PRD §22, next is **Phase 4**: live data, **TaoSwap
-first** (keyless, contract confirmed 2026-07-12), then TaoStats where it
-adds data (Q24–30 all decided 2026-07-12 — see the decision log; the
-TaoStats key still needs installing per `env.example`). Q20 is decided
-(hourly): repo-update timer files in `repotrack/systemd/` await the
-operator's sudo install. Also open: the corpus re-sync to update the
-conviction `conflicting` unit now that repo evidence is recorded, and the
-standing debts before production acceptance from
-[docs/decisions.md](docs/decisions.md): backup restore test, dedicated
-service account, service unit for boot persistence, and the PRD §21 Q19
-gating decision (evidence recorded; default stays approval-gated).
+Phases 0–4 are complete: Atlas answers from validated knowledge, cites
+subtensor source by commit, and reports current data with provider and
+timestamp provenance — or refuses honestly. Per PRD §22, next is
+**Phase 5**: the Telegram gateway (restricted user/chat, operational
+notifications — its §21 blocking questions are still open, including
+Q21 notification granularity). Watchpoints: the **conviction enactment**
+(announced 2026-07-02, still pending at spec 424 — `live_chain_head`
+flips `conviction_ownership_enacted` at spec ≥ 425; the corpus re-sync
+then updates the `conflicting` unit), and the standing pre-production
+debts from [docs/decisions.md](docs/decisions.md): backup restore test,
+dedicated service account, service unit for boot persistence, and the
+PRD §21 Q19 gating decision (evidence recorded; default stays
+approval-gated).
