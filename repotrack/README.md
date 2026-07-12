@@ -89,6 +89,13 @@ sudo systemctl enable --now atlas-repotrack-update.timer
 Verify with `systemctl list-timers atlas-repotrack-update.timer` and
 `python3 repotrack/atlas_repo.py status` after the first firing.
 
+**Phase 5:** the service also runs the Telegram notifier after each
+successful update — `ExecStartPost=-/usr/bin/python3
+/home/pi/atlas/telegram/atlas_telegram.py scan` (the leading `-` makes it
+best-effort, so a Telegram failure never marks this unit failed). Re-`cp`
+the `.service` file and `daemon-reload` if it changes. See
+[telegram/](../telegram/).
+
 ## Re-pinning / re-sync
 
 If the repository moves again: re-run `validate-identity`, record a new

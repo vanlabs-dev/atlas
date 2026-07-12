@@ -64,8 +64,13 @@ unit) — both to close before production acceptance.
   **`atlas-live`** (`livedata/atlas_live_server.py`) for current
   provider data (all registered 2026-07-12; `TAOSTATS_API_KEY` in the
   Pi's 0600 `.env`). Stores live in gitignored `var/knowledge/`,
-  `var/repotrack/` (clone + index), and `var/livedata/` (quota ledger,
-  audit, health) on the Pi. Install record:
+  `var/repotrack/` (clone + index), `var/livedata/` (quota ledger,
+  audit, health), and `var/telegram/` (delivery ledger + watermarks) on
+  the Pi. **Telegram (Phase 5):** inbound conversation is the native Hermes
+  gateway (operator-configured via `hermes gateway setup`; numeric-ID
+  allowlist); the outbound notifier (`telegram/atlas_telegram.py`) runs as
+  a best-effort `ExecStartPost` on the hourly repotrack service and sends
+  scrubbed, de-duplicated alerts. Install record:
   `var/hermes/install-record.json` (on the Pi only). Full facts in the
   acceptance entries in [docs/decisions.md](docs/decisions.md).
 
@@ -83,6 +88,7 @@ hermes/modelval/           # ATLAS-HERMES-003 battery, runner, and read-only sco
 knowledge/                 # Phase 2 knowledge base: corpus snapshot, store, MCP tools, benchmark
 repotrack/                 # Phase 3 subtensor repo tracking: clone/update/index CLI + MCP tools
 livedata/                  # Phase 4 live data: discovery, adapters, quota, MCP tools
+telegram/                  # Phase 5 outbound notifier (scrub, ledger, dedup); inbound is native Hermes gateway
 openspec/specs/            # accepted capability specs
 openspec/changes/          # active changes + archive/
 var/                        # gitignored: device-sensitive inventory/assessment outputs
@@ -109,16 +115,21 @@ var/                        # gitignored: device-sensitive inventory/assessment 
 
 ## Next step
 
-Phases 0–4 are complete: Atlas answers from validated knowledge, cites
-subtensor source by commit, and reports current data with provider and
-timestamp provenance — or refuses honestly. Per PRD §22, next is
-**Phase 5**: the Telegram gateway (restricted user/chat, operational
-notifications — its §21 blocking questions are still open, including
-Q21 notification granularity). Watchpoints: the **conviction enactment**
-(announced 2026-07-02, still pending at spec 424 — `live_chain_head`
-flips `conviction_ownership_enacted` at spec ≥ 425; the corpus re-sync
-then updates the `conflicting` unit), and the standing pre-production
-debts from [docs/decisions.md](docs/decisions.md): backup restore test,
-dedicated service account, service unit for boot persistence, and the
-PRD §21 Q19 gating decision (evidence recorded; default stays
+Phases 0–5 are complete: Atlas answers from validated knowledge, cites
+subtensor source by commit, reports current data with provider and
+timestamp provenance (or refuses honestly), and reaches the operator over
+a controlled Telegram channel — inbound conversation via the native Hermes
+gateway (numeric-ID allowlist) and an outbound notifier (repository-update,
+schema-drift, knowledge-ingestion) that scrubs secrets, records every
+delivery, de-duplicates, and stays isolated on failure. Per PRD §22, next is
+**Phase 6**: the monitoring frontend (local health API + monitoring-only
+UI). Its §21 blocking questions are open — Q36 access location, Q37 auth,
+Q38 LAN HTTPS/certs, Q39 first-screen health fields, Q40 retention.
+Watchpoints: the **conviction enactment** (announced 2026-07-02, still
+pending at spec 424 — `live_chain_head` flips `conviction_ownership_enacted`
+at spec ≥ 425; the corpus re-sync then updates the `conflicting` unit), and
+the standing pre-production debts from [docs/decisions.md](docs/decisions.md):
+backup restore test, dedicated service account, service unit for boot
+persistence (also gates **service-failure** Telegram alerts, deferred), and
+the PRD §21 Q19 gating decision (evidence recorded; default stays
 approval-gated).
