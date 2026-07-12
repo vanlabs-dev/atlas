@@ -1,0 +1,29 @@
+{
+  "_source": "TaoStats /api/metagraph/latest/v1 report 20260712T014512Z-0ee4f8c4; amounts as strings in rao-scale fields; {pagination,data} envelope",
+  "type": "object",
+  "required": ["data"],
+  "properties": {
+    "pagination": {"type": ["object", "null"]},
+    "data": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["hotkey", "coldkey", "block_number", "active"],
+        "properties": {
+          "hotkey": {"type": "object", "required": ["ss58"],
+                     "properties": {"ss58": {"type": "string"}}},
+          "coldkey": {"type": "object", "required": ["ss58"],
+                      "properties": {"ss58": {"type": "string"}}},
+          "block_number": {"type": "integer"},
+          "active": {"type": "boolean"},
+          "alpha_stake": {"type": ["string", "null"]},
+          "daily_reward": {"type": ["string", "null"]},
+          "incentive": {"type": ["string", "null"]},
+          "dividends": {"type": ["string", "null"]},
+          "is_owner_hotkey": {"type": ["boolean", "null"]},
+          "is_immunity_period": {"type": ["boolean", "null"]}
+        }
+      }
+    }
+  }
+}

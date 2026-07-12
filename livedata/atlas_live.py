@@ -187,7 +187,8 @@ def provider_key(config: Dict[str, Any], provider: str,
     if spec.get("auth") != "header":
         return None
     env = env if env is not None else load_env()
-    key = env.get(spec["key_env"], "").strip()
+    key = (env.get(spec["key_env"])
+           or os.environ.get(spec["key_env"], "")).strip()
     if not key:
         raise FatalLiveError(
             "provider %s needs %s in %s (0600) — see env.example"
@@ -495,3 +496,391 @@ def http_get(config: Dict[str, Any], provider: str, path: str,
                     "error": redact("connection failure for %s: %s"
                                     % (path, exc))}
     raise AssertionError("unreachable")
+
+
+# ---------------------------------------------------------------------------
+# Pinned-schema validation (ATLAS-API-006/007)
+# ---------------------------------------------------------------------------
+
+SCHEMAS_DIR = os.path.join(_MODULE_DIR, "schemas")
+_SCHEMA_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+def load_schema(name: str) -> Dict[str, Any]:
+    """`name` like 'taoswap/subnets.v1' → schemas/taoswap/subnets.v1.schema.json"""
+    if name not in _SCHEMA_CACHE:
+        path = os.path.join(SCHEMAS_DIR, *name.split("/")) \
+            + ".schema.json"
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                _SCHEMA_CACHE[name] = json.load(handle)
+        except (OSError, ValueError) as exc:
+            raise FatalLiveError("pinned schema %s unreadable: %s"
+                                 % (name, exc))
+    return _SCHEMA_CACHE[name]
+
+
+def _type_ok(expected: str, value: Any) -> bool:
+    if expected == "null":
+        return value is None
+    if expected == "boolean":
+        return isinstance(value, bool)
+    if expected == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected == "number":
+        return (isinstance(value, (int, float))
+                and not isinstance(value, bool))
+    if expected == "string":
+        return isinstance(value, str)
+    if expected == "object":
+        return isinstance(value, dict)
+    if expected == "array":
+        return isinstance(value, list)
+    return True  # "any"
+
+
+def validate_schema(schema: Dict[str, Any], value: Any,
+                    path: str = "$") -> List[str]:
+    """Tiny JSON-schema subset: type (str or list), required, properties,
+    items. Extra fields are tolerated by design — drift means a missing
+    or mistyped REQUIRED/known field (recorded schema policy)."""
+    errors: List[str] = []
+    expected = schema.get("type")
+    if expected is not None:
+        types = expected if isinstance(expected, list) else [expected]
+        if not any(_type_ok(t, value) for t in types):
+            return ["%s: expected %s, got %s"
+                    % (path, "/".join(types), type(value).__name__)]
+    if isinstance(value, dict):
+        for key in schema.get("required", []):
+            if key not in value:
+                errors.append("%s: missing required %r" % (path, key))
+        for key, sub in schema.get("properties", {}).items():
+            if key in value:
+                errors.extend(validate_schema(sub, value[key],
+                                              "%s.%s" % (path, key)))
+    if isinstance(value, list) and "items" in schema:
+        for index, item in enumerate(value[:200]):
+            errors.extend(validate_schema(schema["items"], item,
+                                          "%s[%d]" % (path, index)))
+            if errors:
+                break  # first bad item is enough evidence
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Per-operation post-processing (typed values + provenance extraction)
+# ---------------------------------------------------------------------------
+
+
+def _epoch_iso(epoch: Any) -> Optional[str]:
+    try:
+        return datetime.datetime.fromtimestamp(
+            float(epoch), tz=datetime.timezone.utc).isoformat()
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def _pp_price_spot_coingecko(payload, params):
+    entry = payload["bittensor"]
+    return {"values": {"tao_usd": entry["usd"],
+                       "kind": "spot"},
+            "units": "USD per TAO (spot)",
+            "upstream_timestamp": _epoch_iso(entry["last_updated_at"]),
+            "block_reference": None}
+
+
+def _pp_price_daily_taoswap(payload, params):
+    if payload.get("currency", "").upper() != "USD":
+        raise FatalLiveError("provider echoed currency %r, expected USD "
+                             "(TaoSwap silently ignores bad params — "
+                             "client-side check per the 2.3 gate)"
+                             % payload.get("currency"))
+    if not payload["results"]:
+        raise FatalLiveError("price-history returned no rows")
+    last = payload["results"][-1]
+    return {"values": {"tao_usd": last["price"], "kind": "daily-close",
+                       "close_date": last["date"]},
+            "units": "USD per TAO (daily close)",
+            "upstream_timestamp": last["date"] + "T00:00:00+00:00",
+            "block_reference": None}
+
+
+def _pp_subnets_taoswap(payload, params):
+    netuid = params.get("netuid")
+    rows = payload["results"]
+    if netuid is not None:
+        rows = [row for row in rows if row.get("id") == netuid]
+        if not rows:
+            raise FatalLiveError("no subnet with id %s in the provider "
+                                 "response" % netuid)
+    pruned = []
+    for row in rows[:130]:
+        conviction = row.get("conviction") or {}
+        pruned.append({
+            "netuid": row.get("id"),
+            "name": row.get("name"),
+            "symbol": row.get("symbol"),
+            "alpha_price_tao": row.get("price"),
+            "alpha_stake": row.get("alpha_stake"),
+            "emission_percent": row.get("emission_percent"),
+            "conviction": {key: conviction.get(key) for key in (
+                "king_is_owner", "is_contested", "takeover_eligible",
+                "takeover_enforced", "gate_ceiling_pct",
+                "total_locked_pct_supply", "holder_count")}
+            if conviction else None,
+        })
+    block = (payload.get("dereg_context") or {}).get("current_block")
+    return {"values": {"subnets": pruned, "count": len(pruned)},
+            "units": "alpha prices in TAO; percentages 0-100",
+            "upstream_timestamp": None,
+            "block_reference": block}
+
+
+def _pp_validators_taoswap(payload, params):
+    rows = payload["results"]
+
+    def stake(row):
+        try:
+            return float(row.get("total_stake") or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    top = sorted(rows, key=stake, reverse=True)[:15]
+    pruned = [{
+        "name": (row.get("identity") or {}).get("name"),
+        "hotkey": row["validator_hotkey"],
+        "total_stake_tao": stake(row),
+        "take": row.get("take"),
+        "apy_7d": row.get("apy_7d"),
+        "delegators": row.get("count_delegators"),
+    } for row in top]
+    return {"values": {"validators": pruned,
+                       "total_listed": len(rows)},
+            "units": "stake in TAO; take/apy fractional",
+            "upstream_timestamp": None,
+            "block_reference": None}
+
+
+def _pp_network_stats_taoswap(payload, params):
+    return {"values": {key: payload.get(key) for key in (
+        "date", "total_staked_tao", "available_tao", "root_stake_tao",
+        "subnets_stake_tao", "subnets_share_pct", "sum_alpha_price",
+        "subnet_reg_cost_tao", "total_accounts", "new_accounts_today")},
+        "units": "TAO",
+        "upstream_timestamp": payload["date"] + "T00:00:00+00:00",
+        "block_reference": None}
+
+
+def _pp_subnets_taostats(payload, params):
+    rows = payload["data"]
+    pruned = [{
+        "netuid": row["netuid"],
+        "owner_ss58": (row.get("owner") or {}).get("ss58"),
+        "emission": row.get("emission"),
+        "kappa": row.get("kappa"),
+        "immunity_period": row.get("immunity_period"),
+        "activity_cutoff": row.get("activity_cutoff"),
+        "active_validators": row.get("active_validators"),
+        "active_miners": row.get("active_miners"),
+        "max_neurons": row.get("max_neurons"),
+        "registration_cost_rao": row.get("neuron_registration_cost"),
+    } for row in rows[:50]]
+    block = max((row["block_number"] for row in rows), default=None)
+    return {"values": {"subnets": pruned, "count": len(pruned)},
+            "units": "raw chain values; *_rao fields in rao "
+                     "(1 TAO = 1e9 rao)",
+            "upstream_timestamp": None,
+            "block_reference": block}
+
+
+def _pp_metagraph_taostats(payload, params):
+    rows = payload["data"]
+    pruned = [{
+        "hotkey": row["hotkey"]["ss58"],
+        "coldkey": row["coldkey"]["ss58"],
+        "active": row["active"],
+        "alpha_stake_rao": row.get("alpha_stake"),
+        "daily_reward_rao": row.get("daily_reward"),
+        "is_owner_hotkey": row.get("is_owner_hotkey"),
+        "is_immunity_period": row.get("is_immunity_period"),
+    } for row in rows[:25]]
+    block = max((row["block_number"] for row in rows), default=None)
+    return {"values": {"neurons": pruned, "count": len(pruned)},
+            "units": "amounts in rao (1 TAO = 1e9 rao)",
+            "upstream_timestamp": None,
+            "block_reference": block}
+
+
+def _pp_chain_head_taostats(payload, params):
+    if not payload["data"]:
+        raise FatalLiveError("block endpoint returned no rows")
+    head = payload["data"][0]
+    return {"values": {
+        "block_number": head["block_number"],
+        "spec_version": head["spec_version"],
+        "spec_name": head.get("spec_name"),
+        "block_hash": (head.get("hash") or "")[:18],
+        "conviction_ownership_enacted": head["spec_version"] >= 425,
+    },
+        "units": "spec_version is the runtime version; >= 425 enacts "
+                 "conviction-based subnet ownership",
+        "upstream_timestamp": head["timestamp"],
+        "block_reference": head["block_number"]}
+
+
+POSTPROCESSORS = {
+    "price_spot_coingecko": _pp_price_spot_coingecko,
+    "price_daily_taoswap": _pp_price_daily_taoswap,
+    "subnets_taoswap": _pp_subnets_taoswap,
+    "validators_taoswap": _pp_validators_taoswap,
+    "network_stats_taoswap": _pp_network_stats_taoswap,
+    "subnets_taostats": _pp_subnets_taostats,
+    "metagraph_taostats": _pp_metagraph_taostats,
+    "chain_head_taostats": _pp_chain_head_taostats,
+}
+
+
+# ---------------------------------------------------------------------------
+# Operation runner — the single fail-closed live pipeline
+# (ATLAS-LIVE-001/002/003/004, ATLAS-API-006/007)
+# ---------------------------------------------------------------------------
+
+
+def _freshness_status(envelope_cfg: Dict[str, Any],
+                      upstream_iso: Optional[str],
+                      now: Optional[datetime.datetime] = None) -> str:
+    if upstream_iso is None:
+        return "unknown-upstream"
+    now = now or datetime.datetime.now(tz=datetime.timezone.utc)
+    try:
+        upstream = datetime.datetime.fromisoformat(
+            upstream_iso.replace("Z", "+00:00"))
+    except ValueError:
+        return "unknown-upstream"
+    age = (now - upstream).total_seconds()
+    limit = envelope_cfg.get("max_upstream_age_s")
+    return "fresh" if limit is None or age <= limit else "aged-upstream"
+
+
+def _failure(connection, config, provider, operation, params_key,
+             category, message, retry_safe,
+             include_last_known: bool) -> Dict[str, Any]:
+    """ATLAS-LIVE-004: unavailable result; the cached value itself only
+    on explicit request, clearly labelled."""
+    result: Dict[str, Any] = {
+        "status": "live-unavailable",
+        "error": {"category": category, "message": redact(message),
+                  "retry_safe": retry_safe,
+                  "correlation_id": secretsmod.token_hex(6)},
+    }
+    snapshot = cache_get(connection, provider, operation, params_key)
+    if snapshot is not None:
+        result["snapshot_available"] = {"stored_at": snapshot["stored_at"],
+                                        "label": snapshot["label"]}
+        if include_last_known:
+            result["historical_snapshot"] = snapshot
+            result["snapshot_warning"] = (
+                "This is a labelled historical snapshot returned on "
+                "explicit request — NOT live data.")
+    return result
+
+
+def run_operation(connection: sqlite3.Connection, config: Dict[str, Any],
+                  ledger: QuotaLedger, op_name: str,
+                  dynamic_params: Optional[Dict[str, Any]] = None,
+                  interactive: bool = True,
+                  include_last_known: bool = False,
+                  env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    operation = config["operations"].get(op_name)
+    if operation is None:
+        raise FatalLiveError("unknown operation %r" % op_name)
+    provider = operation["provider"]
+    params = dict(operation.get("params") or {})
+    params.update(dynamic_params or {})
+    params_key = json.dumps(params, sort_keys=True)
+
+    refusal = ledger.acquire(provider, interactive=interactive)
+    if refusal is not None:
+        audit_call(connection, provider, op_name, params, _utc_now(),
+                   _utc_now(), None, operation["schema"], "not-attempted",
+                   None, refusal["category"])
+        return _failure(connection, config, provider, op_name, params_key,
+                        refusal["category"], refusal["message"],
+                        refusal["retry_safe"], include_last_known)
+
+    headers: Dict[str, str] = {}
+    if config["providers"][provider].get("auth") == "header":
+        headers[config["providers"][provider]["auth_header"]] = \
+            provider_key(config, provider, env)
+
+    started = _utc_now()
+    result = http_get(config, provider, operation["path"], params=params,
+                      headers=headers)
+    finished = _utc_now()
+    ledger.record_reported_limits(provider, result.get("headers", {}))
+    body = result.get("body") or b""
+    body_sha = __import__("hashlib").sha256(body).hexdigest() if body \
+        else None
+
+    if not result["ok"]:
+        audit_call(connection, provider, op_name, params, started,
+                   finished, result.get("status"), operation["schema"],
+                   "not-validated", body_sha, "provider-failure")
+        health_event(connection, provider, op_name, "provider-failure",
+                     result.get("error") or "HTTP %s"
+                     % result.get("status"))
+        return _failure(connection, config, provider, op_name, params_key,
+                        "provider-failure",
+                        result.get("error") or "provider call failed",
+                        True, include_last_known)
+
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as exc:
+        audit_call(connection, provider, op_name, params, started,
+                   finished, result["status"], operation["schema"],
+                   "unparseable", body_sha, "schema-drift")
+        health_event(connection, provider, op_name, "schema-drift",
+                     "unparseable body: %s" % exc)
+        return _failure(connection, config, provider, op_name, params_key,
+                        "schema-drift", "response body is not valid JSON",
+                        False, include_last_known)
+
+    errors = validate_schema(load_schema(operation["schema"]), payload)
+    if not errors:
+        try:
+            processed = POSTPROCESSORS[op_name](payload, params)
+        except FatalLiveError as exc:
+            errors = [str(exc)]
+    if errors:
+        audit_call(connection, provider, op_name, params, started,
+                   finished, result["status"], operation["schema"],
+                   "drift", body_sha, "schema-drift")
+        health_event(connection, provider, op_name, "schema-drift",
+                     "; ".join(errors[:3]))
+        return _failure(connection, config, provider, op_name, params_key,
+                        "schema-drift",
+                        "response no longer matches the pinned schema "
+                        "%s: %s" % (operation["schema"], errors[0]),
+                        False, include_last_known)
+
+    audit_call(connection, provider, op_name, params, started, finished,
+               result["status"], operation["schema"], "valid", body_sha,
+               None)
+    envelope_cfg = operation["envelope"]
+    response = {
+        "status": "ok",
+        "provider": provider,
+        "operation": op_name,
+        "request_completed": finished,
+        "upstream_timestamp": processed["upstream_timestamp"],
+        "block_reference": processed["block_reference"],
+        "units": processed["units"],
+        "validation_status": "valid (schema %s)" % operation["schema"],
+        "freshness_status": _freshness_status(
+            envelope_cfg, processed["upstream_timestamp"]),
+        "values": processed["values"],
+    }
+    cache_put(connection, config, provider, op_name, params_key, response)
+    return response

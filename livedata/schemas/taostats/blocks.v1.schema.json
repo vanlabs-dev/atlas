@@ -1,0 +1,24 @@
+{
+  "_source": "TaoStats /api/block/v1 report 20260712T014512Z-0ee4f8c4; the conviction enactment watch (spec_version >= 425); order pinned block_number_desc in config",
+  "type": "object",
+  "required": ["data"],
+  "properties": {
+    "pagination": {"type": ["object", "null"]},
+    "data": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["block_number", "spec_version", "timestamp"],
+        "properties": {
+          "block_number": {"type": "integer"},
+          "spec_version": {"type": "integer"},
+          "spec_name": {"type": ["string", "null"]},
+          "timestamp": {"type": "string"},
+          "hash": {"type": ["string", "null"]},
+          "events_count": {"type": ["integer", "null"]},
+          "extrinsics_count": {"type": ["integer", "null"]}
+        }
+      }
+    }
+  }
+}

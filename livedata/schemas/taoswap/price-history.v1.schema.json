@@ -1,0 +1,20 @@
+{
+  "_source": "TaoSwap /price-history/ report 20260712T013740Z-f50d283e; adapters MUST verify the echoed currency (provider ignores invalid params)",
+  "type": "object",
+  "required": ["currency", "results"],
+  "properties": {
+    "currency": {"type": "string"},
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["date", "price"],
+        "properties": {
+          "date": {"type": "string"},
+          "price": {"type": "number"},
+          "volume": {"type": ["number", "null"]}
+        }
+      }
+    }
+  }
+}

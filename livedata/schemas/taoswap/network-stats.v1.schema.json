@@ -1,0 +1,17 @@
+{
+  "_source": "TaoSwap /network-stats/ report 20260712T013740Z-f50d283e; rao/tao field pairs — units must be carried explicitly",
+  "type": "object",
+  "required": ["date", "total_staked_tao", "available_tao"],
+  "properties": {
+    "date": {"type": "string"},
+    "total_staked_tao": {"type": "number"},
+    "available_tao": {"type": "number"},
+    "root_stake_tao": {"type": ["number", "null"]},
+    "subnets_stake_tao": {"type": ["number", "null"]},
+    "subnets_share_pct": {"type": ["number", "null"]},
+    "sum_alpha_price": {"type": ["number", "null"]},
+    "subnet_reg_cost_tao": {"type": ["number", "null"]},
+    "total_accounts": {"type": ["integer", "null"]},
+    "new_accounts_today": {"type": ["integer", "null"]}
+  }
+}
