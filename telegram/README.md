@@ -52,10 +52,18 @@ entry only.
 ## Commands
 
 ```bash
+python telegram/atlas_telegram.py init                       # seed watermarks to now (no sends) — run ONCE at deploy
 python telegram/atlas_telegram.py scan                       # deliver new events
 python telegram/atlas_telegram.py test --class schema-drift  # one test alert
 python telegram/atlas_telegram.py status                     # ledger + watermarks
 ```
 
+Run `init` before enabling any schedule, or the first `scan` treats the
+whole backlog as new. **Schedule (decided 2026-07-12):** `scan` piggybacks
+the hourly `atlas-repotrack-update.service` as a best-effort
+`ExecStartPost=-…` — a notifier failure never fails the repo unit
+(isolation).
+
 Config: [config.json](config.json). Setup: [docs/operator-setup.md](docs/operator-setup.md).
-Tests: `python -m pytest telegram/tests -q`.
+Tests: `python -m pytest telegram/tests -q` (or `python3 -m unittest discover
+-s telegram/tests` where pytest is absent, e.g. the Pi's system Python).
