@@ -104,27 +104,27 @@ gates are explicit tasks — nothing is assumed before it is recorded in
 
 ## 6. On-device acceptance (Pi)
 
-- [ ] 6.1 `git pull`; run both discoveries' acceptance re-checks; verify
+- [x] 6.1 `git pull`; run both discoveries' acceptance re-checks; verify
       `.env` loading and that no report/log contains key material
-- [ ] 6.2 **Operator action**: register `atlas-live` in the Hermes config
+- [x] 6.2 **Operator action**: register `atlas-live` in the Hermes config
       (alongside `atlas-kb`/`atlas-repo`), pin the toolset identifier
-- [ ] 6.3 Exit-criteria battery through live Hermes (`-z`, `-t atlas-live`):
+- [x] 6.3 Exit-criteria battery through live Hermes (`-z`, `-t atlas-live`):
       current TAO price answered with provider + timestamp metadata;
       current subnet/metagraph question answered with envelope; outage
       run via dead proxy → honest unavailable (no stale substitution, no
       invented value — the MV-RI-4 class closed with a live path)
-- [ ] 6.4 Quota persistence proof on-device: spend ledger calls, restart,
+- [x] 6.4 Quota persistence proof on-device: spend ledger calls, restart,
       verify carry-over; verify rate pacing matches the confirmed
       contracts (§16 exit criteria)
-- [ ] 6.5 Conviction enactment check if discovery found a spec_version
+- [x] 6.5 Conviction enactment check if discovery found a spec_version
       signal: record mainnet ≥ 425 (or its absence) in
       `docs/decisions.md`, closing the 2026-07-12 evidence-check tail
 
 ## 7. Documentation and close-out
 
-- [ ] 7.1 Write `livedata/README.md`: discovery procedure and budgets,
+- [x] 7.1 Write `livedata/README.md`: discovery procedure and budgets,
       config/envelope/tolerance provenance, quota model, re-discovery
       after drift, server registration, test instructions
-- [ ] 7.2 Update `README.md` (status, layout, next step → Phase 5) and
+- [x] 7.2 Update `README.md` (status, layout, next step → Phase 5) and
       `docs/decisions.md` acceptance entry (runs, spent quota, exit
       criteria, deviations); confirm remaining open items list
