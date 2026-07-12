@@ -8,8 +8,8 @@
   },
   "confirmed_decision": "docs/decisions.md — ATLAS-REPO-001 confirmation 2026-07-12 (RaoFoundation/subtensor @ main; identity runs 20260711T205255Z-6aaa1c02 / 20260711T205312Z-26b97e1e)",
   "access": "anonymous",
-  "update_interval_hours": 24,
-  "stale_multiplier": 2,
+  "update_interval_hours": 1,
+  "stale_multiplier": 3,
   "clone_dir": "var/repotrack/subtensor",
   "db": "var/repotrack/repotrack.db",
   "index": {
