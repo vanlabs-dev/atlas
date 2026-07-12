@@ -8,18 +8,18 @@ gates are explicit tasks — nothing is assumed before it is recorded in
 
 ## 1. Scaffold and shared plumbing
 
-- [ ] 1.1 Create `livedata/` scaffold: `atlas_live.py` (adapters/store/
+- [x] 1.1 Create `livedata/` scaffold: `atlas_live.py` (adapters/store/
       quota/freshness skeleton), `atlas_live_server.py` stub, `schemas/`,
       `config.json` (providers, endpoints, envelopes, tolerances, budgets
       — placeholders marked unconfirmed), `tests/`, `README.md`,
       following the accepted module conventions (stdlib-only,
       fail-closed, 0600 outputs under `var/livedata/`)
-- [ ] 1.2 Implement the store (`var/livedata/livedata.db`): call ledger
+- [x] 1.2 Implement the store (`var/livedata/livedata.db`): call ledger
       (quota windows), audit records (the Q29/LIVE-009 field set),
       `integration_health` events, size-capped labelled last-response
       cache; plus the `.env` loader with redaction wired through
       (ATLAS-API-008)
-- [ ] 1.3 Implement the quota/politeness ledger: per-minute sliding
+- [x] 1.3 Implement the quota/politeness ledger: per-minute sliding
       window + configurable day/month window, persisted, interactive
       reserve policy, local-estimate vs provider-reported tracking,
       visible `quota-exhausted` failure; **TaoStats self-cap strictly
@@ -28,7 +28,7 @@ gates are explicit tasks — nothing is assumed before it is recorded in
 
 ## 2. Contract discovery — TaoSwap (keyless, first)
 
-- [ ] 2.1 Implement `discover_taoswap.py`: pull `/schema/`, exercise the
+- [x] 2.1 Implement `discover_taoswap.py`: pull `/schema/`, exercise the
       Q27 first-slice endpoints (price-history/spot if present, subnets,
       v2 validators, metagraph/{id}, network-stats, blocks) with multiple
       samples, pagination/empty shapes, safe negative tests, rate-header
@@ -57,7 +57,7 @@ gates are explicit tasks — nothing is assumed before it is recorded in
 
 ## 4. Contract discovery — TaoStats (keyed, budgeted) + comparison
 
-- [ ] 4.1 Implement `discover_taostats.py`: hard cap ≤ 40 calls at
+- [x] 4.1 Implement `discover_taostats.py`: hard cap ≤ 40 calls at
       ≤ 4/min through the quota ledger; cover the four Q25 candidates
       (`/api/price/latest/v1`, `/api/subnet/latest/v1`,
       `/api/metagraph/latest/v1`, `/api/block/v1`) + safe negative tests
