@@ -1,12 +1,13 @@
 {
-  "_comment": "Live-data provider policy. Values marked *_unconfirmed are placeholders pending the discovery-report operator gates (tasks 2.3/4.3/5.3) — adapters refuse to serve an operation whose envelope is unconfirmed. Quota design target: TaoStats FREE tier; self-cap strictly below the provider 5/min (operator refinement 2026-07-12). Window kind starts at the stricter 'month' reading until discovery confirms day-vs-month.",
+  "_comment": "Live-data provider policy. Values pinned from the operator-approved discovery gates of 2026-07-12 (docs/decisions.md 'Phase 4 discovery gates'): TaoSwap report 20260712T013740Z-f50d283e, TaoStats report 20260712T014512Z-0ee4f8c4. TaoStats free tier: 5/min, 10,000/MONTH; Atlas self-caps at 2/min (headroom by design) and reserves 20% of the month for interactive use. Price checking spends no TaoStats quota (Q30).",
   "providers": {
     "taoswap": {
       "base_url": "https://api.taoswap.org",
       "auth": "none",
       "quota": {
         "per_minute_cap": 20,
-        "min_spacing_seconds": 1.0
+        "min_spacing_seconds": 1.0,
+        "_rate_note": "no documented/observed limit — politeness policy per ATLAS-LIVE-007"
       }
     },
     "taostats": {
@@ -16,9 +17,7 @@
       "key_env": "TAOSTATS_API_KEY",
       "quota": {
         "per_minute_cap": 2,
-        "per_minute_cap_unconfirmed": "proposed self-cap below provider 5/min — operator gate 5.3",
         "window_kind": "month",
-        "window_kind_unconfirmed": "day vs month confirmed by discovery (task 4.1)",
         "window_limit": 10000,
         "interactive_reserve_fraction": 0.8,
         "min_spacing_seconds": 15.0
@@ -43,8 +42,81 @@
     "never_retry_on_status": [429],
     "jitter_seconds": [0.5, 2.0]
   },
-  "price_tolerance_pairwise_unconfirmed": 0.02,
-  "endpoints": {
-    "_comment": "Filled from approved discovery reports (gates 2.3/4.3). Shape per operation: provider, path, params, schema, freshness envelope {max_upstream_age_s, max_local_age_s, expected_cadence}."
+  "price_tolerance_pairwise": 0.05,
+  "operations": {
+    "price_spot_coingecko": {
+      "provider": "coingecko",
+      "path": "/api/v3/simple/price",
+      "params": {"ids": "bittensor", "vs_currencies": "usd",
+                 "include_last_updated_at": true},
+      "schema": "coingecko/simple-price.v1",
+      "envelope": {"must_hit_provider": true,
+                   "max_upstream_age_s": 900, "max_local_age_s": 60,
+                   "expected_cadence": "spot (minutes)"}
+    },
+    "price_daily_taoswap": {
+      "provider": "taoswap",
+      "path": "/price-history/",
+      "params": {"currency": "usd"},
+      "schema": "taoswap/price-history.v1",
+      "envelope": {"must_hit_provider": true,
+                   "max_upstream_age_s": 172800, "max_local_age_s": 60,
+                   "expected_cadence": "daily close"}
+    },
+    "subnets_taoswap": {
+      "provider": "taoswap",
+      "path": "/v2/subnets/",
+      "params": {},
+      "schema": "taoswap/subnets.v1",
+      "envelope": {"must_hit_provider": true,
+                   "max_upstream_age_s": 3600, "max_local_age_s": 60,
+                   "expected_cadence": "near-live aggregates"}
+    },
+    "validators_taoswap": {
+      "provider": "taoswap",
+      "path": "/v2/validators/",
+      "params": {},
+      "schema": "taoswap/validators.v1",
+      "envelope": {"must_hit_provider": true,
+                   "max_upstream_age_s": 3600, "max_local_age_s": 60,
+                   "expected_cadence": "near-live"}
+    },
+    "network_stats_taoswap": {
+      "provider": "taoswap",
+      "path": "/network-stats/",
+      "params": {},
+      "schema": "taoswap/network-stats.v1",
+      "envelope": {"must_hit_provider": true,
+                   "max_upstream_age_s": 172800, "max_local_age_s": 60,
+                   "expected_cadence": "daily snapshot"}
+    },
+    "subnets_taostats": {
+      "provider": "taostats",
+      "path": "/api/subnet/latest/v1",
+      "params": {},
+      "schema": "taostats/subnets.v1",
+      "envelope": {"must_hit_provider": true,
+                   "max_upstream_age_s": 3600, "max_local_age_s": 60,
+                   "expected_cadence": "near-live (latest)"}
+    },
+    "metagraph_taostats": {
+      "provider": "taostats",
+      "path": "/api/metagraph/latest/v1",
+      "params": {},
+      "schema": "taostats/metagraph.v1",
+      "envelope": {"must_hit_provider": true,
+                   "max_upstream_age_s": 3600, "max_local_age_s": 60,
+                   "expected_cadence": "per-epoch"}
+    },
+    "chain_head_taostats": {
+      "provider": "taostats",
+      "path": "/api/block/v1",
+      "params": {"limit": 1, "order": "block_number_desc"},
+      "schema": "taostats/blocks.v1",
+      "envelope": {"must_hit_provider": true,
+                   "max_upstream_age_s": 120, "max_local_age_s": 60,
+                   "expected_cadence": "~12s block cadence"},
+      "_note": "order pinned explicitly — the conviction enactment watch (spec_version >= 425)"
+    }
   }
 }
