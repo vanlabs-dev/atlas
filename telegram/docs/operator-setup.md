@@ -65,9 +65,19 @@ current maximum silently, so only events that happen *after* deploy fire.
 python telegram/atlas_telegram.py scan
 ```
 
-Wire `scan` to fire after the hourly repo-update timer (or its own timer) so
-alerts follow events. The notifier is idempotent — de-duplication by event
-identity means re-running never re-floods you.
+**Schedule (decided 2026-07-12): piggyback the hourly repo timer.** The
+`atlas-repotrack-update.service` unit runs `scan` as a best-effort
+`ExecStartPost` after each successful subtensor update — the leading `-`
+means a notifier/Telegram failure never marks the repo unit failed
+(isolation). Activate the updated unit (needs sudo):
+
+```bash
+sudo cp ~/atlas/repotrack/systemd/atlas-repotrack-update.service /etc/systemd/system/
+sudo systemctl daemon-reload
+```
+
+The timer itself is unchanged (still hourly). The notifier is idempotent —
+de-duplication by event identity means a re-run never re-floods you.
 
 ## What is deliberately not here
 
