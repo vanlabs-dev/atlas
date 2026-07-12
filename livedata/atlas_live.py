@@ -816,7 +816,9 @@ def run_operation(connection: sqlite3.Connection, config: Dict[str, Any],
 
     started = _utc_now()
     result = http_get(config, provider, operation["path"], params=params,
-                      headers=headers)
+                      headers=headers,
+                      timeout=config["providers"][provider].get(
+                          "timeout_seconds"))
     finished = _utc_now()
     ledger.record_reported_limits(provider, result.get("headers", {}))
     body = result.get("body") or b""
