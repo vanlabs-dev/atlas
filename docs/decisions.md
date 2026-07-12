@@ -105,9 +105,10 @@ Standing reminders carried forward:
 - **Conviction-activation conflict**: RESOLVED as "announced, not yet
   enacted" (chain-evidence entry above, 2026-07-12): activation code
   merged 2026-06-30 (spec 425, unreleased); mainnet still runs spec 424,
-  so **the corpus claim remains true on-chain**. Remaining: (a) the
-  knowledge unit's conflict note updates via re-sync to "announced
-  2026-07-02, enactment pending"; (b) when head `spec_version` ≥ 425
-  appears (TaoStats chain-head tool) or a release tag contains
-  `d34043682` (hourly repotrack), record the enactment and re-sync the
-  corpus for real.
+  so **the corpus claim remains true on-chain**. The knowledge unit's
+  conflict note was refreshed via the re-sync flow (marker-only update;
+  ingest run `20260712T023212Z-a42a19a6`, operator-activated 2026-07-12
+  — 22 units, 21 confirmed / 1 conflicting, hashes unchanged). Remaining:
+  when head `spec_version` ≥ 425 appears (`live_chain_head`) or a release
+  tag contains `d34043682` (hourly repotrack), record the enactment and
+  re-sync the corpus for real.
