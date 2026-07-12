@@ -45,7 +45,7 @@ never in repo/logs/chat, outputs 0600 into gitignored `var/`.
 
 - [ ] 7.1 Unauthorized account (non-allowlisted ID) receives no operational data
 - [ ] 7.2 Approved account queries Hermes and gets a reply through the gateway
-- [ ] 7.3 One test alert of each enabled class (repository-update, schema-drift, knowledge-ingestion) delivers exactly once — verified against the ledger
+- [x] 7.3 One test alert of each enabled class (repository-update, schema-drift, knowledge-ingestion) delivers exactly once — verified against the ledger (Pi run 2026-07-12: all three `delivered`, ledger count 1 each)
 - [ ] 7.4 A seeded secret-bearing outbound message is refused and recorded as a scrub failure
 - [ ] 7.5 A forced send failure is isolated (core operation continues) and ends in a recorded `final_failure` after bounded retries
 - [ ] 7.6 Confirm no secret appears in logs, chat, ledger, or repo
