@@ -10,12 +10,14 @@ running on a Raspberry Pi. Built methodically in gated phases via OpenSpec.
 
 ## Current status (2026-07-12)
 
-**Phases 0–4 are complete and accepted on the device.** Hermes Agent
+**Phases 0–5 are complete and accepted on the device.** Hermes Agent
 v0.18.2 runs on the Pi (Grok via X OAuth, validated), answering Bittensor
 questions from the validated local knowledge base (`atlas-kb`), the
 tracked subtensor repository clone (`atlas-repo`), and live provider
 data (`atlas-live`: TaoSwap/TaoStats/CoinGecko) — source-bound, dated,
-commit-cited, provenance-enveloped, fail-closed.
+commit-cited, provenance-enveloped, fail-closed. A controlled Telegram
+channel (`telegram/`) adds inbound conversation (native Hermes gateway)
+and an outbound operational notifier, scrubbed and de-duplicated.
 
 | Capability (accepted spec) | State |
 |---|---|
@@ -28,6 +30,7 @@ commit-cited, provenance-enveloped, fail-closed.
 | `knowledge-base` | Done — 22 units active (1 marked conflicting: conviction), `atlas-kb` tools live in Hermes; benchmark run `20260711T192206Z-af3fa274` perfect (17/17 grounded, 9/9 refusals, 0 fabrications — MV-RI-4 re-test passed) |
 | `subtensor-repo-tracking` | Done — identity-validated full clone of `RaoFoundation/subtensor` on the Pi (non-shallow, push disabled, @ `14bc6f9f964b`), safe journaled updates (hourly timer), 581-file FTS index, `atlas-repo` tools live in Hermes (commit-and-file-cited answers; honest stale/no-evidence) |
 | `live-data` | Done — contract-validated TaoSwap (keyless, first) + TaoStats (2/min self-cap, 10k/month ledger) + CoinGecko adapters; pinned schemas, freshness envelopes, `atlas-live` tools live in Hermes; outage battery proved honest unavailability (MV-RI-4 class closed); chain head watch: spec 424, conviction ownership NOT yet enacted (announced 2026-07-02, pending spec ≥ 425) |
+| `telegram-integration` | Done — inbound conversation via the native Hermes gateway (operator wizard, numeric-id allowlist); outbound notifier (`telegram/`) for repository-update/schema-drift/knowledge-ingestion, scrub-or-refuse + six-field delivery ledger + event-id de-dup, isolated on failure; `scan` piggybacks the hourly repo-update service (`ExecStartPost=-…`); 16-test suite; three test alerts delivered on the Pi. Service-failure alerts deferred (needs a Hermes service unit); investment alerts are Phase 7 |
 
 Latest closed-loop assessment `20260711T073125Z-d52a70e9`: **ok=7, finding=0**.
 Hermes baseline carries 2 documented exceptions (runs as `pi`; no service

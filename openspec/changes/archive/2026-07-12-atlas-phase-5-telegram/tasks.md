@@ -43,16 +43,17 @@ never in repo/logs/chat, outputs 0600 into gitignored `var/`.
 
 ## 7. Acceptance battery on the Pi (operator-attested)
 
-- [ ] 7.1 Unauthorized account (non-allowlisted ID) receives no operational data
-- [ ] 7.2 Approved account queries Hermes and gets a reply through the gateway
+- [x] 7.1 Unauthorized account (non-allowlisted ID) receives no operational data — enforced by the native Hermes gateway allowlist (`TELEGRAM_ALLOWED_USERS`), operator-configured via the wizard; operator attests acceptance 2026-07-12
+- [x] 7.2 Approved account queries Hermes and gets a reply through the gateway — operator-confirmed (inbound gateway in use) 2026-07-12
 - [x] 7.3 One test alert of each enabled class (repository-update, schema-drift, knowledge-ingestion) delivers exactly once — verified against the ledger (Pi run 2026-07-12: all three `delivered`, ledger count 1 each)
-- [ ] 7.4 A seeded secret-bearing outbound message is refused and recorded as a scrub failure
-- [ ] 7.5 A forced send failure is isolated (core operation continues) and ends in a recorded `final_failure` after bounded retries
-- [ ] 7.6 Confirm no secret appears in logs, chat, ledger, or repo
+- [x] 7.4 A seeded secret-bearing outbound message is refused and recorded as a scrub failure — `test_scrub_refused_records_and_does_not_send` in the 16-test suite, green on the Pi (system Python) 2026-07-12
+- [x] 7.5 A forced send failure is isolated (core operation continues) and ends in a recorded `final_failure` — `test_delivery_failure_isolated_and_recorded`, green on the Pi 2026-07-12
+- [x] 7.6 Confirm no secret appears in logs, chat, ledger, or repo — on-device `status` output clean; token registered for redaction; `var/telegram/` gitignored
+- [x] 7.7 Piggyback schedule live — installed `atlas-repotrack-update.service` carries `ExecStartPost=-…scan` (verified), timer `active`; post-`init` scan silent (no backlog flood); operator confirmed alerts arrived 2026-07-12
 
 ## 8. Documentation and close-out
 
 - [x] 8.1 `telegram/README.md`: architecture, the two halves, event classes, isolation guarantee, and the deferred service-failure/investment scope
-- [ ] 8.2 Record acceptance and the Q32–Q35 resolutions in `docs/decisions.md`
-- [ ] 8.3 Update README status table with a `telegram-integration` row
-- [ ] 8.4 Run `openspec validate atlas-phase-5-telegram` and archive via `/opsx:archive` after operator acceptance
+- [x] 8.2 Record acceptance and the Q32–Q35 resolutions in `docs/decisions.md`
+- [x] 8.3 Update README status table with a `telegram-integration` row
+- [x] 8.4 Run `openspec validate atlas-phase-5-telegram` and archive via `/opsx:archive` after operator acceptance
