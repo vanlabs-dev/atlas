@@ -1,0 +1,32 @@
+{
+  "_comment": "Atlas Phase 5 outbound Telegram notifier policy. The inbound conversation gateway is native Hermes (operator-configured via `hermes gateway setup`); this file governs ONLY the outbound operational notifier. Credentials are resolved from the env files below in order (first hit wins) so the wizard-written ~/.hermes/.env is reused without duplicating secrets; the alert target chat id is the one value the operator supplies (their numeric Telegram id). Nothing here is committed with real values.",
+  "credential_env_files": ["~/.hermes/.env", ".env"],
+  "bot_token_env": "TELEGRAM_BOT_TOKEN",
+  "alert_chat_id_env": "TELEGRAM_ALERT_CHAT_ID",
+  "api_base": "https://api.telegram.org",
+  "db": "var/telegram/telegram.db",
+  "output_dir": "var/telegram",
+  "request_timeout_seconds": 20,
+  "retry": {
+    "max_attempts": 3,
+    "retry_on_status": [500, 502, 503, 504],
+    "never_retry_on_status": [400, 401, 403, 404],
+    "backoff_seconds": [1.0, 3.0]
+  },
+  "coalesce_window_seconds": 3600,
+  "message_max_chars": 3500,
+  "classes": {
+    "repository-update": {
+      "enabled": true,
+      "source_db": "var/repotrack/repotrack.db"
+    },
+    "schema-drift": {
+      "enabled": true,
+      "source_db": "var/livedata/livedata.db"
+    },
+    "knowledge-ingestion": {
+      "enabled": true,
+      "source_db": "var/knowledge/knowledge.db"
+    }
+  }
+}
