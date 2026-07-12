@@ -1,0 +1,29 @@
+{
+  "_source": "TaoStats /api/subnet/latest/v1 report 20260712T014512Z-0ee4f8c4; numeric protocol params arrive as strings; {pagination,data} envelope",
+  "type": "object",
+  "required": ["data"],
+  "properties": {
+    "pagination": {"type": ["object", "null"]},
+    "data": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["netuid", "block_number"],
+        "properties": {
+          "netuid": {"type": "integer"},
+          "block_number": {"type": "integer"},
+          "owner": {"type": ["object", "null"]},
+          "emission": {"type": ["string", "number", "null"]},
+          "kappa": {"type": ["integer", "null"]},
+          "immunity_period": {"type": ["integer", "null"]},
+          "activity_cutoff": {"type": ["integer", "null"]},
+          "active_validators": {"type": ["integer", "null"]},
+          "active_miners": {"type": ["integer", "null"]},
+          "active_keys": {"type": ["integer", "null"]},
+          "max_neurons": {"type": ["integer", "null"]},
+          "neuron_registration_cost": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

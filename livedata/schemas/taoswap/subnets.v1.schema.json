@@ -1,0 +1,24 @@
+{
+  "_source": "TaoSwap /v2/subnets/ report 20260712T013740Z-f50d283e + full-item key sample 2026-07-12; subnet identifier is `id` (not netuid); root row may carry nulls — only `id` is required per item",
+  "type": "object",
+  "required": ["results"],
+  "properties": {
+    "dereg_context": {"type": ["object", "null"]},
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": {"type": "integer"},
+          "name": {"type": ["string", "null"]},
+          "symbol": {"type": ["string", "null"]},
+          "price": {"type": ["number", "null"]},
+          "alpha_stake": {"type": ["number", "null"]},
+          "emission_percent": {"type": ["number", "null"]},
+          "conviction": {"type": ["object", "null"]}
+        }
+      }
+    }
+  }
+}

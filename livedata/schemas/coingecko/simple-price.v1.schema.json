@@ -1,0 +1,15 @@
+{
+  "_source": "CoinGecko /api/v3/simple/price observed 2026-07-12 + public docs; drift = missing/mistyped required field (extra fields tolerated)",
+  "type": "object",
+  "required": ["bittensor"],
+  "properties": {
+    "bittensor": {
+      "type": "object",
+      "required": ["usd", "last_updated_at"],
+      "properties": {
+        "usd": {"type": "number"},
+        "last_updated_at": {"type": "integer"}
+      }
+    }
+  }
+}

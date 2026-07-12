@@ -43,15 +43,15 @@ gates are explicit tasks — nothing is assumed before it is recorded in
 
 ## 3. TaoSwap adapters and validation
 
-- [ ] 3.1 Pin per-endpoint JSON schemas (`schemas/taoswap/*.v1.schema.json`)
+- [x] 3.1 Pin per-endpoint JSON schemas (`schemas/taoswap/*.v1.schema.json`)
       from documented + observed samples; implement the stdlib validator
       (types, nullability, units) run before any exposure
       (ATLAS-API-006)
-- [ ] 3.2 Implement the TaoSwap adapters for the approved slice with the
+- [x] 3.2 Implement the TaoSwap adapters for the approved slice with the
       LIVE-003 metadata envelope, freshness evaluation, bounded
       per-endpoint retries (never on 429/drift), drift → fail closed +
       health event (ATLAS-API-007, ATLAS-LIVE-008)
-- [ ] 3.3 Off-device tests over a stdlib fixture provider: happy paths,
+- [x] 3.3 Off-device tests over a stdlib fixture provider: happy paths,
       empty/paginated shapes, schema drift, 429/5xx, timeout path,
       envelope violations (`aged-upstream`), retry observability
 
@@ -71,17 +71,17 @@ gates are explicit tasks — nothing is assumed before it is recorded in
       endpoint set (may be smaller than the four); approve its freshness
       envelopes and the confirmed quota window; record in
       `docs/decisions.md`; pin into `config.json`
-- [ ] 4.4 Pin TaoStats schemas + implement adapters for the chosen set
+- [x] 4.4 Pin TaoStats schemas + implement adapters for the chosen set
       behind the quota ledger (429 → no retry, ledger-aware), same
       envelope/drift behavior; extend fixture tests (quota exhaustion,
       restart persistence, auth-failure redaction)
 
 ## 5. Cross-check and MCP server
 
-- [ ] 5.1 Implement the CoinGecko TAO/USD reference adapter (keyless
+- [x] 5.1 Implement the CoinGecko TAO/USD reference adapter (keyless
       `simple/price`, pinned schema, politeness budget) — reference use
       only, per Q30
-- [ ] 5.2 Implement the `live_price` comparison over **TaoSwap +
+- [x] 5.2 Implement the `live_price` comparison over **TaoSwap +
       CoinGecko only (zero TaoStats quota — Q30 refinement; tested)**:
       pairwise relative deviation vs tolerance, partial-provider results
       with per-provider status, `conflicting: true` + logged discrepancy
@@ -91,12 +91,12 @@ gates are explicit tasks — nothing is assumed before it is recorded in
       80% cutoff for non-interactive), and the TaoStats per-minute
       self-cap (proposed 2/min, below the 5/min limit); record in
       `docs/decisions.md`
-- [ ] 5.4 Implement `atlas_live_server.py` (stdio MCP, accepted shape):
+- [x] 5.4 Implement `atlas_live_server.py` (stdio MCP, accepted shape):
       `live_price`, `live_subnets`, `live_metagraph`, `live_network_stats`,
       `live_status` — LIVE-003 envelopes, `live-unavailable` /
       `historical-snapshot` semantics (explicit opt-in only), structured
       errors, append-only redacted audit, no generic surface
-- [ ] 5.5 Off-device server contract tests: metadata envelope on every
+- [x] 5.5 Off-device server contract tests: metadata envelope on every
       success, unavailability on outage, snapshot only when requested and
       labelled, conflicting-price path, status tool (health + quota
       local-vs-reported), secret-leak regression (auth errors redacted),

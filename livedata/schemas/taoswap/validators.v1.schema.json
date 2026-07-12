@@ -1,0 +1,24 @@
+{
+  "_source": "TaoSwap /v2/validators/ report 20260712T013740Z-f50d283e; stake totals arrive as strings",
+  "type": "object",
+  "required": ["results"],
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["validator_hotkey", "total_stake"],
+        "properties": {
+          "validator_hotkey": {"type": "string"},
+          "validator_coldkey": {"type": ["string", "null"]},
+          "total_stake": {"type": ["string", "number"]},
+          "take": {"type": ["number", "null"]},
+          "apy_7d": {"type": ["number", "null"]},
+          "dominance": {"type": ["string", "number", "null"]},
+          "count_delegators": {"type": ["integer", "null"]},
+          "identity": {"type": ["object", "null"]}
+        }
+      }
+    }
+  }
+}
