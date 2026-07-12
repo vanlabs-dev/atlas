@@ -33,11 +33,11 @@ gates are explicit tasks — nothing is assumed before it is recorded in
       v2 validators, metagraph/{id}, network-stats, blocks) with multiple
       samples, pagination/empty shapes, safe negative tests, rate-header
       observation; write the ATLAS-API-003 report (JSON + MD, 0600)
-- [ ] 2.2 Run TaoSwap discovery for real; record rate behavior from
+- [x] 2.2 Run TaoSwap discovery for real; record rate behavior from
       terms/headers/observation ("unknown → politeness policy" if
       undocumented, ATLAS-LIVE-007); note whether a true spot-price
       endpoint exists
-- [ ] 2.3 **Operator gate**: approve the TaoSwap contract report and its
+- [x] 2.3 **Operator gate**: approve the TaoSwap contract report and its
       proposed per-endpoint freshness envelopes; record in
       `docs/decisions.md`; pin approved values into `config.json`
 
@@ -64,10 +64,10 @@ gates are explicit tasks — nothing is assumed before it is recorded in
       (missing/invalid auth, bad param, nonexistent resource); confirm
       the real free-tier window (day vs month) from docs + headers; check
       for a runtime/spec_version signal (conviction enactment bonus)
-- [ ] 4.2 Run TaoStats discovery on the Pi (where the key lives); write
+- [x] 4.2 Run TaoStats discovery on the Pi (where the key lives); write
       the report **including the TaoSwap comparison**: per data category,
       what TaoStats adds (spot freshness, fields, block references)
-- [ ] 4.3 **Operator gate**: from the comparison, pick the TaoStats
+- [x] 4.3 **Operator gate**: from the comparison, pick the TaoStats
       endpoint set (may be smaller than the four); approve its freshness
       envelopes and the confirmed quota window; record in
       `docs/decisions.md`; pin into `config.json`
@@ -86,7 +86,7 @@ gates are explicit tasks — nothing is assumed before it is recorded in
       pairwise relative deviation vs tolerance, partial-provider results
       with per-provider status, `conflicting: true` + logged discrepancy
       beyond tolerance, no averaging (ATLAS-LIVE-005)
-- [ ] 5.3 **Operator gate**: approve the TAO/USD disagreement tolerance
+- [x] 5.3 **Operator gate**: approve the TAO/USD disagreement tolerance
       (proposed 2% pairwise), the interactive quota reserve (proposed
       80% cutoff for non-interactive), and the TaoStats per-minute
       self-cap (proposed 2/min, below the 5/min limit); record in
