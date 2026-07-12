@@ -65,7 +65,7 @@ class IngestTests(unittest.TestCase):
                 "SELECT heading_path, conflict_note FROM units WHERE "
                 "evidence_state = 'conflicting'").fetchone()
             self.assertIn("Conviction", conflict[0])
-            self.assertIn("2026-07-10/11", conflict[1])
+            self.assertIn("spec_version >= 425", conflict[1])
             self.assertEqual(connection.execute(
                 "SELECT count(*) FROM units WHERE active = 1"
             ).fetchone()[0], 0, "units must stage inactive")

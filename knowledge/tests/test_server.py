@@ -51,7 +51,7 @@ class ServerTests(unittest.TestCase):
             {"query": "conviction ownership transfer"})])
         top = payloads[1]["results"][0]
         self.assertEqual(top["evidence_state"], "conflicting")
-        self.assertIn("2026-07-10/11", top["conflict_note"])
+        self.assertIn("spec_version >= 425", top["conflict_note"])
 
     def test_insufficient_evidence_is_structured(self):
         payloads = call_server(self.db, [tool_call(
