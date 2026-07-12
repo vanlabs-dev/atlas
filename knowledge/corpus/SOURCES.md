@@ -13,11 +13,15 @@ Verbatim snapshot of the confirmed July 2026 Bittensor corpus (decision
 
 ## Known staleness at snapshot time
 
-`ground-truth.md` states conviction ownership transfer is "NOT yet active".
-The operator reported activation ~2026-07-10/11 (unverified — see
-docs/decisions.md). Ingest marks the affected units `conflicting` via
-[../supersession-markers.json](../supersession-markers.json); Phase 3
-evidence resolves it.
+`ground-truth.md` states conviction ownership transfer is "NOT yet active" —
+**verified still true on-chain 2026-07-12** (Phase 3 repo evidence + Phase 4
+chain evidence: mainnet runs spec 424; the enforcement code is spec 425,
+unreleased; activation was announced 2026-07-02 but enactment is pending —
+see the decision log's chain-evidence entry). Ingest marks the affected
+units `conflicting` via
+[../supersession-markers.json](../supersession-markers.json) so retrieval
+surfaces the announced-but-pending status; the marker (and eventually the
+corpus itself) updates when the chain head reports spec_version ≥ 425.
 
 ## Re-sync procedure
 
