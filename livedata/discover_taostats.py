@@ -41,9 +41,10 @@ def discover(taoswap_report_path: Optional[str]) -> int:
     try:
         # -- the four Q25 candidates (one call + one variant sample each)
         session.probe("price-latest", "/api/price/latest/v1",
-                      params={"asset": "tao"},
+                      params={"asset": "tao"}, timeout=45,
                       note="discovery-only: production price checking "
-                           "spends NO TaoStats quota (Q30 refinement)")
+                           "spends NO TaoStats quota (Q30 refinement); "
+                           "45s timeout — first run timed out at 20s")
         session.probe("subnets-latest", "/api/subnet/latest/v1",
                       params={"limit": 5})
         session.probe("subnets-latest-one", "/api/subnet/latest/v1",
@@ -109,8 +110,10 @@ def discover(taoswap_report_path: Optional[str]) -> int:
                 "canonical_base_url": config["providers"][PROVIDER]
                 ["base_url"],
                 "tls": "HTTPS enforced by client",
-                "authentication": "Authorization: <key> header — "
-                                  "missing/invalid behavior in negative "
+                "authentication": "key sent via the Authorization "
+                                  "request header (loaded from .env; "
+                                  "redacted everywhere) — missing/"
+                                  "invalid behavior in negative "
                                   "observations",
                 "required_headers": "Authorization + User-Agent + Accept",
                 "success_status": "200 observed",

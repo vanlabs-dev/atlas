@@ -169,6 +169,18 @@ def redact(text: str) -> str:
     return _ahv().inv.redact(text)
 
 
+def redact_tree(value: Any) -> Any:
+    """Redact every string INSIDE a structure, then serialize — never
+    redact serialized JSON (a pattern spanning a quote corrupts it)."""
+    if isinstance(value, dict):
+        return {key: redact_tree(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [redact_tree(item) for item in value]
+    if isinstance(value, str):
+        return redact(value)
+    return value
+
+
 def provider_key(config: Dict[str, Any], provider: str,
                  env: Optional[Dict[str, str]] = None) -> Optional[str]:
     spec = config["providers"][provider]
@@ -417,7 +429,8 @@ def http_get(config: Dict[str, Any], provider: str, path: str,
              params: Optional[Dict[str, Any]] = None,
              headers: Optional[Dict[str, str]] = None,
              attempts: Optional[int] = None,
-             base_url: Optional[str] = None) -> Dict[str, Any]:
+             base_url: Optional[str] = None,
+             timeout: Optional[float] = None) -> Dict[str, Any]:
     """One logical GET with bounded retries. Returns a result dict:
     {ok, status, headers, body(bytes), elapsed_s, attempts, error?}.
     Never retries on 429 or 4xx; never raises on HTTP failure (fail
@@ -432,7 +445,7 @@ def http_get(config: Dict[str, Any], provider: str, path: str,
     request_headers = {"User-Agent": USER_AGENT,
                        "Accept": "application/json"}
     request_headers.update(headers or {})
-    timeout = config["request_timeout_seconds"]
+    timeout = timeout or config["request_timeout_seconds"]
 
     attempt_log: List[Dict[str, Any]] = []
     for attempt in range(1, max_attempts + 1):
