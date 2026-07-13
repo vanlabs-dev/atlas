@@ -8,6 +8,11 @@
 # scan (piggyback schedule, decided 2026-07-12). The leading `-` makes the
 # notifier best-effort — a Telegram failure or missing config NEVER marks
 # this unit failed and never affects the repo update (isolation guarantee).
+#
+# Signal tiering: poll the live chain head (one non-interactive TaoStats
+# call within the 2/min self-cap) BEFORE the Telegram scan, so a live
+# runtime upgrade recorded by the poll is alerted in the same run rather
+# than an hour later. Best-effort like the scan (leading `-`).
 [Unit]
 Description=Atlas subtensor repository update
 Wants=network-online.target
@@ -17,4 +22,5 @@ After=network-online.target
 Type=oneshot
 User=pi
 ExecStart=/usr/bin/python3 /home/pi/atlas/repotrack/atlas_repo.py update
+ExecStartPost=-/usr/bin/python3 /home/pi/atlas/livedata/atlas_live.py poll-chain-head
 ExecStartPost=-/usr/bin/python3 /home/pi/atlas/telegram/atlas_telegram.py scan

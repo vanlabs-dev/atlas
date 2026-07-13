@@ -172,6 +172,88 @@ class UpdateTests(unittest.TestCase):
             self.assertNotIn(banned, source)
 
 
+class SpecVersionTests(unittest.TestCase):
+    """Runtime spec_version facts on change records (spec-tiering)."""
+
+    MANIFEST = ("pub const VERSION: RuntimeVersion = RuntimeVersion {\n"
+                "    spec_name: \"node-subtensor\",\n"
+                "    spec_version: %d,\n"
+                "};\n")
+
+    def test_spec_bump_recorded_on_both_heads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            origin = make_origin(tmp, files={
+                "runtime/src/lib.rs": self.MANIFEST % 428,
+                "docs/a.md": "notes\n"})
+            config_path, config = make_config(tmp, origin)
+            self.assertEqual(run_cli(config_path, "setup",
+                                     "--actor", "test"), 0)
+            write_origin_file(origin, "runtime/src/lib.rs",
+                              self.MANIFEST % 429)
+            commit_origin(origin, "bump spec_version to 429")
+            self.assertEqual(run_cli(config_path, "update",
+                                     "--actor", "test"), 0)
+            record = change_ranges(config["db"])[0]
+            self.assertEqual(record["prev_spec"], 428)
+            self.assertEqual(record["new_spec"], 429)
+
+    def test_manifest_absent_recorded_unknown_update_succeeds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tracking = setup_tracking(tmp)  # fixture has no runtime manifest
+            write_origin_file(tracking["origin"], "docs/b.md", "more\n")
+            commit_origin(tracking["origin"], "docs only")
+            self.assertEqual(run_cli(tracking["config_path"], "update",
+                                     "--actor", "test"), 0)
+            record = change_ranges(tracking["db"])[0]
+            self.assertIsNone(record["prev_spec"])
+            self.assertIsNone(record["new_spec"])
+            self.assertEqual(last_run(tracking["db"])["status"], "ok")
+
+    def test_malformed_field_recorded_unknown_update_succeeds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            origin = make_origin(tmp, files={
+                "runtime/src/lib.rs":
+                    "// spec_version moved elsewhere, no numeric field\n",
+                "docs/a.md": "notes\n"})
+            config_path, config = make_config(tmp, origin)
+            self.assertEqual(run_cli(config_path, "setup",
+                                     "--actor", "test"), 0)
+            write_origin_file(origin, "docs/a.md", "changed\n")
+            commit_origin(origin, "docs change")
+            self.assertEqual(run_cli(config_path, "update",
+                                     "--actor", "test"), 0)
+            record = change_ranges(config["db"])[0]
+            self.assertIsNone(record["prev_spec"])
+            self.assertIsNone(record["new_spec"])
+            self.assertEqual(last_run(config["db"])["status"], "ok")
+
+    def test_existing_store_migrates_additively(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "repotrack.db")
+            legacy = ("CREATE TABLE change_ranges (id INTEGER PRIMARY KEY, "
+                      "run_id TEXT NOT NULL, prev_sha TEXT NOT NULL, "
+                      "new_sha TEXT NOT NULL, retrieved_at TEXT NOT NULL, "
+                      "non_fast_forward INTEGER NOT NULL, "
+                      "commits_json TEXT NOT NULL, files_json TEXT NOT NULL, "
+                      "tags_json TEXT NOT NULL, index_status TEXT NOT NULL, "
+                      "index_detail TEXT, summary TEXT NOT NULL);")
+            import sqlite3
+            conn = sqlite3.connect(db)
+            conn.executescript(legacy)
+            conn.execute(
+                "INSERT INTO change_ranges (run_id, prev_sha, new_sha, "
+                "retrieved_at, non_fast_forward, commits_json, files_json, "
+                "tags_json, index_status, summary) VALUES "
+                "('r1','a','b','t',0,'{}','{}','[]','ok','s')")
+            conn.commit()
+            conn.close()
+            store = arp.open_store(db)
+            row = store.execute("SELECT prev_spec, new_spec FROM "
+                                "change_ranges").fetchone()
+            store.close()
+            self.assertEqual(row, (None, None))
+
+
 class FreshnessTests(unittest.TestCase):
     def test_status_answers_every_field(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -12,13 +12,20 @@ Fail-closed, stdlib-only, read-only toward the device except its own 0600
 
 - credentials resolved from operator env files (the wizard-written
   `~/.hermes/.env` is reused — no secret is duplicated into the repo);
-- three source adapters read existing stores read-only and surface only
+- four source adapters read existing stores read-only and surface only
   events past a persisted per-source watermark:
-    repository-update   <- var/repotrack/repotrack.db  (last_remote_sha)
-    schema-drift        <- var/livedata/livedata.db     (integration_health)
-    knowledge-ingestion <- var/knowledge/knowledge.db   (intake_runs)
+    chain-runtime-upgrade <- var/livedata/livedata.db   (spec_upgrades)
+    repository-update     <- var/repotrack/repotrack.db (change_ranges)
+    schema-drift          <- var/livedata/livedata.db   (integration_health)
+    knowledge-ingestion   <- var/knowledge/knowledge.db (intake_runs)
+- repository ranges are tiered: churn (an explicit allowlist of
+  non-protocol directories) is digested — persisted durably before the
+  watermark passes it, never paged, never dropped — while significant
+  ranges page with a breakdown and an explicit repo-vs-live-chain line;
 - a **refuse-don't-truncate** scrubber gates every send, built on the
   pinned inventory redaction oracle plus the registered bot token;
+- messages render as Telegram HTML (escaped after redaction, sized
+  before rendering); an HTTP 400 falls back once to plain text;
 - a delivery ledger carries the six ATLAS-TG-005 fields; de-duplication
   is by stable `event_id` within a coalescing window;
 - Telegram failure is caught at the per-event boundary, recorded, and
@@ -71,7 +78,25 @@ CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS pending_churn (
+    range_id INTEGER PRIMARY KEY,
+    prev_sha TEXT NOT NULL,
+    new_sha TEXT NOT NULL,
+    dominant_area TEXT NOT NULL,
+    detected_at TEXT NOT NULL
+);
 """
+
+# Repository-range significance policy defaults (config-overridable).
+# Churn is DENY-BY-DEFAULT: an explicit allowlist; any directory not
+# provably in it (including a top-level dir never seen before) escalates
+# to significant — the monorepo reorganizes, fail toward paging.
+DEFAULT_PROTOCOL_DIRS = ("pallets", "runtime", "precompiles", "common")
+DEFAULT_CHURN_DIRS = (".github", "docs", "website", "vendor", "sdk")
+DEFAULT_DIGEST_BACKSTOP_HOURS = 24
+DEFAULT_GOVERNANCE_THRESHOLD = 425
+SIGNIFICANT = "significant"
+CHURN = "churn"
 
 # Terminal ledger states (a repeat of one of these suppresses a re-send).
 STATUS_DELIVERED = "delivered"
@@ -303,6 +328,58 @@ def assert_sendable(text: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Telegram HTML rendering — escape after redact, size before render
+# ---------------------------------------------------------------------------
+# Only Bot-API-supported tags are ever emitted (b, i, code, blockquote,
+# blockquote expandable). Every dynamic value passes html_escape(); a real
+# in-range commit subject contains `Vec<PerU16>`, which unescaped would
+# 400 the send. Rendered HTML is NEVER truncated after rendering — the
+# builder shortens *content* until the rendered body fits, because a
+# post-render slice can cut a tag mid-entity and 400 every long message.
+
+
+def html_escape(text: str) -> str:
+    return (text.replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;"))
+
+
+def render_html(headline: str, lines: List[str], expandable: str,
+                trailer: Optional[str], max_chars: int) -> str:
+    """Compose the supported-tag HTML body, shrinking the expandable
+    content (never the markup) until the result fits max_chars."""
+    for _ in range(4):
+        parts = ["<b>%s</b>" % html_escape(headline)]
+        parts.extend(html_escape(line) for line in lines)
+        if expandable:
+            parts.append("<blockquote expandable>%s</blockquote>"
+                         % html_escape(expandable))
+        if trailer:
+            parts.append("<i>%s</i>" % html_escape(trailer))
+        body = "\n".join(parts)
+        if len(body) <= max_chars:
+            return body
+        overshoot = len(body) - max_chars
+        if expandable and len(expandable) > 40:
+            expandable = expandable[:max(20, len(expandable)
+                                         - overshoot - 20)] + "…"
+        elif trailer:
+            trailer = None
+        else:
+            lines = lines[:-1] if lines else []
+    return body[:0] + "<b>%s</b>" % html_escape(headline[:max_chars - 7])
+
+
+def render_plain(headline: str, lines: List[str], expandable: str,
+                 trailer: Optional[str], max_chars: int) -> str:
+    parts = [headline] + list(lines)
+    if expandable:
+        parts.append(expandable)
+    if trailer:
+        parts.append(trailer)
+    return "\n".join(parts)[:max_chars]
+
+
+# ---------------------------------------------------------------------------
 # Transport — Telegram Bot API sendMessage with bounded, observable retry
 # ---------------------------------------------------------------------------
 
@@ -318,7 +395,7 @@ def _do_post(url: str, data: bytes, timeout: int) -> Tuple[int, str]:
 def send_message(config: Dict[str, Any], token: str, chat_id: str,
                  text: str,
                  poster: Optional[Callable[[str, bytes, int], Tuple[int, str]]]
-                 = None) -> Dict[str, Any]:
+                 = None, parse_mode: Optional[str] = None) -> Dict[str, Any]:
     """Attempt delivery with bounded retry. Returns a result dict with
     delivered/attempts/status/detail. Never raises for transport or API
     failures — those are the caller's recorded terminal outcomes. The
@@ -332,9 +409,11 @@ def send_message(config: Dict[str, Any], token: str, chat_id: str,
     backoff = retry.get("backoff_seconds", [1.0, 3.0])
     timeout = int(config.get("request_timeout_seconds", 20))
     url = "%s/bot%s/sendMessage" % (config["api_base"], token)
-    payload = urllib.parse.urlencode(
-        {"chat_id": chat_id, "text": text,
-         "disable_web_page_preview": "true"}).encode("utf-8")
+    fields = {"chat_id": chat_id, "text": text,
+              "disable_web_page_preview": "true"}
+    if parse_mode:
+        fields["parse_mode"] = parse_mode
+    payload = urllib.parse.urlencode(fields).encode("utf-8")
 
     attempts = 0
     last_detail = "no attempt made"
@@ -367,36 +446,295 @@ def send_message(config: Dict[str, Any], token: str, chat_id: str,
 # Event adapters — read existing stores read-only, past a watermark
 # ---------------------------------------------------------------------------
 # Each returns (events, new_watermark). An event is a dict:
-#   {event_id, event_class, created_at, text}
-# Adapters never mutate their source and never invent data.
+#   {event_id, event_class, created_at, text} plus optional keys:
+#   html (rendered Telegram HTML body) and digest_range_ids (pending
+#   churn cleared by the scan once the carrying event is DELIVERED).
+# Adapters never mutate their source and never invent data. `ctx`
+# carries the notifier's own store + config: {"config", "spec",
+# "connection"}; adapters that need neither ignore it.
 
 
-def repository_update_events(source_db: str, watermark: Optional[str]
-                             ) -> Tuple[List[Dict[str, str]], Optional[str]]:
+def _repo_policy(ctx: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    policy = ((ctx or {}).get("config") or {}).get("repository_update", {})
+    return {
+        "protocol_dirs": set(policy.get("protocol_dirs",
+                                        DEFAULT_PROTOCOL_DIRS)),
+        "churn_dirs": set(policy.get("churn_dirs", DEFAULT_CHURN_DIRS)),
+        "digest_backstop_hours": float(policy.get(
+            "digest_backstop_hours", DEFAULT_DIGEST_BACKSTOP_HOURS)),
+    }
+
+
+def classify_range(rng: Dict[str, Any], policy: Dict[str, Any]) -> str:
+    """Deny-by-default significance: churn only when the recorded file
+    list is complete, trustworthy, and provably a subset of the churn
+    allowlist with no spec_version change. Everything else pages."""
+    if rng["files_truncated"] or rng["non_fast_forward"]:
+        return SIGNIFICANT  # file list known-incomplete: cannot prove churn
+    prev_spec, new_spec = rng["prev_spec"], rng["new_spec"]
+    if (prev_spec is not None and new_spec is not None
+            and prev_spec != new_spec):
+        return SIGNIFICANT  # runtime spec bump: the strongest signal
+    dirs = {path.split("/", 1)[0] for path in rng["files"]}
+    if dirs & policy["protocol_dirs"]:
+        return SIGNIFICANT
+    if dirs and dirs <= policy["churn_dirs"]:
+        return CHURN
+    return SIGNIFICANT  # unknown/new top-level dir (or empty) → escalate
+
+
+def _dominant_area(files: List[str]) -> str:
+    counts: Dict[str, int] = {}
+    for path in files:
+        top = path.split("/", 1)[0]
+        counts[top] = counts.get(top, 0) + 1
+    if not counts:
+        return "unknown"
+    return sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))[0][0]
+
+
+def _resolve_repo_watermark(conn: sqlite3.Connection,
+                            watermark: Optional[str]) -> Optional[int]:
+    """The repository-update watermark is the last-processed
+    `change_ranges.id`. The pre-tiering deployment stored a head SHA —
+    translate it once (its range's id, else reseed to the current max so
+    a hex string is never int()'d and history is never replayed)."""
+    if watermark is None:
+        return None
+    if watermark.isdigit():
+        return int(watermark)
+    row = conn.execute("SELECT id FROM change_ranges WHERE new_sha = ?",
+                       (watermark,)).fetchone()
+    if row is not None:
+        return int(row[0])
+    row = conn.execute("SELECT MAX(id) FROM change_ranges").fetchone()
+    return int(row[0]) if row and row[0] is not None else 0
+
+
+def read_live_spec(live_db: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Last-seen live runtime spec_version from livedata's store,
+    read-only. None when unavailable — the caller degrades honestly."""
+    if not live_db:
+        return None
+    conn = open_source_ro(live_db)
+    if conn is None:
+        return None
+    try:
+        rows = dict(conn.execute(
+            "SELECT key, value FROM meta WHERE key IN "
+            "('last_live_spec', 'last_live_spec_block')").fetchall())
+    except sqlite3.Error:
+        return None
+    finally:
+        conn.close()
+    spec = rows.get("last_live_spec")
+    if spec is None:
+        return None
+    return {"spec_version": int(spec),
+            "block": rows.get("last_live_spec_block")}
+
+
+def _both_clocks_line(new_spec: Optional[int],
+                      live: Optional[Dict[str, Any]]) -> str:
+    """The repo-vs-live-chain distinction, stated on every repo alert."""
+    if live is None:
+        return ("live chain spec unavailable — cannot compare; this is a "
+                "repository (source-code) event, the live chain did not "
+                "change")
+    if new_spec is None:
+        return ("repo spec unknown · live Finney spec %d — repository "
+                "event only, not enacted on chain" % live["spec_version"])
+    delta = new_spec - live["spec_version"]
+    return ("repo spec %d · live Finney spec %d · Δ%+d · not enacted — "
+            "source code only, the live chain has NOT changed"
+            % (new_spec, live["spec_version"], delta))
+
+
+def _pending_churn_rows(store: sqlite3.Connection
+                        ) -> List[Tuple[int, str, str, str]]:
+    return store.execute(
+        "SELECT range_id, new_sha, dominant_area, detected_at "
+        "FROM pending_churn ORDER BY range_id ASC").fetchall()
+
+
+def _digest_line(pending: List[Tuple[int, str, str, str]]) -> str:
+    areas = ", ".join(row[2] for row in pending)
+    shas = " · ".join(row[1][:12] for row in pending)
+    return ("%d low-signal update(s) digested — %s (%s) — no "
+            "protocol/spec change" % (len(pending), areas, shas))
+
+
+def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
+                      pending: List[Tuple[int, str, str, str]],
+                      max_chars: int) -> Dict[str, Any]:
+    prev_spec, new_spec = rng["prev_spec"], rng["new_spec"]
+    if (prev_spec is not None and new_spec is not None
+            and prev_spec != new_spec):
+        reason = "runtime spec bump %d→%d" % (prev_spec, new_spec)
+    elif rng["files_truncated"] or rng["non_fast_forward"]:
+        reason = "review needed (incomplete change record)"
+    else:
+        reason = "protocol-area change"
+    headline = "Atlas • subtensor repo — %s" % reason
+    lines = [
+        "%s → %s · %d file(s) changed"
+        % (rng["prev_sha"][:12], rng["new_sha"][:12], len(rng["files"])),
+        _both_clocks_line(new_spec, live),
+        "source: repository (source code), not the live chain",
+    ]
+    trailer = _digest_line(pending) if pending else None
+    plain = render_plain(headline, lines, rng["summary"], trailer,
+                         max_chars)
+    html = render_html(headline, lines, rng["summary"], trailer, max_chars)
+    return {"event_id": "repository-update:range:%d" % rng["id"],
+            "event_class": "repository-update",
+            "created_at": _utc_now(), "text": plain, "html": html,
+            "digest_range_ids": [row[0] for row in pending]}
+
+
+def _build_digest_event(pending: List[Tuple[int, str, str, str]],
+                        max_chars: int) -> Dict[str, Any]:
+    headline = "Atlas • subtensor repo — low-signal digest"
+    lines = ["no protocol or spec_version change in these ranges",
+             "source: repository (source code), not the live chain"]
+    body = _digest_line(pending)
+    plain = render_plain(headline, lines, body, None, max_chars)
+    html = render_html(headline, lines, body, None, max_chars)
+    return {"event_id": "repository-churn-digest:%d" % pending[-1][0],
+            "event_class": "repository-update",
+            "created_at": _utc_now(), "text": plain, "html": html,
+            "digest_range_ids": [row[0] for row in pending]}
+
+
+def repository_update_events(source_db: str, watermark: Optional[str],
+                             ctx: Optional[Dict[str, Any]] = None
+                             ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     conn = open_source_ro(source_db)
     if conn is None:
         return [], watermark
     try:
-        row = conn.execute(
-            "SELECT value FROM meta WHERE key = 'last_remote_sha'").fetchone()
-        sha = row[0] if row else None
-        if not sha or sha == watermark:
-            return [], watermark
-        detected = conn.execute(
-            "SELECT value FROM meta WHERE key = 'last_detected_update'"
-        ).fetchone()
-        when = detected[0] if detected else _utc_now()
-        text = ("Atlas • subtensor repository updated\n"
-                "new head: %s\ndetected: %s" % (sha[:12], when))
-        event = {"event_id": "repository-update:%s" % sha,
-                 "event_class": "repository-update",
-                 "created_at": _utc_now(), "text": text}
-        return [event], sha
+        wm_id = _resolve_repo_watermark(conn, watermark)
+        columns = {row[1] for row in conn.execute(
+            "PRAGMA table_info(change_ranges)")}
+        spec_cols = (", prev_spec, new_spec"
+                     if {"prev_spec", "new_spec"} <= columns
+                     else ", NULL, NULL")
+        rows = conn.execute(
+            "SELECT id, prev_sha, new_sha, retrieved_at, non_fast_forward, "
+            "files_json, summary" + spec_cols + " FROM change_ranges "
+            "WHERE id > ? ORDER BY id ASC LIMIT 50",
+            (wm_id or 0,)).fetchall()
     finally:
         conn.close()
 
+    ctx = ctx or {}
+    config = ctx.get("config") or {}
+    store: Optional[sqlite3.Connection] = ctx.get("connection")
+    policy = _repo_policy(ctx)
+    max_chars = int(config.get("message_max_chars", 3500))
+    live = read_live_spec((ctx.get("spec") or {}).get("live_db"))
 
-def schema_drift_events(source_db: str, watermark: Optional[str]
+    events: List[Dict[str, Any]] = []
+    high = wm_id
+    for (range_id, prev_sha, new_sha, retrieved_at, non_ff, files_json,
+         summary, prev_spec, new_spec) in rows:
+        high = range_id if high is None else max(high, range_id)
+        files_data = json.loads(files_json)
+        rng = {"id": range_id, "prev_sha": prev_sha, "new_sha": new_sha,
+               "non_fast_forward": bool(non_ff),
+               "files": [item["path"] for item in files_data["files"]],
+               "files_truncated": bool(files_data["truncated"]),
+               "summary": summary or "",
+               "prev_spec": prev_spec, "new_spec": new_spec}
+        tier = classify_range(rng, policy)
+        if tier == CHURN and store is not None:
+            # Durable BEFORE the watermark passes it (never dropped):
+            # committed by the same connection's next commit, and
+            # idempotent on re-scan if that commit never lands.
+            store.execute(
+                "INSERT OR IGNORE INTO pending_churn (range_id, prev_sha, "
+                "new_sha, dominant_area, detected_at) VALUES (?, ?, ?, ?, ?)",
+                (range_id, prev_sha, new_sha,
+                 _dominant_area(rng["files"]), _utc_now()))
+            continue
+        if tier == CHURN:
+            tier = SIGNIFICANT  # no durable store → never silently drop
+        pending = _pending_churn_rows(store) if store is not None else []
+        events.append(_build_repo_event(rng, live, pending, max_chars))
+
+    if not events and store is not None:
+        # Backstop: pending churn must not linger forever waiting for a
+        # significant alert to ride.
+        pending = _pending_churn_rows(store)
+        if pending:
+            backstop = policy["digest_backstop_hours"] * 3600
+            oldest = pending[0][3]
+            try:
+                age = (datetime.datetime.now(tz=datetime.timezone.utc)
+                       - datetime.datetime.fromisoformat(oldest)
+                       ).total_seconds()
+            except ValueError:
+                age = backstop + 1
+            if age > backstop:
+                events.append(_build_digest_event(pending, max_chars))
+
+    new_wm = str(high) if high is not None else watermark
+    return events, new_wm
+
+
+def chain_runtime_upgrade_events(source_db: str, watermark: Optional[str],
+                                 ctx: Optional[Dict[str, Any]] = None
+                                 ) -> Tuple[List[Dict[str, Any]],
+                                            Optional[str]]:
+    """Live runtime upgrades recorded by livedata — the network actually
+    changed, as opposed to the source-code repository moving."""
+    conn = open_source_ro(source_db)
+    if conn is None:
+        return [], watermark
+    try:
+        present = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND "
+            "name = 'spec_upgrades'").fetchone()
+        if present is None:
+            return [], watermark  # livedata not migrated yet: no events
+        last_id = int(watermark) if watermark else 0
+        rows = conn.execute(
+            "SELECT id, observed_at, prev_spec, new_spec, block_reference "
+            "FROM spec_upgrades WHERE id > ? ORDER BY id ASC LIMIT 50",
+            (last_id,)).fetchall()
+    finally:
+        conn.close()
+
+    config = (ctx or {}).get("config") or {}
+    max_chars = int(config.get("message_max_chars", 3500))
+    threshold = int(config.get("governance_threshold",
+                               DEFAULT_GOVERNANCE_THRESHOLD))
+    events: List[Dict[str, Any]] = []
+    high = last_id
+    for row_id, observed_at, prev_spec, new_spec, block in rows:
+        high = max(high, int(row_id))
+        headline = ("Atlas • LIVE CHAIN UPGRADED — Finney runtime "
+                    "spec %s → %s" % (prev_spec, new_spec))
+        lines = ["this is the LIVE network changing (enacted), not the "
+                 "source repository",
+                 "reference block: %s · observed: %s"
+                 % (block if block is not None else "unknown",
+                    observed_at)]
+        if prev_spec < threshold <= new_spec:
+            lines.append("governance threshold %d crossed — "
+                         "conviction-based subnet ownership enforcement "
+                         "is now ENACTED" % threshold)
+        plain = render_plain(headline, lines, "", None, max_chars)
+        html = render_html(headline, lines, "", None, max_chars)
+        events.append({"event_id": "chain-runtime-upgrade:%s" % row_id,
+                       "event_class": "chain-runtime-upgrade",
+                       "created_at": _utc_now(), "text": plain,
+                       "html": html})
+    return events, (str(high) if high else watermark)
+
+
+def schema_drift_events(source_db: str, watermark: Optional[str],
+                        ctx: Optional[Dict[str, Any]] = None
                         ) -> Tuple[List[Dict[str, str]], Optional[str]]:
     conn = open_source_ro(source_db)
     if conn is None:
@@ -422,7 +760,8 @@ def schema_drift_events(source_db: str, watermark: Optional[str]
         conn.close()
 
 
-def knowledge_ingestion_events(source_db: str, watermark: Optional[str]
+def knowledge_ingestion_events(source_db: str, watermark: Optional[str],
+                               ctx: Optional[Dict[str, Any]] = None
                                ) -> Tuple[List[Dict[str, str]], Optional[str]]:
     conn = open_source_ro(source_db)
     if conn is None:
@@ -453,8 +792,9 @@ def knowledge_ingestion_events(source_db: str, watermark: Optional[str]
         conn.close()
 
 
-_ADAPTERS: Dict[str, Callable[[str, Optional[str]],
-                              Tuple[List[Dict[str, str]], Optional[str]]]] = {
+_ADAPTERS: Dict[str, Callable[..., Tuple[List[Dict[str, Any]],
+                                         Optional[str]]]] = {
+    "chain-runtime-upgrade": chain_runtime_upgrade_events,
     "repository-update": repository_update_events,
     "schema-drift": schema_drift_events,
     "knowledge-ingestion": knowledge_ingestion_events,
@@ -479,18 +819,44 @@ def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
     if ledger_seen_recent(connection, event_id, window):
         return STATUS_SUPPRESSED
 
-    text = (event["text"] or "")[:int(config.get("message_max_chars", 3500))]
+    max_chars = int(config.get("message_max_chars", 3500))
+    text = (event["text"] or "")[:max_chars]
+    # HTML bodies are sized by the renderer and are NEVER sliced here —
+    # a post-render cut can split a tag/entity and 400 the send. An
+    # oversized HTML body (renderer contract breach) demotes to plain.
+    html = event.get("html") if config.get("parse_mode") == "HTML" else None
+    if html and len(html) > max_chars:
+        html = None
     try:
         assert_sendable(text)
+        if html:
+            assert_sendable(html)
     except ScrubRefusal as refusal:
         ledger_record(connection, event_id, event_class, created_at,
                       _utc_now(), STATUS_SCRUB_REFUSED, 0, str(refusal))
         return STATUS_SCRUB_REFUSED
 
-    result = send_message(config, token, chat_id, text, poster=poster)
+    fallback_note = None
+    if html:
+        result = send_message(config, token, chat_id, html, poster=poster,
+                              parse_mode="HTML")
+        if not result["delivered"] and result.get("status") == 400:
+            # Rejected formatting must never suppress an alert: resend
+            # once as the untagged structured text (never the HTML
+            # source) and record the fallback.
+            plain_result = send_message(config, token, chat_id, text,
+                                        poster=poster)
+            plain_result["attempts"] += result["attempts"]
+            if plain_result["delivered"]:
+                fallback_note = "html-400-fallback: delivered as plain text"
+            result = plain_result
+    else:
+        result = send_message(config, token, chat_id, text, poster=poster)
+
     if result["delivered"]:
         ledger_record(connection, event_id, event_class, created_at,
-                      _utc_now(), STATUS_DELIVERED, result["attempts"], None)
+                      _utc_now(), STATUS_DELIVERED, result["attempts"],
+                      fallback_note)
         return STATUS_DELIVERED
     ledger_record(connection, event_id, event_class, created_at, _utc_now(),
                   STATUS_FAILED, result["attempts"], result["detail"])
@@ -514,7 +880,10 @@ def seed_watermarks(config: Dict[str, Any],
         if watermark_get(connection, event_class) is not None:
             seeded[event_class] = "already-seeded"
             continue
-        _events, new_wm = adapter(resolve(spec["source_db"]), None)
+        # Seed ctx carries NO store connection: backlog churn must not
+        # land in pending_churn (seeding skips history, not digests it).
+        ctx = {"config": config, "spec": spec, "connection": None}
+        _events, new_wm = adapter(resolve(spec["source_db"]), None, ctx)
         if new_wm:
             watermark_set(connection, event_class, new_wm)
             seeded[event_class] = {"seeded_to": new_wm, "skipped": len(_events)}
@@ -542,8 +911,9 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
         wm = watermark_get(connection, event_class)
         counts = {"delivered": 0, "suppressed": 0, "failed": 0,
                   "scrub-refused": 0, "error": 0}
+        ctx = {"config": config, "spec": spec, "connection": connection}
         try:
-            events, new_wm = adapter(source_db, wm)
+            events, new_wm = adapter(source_db, wm, ctx)
         except Exception as exc:  # adapter is isolated from the scan
             summary["classes"][event_class] = {
                 "error": redact(str(exc))[:200]}
@@ -553,6 +923,13 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
                 status = deliver_event(connection, config, token, chat_id,
                                        event, poster=poster)
                 counts[status] = counts.get(status, 0) + 1
+                if (status == STATUS_DELIVERED
+                        and event.get("digest_range_ids")):
+                    # Pending churn clears ONLY once its digest was in a
+                    # delivered message (never dropped, auditable).
+                    connection.executemany(
+                        "DELETE FROM pending_churn WHERE range_id = ?",
+                        [(rid,) for rid in event["digest_range_ids"]])
             except Exception as exc:  # never let one event break the loop
                 counts["error"] += 1
                 ledger_record(connection, event["event_id"],
@@ -561,6 +938,8 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
                               redact(str(exc)))
         if new_wm and new_wm != wm:
             watermark_set(connection, event_class, new_wm)
+        else:
+            connection.commit()  # land pending churn even when wm is unchanged
         summary["classes"][event_class] = counts
     return summary
 

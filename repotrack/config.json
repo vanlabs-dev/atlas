@@ -10,6 +10,7 @@
   "access": "anonymous",
   "update_interval_hours": 1,
   "stale_multiplier": 3,
+  "runtime_manifest": "runtime/src/lib.rs",
   "clone_dir": "var/repotrack/subtensor",
   "db": "var/repotrack/repotrack.db",
   "index": {

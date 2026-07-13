@@ -139,10 +139,11 @@ def last_run(db):
 def change_ranges(db):
     rows = query(db, "SELECT prev_sha, new_sha, non_fast_forward, "
                      "commits_json, files_json, tags_json, index_status, "
-                     "index_detail, summary FROM change_ranges ORDER BY id")
+                     "index_detail, summary, prev_spec, new_spec "
+                     "FROM change_ranges ORDER BY id")
     keys = ("prev_sha", "new_sha", "non_fast_forward", "commits_json",
             "files_json", "tags_json", "index_status", "index_detail",
-            "summary")
+            "summary", "prev_spec", "new_spec")
     return [dict(zip(keys, row)) for row in rows]
 
 
