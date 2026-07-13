@@ -104,5 +104,5 @@
   `.github/`-only churn held pending for the backstop flush.
 - [x] 7.4 Verify scrubber, ledger six-field record, and failure-isolation
   guarantees are unchanged (regression).
-- [ ] 7.5 On-device acceptance: `init` (seed watermarks incl. new class), then a
+- [x] 7.5 On-device acceptance: `init` (seed watermarks incl. new class), then a
   scan, confirming HTML render and repo/chain lines in a real Telegram message.
