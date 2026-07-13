@@ -95,10 +95,11 @@ retains an audit trail of skipped churn.
 
 A significant repository alert SHALL include a breakdown built from the recorded
 change range: commit count, top changed areas, notable commit subjects or PR
-references, tags crossed, and the `spec_version` delta. The breakdown SHALL reuse
-the machine-generated summary already recorded by the repository tracker and
-SHALL pass the outbound scrubber unchanged; no un-scrubbed diff content SHALL be
-sent.
+references, tags crossed, and the `spec_version` delta. The breakdown SHALL be
+built only from fields already recorded by the repository tracker (never
+re-fetched), SHALL be rendered as structured single-fact lines rather than a
+prose paragraph, and SHALL pass outbound redaction before rendering; no
+un-scrubbed diff content SHALL be sent.
 
 #### Scenario: Breakdown reflects the recorded range
 
@@ -155,7 +156,9 @@ dynamic values (SHAs, paths, commit subjects, provider text) SHALL be
 HTML-escaped after scrubbing and before send. The renderer SHALL only emit tags
 supported by the Telegram Bot API and SHALL produce a body already within the
 configured message size limit with balanced tags; rendered HTML SHALL NOT be
-truncated after rendering. On an HTTP 400 (rejected formatting), the notifier
+truncated after rendering. Message bodies SHALL be composed of short
+single-fact lines and SHALL NOT contain em or en dashes (the renderer
+normalizes any imported from stored data). On an HTTP 400 (rejected formatting), the notifier
 SHALL retry once as plain text (the untagged structured text, never the raw
 HTML source) so a rendering fault never suppresses an alert, and SHALL record
 the fallback.

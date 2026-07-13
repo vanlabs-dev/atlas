@@ -125,22 +125,32 @@ significant alerts, the second carrying the digest of range 2; range 4 stays
 pending for the backstop flush.
 
 ```
-🟠 Subtensor repo — runtime spec bump
-   14bc6f9 → 647ca2b · 500 commits
-   repo spec 425→428 · live Finney 424 · Δ4 · not enacted
-   ▸ breakdown (expandable): PR #2846 bittensor-core-exploration;
-     top areas sdk/ pallets/ runtime/; drand round-skip fix (#2794)
+Atlas · subtensor repo · runtime spec bump 425→428          (bold headline)
+14bc6f90000 → 647ca2b0000 · 500+ commit(s) · 1200 file(s)
+repo spec 428 · live Finney spec 424 · Δ+4 · not enacted on chain
+source: repository (source code), not the live chain
+▸ expandable quote, one fact per line:
+    top areas: sdk (700) · pallets (300) · runtime (90)
+    tags: v3.4.0
+    • Merge pull request #2846 from RaoFoundation/bittensor-core-exploration
+    • drand - round skip fix (#2794)
+    from recorded change data · effects not verified
+digested 1 low-signal update(s): sdk (82142f90000) · no protocol or spec
+change                                                    (italic trailer)
 
-🟠 Subtensor repo — runtime spec bump
-   82142f9 → ff1e1ed
-   repo spec 428→429 · live Finney 424 · Δ5 · not enacted
-   ▸ breakdown (expandable): PR #2867 bittensor-core-typed-units;
-     top areas pallets/ common/ runtime/
-   ⚪ 1 low-signal update digested — sdk (82142f9) — no spec change
-
-🔴 LIVE CHAIN UPGRADED — Finney 424 → 425 · block 8,612,004
-   conviction ownership enforcement now ENACTABLE
+Atlas · LIVE CHAIN UPGRADED · Finney runtime spec 424 → 425
+the LIVE network changed (enacted), not the source repository
+reference block: 8612004 · observed: <ts>
+governance threshold 425 crossed · conviction-based subnet ownership
+enforcement is now ENACTED
 ```
+
+**Formatting rules (operator feedback 2026-07-13):** message bodies are
+structured single-fact lines, never a prose blob — the breakdown is built
+from the recorded fields (top areas, tags, bulleted subjects), not the
+machine-summary sentence. Alert bodies NEVER contain em/en dashes: the
+renderer normalizes them to `-` as a choke point, and composed strings use
+`·` separators.
 
 ## Render / scrub / escape ordering
 

@@ -72,26 +72,21 @@ SHA_3 = "ff1e1ed" + "0" * 33
 SHA_4 = "75798da" + "0" * 33
 
 RANGES = [
-    # (prev, new, files, prev_spec, new_spec, summary)
+    # (prev, new, files, prev_spec, new_spec, subjects)
     (SHA_BASE, SHA_1,
      ["runtime/src/lib.rs", "pallets/subtensor/src/lib.rs", "sdk/api.rs"],
      425, 428,
-     "[machine summary — not verified effect] 500 commit(s), 1200 file(s) "
-     "changed. Top changed areas: sdk (700), pallets (300). Recent "
-     "subjects: PR #2846 bittensor-core-exploration"),
-    (SHA_1, SHA_2, ["sdk/README.md"], 428, 428,
-     "[machine summary — not verified effect] 2 commit(s), 1 file(s) "
-     "changed. Top changed areas: sdk (1)."),
+     ["Merge pull request #2846 from RaoFoundation/"
+      "bittensor-core-exploration",
+      "drand — round skip fix (#2794)"]),
+    (SHA_1, SHA_2, ["sdk/README.md"], 428, 428, ["sdk readme docs link"]),
     (SHA_2, SHA_3,
      ["pallets/subtensor/src/lib.rs", "common/src/units.rs",
       "runtime/src/lib.rs"],
      428, 429,
-     "[machine summary — not verified effect] 214 commit(s), 90 file(s) "
-     "changed. Top changed areas: pallets (57), common (20). Recent "
-     "subjects: use Vec<PerU16> for typed units (#2867)"),
+     ["use Vec<PerU16> for typed units (#2867)"]),
     (SHA_3, SHA_4, [".github/workflows/ci.yml"], 429, 429,
-     "[machine summary — not verified effect] 1 commit(s), 1 file(s) "
-     "changed. Top changed areas: .github (1)."),
+     ["ci: build the core sdist with uv"]),
 ]
 
 REPO_SCHEMA = """
@@ -111,16 +106,20 @@ def seed_repotrack(path, ranges=RANGES, truncated=False, non_ff=False):
     import json
     conn = sqlite3.connect(path)
     conn.executescript(REPO_SCHEMA)
-    for prev, new, files, prev_spec, new_spec, summary in ranges:
+    for prev, new, files, prev_spec, new_spec, subjects in ranges:
         conn.execute(
             "INSERT INTO change_ranges (run_id, prev_sha, new_sha, "
             "retrieved_at, non_fast_forward, commits_json, files_json, "
             "tags_json, index_status, summary, prev_spec, new_spec) "
-            "VALUES ('r', ?, ?, 't', ?, '{}', ?, '[]', 'ok', ?, ?, ?)",
+            "VALUES ('r', ?, ?, 't', ?, ?, ?, '[]', 'ok', ?, ?, ?)",
             (prev, new, 1 if non_ff else 0,
+             json.dumps({"commits": [{"sha": "c%d" % i, "subject": s}
+                                     for i, s in enumerate(subjects)],
+                         "truncated": False}),
              json.dumps({"files": [{"path": item} for item in files],
                          "truncated": truncated}),
-             summary, prev_spec, new_spec))
+             "[machine summary — not verified effect] fixture",
+             prev_spec, new_spec))
     conn.execute("INSERT INTO meta VALUES ('last_remote_sha', ?)", (SHA_4,))
     conn.commit()
     conn.close()
@@ -387,20 +386,39 @@ class FourHeadsTests(unittest.TestCase):
         self.assertEqual(second["digest_range_ids"], [2])
         self.assertIn("sdk", second["text"])
         self.assertIn(SHA_2[:12], second["text"])
-        self.assertIn("no protocol/spec change", second["text"])
+        self.assertIn("no protocol or spec change", second["text"])
+        # Structured breakdown: facts as lines, subjects as bullets.
+        self.assertIn("top areas: common (1) · pallets (1) · runtime (1)",
+                      second["text"])
+        self.assertIn("• use Vec<PerU16> for typed units (#2867)",
+                      second["text"])
+        self.assertIn("Vec&lt;PerU16&gt;", second["html"])
         # Both churn ranges are durably pending until a digest DELIVERS.
         self.assertEqual(self.pending(), [(2,), (4,)])
+
+    def test_no_em_dashes_anywhere(self):
+        # Operator rule: alert bodies never contain em/en dashes, even
+        # when a commit subject (range 1 fixture) carries one.
+        events, _ = tg.repository_update_events(
+            self.config["classes"]["repository-update"]["source_db"], None,
+            repo_ctx(self.config, self.store))
+        for event in events:
+            self.assertNotIn("—", event["text"])
+            self.assertNotIn("—", event["html"])
+            self.assertNotIn("–", event["text"])
+        self.assertIn("• drand - round skip fix (#2794)",
+                      events[0]["text"])
 
     def test_both_clocks_line_and_repo_marking(self):
         events, _ = tg.repository_update_events(
             self.config["classes"]["repository-update"]["source_db"], None,
             repo_ctx(self.config, self.store))
-        self.assertIn("repo spec 428 · live Finney spec 424 · Δ+4",
-                      events[0]["text"])
-        self.assertIn("live chain has NOT changed", events[0]["text"])
+        self.assertIn("repo spec 428 · live Finney spec 424 · Δ+4 · "
+                      "not enacted on chain", events[0]["text"])
         self.assertIn("repo spec 429 · live Finney spec 424 · Δ+5",
                       events[1]["text"])
-        self.assertIn("source: repository (source code)", events[1]["text"])
+        self.assertIn("source: repository (source code), not the live "
+                      "chain", events[1]["text"])
 
     def test_live_unavailable_degrades_honestly(self):
         os.remove(self.config["classes"]["repository-update"]["live_db"])
@@ -409,7 +427,7 @@ class FourHeadsTests(unittest.TestCase):
             repo_ctx(self.config, self.store))
         self.assertEqual(len(events), 2)
         self.assertIn("live chain spec unavailable", events[0]["text"])
-        self.assertIn("repository (source-code) event", events[0]["text"])
+        self.assertIn("repository event only", events[0]["text"])
 
     def test_churn_survives_scans_and_clears_only_on_delivery(self):
         posts = []
@@ -509,7 +527,9 @@ class ChainUpgradeTests(unittest.TestCase):
         self.assertIn("424 → 425", text)
         self.assertIn("8612004", text)
         self.assertIn("ENACTED", text)
-        self.assertIn("LIVE network changing (enacted)", text)
+        self.assertIn("LIVE network changed (enacted)", text)
+        self.assertNotIn("—", text)
+        self.assertNotIn("—", events[0]["html"])
         # Watermark advanced -> no re-emit.
         again, _ = tg.chain_runtime_upgrade_events(self.db, wm, ctx)
         self.assertEqual(again, [])
