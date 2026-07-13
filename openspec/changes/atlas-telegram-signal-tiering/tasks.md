@@ -106,3 +106,14 @@
   guarantees are unchanged (regression).
 - [x] 7.5 On-device acceptance: `init` (seed watermarks incl. new class), then a
   scan, confirming HTML render and repo/chain lines in a real Telegram message.
+
+## 8. Message structure rework (operator feedback on first live alert)
+
+- [x] 8.1 Build the breakdown from recorded fields as single-fact lines (top
+  areas / tags / bulleted subjects, unverified-data note) instead of rendering
+  the machine-summary prose sentence as one block.
+- [x] 8.2 Ban em/en dashes from alert bodies: `_typography()` normalization in
+  both renderers as the choke point; composed strings use `·` separators.
+- [x] 8.3 Unit tests: structured lines present; a fixture commit subject
+  carrying an em dash is normalized; no em dash in any rendered text or HTML;
+  re-run on-device acceptance with the restructured message.

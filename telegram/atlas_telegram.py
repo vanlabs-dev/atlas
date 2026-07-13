@@ -343,10 +343,21 @@ def html_escape(text: str) -> str:
             .replace(">", "&gt;"))
 
 
+def _typography(text: str) -> str:
+    """Operator style rule (2026-07-13): alert bodies never contain em or
+    en dashes. Composed strings use '·' separators; anything imported
+    from stored data is normalized here, the single choke point."""
+    return text.replace("—", "-").replace("–", "-")
+
+
 def render_html(headline: str, lines: List[str], expandable: str,
                 trailer: Optional[str], max_chars: int) -> str:
     """Compose the supported-tag HTML body, shrinking the expandable
     content (never the markup) until the result fits max_chars."""
+    headline = _typography(headline)
+    lines = [_typography(line) for line in lines]
+    expandable = _typography(expandable)
+    trailer = _typography(trailer) if trailer else trailer
     for _ in range(4):
         parts = ["<b>%s</b>" % html_escape(headline)]
         parts.extend(html_escape(line) for line in lines)
@@ -376,7 +387,7 @@ def render_plain(headline: str, lines: List[str], expandable: str,
         parts.append(expandable)
     if trailer:
         parts.append(trailer)
-    return "\n".join(parts)[:max_chars]
+    return _typography("\n".join(parts))[:max_chars]
 
 
 # ---------------------------------------------------------------------------
@@ -538,16 +549,14 @@ def _both_clocks_line(new_spec: Optional[int],
                       live: Optional[Dict[str, Any]]) -> str:
     """The repo-vs-live-chain distinction, stated on every repo alert."""
     if live is None:
-        return ("live chain spec unavailable — cannot compare; this is a "
-                "repository (source-code) event, the live chain did not "
-                "change")
+        return ("live chain spec unavailable · cannot compare · "
+                "repository event only")
     if new_spec is None:
-        return ("repo spec unknown · live Finney spec %d — repository "
-                "event only, not enacted on chain" % live["spec_version"])
+        return ("repo spec unknown · live Finney spec %d · not enacted "
+                "on chain" % live["spec_version"])
     delta = new_spec - live["spec_version"]
-    return ("repo spec %d · live Finney spec %d · Δ%+d · not enacted — "
-            "source code only, the live chain has NOT changed"
-            % (new_spec, live["spec_version"], delta))
+    return ("repo spec %d · live Finney spec %d · Δ%+d · not enacted "
+            "on chain" % (new_spec, live["spec_version"], delta))
 
 
 def _pending_churn_rows(store: sqlite3.Connection
@@ -558,10 +567,31 @@ def _pending_churn_rows(store: sqlite3.Connection
 
 
 def _digest_line(pending: List[Tuple[int, str, str, str]]) -> str:
-    areas = ", ".join(row[2] for row in pending)
-    shas = " · ".join(row[1][:12] for row in pending)
-    return ("%d low-signal update(s) digested — %s (%s) — no "
-            "protocol/spec change" % (len(pending), areas, shas))
+    items = " · ".join("%s (%s)" % (row[2], row[1][:12]) for row in pending)
+    return ("digested %d low-signal update(s): %s · no protocol or spec "
+            "change" % (len(pending), items))
+
+
+def _breakdown_lines(rng: Dict[str, Any]) -> str:
+    """Structured breakdown from the recorded change range: one fact per
+    line (operator feedback 2026-07-13: never a prose blob)."""
+    lines: List[str] = []
+    counts: Dict[str, int] = {}
+    for path in rng["files"]:
+        top = path.split("/", 1)[0]
+        counts[top] = counts.get(top, 0) + 1
+    top = sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))[:5]
+    if top:
+        lines.append("top areas: " + " · ".join(
+            "%s (%d)" % pair for pair in top))
+    if rng["tags"]:
+        lines.append("tags: " + " · ".join(rng["tags"][:10]))
+    for commit in rng["commits"][:5]:
+        subject = (commit.get("subject") or "").strip()
+        if subject:
+            lines.append("• " + subject[:100])
+    lines.append("from recorded change data · effects not verified")
+    return "\n".join(lines)
 
 
 def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
@@ -575,17 +605,19 @@ def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
         reason = "review needed (incomplete change record)"
     else:
         reason = "protocol-area change"
-    headline = "Atlas • subtensor repo — %s" % reason
+    headline = "Atlas · subtensor repo · %s" % reason
     lines = [
-        "%s → %s · %d file(s) changed"
-        % (rng["prev_sha"][:12], rng["new_sha"][:12], len(rng["files"])),
+        "%s → %s · %d commit(s)%s · %d file(s)%s"
+        % (rng["prev_sha"][:12], rng["new_sha"][:12],
+           len(rng["commits"]), "+" if rng["commits_truncated"] else "",
+           len(rng["files"]), "+" if rng["files_truncated"] else ""),
         _both_clocks_line(new_spec, live),
         "source: repository (source code), not the live chain",
     ]
+    breakdown = redact(_breakdown_lines(rng))
     trailer = _digest_line(pending) if pending else None
-    plain = render_plain(headline, lines, rng["summary"], trailer,
-                         max_chars)
-    html = render_html(headline, lines, rng["summary"], trailer, max_chars)
+    plain = render_plain(headline, lines, breakdown, trailer, max_chars)
+    html = render_html(headline, lines, breakdown, trailer, max_chars)
     return {"event_id": "repository-update:range:%d" % rng["id"],
             "event_class": "repository-update",
             "created_at": _utc_now(), "text": plain, "html": html,
@@ -594,7 +626,7 @@ def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
 
 def _build_digest_event(pending: List[Tuple[int, str, str, str]],
                         max_chars: int) -> Dict[str, Any]:
-    headline = "Atlas • subtensor repo — low-signal digest"
+    headline = "Atlas · subtensor repo · low-signal digest"
     lines = ["no protocol or spec_version change in these ranges",
              "source: repository (source code), not the live chain"]
     body = _digest_line(pending)
@@ -621,8 +653,8 @@ def repository_update_events(source_db: str, watermark: Optional[str],
                      else ", NULL, NULL")
         rows = conn.execute(
             "SELECT id, prev_sha, new_sha, retrieved_at, non_fast_forward, "
-            "files_json, summary" + spec_cols + " FROM change_ranges "
-            "WHERE id > ? ORDER BY id ASC LIMIT 50",
+            "commits_json, files_json, tags_json" + spec_cols +
+            " FROM change_ranges WHERE id > ? ORDER BY id ASC LIMIT 50",
             (wm_id or 0,)).fetchall()
     finally:
         conn.close()
@@ -636,15 +668,18 @@ def repository_update_events(source_db: str, watermark: Optional[str],
 
     events: List[Dict[str, Any]] = []
     high = wm_id
-    for (range_id, prev_sha, new_sha, retrieved_at, non_ff, files_json,
-         summary, prev_spec, new_spec) in rows:
+    for (range_id, prev_sha, new_sha, retrieved_at, non_ff, commits_json,
+         files_json, tags_json, prev_spec, new_spec) in rows:
         high = range_id if high is None else max(high, range_id)
         files_data = json.loads(files_json)
+        commits_data = json.loads(commits_json)
         rng = {"id": range_id, "prev_sha": prev_sha, "new_sha": new_sha,
                "non_fast_forward": bool(non_ff),
                "files": [item["path"] for item in files_data["files"]],
                "files_truncated": bool(files_data["truncated"]),
-               "summary": summary or "",
+               "commits": commits_data.get("commits", []),
+               "commits_truncated": bool(commits_data.get("truncated")),
+               "tags": json.loads(tags_json),
                "prev_spec": prev_spec, "new_spec": new_spec}
         tier = classify_range(rng, policy)
         if tier == CHURN and store is not None:
@@ -713,15 +748,15 @@ def chain_runtime_upgrade_events(source_db: str, watermark: Optional[str],
     high = last_id
     for row_id, observed_at, prev_spec, new_spec, block in rows:
         high = max(high, int(row_id))
-        headline = ("Atlas • LIVE CHAIN UPGRADED — Finney runtime "
+        headline = ("Atlas · LIVE CHAIN UPGRADED · Finney runtime "
                     "spec %s → %s" % (prev_spec, new_spec))
-        lines = ["this is the LIVE network changing (enacted), not the "
-                 "source repository",
+        lines = ["the LIVE network changed (enacted), not the source "
+                 "repository",
                  "reference block: %s · observed: %s"
                  % (block if block is not None else "unknown",
                     observed_at)]
         if prev_spec < threshold <= new_spec:
-            lines.append("governance threshold %d crossed — "
+            lines.append("governance threshold %d crossed · "
                          "conviction-based subnet ownership enforcement "
                          "is now ENACTED" % threshold)
         plain = render_plain(headline, lines, "", None, max_chars)
