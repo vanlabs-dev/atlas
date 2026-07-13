@@ -40,7 +40,9 @@ The `update` pipeline, in order: pinned remote-identity check → clean
 working-tree check → `fetch` (branch + tags) → SHA recording →
 fast-forward, or deterministic reset when upstream rewrote history
 (recorded as non-fast-forward; never a merge) → change record (commits,
-files ±, tags, labelled machine summary) → incremental index (changed
+files ±, tags, labelled machine summary, and the runtime `spec_version` at
+both heads read from the config-driven manifest — `runtime/src/lib.rs`,
+recorded unknown when absent, never guessed) → incremental index (changed
 paths only; an indexer schema bump forces a recorded full rebuild).
 Every run is journaled in `update_runs` with start/finish/status/error;
 any failure preserves the last good state (ATLAS-REPO-008). No build or
@@ -49,9 +51,11 @@ test of subtensor is ever invoked (ATLAS-REPO-009).
 ## Store
 
 `var/repotrack/repotrack.db` (gitignored, device-local): `update_runs`,
-`change_ranges`, `files` + `files_fts` (FTS5), `audit`, `meta`
-(fetch/index bookkeeping). Change-record summaries carry the fixed
-prefix `[machine summary — not verified effect]`.
+`change_ranges` (incl. additive `prev_spec`/`new_spec` runtime-version
+columns; older rows stay NULL = unknown), `files` + `files_fts` (FTS5),
+`audit`, `meta` (fetch/index bookkeeping). Change-record summaries carry the
+fixed prefix `[machine summary — not verified effect]`; the `repo_changes`
+tool surfaces the recorded `spec_version` delta.
 
 ## MCP server (Hermes registration is an operator action)
 
@@ -89,12 +93,15 @@ sudo systemctl enable --now atlas-repotrack-update.timer
 Verify with `systemctl list-timers atlas-repotrack-update.timer` and
 `python3 repotrack/atlas_repo.py status` after the first firing.
 
-**Phase 5:** the service also runs the Telegram notifier after each
-successful update — `ExecStartPost=-/usr/bin/python3
-/home/pi/atlas/telegram/atlas_telegram.py scan` (the leading `-` makes it
-best-effort, so a Telegram failure never marks this unit failed). Re-`cp`
-the `.service` file and `daemon-reload` if it changes. See
-[telegram/](../telegram/).
+**Phase 5:** the service also runs two best-effort `ExecStartPost=-…` steps
+after each successful update — first the live chain-head poll
+(`livedata/atlas_live.py poll-chain-head`, one non-interactive TaoStats call
+that records a live `spec_version` upgrade promptly), then the Telegram
+notifier (`telegram/atlas_telegram.py scan`). The poll runs *before* the scan
+so a fresh upgrade event is alerted in the same run. The leading `-` on each
+makes them best-effort, so a poll or Telegram failure never marks this unit
+failed. Re-`cp` the `.service` file and `daemon-reload` if it changes. See
+[telegram/](../telegram/) and [livedata/](../livedata/).
 
 ## Re-pinning / re-sync
 

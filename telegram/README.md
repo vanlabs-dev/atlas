@@ -19,13 +19,35 @@ Fail-closed, stdlib-only, read-only toward the device except its own 0600
 `var/telegram/` store.
 
 **Event classes** (each reads an existing store read-only, past a persisted
-per-source watermark, and never mutates or invents):
+per-source watermark, and never mutates or invents). Class order is delivery
+priority — a live chain upgrade surfaces before repo alerts in the same scan:
 
 | Class | Source | Trigger |
 |---|---|---|
-| `repository-update` | `var/repotrack/repotrack.db` (`last_remote_sha`) | subtensor head advanced (Phase 3 timer) |
+| `chain-runtime-upgrade` | `var/livedata/livedata.db` (`spec_upgrades`) | the **live** Finney runtime `spec_version` changed (the network changed) |
+| `repository-update` | `var/repotrack/repotrack.db` (`change_ranges`) | a **significant** tracked commit range (Phase 3 timer); churn is digested, not paged |
 | `schema-drift` | `var/livedata/livedata.db` (`integration_health`) | a live provider response stopped validating (Phase 4) |
 | `knowledge-ingestion` | `var/knowledge/knowledge.db` (`intake_runs`) | a new ingest run staged units for review (Phase 2) |
+
+**Repository alert tiering** (signal-tiering, 2026-07-13). Each tracked commit
+range is classified from recorded facts (changed paths + the recorded runtime
+`spec_version` delta), deny-by-default:
+
+- **Significant** — a `spec_version` bump, any touch of `pallets/ runtime/
+  precompiles/ common/`, any top-level directory *not* in the churn allowlist,
+  or an incomplete record (truncated / non-fast-forward). Pages immediately
+  with a structured breakdown (top areas, tags, bulleted subjects) and states
+  both clocks: `repo spec N · live Finney spec M · Δ · not enacted on chain`.
+- **Churn** — ranges touching *only* the allowlist (`.github/ docs/ website/
+  vendor/ sdk/`) with no spec change. Never paged, never dropped: written to
+  durable `pending_churn` before the watermark passes, carried as a one-line
+  digest on the next significant alert, or flushed by a periodic backstop.
+
+The tier directory sets, the backstop cadence, and the governance threshold
+live in [config.json](config.json). Every repo alert is badged a source-code
+event, distinct from the live chain; a repo advance never implies the chain
+moved. Messages render as Telegram HTML (escaped, size-bounded, single-fact
+lines, no em dashes); an HTTP 400 falls back once to plain text, recorded.
 
 **Guarantees**
 
@@ -59,9 +81,16 @@ python telegram/atlas_telegram.py status                     # ledger + watermar
 ```
 
 Run `init` before enabling any schedule, or the first `scan` treats the
-whole backlog as new. **Schedule (decided 2026-07-12):** `scan` piggybacks
-the hourly `atlas-repotrack-update.service` as a best-effort
-`ExecStartPost=-…` — a notifier failure never fails the repo unit
+whole backlog as new. Re-run `init` after an upgrade to seed only new classes
+(it never rolls a seeded watermark back); the pre-tiering SHA-valued
+repository watermark migrates itself to a `change_ranges.id` on the first
+scan (no history replay). **Schedule (decided 2026-07-12):** the hourly
+`atlas-repotrack-update.service` runs two best-effort `ExecStartPost=-…`
+steps after the repo update — first `livedata/atlas_live.py poll-chain-head`
+(one non-interactive TaoStats call so a live upgrade is detected promptly),
+then `atlas_telegram.py scan`. The ordering matters: the poll records a fresh
+upgrade event *before* the scan reads it, so it alerts in the same run. Both
+are best-effort — a notifier or provider failure never fails the repo unit
 (isolation).
 
 Config: [config.json](config.json). Setup: [docs/operator-setup.md](docs/operator-setup.md).

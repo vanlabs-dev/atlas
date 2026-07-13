@@ -8,7 +8,7 @@ running on a Raspberry Pi. Built methodically in gated phases via OpenSpec.
 (resolved/open decisions), `openspec/specs/` (accepted capability specs), and
 `openspec/changes/archive/` (completed changes with their proposal/design/tasks).
 
-## Current status (2026-07-12)
+## Current status (2026-07-13)
 
 **Phases 0–5 are complete and accepted on the device.** Hermes Agent
 v0.18.2 runs on the Pi (Grok via X OAuth, validated), answering Bittensor
@@ -30,7 +30,7 @@ and an outbound operational notifier, scrubbed and de-duplicated.
 | `knowledge-base` | Done — 22 units active (1 marked conflicting: conviction), `atlas-kb` tools live in Hermes; benchmark run `20260711T192206Z-af3fa274` perfect (17/17 grounded, 9/9 refusals, 0 fabrications — MV-RI-4 re-test passed) |
 | `subtensor-repo-tracking` | Done — identity-validated full clone of `RaoFoundation/subtensor` on the Pi (non-shallow, push disabled, @ `14bc6f9f964b`), safe journaled updates (hourly timer), 581-file FTS index, `atlas-repo` tools live in Hermes (commit-and-file-cited answers; honest stale/no-evidence) |
 | `live-data` | Done — contract-validated TaoSwap (keyless, first) + TaoStats (2/min self-cap, 10k/month ledger) + CoinGecko adapters; pinned schemas, freshness envelopes, `atlas-live` tools live in Hermes; outage battery proved honest unavailability (MV-RI-4 class closed); chain head watch: spec 424, conviction ownership NOT yet enacted (announced 2026-07-02, pending spec ≥ 425) |
-| `telegram-integration` | Done — inbound conversation via the native Hermes gateway (operator wizard, numeric-id allowlist); outbound notifier (`telegram/`) for repository-update/schema-drift/knowledge-ingestion, scrub-or-refuse + six-field delivery ledger + event-id de-dup, isolated on failure; `scan` piggybacks the hourly repo-update service (`ExecStartPost=-…`); 16-test suite; three test alerts delivered on the Pi. Service-failure alerts deferred (needs a Hermes service unit); investment alerts are Phase 7 |
+| `telegram-integration` | Done — inbound conversation via the native Hermes gateway (operator wizard, numeric-id allowlist); outbound notifier (`telegram/`) for four classes (chain-runtime-upgrade / repository-update / schema-drift / knowledge-ingestion), scrub-or-refuse + six-field delivery ledger + event-id de-dup, isolated on failure. **Signal-tiering (2026-07-13):** repo alerts tiered significant-vs-churn (deny-by-default; churn digested, never dropped), both-clocks repo-vs-live-chain marking, a high-priority live `chain-runtime-upgrade` class, and structured Telegram HTML (no em dashes, 400→plain-text fallback). Schedule: an hourly chain-head poll then `scan`, both best-effort `ExecStartPost=-…` on the repo-update service; 41-test suite; live alerts delivered on the Pi. Service-failure alerts deferred (needs a Hermes service unit); investment alerts are Phase 7 |
 
 Latest closed-loop assessment `20260711T073125Z-d52a70e9`: **ok=7, finding=0**.
 Hermes baseline carries 2 documented exceptions (runs as `pi`; no service
@@ -69,8 +69,9 @@ unit) — both to close before production acceptance.
   the Pi. **Telegram (Phase 5):** inbound conversation is the native Hermes
   gateway (operator-configured via `hermes gateway setup`; numeric-ID
   allowlist); the outbound notifier (`telegram/atlas_telegram.py`) runs as
-  a best-effort `ExecStartPost` on the hourly repotrack service and sends
-  scrubbed, de-duplicated alerts. Install record:
+  a best-effort `ExecStartPost` on the hourly repotrack service (preceded by
+  a live chain-head poll) and sends scrubbed, de-duplicated, significance-
+  tiered alerts. Install record:
   `var/hermes/install-record.json` (on the Pi only). Full facts in the
   acceptance entries in [docs/decisions.md](docs/decisions.md).
 
@@ -119,15 +120,17 @@ Phases 0–5 are complete: Atlas answers from validated knowledge, cites
 subtensor source by commit, reports current data with provider and
 timestamp provenance (or refuses honestly), and reaches the operator over
 a controlled Telegram channel — inbound conversation via the native Hermes
-gateway (numeric-ID allowlist) and an outbound notifier (repository-update,
-schema-drift, knowledge-ingestion) that scrubs secrets, records every
-delivery, de-duplicates, and stays isolated on failure. Per PRD §22, next is
+gateway (numeric-ID allowlist) and an outbound notifier (chain-runtime-upgrade,
+repository-update, schema-drift, knowledge-ingestion; repo alerts tiered by
+significance) that scrubs secrets, records every delivery, de-duplicates, and
+stays isolated on failure. Per PRD §22, next is
 **Phase 6**: the monitoring frontend (local health API + monitoring-only
 UI). Its §21 blocking questions are open — Q36 access location, Q37 auth,
 Q38 LAN HTTPS/certs, Q39 first-screen health fields, Q40 retention.
 Watchpoints: the **conviction enactment** (announced 2026-07-02, still
 pending at spec 424 — `live_chain_head` flips `conviction_ownership_enacted`
-at spec ≥ 425; the corpus re-sync then updates the `conflicting` unit), and
+at spec ≥ 425, which now also fires the high-priority `chain-runtime-upgrade`
+Telegram alert; the corpus re-sync then updates the `conflicting` unit), and
 the standing pre-production debts from [docs/decisions.md](docs/decisions.md):
 backup restore test, dedicated service account, service unit for boot
 persistence (also gates **service-failure** Telegram alerts, deferred), and

@@ -15,13 +15,15 @@ discover_taostats.py   contract discovery, keyed (hard budget 40 calls,
                        paced through the ledger; run on the Pi)
 discovery_common.py    shared probe/report machinery (ATLAS-API-003/004/005)
 atlas_live.py          store, quota ledger, HTTP, pinned-schema validation,
-                       per-operation adapters, the fail-closed pipeline
+                       per-operation adapters, the fail-closed pipeline;
+                       also the `poll-chain-head` CLI (scheduled live-spec
+                       poll) and live `spec_version` upgrade recording
 atlas_live_server.py   `atlas-live` stdio MCP server (six tools)
 schemas/               pinned per-endpoint schemas (drift = missing or
                        mistyped required field; extras tolerated)
 config.json            operator-approved contract: endpoints, freshness
                        envelopes, budgets, tolerance (gates 2.3/4.3/5.3)
-tests/                 fixture-provider suite (32 tests, off-device)
+tests/                 fixture-provider suite (36 tests, off-device)
 ```
 
 ## The pipeline (every live call)
@@ -58,6 +60,19 @@ optional TaoStats protocol params), `live_metagraph` (TaoStats),
 timestamp, **spec_version: ≥ 425 = conviction ownership enacted**),
 `live_status` (health events, quota, last successes; no provider
 calls).
+
+A validated `chain_head` response also persists the last-seen live
+`spec_version` and writes a durable `spec_upgrades` event on any change
+(from validated data only, idempotent across restarts). The
+`poll-chain-head` CLI runs one such read on a schedule — piggybacked on the
+hourly repotrack service, *before* the Telegram scan — so a live runtime
+upgrade is detected promptly rather than only when Hermes happens to query.
+The Telegram `chain-runtime-upgrade` alert class reads that event store
+read-only; no extra TaoStats quota is spent by the notifier.
+
+```bash
+python3 livedata/atlas_live.py poll-chain-head   # one validated chain-head read; records live spec + upgrade event
+```
 
 Hermes registration (done 2026-07-12, alongside atlas-kb/atlas-repo):
 
