@@ -173,5 +173,67 @@ class FailClosedTests(AdapterHarness):
         self.assertNotIn(TEST_KEY, json.dumps(rows))
 
 
+class SpecUpgradeTests(AdapterHarness):
+    """Live runtime spec_version persistence + upgrade events
+    (signal-tiering; consumed by the chain-runtime-upgrade class)."""
+
+    def _head_payload(self, spec, block):
+        import datetime as dt
+        now = dt.datetime.now(tz=dt.timezone.utc)
+        return json.dumps({
+            "pagination": {"current_page": 1},
+            "data": [{"block_number": block, "spec_version": spec,
+                      "spec_name": "node-subtensor",
+                      "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                      "hash": "0x" + "e" * 64, "events_count": 1,
+                      "extrinsics_count": 1}]}).encode()
+
+    def _upgrades(self):
+        return self.connection.execute(
+            "SELECT prev_spec, new_spec, block_reference FROM "
+            "spec_upgrades ORDER BY id").fetchall()
+
+    def test_first_observation_records_no_upgrade(self):
+        self.assertEqual(self.run_op("chain_head_taostats")["status"], "ok")
+        self.assertEqual(
+            al.meta_get(self.connection, al.META_LAST_LIVE_SPEC), "424")
+        self.assertEqual(self._upgrades(), [])
+
+    def test_change_records_one_upgrade_same_value_none(self):
+        self.run_op("chain_head_taostats")
+        self.fixture.set_override("/api/block/v1", 200,
+                                  self._head_payload(425, 8612004))
+        self.run_op("chain_head_taostats")
+        self.assertEqual(self._upgrades(), [(424, 425, 8612004)])
+        # Same value again -> observed_at advances, no second event.
+        self.run_op("chain_head_taostats")
+        self.assertEqual(len(self._upgrades()), 1)
+        self.assertEqual(
+            al.meta_get(self.connection, al.META_LAST_LIVE_SPEC), "425")
+
+    def test_restart_does_not_reemit(self):
+        self.run_op("chain_head_taostats")
+        self.fixture.set_override("/api/block/v1", 200,
+                                  self._head_payload(425, 8612004))
+        self.run_op("chain_head_taostats")
+        # Simulate a restart: reopen the store, observe the same spec.
+        self.connection.close()
+        self.connection = al.open_store(self.config["db"])
+        self.ledger = al.QuotaLedger(self.connection, self.config)
+        self.run_op("chain_head_taostats")
+        self.assertEqual(len(self._upgrades()), 1)
+
+    def test_failed_or_invalid_response_records_nothing(self):
+        self.run_op("chain_head_taostats")
+        self.fixture.set_override("/api/block/v1", 503)
+        self.run_op("chain_head_taostats")
+        self.fixture.set_override("/api/block/v1", 200,
+                                  b'{"data": [{"bogus": true}]}')
+        self.run_op("chain_head_taostats")
+        self.assertEqual(self._upgrades(), [])
+        self.assertEqual(
+            al.meta_get(self.connection, al.META_LAST_LIVE_SPEC), "424")
+
+
 if __name__ == "__main__":
     unittest.main()

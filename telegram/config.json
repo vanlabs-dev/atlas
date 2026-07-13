@@ -15,10 +15,24 @@
   },
   "coalesce_window_seconds": 3600,
   "message_max_chars": 3500,
+  "parse_mode": "HTML",
+  "governance_threshold": 425,
+  "repository_update": {
+    "_comment": "Significance policy. Churn is DENY-BY-DEFAULT: only ranges whose changed paths are provably a subset of churn_dirs (and with no recorded spec_version change) are digested instead of paged; any unknown top-level directory escalates to significant. Digested churn is held durably and rides the next significant alert; the backstop flushes it as a standalone digest after digest_backstop_hours.",
+    "protocol_dirs": ["pallets", "runtime", "precompiles", "common"],
+    "churn_dirs": [".github", "docs", "website", "vendor", "sdk"],
+    "digest_backstop_hours": 24
+  },
   "classes": {
+    "chain-runtime-upgrade": {
+      "_comment": "Class order is delivery priority: a live chain upgrade surfaces before repo alerts in the same scan.",
+      "enabled": true,
+      "source_db": "var/livedata/livedata.db"
+    },
     "repository-update": {
       "enabled": true,
-      "source_db": "var/repotrack/repotrack.db"
+      "source_db": "var/repotrack/repotrack.db",
+      "live_db": "var/livedata/livedata.db"
     },
     "schema-drift": {
       "enabled": true,

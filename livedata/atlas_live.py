@@ -93,7 +93,18 @@ CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS spec_upgrades (
+    id INTEGER PRIMARY KEY,
+    observed_at TEXT NOT NULL,
+    prev_spec INTEGER NOT NULL,
+    new_spec INTEGER NOT NULL,
+    block_reference INTEGER
+);
 """
+
+META_LAST_LIVE_SPEC = "last_live_spec"
+META_LAST_LIVE_SPEC_BLOCK = "last_live_spec_block"
+META_LAST_LIVE_SPEC_OBSERVED = "last_live_spec_observed_at"
 
 
 class FatalLiveError(Exception):
@@ -271,6 +282,47 @@ def cache_put(connection: sqlite3.Connection, config: Dict[str, Any],
         "response_cache ORDER BY stored_at DESC LIMIT ?)",
         (int(config.get("cache_max_rows", 200)),))
     connection.commit()
+
+
+def meta_get(connection: sqlite3.Connection, key: str) -> Optional[str]:
+    row = connection.execute("SELECT value FROM meta WHERE key = ?",
+                             (key,)).fetchone()
+    return row[0] if row else None
+
+
+def meta_set(connection: sqlite3.Connection, key: str, value: str) -> None:
+    connection.execute(
+        "INSERT INTO meta (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, value))
+
+
+def record_spec_observation(connection: sqlite3.Connection,
+                            values: Dict[str, Any]) -> Optional[int]:
+    """Persist the last-seen live runtime `spec_version` and write one
+    durable upgrade event when a *validated* chain-head response reports a
+    changed value. Called only from the validated-response path — never
+    from stale, cached, or failed data. Idempotent across restarts: the
+    last-seen value lives in `meta`, so an already-recorded spec_version
+    never re-emits. Returns the new spec_upgrades row id, or None."""
+    new_spec = values.get("spec_version")
+    if not isinstance(new_spec, int):
+        return None
+    block = values.get("block_number")
+    prev_raw = meta_get(connection, META_LAST_LIVE_SPEC)
+    upgrade_id: Optional[int] = None
+    if prev_raw is not None and int(prev_raw) != new_spec:
+        cursor = connection.execute(
+            "INSERT INTO spec_upgrades (observed_at, prev_spec, new_spec, "
+            "block_reference) VALUES (?, ?, ?, ?)",
+            (_utc_now(), int(prev_raw), new_spec, block))
+        upgrade_id = cursor.lastrowid
+    meta_set(connection, META_LAST_LIVE_SPEC, str(new_spec))
+    if block is not None:
+        meta_set(connection, META_LAST_LIVE_SPEC_BLOCK, str(block))
+    meta_set(connection, META_LAST_LIVE_SPEC_OBSERVED, _utc_now())
+    connection.commit()
+    return upgrade_id
 
 
 def cache_get(connection: sqlite3.Connection, provider: str,
@@ -885,4 +937,69 @@ def run_operation(connection: sqlite3.Connection, config: Dict[str, Any],
         "values": processed["values"],
     }
     cache_put(connection, config, provider, op_name, params_key, response)
+    if op_name == "chain_head_taostats":
+        # Validated live chain head: persist the last-seen runtime
+        # spec_version and record an upgrade event on change (the
+        # chain-runtime-upgrade notifier class reads these read-only).
+        record_spec_observation(connection, response["values"])
     return response
+
+
+# ---------------------------------------------------------------------------
+# CLI — scheduled chain-head poll (piggybacked on the hourly repo-update
+# service, before the Telegram scan line). Everything else in this module
+# is served through atlas_live_server.py when Hermes asks; this entry
+# point exists so a live runtime upgrade is detected promptly rather than
+# only when someone queries. Spends one non-interactive TaoStats call.
+# ---------------------------------------------------------------------------
+
+
+def _cmd_poll_chain_head() -> int:
+    config = load_config()
+    env = load_env()
+    connection = open_store(resolve(config["db"]))
+    try:
+        ledger = QuotaLedger(connection, config)
+        result = run_operation(connection, config, ledger,
+                               "chain_head_taostats", interactive=False,
+                               env=env)
+        summary: Dict[str, Any] = {"status": result["status"]}
+        if result["status"] == "ok":
+            summary["spec_version"] = result["values"]["spec_version"]
+            summary["block_number"] = result["values"]["block_number"]
+        else:
+            summary["error"] = result.get("error", {}).get("category")
+        row = connection.execute(
+            "SELECT id, prev_spec, new_spec FROM spec_upgrades "
+            "ORDER BY id DESC LIMIT 1").fetchone()
+        summary["last_upgrade_event"] = (
+            {"id": row[0], "prev_spec": row[1], "new_spec": row[2]}
+            if row else None)
+    finally:
+        connection.close()
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0 if summary["status"] == "ok" else 1
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Atlas live-data scheduled poll (the MCP server "
+                    "atlas_live_server.py serves interactive queries)")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("poll-chain-head",
+                   help="one validated chain-head read; records the live "
+                        "runtime spec_version and an upgrade event on "
+                        "change (non-interactive quota)")
+    args = parser.parse_args(argv)
+    try:
+        if args.command == "poll-chain-head":
+            return _cmd_poll_chain_head()
+    except FatalLiveError as exc:
+        print("fatal: %s" % redact(str(exc)), file=sys.stderr)
+        return 2
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

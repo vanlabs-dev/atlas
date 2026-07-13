@@ -312,10 +312,18 @@ class RepoStore:
         try:
             connection = self._connect(context["db"])
             try:
+                # Read-only open: a store written before the spec-tiering
+                # migration lacks prev_spec/new_spec — report unknown.
+                columns = {row[1] for row in connection.execute(
+                    "PRAGMA table_info(change_ranges)")}
+                has_spec = {"prev_spec", "new_spec"} <= columns
+                spec_cols = (", prev_spec, new_spec" if has_spec
+                             else ", NULL, NULL")
                 rows = connection.execute(
                     "SELECT run_id, prev_sha, new_sha, retrieved_at, "
                     "non_fast_forward, commits_json, files_json, "
-                    "tags_json, index_status, summary FROM change_ranges "
+                    "tags_json, index_status, summary" + spec_cols +
+                    " FROM change_ranges "
                     "ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
             finally:
                 connection.close()
@@ -332,10 +340,17 @@ class RepoStore:
         ranges = []
         for (run_id, prev_sha, new_sha, retrieved_at, non_ff,
              commits_json, files_json, tags_json, index_status,
-             summary) in rows:
+             summary, prev_spec, new_spec) in rows:
             commits = json.loads(commits_json)
             files = json.loads(files_json)
+            spec_delta = (new_spec - prev_spec
+                          if prev_spec is not None and new_spec is not None
+                          else None)
             ranges.append({
+                "runtime_spec": {"prev": prev_spec, "new": new_spec,
+                                 "delta": spec_delta,
+                                 "note": "null = unknown (manifest or "
+                                         "field absent at that head)"},
                 "run_id": run_id,
                 "prev_sha": prev_sha,
                 "new_sha": new_sha,

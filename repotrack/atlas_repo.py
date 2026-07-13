@@ -92,7 +92,9 @@ CREATE TABLE IF NOT EXISTS change_ranges (
     tags_json TEXT NOT NULL,
     index_status TEXT NOT NULL,
     index_detail TEXT,
-    summary TEXT NOT NULL
+    summary TEXT NOT NULL,
+    prev_spec INTEGER,
+    new_spec INTEGER
 );
 CREATE TABLE IF NOT EXISTS files (
     id INTEGER PRIMARY KEY,
@@ -321,6 +323,16 @@ def open_store(db_path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     connection = sqlite3.connect(db_path)
     connection.executescript(SCHEMA_SQL)
+    # Additive migration: pre-spec-tiering stores lack the runtime
+    # spec_version columns; existing rows stay NULL (= unknown, never
+    # guessed).
+    columns = {row[1] for row in connection.execute(
+        "PRAGMA table_info(change_ranges)")}
+    for column in ("prev_spec", "new_spec"):
+        if column not in columns:
+            connection.execute(
+                "ALTER TABLE change_ranges ADD COLUMN %s INTEGER" % column)
+    connection.commit()
     return connection
 
 
@@ -601,6 +613,23 @@ def _collect_range(clone_dir: str, prev_sha: str,
     }
 
 
+DEFAULT_RUNTIME_MANIFEST = "runtime/src/lib.rs"
+_SPEC_VERSION_RE = re.compile(r"spec_version\s*:\s*(\d+)")
+
+
+def _spec_version_at(clone_dir: str, sha: str,
+                     manifest_path: str) -> Optional[int]:
+    """Runtime `spec_version` at *sha*, read from the tracked clone's
+    runtime manifest via `git show`. Returns None (recorded as unknown)
+    when the manifest or the field is absent — never guessed. The
+    manifest path is config-driven because the monorepo moves trees."""
+    code, out, _err = _git(clone_dir, "show", "%s:%s" % (sha, manifest_path))
+    if code != 0:
+        return None
+    match = _SPEC_VERSION_RE.search(out)
+    return int(match.group(1)) if match else None
+
+
 def _machine_summary(range_data: Dict[str, Any], prev_sha: str,
                      new_sha: str, non_fast_forward: bool) -> str:
     top_dirs: Dict[str, int] = {}
@@ -718,18 +747,23 @@ def update(config: Dict[str, Any], repo_root: str = _REPO_ROOT,
         range_data = _collect_range(clone_dir, prev_sha, new_sha)
         summary = _machine_summary(range_data, prev_sha, new_sha,
                                    not fast_forward)
+        manifest = config.get("runtime_manifest", DEFAULT_RUNTIME_MANIFEST)
+        prev_spec = _spec_version_at(clone_dir, prev_sha, manifest)
+        new_spec = _spec_version_at(clone_dir, new_sha, manifest)
         cursor = connection.execute(
             "INSERT INTO change_ranges (run_id, prev_sha, new_sha, "
             "retrieved_at, non_fast_forward, commits_json, files_json, "
-            "tags_json, index_status, index_detail, summary) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?)",
+            "tags_json, index_status, index_detail, summary, "
+            "prev_spec, new_spec) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?, ?)",
             (run_id, prev_sha, new_sha, _utc_now(),
              0 if fast_forward else 1,
              json.dumps({"commits": range_data["commits"],
                          "truncated": range_data["commits_truncated"]}),
              json.dumps({"files": range_data["files"],
                          "truncated": range_data["files_truncated"]}),
-             json.dumps(range_data["tags"]), summary))
+             json.dumps(range_data["tags"]), summary,
+             prev_spec, new_spec))
         change_id = cursor.lastrowid
         connection.commit()
         try:
