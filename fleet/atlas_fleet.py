@@ -711,6 +711,10 @@ def _close_epoch_all(connection: sqlite3.Connection, netuid: int,
         "IS NULL", (now, netuid))
 
 
+def _bump(summary: Dict[str, int], key: str) -> None:
+    summary[key] = summary.get(key, 0) + 1
+
+
 def _apply_action(connection: sqlite3.Connection, action: Dict[str, Any],
                   ctx: "_Pass", summary: Dict[str, int]) -> None:
     kind = action["action"]
@@ -759,7 +763,10 @@ def _apply_action(connection: sqlite3.Connection, action: Dict[str, Any],
                        ctx.now)
         audit(connection, ctx.actor, "clone", netuid,
               "%s -> %s" % (action["reason"], state["status"]))
-        summary["clone" if state["status"] == "active" else "errors"] += 1
+        # a non-active clone (unreachable / quarantined) is a recorded
+        # per-slot outcome, not a process error — bucket it by its status
+        _bump(summary, "clone" if state["status"] == "active"
+              else state["status"])
     elif kind == REPOINT:
         if not ctx.disk_check():
             audit(connection, ctx.actor, "disk-limited", netuid,
@@ -779,7 +786,8 @@ def _apply_action(connection: sqlite3.Connection, action: Dict[str, Any],
         audit(connection, ctx.actor, "repoint", netuid,
               "epoch %s -> %d, %s" % (old.get("epoch") if old else "-",
                                       epoch, state["status"]))
-        summary["repoint" if state["status"] == "active" else "errors"] += 1
+        _bump(summary, "repoint" if state["status"] == "active"
+              else state["status"])
     elif kind == UPDATE:
         slot = get_slot(connection, netuid)
         if not slot or not slot.get("default_branch") or not slot.get(
@@ -789,10 +797,8 @@ def _apply_action(connection: sqlite3.Connection, action: Dict[str, Any],
                             slot["local_sha"], token=ctx.token)
         _persist_update(connection, netuid, slot["epoch"], result, ctx.now)
         audit(connection, ctx.actor, "update", netuid, result["status"])
-        if result["status"] in ("ok", "no-change", "record-failed"):
-            summary["update"] += 1
-        else:
-            summary["errors"] += 1
+        _bump(summary, "update" if result["status"] in (
+            "ok", "no-change", "record-failed") else result["status"])
 
 
 def reconcile(connection: sqlite3.Connection,
@@ -832,9 +838,12 @@ def reconcile(connection: sqlite3.Connection,
     plan = apply_bound(build_plan(desired, registry, fetch_ok=fetch_ok),
                        config.get("max_new_clones_per_pass"))
 
+    # Per-slot failure outcomes (unreachable / quarantined / fetch-failed …)
+    # are bucketed dynamically by their status, never as process "errors" —
+    # a scheduled pass that ran is healthy even if some repos are dead.
     summary = {"fetch_ok": fetch_ok, "planned": len(plan), "clone": 0,
                "update": 0, "repoint": 0, "discard": 0, "no-repo": 0,
-               "deferred": 0, "skip": 0, "disk-limited": 0, "errors": 0}
+               "deferred": 0, "skip": 0, "disk-limited": 0}
     for action in plan:
         _apply_action(connection, action, ctx, summary)
         connection.commit()
@@ -992,7 +1001,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(json.dumps(summary, indent=2, sort_keys=True))
             finally:
                 connection.close()
-            return 0 if summary["errors"] == 0 else 1
+            # The pass is healthy if it ran against a validated identity map,
+            # regardless of individual dead/oversized repos (recorded per
+            # slot). A degraded identity fetch exits 1 to surface it.
+            return 0 if summary["fetch_ok"] else 1
     except FleetError as exc:
         print("fatal: %s" % redact(str(exc)), file=sys.stderr)
         return 2
