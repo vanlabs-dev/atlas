@@ -18,7 +18,7 @@
   "parse_mode": "HTML",
   "governance_threshold": 425,
   "repository_update": {
-    "_comment": "Significance policy. Churn is DENY-BY-DEFAULT: only ranges whose changed paths are provably a subset of churn_dirs (and with no recorded spec_version change) are digested instead of paged; any unknown top-level directory escalates to significant. Digested churn is held durably and rides the next significant alert; the backstop flushes it as a standalone digest after digest_backstop_hours.",
+    "_comment": "Significance policy. Churn is DENY-BY-DEFAULT: only ranges whose changed paths are provably a subset of churn_dirs (and with no recorded spec_version change) are digested instead of paged; any unknown top-level directory escalates to significant. Digested churn is held durably and rides the next significant alert; the backstop flushes it as a standalone digest after digest_backstop_hours. The DISPLAY of a significant alert is governed separately by three OPTIONAL keys (code defaults apply when absent): area_map ({top-level-dir: \"core\"|\"node\"|\"noise\"} for the signal-vs-noise breakdown; any dir absent from the map is surfaced as a new/unclassified area, never hidden), pallet_map ({pallet-name: domain-label} so a pallets/<name> touch is named and interpreted), and light_touch_ratio (0..1, default 0.15; when core-protocol line churn is below this share of total the verdict reads 'large sync, light protocol touch'). These affect wording only, never paging.",
     "protocol_dirs": ["pallets", "runtime", "precompiles", "common"],
     "churn_dirs": [".github", "docs", "website", "vendor", "sdk"],
     "digest_backstop_hours": 24

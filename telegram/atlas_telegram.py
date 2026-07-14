@@ -41,6 +41,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -97,6 +98,46 @@ DEFAULT_DIGEST_BACKSTOP_HOURS = 24
 DEFAULT_GOVERNANCE_THRESHOLD = 425
 SIGNIFICANT = "significant"
 CHURN = "churn"
+
+# Interpreted-breakdown display policy (config-overridable). This is the
+# PRESENTATION taxonomy — distinct from the significance policy above, which
+# governs paging. Classes: core (protocol logic), node (client/network),
+# noise (housekeeping). A top-level dir absent from the map is UNKNOWN and is
+# surfaced on its own line, never folded into noise — the same deny-by-default
+# posture the classifier takes toward never-seen dirs. Grounded in the live
+# opentensor/subtensor tree.
+CORE, NODE, NOISE, UNKNOWN = "core", "node", "noise", "unknown"
+_ROOT_AREA = "(root)"  # synthetic bucket for repo-root files (no '/')
+DEFAULT_AREA_MAP = {
+    "pallets": CORE, "runtime": CORE, "precompiles": CORE,
+    "common": CORE, "primitives": CORE,
+    "node": NODE, "chainspecs": NODE, "chain-extensions": NODE,
+    "vendor": NOISE, "website": NOISE, "docs": NOISE, "sdk": NOISE,
+    ".github": NOISE, "ts-tests": NOISE, "eco-tests": NOISE, "clones": NOISE,
+    "scripts": NOISE, ".maintain": NOISE, "support": NOISE,
+    "ink-contract": NOISE, ".agents": NOISE, ".claude": NOISE,
+    ".vscode": NOISE, _ROOT_AREA: NOISE,
+}
+# pallets/<name> -> the domain the pallet governs, for semantic labels.
+DEFAULT_PALLET_MAP = {
+    "subtensor": "staking/emissions/weights",
+    "admin-utils": "governance params",
+    "swap": "dTAO economics", "limit-orders": "dTAO economics",
+    "alpha-assets": "dTAO economics", "transaction-fee": "dTAO economics",
+    "drand": "randomness", "shield": "MEV shield",
+    "commitments": "commit-reveal", "crowdloan": "crowdloan",
+    "proxy": "account tooling", "utility": "account tooling",
+}
+DEFAULT_LIGHT_TOUCH_RATIO = 0.15
+
+# Commit-subject conventions for the meaningful-commit filter. There is no
+# recorded commit->file map, so selection ranks SUBJECTS only.
+_CONV_PREFIX_RE = re.compile(r"^([a-z]+)(\([^)]*\))?!?:")
+_COMMIT_NOISE_PREFIXES = frozenset(("ci", "test", "docs", "build", "style"))
+_COMMIT_HIGH_PREFIXES = frozenset(("feat", "fix", "refactor", "perf"))
+_RELEASE_KEYWORDS = ("spec_version", "version", "release")
+_PROTOCOL_KEYWORDS = ("pallet", "runtime", "spec_version", "staking",
+                      "emission", "weight", "consensus", "governance")
 
 # Terminal ledger states (a repeat of one of these suppresses a re-send).
 STATUS_DELIVERED = "delivered"
@@ -467,12 +508,20 @@ def send_message(config: Dict[str, Any], token: str, chat_id: str,
 
 def _repo_policy(ctx: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     policy = ((ctx or {}).get("config") or {}).get("repository_update", {})
+    area_map = dict(DEFAULT_AREA_MAP)
+    area_map.update(policy.get("area_map") or {})
+    pallet_map = dict(DEFAULT_PALLET_MAP)
+    pallet_map.update(policy.get("pallet_map") or {})
     return {
         "protocol_dirs": set(policy.get("protocol_dirs",
                                         DEFAULT_PROTOCOL_DIRS)),
         "churn_dirs": set(policy.get("churn_dirs", DEFAULT_CHURN_DIRS)),
         "digest_backstop_hours": float(policy.get(
             "digest_backstop_hours", DEFAULT_DIGEST_BACKSTOP_HOURS)),
+        "area_map": area_map,
+        "pallet_map": pallet_map,
+        "light_touch_ratio": float(policy.get(
+            "light_touch_ratio", DEFAULT_LIGHT_TOUCH_RATIO)),
     }
 
 
@@ -572,40 +621,203 @@ def _digest_line(pending: List[Tuple[int, str, str, str]]) -> str:
             "change" % (len(pending), items))
 
 
-def _breakdown_lines(rng: Dict[str, Any]) -> str:
-    """Structured breakdown from the recorded change range: one fact per
-    line (operator feedback 2026-07-13: never a prose blob)."""
-    lines: List[str] = []
-    counts: Dict[str, int] = {}
-    for path in rng["files"]:
-        top = path.split("/", 1)[0]
-        counts[top] = counts.get(top, 0) + 1
-    top = sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))[:5]
-    if top:
-        lines.append("top areas: " + " · ".join(
-            "%s (%d)" % pair for pair in top))
-    if rng["tags"]:
-        lines.append("tags: " + " · ".join(rng["tags"][:10]))
-    for commit in rng["commits"][:5]:
+def _area_class(top: str, area_map: Dict[str, str]) -> str:
+    """Display class for a top-level dir. Absent => UNKNOWN (surfaced,
+    never hidden), mirroring the classifier's deny-by-default posture."""
+    return area_map.get(top, UNKNOWN)
+
+
+def _aggregate_areas(file_entries: List[Any], files_truncated: bool,
+                     area_map: Dict[str, str]) -> List[Dict[str, Any]]:
+    """Per-top-level-dir aggregation from recorded file entries. Repo-root
+    files (no '/') group under (root). Absent additions/deletions count as 0
+    for churn but still count the file. Sorted by line churn desc. When the
+    file list is truncated every count is a lower bound (partial=True)."""
+    agg: Dict[str, Dict[str, Any]] = {}
+    for entry in file_entries:
+        path = entry["path"] if isinstance(entry, dict) else entry
+        top = path.split("/", 1)[0] if "/" in path else _ROOT_AREA
+        area = agg.setdefault(top, {"area": top,
+                                    "cls": _area_class(top, area_map),
+                                    "files": 0, "adds": 0, "dels": 0,
+                                    "partial": files_truncated})
+        area["files"] += 1
+        if isinstance(entry, dict):
+            area["adds"] += entry.get("additions") or 0
+            area["dels"] += entry.get("deletions") or 0
+    return sorted(agg.values(),
+                  key=lambda a: (-(a["adds"] + a["dels"]), -a["files"],
+                                 a["area"]))
+
+
+def _compact(n: int) -> str:
+    """Compact line-count: 3162 -> 3.2k, 1_240_000 -> 1.2m."""
+    if n < 1000:
+        return str(n)
+    if n < 1_000_000:
+        return ("%.1fk" % (n / 1000)).replace(".0k", "k")
+    return ("%.1fm" % (n / 1_000_000)).replace(".0m", "m")
+
+
+def _area_churn(area: Dict[str, Any]) -> str:
+    tail = " (partial)" if area["partial"] else ""
+    if area["adds"] or area["dels"]:
+        return "%s %d files +%s/-%s%s" % (
+            area["area"], area["files"], _compact(area["adds"]),
+            _compact(area["dels"]), tail)
+    return "%s %d files%s" % (area["area"], area["files"], tail)
+
+
+def _pallet_domains(file_entries: List[Any],
+                    pallet_map: Dict[str, str]) -> List[str]:
+    """Pallets touched, labelled with the domain each governs, from the
+    second segment of recorded `pallets/<name>/...` paths. Order-stable,
+    de-duplicated."""
+    domains: List[str] = []
+    seen = set()
+    for entry in file_entries:
+        path = entry["path"] if isinstance(entry, dict) else entry
+        parts = path.split("/")
+        if len(parts) >= 2 and parts[0] == "pallets" and parts[1] not in seen:
+            seen.add(parts[1])
+            label = pallet_map.get(parts[1])
+            domains.append("%s (%s)" % (parts[1], label) if label
+                           else parts[1])
+    return domains
+
+
+def _conv_prefix(subject: str) -> str:
+    match = _CONV_PREFIX_RE.match(subject)
+    return match.group(1) if match else ""
+
+
+def _filter_commits(commits: List[Dict[str, Any]]) -> List[str]:
+    """Rank commit SUBJECTS (no commit->file map exists, so this is a
+    subject heuristic, not 'the commits that changed area X'). Drop merges
+    and ci/test/docs/build/style; drop chore unless it names a release;
+    rank feat/fix/refactor/perf and protocol-keyword subjects first."""
+    kept: List[str] = []
+    for commit in commits:
         subject = (commit.get("subject") or "").strip()
-        if subject:
-            lines.append("• " + subject[:100])
+        if not subject or subject.startswith("Merge "):
+            continue
+        prefix = _conv_prefix(subject)
+        if prefix in _COMMIT_NOISE_PREFIXES:
+            continue
+        if prefix == "chore" and not any(
+                kw in subject.lower() for kw in _RELEASE_KEYWORDS):
+            continue
+        kept.append(subject)
+
+    def rank(subject: str) -> int:
+        if _conv_prefix(subject) in _COMMIT_HIGH_PREFIXES:
+            return 0
+        if any(kw in subject.lower() for kw in _PROTOCOL_KEYWORDS):
+            return 1
+        return 2
+
+    return sorted(kept, key=rank)  # stable: original order within a rank
+
+
+def _repo_verdict(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
+                  areas: List[Dict[str, Any]], policy: Dict[str, Any]) -> str:
+    """Ordered, deterministic verdict over recorded facts only. Each rule
+    assumes the earlier ones did not fire; ordering keeps it from ever
+    claiming a signal the data does not support."""
+    prev_spec, new_spec = rng["prev_spec"], rng["new_spec"]
+    spec_changed = (prev_spec is not None and new_spec is not None
+                    and prev_spec != new_spec)
+    # (1) Incomplete record: a truncated file list makes any ratio a lie,
+    #     and a rewritten history means the commit set is unknown.
+    if rng["non_fast_forward"] or (rng["files_truncated"] and not spec_changed):
+        return "large / incomplete range · review"
+    # (2) Runtime spec bump: the strongest signal, outranks file-count mix.
+    if spec_changed:
+        return "RUNTIME SPEC BUMP %d→%d" % (prev_spec, new_spec)
+    core = [a for a in areas if a["cls"] == CORE]
+    unknown = [a for a in areas if a["cls"] == UNKNOWN]
+    node = [a for a in areas if a["cls"] == NODE]
+    # (3) Unknown area: exactly what the classifier escalated for — surface.
+    if unknown:
+        return "NEW / unmapped area: %s" % " · ".join(
+            a["area"] for a in unknown[:4])
+    core_churn = sum(a["adds"] + a["dels"] for a in core)
+    # (4) Light touch: core exists but is a small share of LINE churn (not
+    #     file count). Guarded by core_churn > 0 so it never claims a
+    #     protocol touch that did not happen.
+    if core_churn > 0:
+        total_churn = sum(a["adds"] + a["dels"] for a in areas)
+        share = core_churn / total_churn if total_churn else 1.0
+        if share < policy["light_touch_ratio"]:
+            return "large sync · LIGHT protocol touch"
+    elif core:
+        # Core files changed but no line churn recorded: fall back to file
+        # share so a light touch is still recognised.
+        core_files = sum(a["files"] for a in core)
+        total_files = sum(a["files"] for a in areas) or 1
+        if core_files / total_files < policy["light_touch_ratio"]:
+            return "large sync · LIGHT protocol touch"
+    # (5) Core change: name the pallet domains when present.
+    if core:
+        domains = _pallet_domains(rng["file_entries"], policy["pallet_map"])
+        surfaced = domains[:3] or [a["area"] for a in core[:3]]
+        return "core protocol change: %s" % " · ".join(surfaced)
+    # (6) Node/network only.
+    if node:
+        return "node / network change"
+    # (7) Neutral fallback.
+    return "repository change"
+
+
+def _breakdown_lines(rng: Dict[str, Any], areas: List[Dict[str, Any]],
+                     policy: Dict[str, Any]) -> str:
+    """Interpreted breakdown: one fact per line, signal split from noise,
+    built only from already-recorded fields (operator feedback 2026-07-14:
+    'none of the info really tells me anything')."""
+    lines: List[str] = []
+    core = [a for a in areas if a["cls"] == CORE]
+    unknown = [a for a in areas if a["cls"] == UNKNOWN]
+    node = [a for a in areas if a["cls"] == NODE]
+    noise = [a for a in areas if a["cls"] == NOISE]
+    if core:
+        lines.append("protocol changed · " + " · ".join(
+            _area_churn(a) for a in core[:6]))
+        domains = _pallet_domains(rng["file_entries"], policy["pallet_map"])
+        if domains:
+            lines.append("pallets · " + " · ".join(domains[:4]))
+    if unknown:
+        lines.append("NEW / unclassified area · " + " · ".join(
+            _area_churn(a) for a in unknown[:6]))
+    if node:
+        lines.append("node / network · " + " · ".join(
+            "%s (%d)" % (a["area"], a["files"]) for a in node[:6]))
+    if noise:
+        lines.append("housekeeping · " + " · ".join(
+            "%s (%d)" % (a["area"], a["files"]) for a in noise[:8]))
+    if rng["tags"]:
+        lines.append("tags · " + " · ".join(rng["tags"][:10]))
+    commits = _filter_commits(rng["commits"])
+    if commits:
+        lines.extend("• " + subject[:100] for subject in commits[:5])
+    else:
+        lines.append("• no feature or fix commits in range (tooling only)")
+    if rng["commits_truncated"]:
+        lines.append("commit list truncated at cap · sample only")
+    if rng["files_truncated"] or rng["non_fast_forward"]:
+        lines.append("counts are a lower bound · change record incomplete")
     lines.append("from recorded change data · effects not verified")
     return "\n".join(lines)
 
 
 def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
                       pending: List[Tuple[int, str, str, str]],
-                      max_chars: int) -> Dict[str, Any]:
-    prev_spec, new_spec = rng["prev_spec"], rng["new_spec"]
-    if (prev_spec is not None and new_spec is not None
-            and prev_spec != new_spec):
-        reason = "runtime spec bump %d→%d" % (prev_spec, new_spec)
-    elif rng["files_truncated"] or rng["non_fast_forward"]:
-        reason = "review needed (incomplete change record)"
-    else:
-        reason = "protocol-area change"
-    headline = "Atlas · subtensor repo · %s" % reason
+                      max_chars: int,
+                      policy: Dict[str, Any]) -> Dict[str, Any]:
+    new_spec = rng["new_spec"]
+    areas = _aggregate_areas(rng["file_entries"], rng["files_truncated"],
+                             policy["area_map"])
+    verdict = _repo_verdict(rng, live, areas, policy)
+    headline = "Atlas · subtensor repo · %s" % verdict
     lines = [
         "%s → %s · %d commit(s)%s · %d file(s)%s"
         % (rng["prev_sha"][:12], rng["new_sha"][:12],
@@ -614,7 +826,7 @@ def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
         _both_clocks_line(new_spec, live),
         "source: repository (source code), not the live chain",
     ]
-    breakdown = redact(_breakdown_lines(rng))
+    breakdown = redact(_breakdown_lines(rng, areas, policy))
     trailer = _digest_line(pending) if pending else None
     plain = render_plain(headline, lines, breakdown, trailer, max_chars)
     html = render_html(headline, lines, breakdown, trailer, max_chars)
@@ -676,6 +888,7 @@ def repository_update_events(source_db: str, watermark: Optional[str],
         rng = {"id": range_id, "prev_sha": prev_sha, "new_sha": new_sha,
                "non_fast_forward": bool(non_ff),
                "files": [item["path"] for item in files_data["files"]],
+               "file_entries": files_data["files"],
                "files_truncated": bool(files_data["truncated"]),
                "commits": commits_data.get("commits", []),
                "commits_truncated": bool(commits_data.get("truncated")),
@@ -695,7 +908,8 @@ def repository_update_events(source_db: str, watermark: Optional[str],
         if tier == CHURN:
             tier = SIGNIFICANT  # no durable store → never silently drop
         pending = _pending_churn_rows(store) if store is not None else []
-        events.append(_build_repo_event(rng, live, pending, max_chars))
+        events.append(_build_repo_event(rng, live, pending, max_chars,
+                                        policy))
 
     if not events and store is not None:
         # Backstop: pending churn must not linger forever waiting for a

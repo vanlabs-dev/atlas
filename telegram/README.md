@@ -36,8 +36,18 @@ range is classified from recorded facts (changed paths + the recorded runtime
 - **Significant** — a `spec_version` bump, any touch of `pallets/ runtime/
   precompiles/ common/`, any top-level directory *not* in the churn allowlist,
   or an incomplete record (truncated / non-fast-forward). Pages immediately
-  with a structured breakdown (top areas, tags, bulleted subjects) and states
-  both clocks: `repo spec N · live Finney spec M · Δ · not enacted on chain`.
+  with an **interpreted breakdown** and states both clocks: `repo spec N ·
+  live Finney spec M · Δ · not enacted on chain`. The breakdown leads with a
+  one-line **verdict** (a runtime spec bump, a new/unmapped area, a light
+  protocol touch amid a large sync, or a core protocol change), then splits
+  **signal from noise**: a `protocol changed` line with per-area file counts
+  and line churn `+adds/-dels`, pallets named with what they govern, unknown
+  directories surfaced on their own line (never hidden), housekeeping listed
+  separately with counts only, and a commit list filtered to substantive
+  subjects (merge / CI / test dropped). Truncated ranges render lower-bound
+  markers and a low-confidence verdict. The display taxonomy is code-defaulted
+  and overridable via `area_map` / `pallet_map` / `light_touch_ratio` in
+  [config.json](config.json); it affects wording only, never paging.
 - **Churn** — ranges touching *only* the allowlist (`.github/ docs/ website/
   vendor/ sdk/`) with no spec change. Never paged, never dropped: written to
   durable `pending_churn` before the watermark passes, carried as a one-line
