@@ -125,6 +125,32 @@ def seed_repotrack(path, ranges=RANGES, truncated=False, non_ff=False):
     conn.close()
 
 
+def seed_custom(path, files, subjects, prev_spec=428, new_spec=428,
+                truncated=False, non_ff=False, commits_truncated=False,
+                tags=()):
+    """Seed a repotrack db with a single change range under full control.
+    `files` items may be a path string or a {path, additions, deletions}
+    dict; `subjects` are commit subject strings."""
+    import json
+    conn = sqlite3.connect(path)
+    conn.executescript(REPO_SCHEMA)
+    entries = [f if isinstance(f, dict) else {"path": f} for f in files]
+    conn.execute(
+        "INSERT INTO change_ranges (run_id, prev_sha, new_sha, retrieved_at, "
+        "non_fast_forward, commits_json, files_json, tags_json, index_status, "
+        "summary, prev_spec, new_spec) VALUES ('r', ?, ?, 't', ?, ?, ?, ?, "
+        "'ok', 'fixture', ?, ?)",
+        (SHA_BASE, SHA_1, 1 if non_ff else 0,
+         json.dumps({"commits": [{"sha": "c%d" % i, "subject": s}
+                                 for i, s in enumerate(subjects)],
+                     "truncated": commits_truncated}),
+         json.dumps({"files": entries, "truncated": truncated}),
+         json.dumps(list(tags)), prev_spec, new_spec))
+    conn.execute("INSERT INTO meta VALUES ('last_remote_sha', ?)", (SHA_1,))
+    conn.commit()
+    conn.close()
+
+
 def seed_livedata(path, live_spec=424, upgrades=()):
     conn = sqlite3.connect(path)
     conn.executescript(
@@ -379,16 +405,18 @@ class FourHeadsTests(unittest.TestCase):
         self.assertEqual(wm, "4")
         self.assertEqual(len(events), 2)
         first, second = events
-        self.assertIn("runtime spec bump 425→428", first["text"])
+        self.assertIn("RUNTIME SPEC BUMP 425→428", first["text"])
         self.assertEqual(first["digest_range_ids"], [])
-        self.assertIn("runtime spec bump 428→429", second["text"])
+        self.assertIn("RUNTIME SPEC BUMP 428→429", second["text"])
         # The sdk/-only churn (range 2) rides the second significant alert.
         self.assertEqual(second["digest_range_ids"], [2])
         self.assertIn("sdk", second["text"])
         self.assertIn(SHA_2[:12], second["text"])
         self.assertIn("no protocol or spec change", second["text"])
-        # Structured breakdown: facts as lines, subjects as bullets.
-        self.assertIn("top areas: common (1) · pallets (1) · runtime (1)",
+        # Interpreted breakdown: signal split from noise, pallet named.
+        self.assertIn("protocol changed · common 1 files · pallets 1 files "
+                      "· runtime 1 files", second["text"])
+        self.assertIn("pallets · subtensor (staking/emissions/weights)",
                       second["text"])
         self.assertIn("• use Vec<PerU16> for typed units (#2867)",
                       second["text"])
@@ -466,6 +494,173 @@ class FourHeadsTests(unittest.TestCase):
                        poster=poster)
         # Nothing delivered -> nothing cleared, both churn ranges pending.
         self.assertEqual(self.pending(), [(2,), (4,)])
+
+
+class InterpretiveBreakdownTests(unittest.TestCase):
+    """Interpreted alert body: verdict, signal-vs-noise split with line
+    churn, unknown-area surfacing, commit filtering, pallet semantics,
+    truncation honesty (change: interpretive-repo-alerts)."""
+
+    def setUp(self):
+        tg._SECRET_VALUES.clear()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.config = make_config(self.tmp.name)
+        self.db = self.config["classes"]["repository-update"]["source_db"]
+        self.live = self.config["classes"]["repository-update"]["live_db"]
+        self.store = tg.open_store(self.config["db"])
+
+    def tearDown(self):
+        self.store.close()
+        self.tmp.cleanup()
+
+    def only_event(self):
+        events, _ = tg.repository_update_events(
+            self.db, None, repo_ctx(self.config, self.store))
+        self.assertEqual(len(events), 1)
+        return events[0]
+
+    def test_noise_dominated_range_is_light_touch(self):
+        seed_custom(self.db, [
+            {"path": "pallets/subtensor/src/x.rs", "additions": 50,
+             "deletions": 10},
+            {"path": "vendor/a.rs", "additions": 400, "deletions": 300},
+            {"path": "website/b.js", "additions": 200, "deletions": 100},
+            {"path": "docs/c.md", "additions": 50, "deletions": 20},
+        ], ["feat(subtensor): guard weights", "ci: cache"])
+        seed_livedata(self.live)
+        event = self.only_event()
+        self.assertIn("LIGHT protocol touch", event["text"])
+        self.assertIn("protocol changed · pallets 1 files +50/-10",
+                      event["text"])
+        self.assertIn("housekeeping ·", event["text"])
+        self.assertIn("vendor (1)", event["text"])
+
+    def test_spec_bump_leads_even_when_files_are_tests(self):
+        seed_custom(self.db, [
+            {"path": "ts-tests/x.ts", "additions": 200, "deletions": 50},
+            {"path": "pallets/subtensor/src/y.rs", "additions": 5,
+             "deletions": 2},
+        ], ["chore: bump spec_version to 430"], prev_spec=429, new_spec=430)
+        seed_livedata(self.live, live_spec=424)
+        event = self.only_event()
+        self.assertIn("subtensor repo · RUNTIME SPEC BUMP 429→430",
+                      event["text"])
+        self.assertIn("repo spec 430 · live Finney spec 424 · Δ+6",
+                      event["text"])
+
+    def test_commit_filter_keeps_signal_drops_noise(self):
+        seed_custom(self.db, [
+            {"path": "pallets/subtensor/src/x.rs", "additions": 10,
+             "deletions": 1}],
+            ["Merge pull request #2888 from RaoFoundation/rao-release",
+             "chore: bump spec_version to 430; add devnet endpoint",
+             "test: poll NextKey in mev shield e2e",
+             "feat(subtensor): add limit order guard",
+             "ci: warm sccache"])
+        seed_livedata(self.live)
+        text = self.only_event()["text"]
+        self.assertIn("• feat(subtensor): add limit order guard", text)
+        self.assertIn("• chore: bump spec_version to 430; add devnet "
+                      "endpoint", text)  # release chore retained
+        self.assertNotIn("Merge pull request", text)
+        self.assertNotIn("• test:", text)
+        self.assertNotIn("• ci:", text)
+
+    def test_no_meaningful_commits_states_it(self):
+        seed_custom(self.db, [
+            {"path": "pallets/subtensor/src/x.rs", "additions": 10,
+             "deletions": 1}],
+            ["Merge pull request #1 from a/b", "ci: x", "test: y"])
+        seed_livedata(self.live)
+        self.assertIn("• no feature or fix commits in range (tooling only)",
+                      self.only_event()["text"])
+
+    def test_pallet_touch_is_named_and_interpreted(self):
+        seed_custom(self.db, [
+            {"path": "pallets/admin-utils/src/lib.rs", "additions": 3,
+             "deletions": 1}], ["feat(admin-utils): new hyperparam setter"])
+        seed_livedata(self.live)
+        text = self.only_event()["text"]
+        self.assertIn("core protocol change: admin-utils (governance params)",
+                      text)
+        self.assertIn("pallets · admin-utils (governance params)", text)
+
+    def test_unknown_dir_is_surfaced_not_hidden(self):
+        seed_custom(self.db, [
+            {"path": "consensus-v2/src/x.rs", "additions": 10,
+             "deletions": 2},
+            {"path": "docs/a.md", "additions": 1, "deletions": 0}],
+            ["feat: new consensus tree"])
+        seed_livedata(self.live)
+        text = self.only_event()["text"]
+        self.assertIn("subtensor repo · NEW / unmapped area: consensus-v2",
+                      text)
+        self.assertIn("NEW / unclassified area · consensus-v2 1 files +10/-2",
+                      text)
+        # consensus-v2 must NOT be filed under housekeeping.
+        housekeeping = [ln for ln in text.splitlines()
+                        if ln.startswith("housekeeping ·")]
+        self.assertTrue(housekeeping)
+        self.assertNotIn("consensus-v2", housekeeping[0])
+
+    def test_truncated_range_is_low_confidence(self):
+        seed_custom(self.db, [
+            {"path": "pallets/subtensor/src/x.rs", "additions": 5,
+             "deletions": 1}], ["feat(subtensor): x"], truncated=True)
+        seed_livedata(self.live)
+        text = self.only_event()["text"]
+        self.assertIn("large / incomplete range · review", text)
+        self.assertIn("pallets 1 files +5/-1 (partial)", text)
+        self.assertIn("counts are a lower bound · change record incomplete",
+                      text)
+
+    def test_root_file_grouped_not_a_protocol_area(self):
+        seed_custom(self.db, [
+            {"path": "snapshot.json", "additions": 5000, "deletions": 100},
+            {"path": "pallets/subtensor/src/x.rs", "additions": 20,
+             "deletions": 5}], ["feat(subtensor): x"])
+        seed_livedata(self.live)
+        text = self.only_event()["text"]
+        self.assertIn("housekeeping · (root) (1)", text)
+        protocol = [ln for ln in text.splitlines()
+                    if ln.startswith("protocol changed ·")][0]
+        self.assertNotIn("(root)", protocol)
+        # A large generated root file is noise: counts only, its churn is
+        # never surfaced as if it were signal.
+        self.assertNotIn("5.0k", text)
+        self.assertNotIn("5k", text)
+
+    def test_line_churn_ratio_beats_file_count(self):
+        # 1 core file (huge churn) vs 10 doc files (tiny churn): by file
+        # count core is 9% (would read 'light'); by line churn it is 99.8%,
+        # so the verdict must be a core change, not a light touch.
+        files = [{"path": "docs/d%d.md" % i, "additions": 1, "deletions": 0}
+                 for i in range(10)]
+        files.append({"path": "pallets/subtensor/src/x.rs",
+                      "additions": 5000, "deletions": 1000})
+        seed_custom(self.db, files, ["feat(subtensor): rewrite emissions"])
+        seed_livedata(self.live)
+        text = self.only_event()["text"]
+        self.assertIn("core protocol change: subtensor "
+                      "(staking/emissions/weights)", text)
+        self.assertNotIn("LIGHT protocol touch", text)
+        # compact k-suffix on core line churn (5000 -> 5k, 1000 -> 1k)
+        self.assertIn("protocol changed · pallets 1 files +5k/-1k", text)
+
+    def test_body_within_budget_and_no_em_dashes(self):
+        files = [{"path": "vendor/lib%d.rs" % i, "additions": 40,
+                  "deletions": 30} for i in range(60)]
+        files.append({"path": "pallets/subtensor/src/x.rs",
+                      "additions": 20, "deletions": 5})
+        subjects = ["feat(subtensor): change number %d — with an em dash" % i
+                    for i in range(40)]
+        seed_custom(self.db, files, subjects)
+        seed_livedata(self.live)
+        event = self.only_event()
+        self.assertLessEqual(len(event["html"]),
+                             self.config["message_max_chars"])
+        self.assertNotIn("—", event["text"])
+        self.assertNotIn("—", event["html"])
 
 
 class WatermarkMigrationTests(unittest.TestCase):
