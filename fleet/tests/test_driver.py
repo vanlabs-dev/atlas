@@ -185,6 +185,21 @@ class GuardAndBoundTests(DriverTestBase):
                         disk_free=lambda: 2_000_000_000)
         self.assertEqual(fleet.get_slot(self.conn, 1)["status"], "active")
 
+    def test_unreachable_clone_is_bucketed_not_an_error(self):
+        # A subnet whose on-chain github_repo is a dead/placeholder URL is a
+        # normal operational outcome (recorded unreachable), not a process
+        # error — otherwise the scheduled unit would report failed forever.
+        def dead_setup(clone_dir, url, token=None, caps=None):
+            return {"status": "unreachable", "error": "404"}
+
+        summary = fleet.reconcile(
+            self.conn, identity_result([subnet(1, "https://github.com/test/a")]),
+            self.config, setup=dead_setup, update=fleet.update_clone)
+        self.assertEqual(summary["unreachable"], 1)
+        self.assertEqual(summary["clone"], 0)
+        self.assertNotIn("errors", summary)
+        self.assertEqual(fleet.get_slot(self.conn, 1)["status"], "unreachable")
+
     def test_bound_defers_excess_then_converges(self):
         config = dict(self.config, max_new_clones_per_pass=1)
         result = identity_result([subnet(1, "https://github.com/test/a"),
