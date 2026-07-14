@@ -185,6 +185,28 @@ class GuardAndBoundTests(DriverTestBase):
                         disk_free=lambda: 2_000_000_000)
         self.assertEqual(fleet.get_slot(self.conn, 1)["status"], "active")
 
+    def test_dead_repo_backs_off_and_frees_the_bound_for_live_repos(self):
+        # netuid 1 is a dead/placeholder repo; with a per-pass bound of 1 it
+        # must not keep the live netuid 2 from ever cloning.
+        cfg = dict(self.config, max_new_clones_per_pass=1,
+                   unreachable_backoff_hours=[100000])
+
+        def dead_setup(clone_dir, url, token=None, caps=None):
+            if url == "https://github.com/test/a":
+                return {"status": "unreachable", "error": "404"}
+            return self._setup(clone_dir, url, token=token, caps=caps)
+
+        result = identity_result([subnet(1, "https://github.com/test/a"),
+                                  subnet(2, "https://github.com/test/b")])
+        # pass 1: netuid 1 tried (dead) consumes the bound; netuid 2 deferred
+        fleet.reconcile(self.conn, result, cfg, setup=dead_setup,
+                        update=fleet.update_clone)
+        self.assertEqual(fleet.get_slot(self.conn, 1)["status"], "unreachable")
+        # pass 2: netuid 1 is backed off, so the bound goes to the live repo
+        fleet.reconcile(self.conn, result, cfg, setup=dead_setup,
+                        update=fleet.update_clone)
+        self.assertEqual(fleet.get_slot(self.conn, 2)["status"], "active")
+
     def test_unreachable_clone_is_bucketed_not_an_error(self):
         # A subnet whose on-chain github_repo is a dead/placeholder URL is a
         # normal operational outcome (recorded unreachable), not a process

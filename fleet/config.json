@@ -1,10 +1,11 @@
 {
-  "_comment": "subnet-repo-fleet policy. `clone_root`/`db` are relative to the repo root (gitignored var/). `caps` bound each untrusted clone (bytes via git object size; files via tree entry count) — a breach quarantines the slot. `min_free_bytes` is the disk ceiling: below it, new clones are held as `disk-limited` and retried when space frees. `max_new_clones_per_pass` spreads cold-start across passes. `update_interval_hours` × `stale_multiplier` drives per-slot staleness. GITHUB_TOKEN (optional) is read from the 0600 .env at runtime, never from here.",
+  "_comment": "subnet-repo-fleet policy. `clone_root`/`db` are relative to the repo root (gitignored var/). `caps` bound each untrusted clone (bytes via git object size; files via tree entry count) — a breach quarantines the slot. `min_free_bytes` is the disk ceiling: below it, new clones are held as `disk-limited` and retried when space frees. `max_new_clones_per_pass` spreads cold-start across passes. `unreachable_backoff_hours` throttles repos that will not clone (placeholder URLs, private repos the public-read-only token cannot see, deleted/moved) with an escalating retry delay per consecutive failure — a fix (new repo URL) changes the fingerprint and re-points immediately, bypassing the backoff. `update_interval_hours` × `stale_multiplier` drives per-slot staleness. GITHUB_TOKEN (optional) is read from the 0600 .env at runtime, never from here.",
   "db": "var/fleet/fleet.db",
   "clone_root": "var/fleet/clones",
   "max_new_clones_per_pass": 8,
   "caps": {"max_bytes": 2147483648, "max_files": 50000},
   "min_free_bytes": 5368709120,
+  "unreachable_backoff_hours": [6, 24, 72, 168],
   "update_interval_hours": 6,
   "stale_multiplier": 3
 }

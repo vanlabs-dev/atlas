@@ -47,7 +47,19 @@ blocking any other slot.
 - **WHEN** a slot's repository is unreachable, has an unparsable URL, or exceeds
   the size or file-count cap
 - **THEN** that slot is recorded as unreachable / invalid-url / quarantined and
-  the remaining slots are processed normally
+  the remaining slots are processed normally, and the per-slot failure is
+  counted by its status rather than as a process error (so a scheduled pass
+  that ran is reported healthy even while dead repositories exist)
+
+#### Scenario: A persistently unreachable repository is backed off, a fix is not
+
+- **WHEN** a slot's repository stays unreachable across passes (a placeholder
+  URL, a private repository the read-only token cannot access, or a deleted
+  repository)
+- **THEN** its retry is throttled by an escalating backoff so it stops consuming
+  a clone attempt every pass; but if the owner publishes a different repository
+  URL, the identity fingerprint changes and the slot is re-pointed immediately,
+  without waiting for the backoff
 
 #### Scenario: Re-running a converged pass changes nothing
 
