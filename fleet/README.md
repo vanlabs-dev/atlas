@@ -16,17 +16,23 @@ those features build on.
 
 The desired map comes from the live-data TaoStats subnet-identity
 operation (`GET /api/subnet/identity/v1`, paginated) →
-`netuid → { github_repo, subnet_name, owner }`. Per the live-data
-"discovery gates adapter construction" rule, that operation is built only
-after `livedata/discover_taostats.py` samples the endpoint under the
-free-tier budget and the operator records the contract in
-`docs/decisions.md`. Provenance is **TaoStats-reported chain identity at
-block B**, not chain-verified.
+`netuid → { github_repo, subnet_name }`. The endpoint does **not** carry
+the subnet owner ss58, so the fleet fingerprint keys on the normalized
+repo URL (a re-registration is a different project with a different repo).
+Provenance is **TaoStats-reported chain identity**, not chain-verified.
 
-Until that gate is complete, `reconcile` has no automatic source and fails
-closed; seed or drive a pass manually with `--identity-file` (a bare list
-of `{netuid, github_repo, owner_ss58, subnet_name}` or a full live-result
-envelope).
+The automatic source is built and working: a bare `reconcile` pages the
+identity map to completion (the whole ~129-subnet map is one call at
+`limit=200`) and reconciles. `reconcile --identity-file` still drives a
+manual/seed pass from a bare list of
+`{netuid, github_repo, owner_ss58, subnet_name}` or a full live-result
+envelope.
+
+Per the live-data "discovery gates adapter construction" rule, the
+endpoint contract is recorded in `docs/decisions.md`. That entry is
+currently **PROPOSED**; the operator ratifies it via the on-device
+`discover_taostats.py` run (identity probes included) and records the
+once-off fleet tracking-policy confirmation.
 
 ## Invariants
 
@@ -75,7 +81,7 @@ envelope).
 python3 fleet/atlas_fleet.py status                       # registry summary
 python3 fleet/atlas_fleet.py reconcile --identity-file F   # manual / seed pass
 python3 fleet/atlas_fleet.py reconcile --max-new N         # override per-pass bound
-python3 fleet/atlas_fleet.py reconcile                     # auto source (pending §1)
+python3 fleet/atlas_fleet.py reconcile                     # auto source (live TaoStats subnet/identity)
 ```
 
 `GITHUB_TOKEN` (optional) is read from the 0600 `.env`, injected per git
@@ -96,12 +102,22 @@ sudo systemctl enable --now atlas-fleet.timer
 Verify with `systemctl list-timers atlas-fleet.timer` and
 `python3 fleet/atlas_fleet.py status`.
 
-## Before enabling — operator decisions
+## Status (2026-07-15)
 
-1. Run the live-data discovery gate for `subnet/identity` and record the
-   contract approval in `docs/decisions.md` (unblocks the automatic
-   source and the pinned schema).
-2. Record the once-off fleet **tracking-policy** confirmation in
+Deployed and seeded on the Pi: **104 active blobless clones** (~851 MB),
+10 unreachable (backed off), 1 invalid-url, 14 no-repo = 129 subnets. The
+reconcile pipeline is accepted on-device (blobless, push-disabled,
+token-safe, per-slot fail-closed all verified against real data). Search
+indexing / MCP / Telegram fleet alerts remain deferred to later features.
+
+## Before it is self-maintaining — operator steps
+
+1. Install the timer (sudo) so passes run every 6h — see Scheduling above.
+2. Ratify the **PROPOSED** `subnet/identity` discovery-gate entry in
+   `docs/decisions.md` (run `discover_taostats.py` on the Pi, confirm the
+   contract, flip it to approved). The automatic source already works; this
+   is the recorded operator approval, not a functional unblock.
+3. Record the once-off fleet **tracking-policy** confirmation in
    `docs/decisions.md` (the policy-level analogue of ATLAS-REPO-001:
    "track chain-reported subnet `github_repo`s under the fleet policy,"
    not a per-repo confirmation).

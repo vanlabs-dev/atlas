@@ -38,10 +38,11 @@ change-tracked fleet those features will build on.
 - Add a **TaoStats subnet-identity operation** to `live-data`
   (`GET /api/subnet/identity/v1`, paginated), behind the existing contract
   discovery gate and typed-schema validation, exposing the validated
-  `netuid → { github_repo, subnet_name, owner }` map. One-to-two calls per
-  refresh; trivial quota. The on-chain source is `SubnetIdentity.github_repo`;
-  provenance is recorded as **TaoStats-reported chain identity at block B**, not
-  chain-verified.
+  `netuid → { github_repo, subnet_name }` map. (Discovery confirmed the
+  endpoint does not carry the owner ss58, so the fingerprint keys on the repo
+  URL — see design.md.) The whole ~129-subnet map is one call at `limit=200`;
+  trivial quota. The on-chain source is `SubnetIdentity.github_repo`; provenance
+  is recorded as **TaoStats-reported chain identity**, not chain-verified.
 - Add a new **`subnet-repo-fleet`** capability and a `fleet/` module that
   reconciles the chain identity map against a local **registry** and a fleet of
   clones under gitignored `var/fleet/<netuid>/`:

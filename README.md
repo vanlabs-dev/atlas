@@ -8,7 +8,7 @@ running on a Raspberry Pi. Built methodically in gated phases via OpenSpec.
 (resolved/open decisions), `openspec/specs/` (accepted capability specs), and
 `openspec/changes/archive/` (completed changes with their proposal/design/tasks).
 
-## Current status (2026-07-13)
+## Current status (2026-07-15)
 
 **Phases 0–5 are complete and accepted on the device.** Hermes Agent
 v0.18.2 runs on the Pi (Grok via X OAuth, validated), answering Bittensor
@@ -18,6 +18,12 @@ data (`atlas-live`: TaoSwap/TaoStats/CoinGecko) — source-bound, dated,
 commit-cited, provenance-enveloped, fail-closed. A controlled Telegram
 channel (`telegram/`) adds inbound conversation (native Hermes gateway)
 and an outbound operational notifier, scrubbed and de-duplicated.
+
+**Beyond the accepted phases:** the `subnet-repo-fleet` (`fleet/`) is
+implemented and seeded on the Pi — 104 subnet code repositories cloned
+blobless and chain-reconciled — pending the operator's timer install and
+discovery-gate sign-off (change not yet archived). Search indexing over
+the fleet is the next feature.
 
 | Capability (accepted spec) | State |
 |---|---|
@@ -31,7 +37,7 @@ and an outbound operational notifier, scrubbed and de-duplicated.
 | `subtensor-repo-tracking` | Done — identity-validated full clone of `RaoFoundation/subtensor` on the Pi (non-shallow, push disabled, @ `14bc6f9f964b`), safe journaled updates (hourly timer), 581-file FTS index, `atlas-repo` tools live in Hermes (commit-and-file-cited answers; honest stale/no-evidence) |
 | `live-data` | Done — contract-validated TaoSwap (keyless, first) + TaoStats (2/min self-cap, 10k/month ledger) + CoinGecko adapters; pinned schemas, freshness envelopes, `atlas-live` tools live in Hermes; outage battery proved honest unavailability (MV-RI-4 class closed); chain head watch: spec 424, conviction ownership NOT yet enacted (announced 2026-07-02, pending spec ≥ 425) |
 | `telegram-integration` | Done — inbound conversation via the native Hermes gateway (operator wizard, numeric-id allowlist); outbound notifier (`telegram/`) for four classes (chain-runtime-upgrade / repository-update / schema-drift / knowledge-ingestion), scrub-or-refuse + six-field delivery ledger + event-id de-dup, isolated on failure. **Signal-tiering (2026-07-13):** repo alerts tiered significant-vs-churn (deny-by-default; churn digested, never dropped), both-clocks repo-vs-live-chain marking, a high-priority live `chain-runtime-upgrade` class, and structured Telegram HTML (no em dashes, 400→plain-text fallback). Schedule: an hourly chain-head poll then `scan`, both best-effort `ExecStartPost=-…` on the repo-update service; 41-test suite; live alerts delivered on the Pi. Service-failure alerts deferred (needs a Hermes service unit); investment alerts are Phase 7 |
-| `subnet-repo-fleet` | Off-device complete (2026-07-14), pending on-device acceptance — a chain-driven reconciliation layer over the singleton tracker (`fleet/`): clones every subnet's on-chain `github_repo` (TaoStats `subnet/identity`, whole 129-subnet map in one call at `limit=200`) into a **blobless, never-executed** fleet under `var/fleet/`, keyed by netuid. Mass-discard guard (a degraded identity fetch is non-destructive), fingerprint re-point with epoch-segmented change history, per-repo size/file caps→quarantine, disk ceiling, optional `GITHUB_TOKEN`. Reuses repotrack's `collect_range`; 75-test suite; `status` + `reconcile [--identity-file]` CLI + a 6h timer. Discovery gate **PROPOSED** (operator ratifies on-device); indexing / search / alerts deferred to later features |
+| `subnet-repo-fleet` | Implemented + seeded on the Pi (2026-07-15), **change not yet archived** — a chain-driven reconciliation layer over the singleton tracker (`fleet/`): clones every subnet's on-chain `github_repo` (TaoStats `subnet/identity`, whole 129-subnet map in one call at `limit=200`) into a **blobless, never-executed** fleet under `var/fleet/`, keyed by netuid. On-device: **104 active clones** (~851 MB), 10 unreachable (escalating backoff — placeholder/private/dead repos), 1 invalid-url, 14 no-repo. Mass-discard guard (a degraded identity fetch is non-destructive), fingerprint re-point with epoch-segmented change history, per-repo size/file caps→quarantine, disk ceiling, optional `GITHUB_TOKEN` (public-read-only, never persisted to a clone). Reuses repotrack's `collect_range`; **80-test suite**; `status` + `reconcile [--identity-file]` CLI + a 6h timer. **Pending operator:** timer install (sudo), discovery-gate ratification (**PROPOSED** in `docs/decisions.md`), sign-off. Indexing / search / alerts deferred to later features |
 
 Latest closed-loop assessment `20260711T073125Z-d52a70e9`: **ok=7, finding=0**.
 Hermes baseline carries 2 documented exceptions (runs as `pi`; no service
