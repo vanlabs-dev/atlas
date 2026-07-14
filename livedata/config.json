@@ -119,6 +119,16 @@
                    "max_upstream_age_s": 120, "max_local_age_s": 60,
                    "expected_cadence": "~12s block cadence"},
       "_note": "order pinned explicitly — the conviction enactment watch (spec_version >= 425)"
+    },
+    "subnet_identity_taostats": {
+      "provider": "taostats",
+      "path": "/api/subnet/identity/v1",
+      "params": {"limit": 200},
+      "schema": "taostats/subnet-identity.v1",
+      "envelope": {"must_hit_provider": true,
+                   "max_upstream_age_s": null, "max_local_age_s": 60,
+                   "expected_cadence": "near-live identity (owner-edited, rarely)"},
+      "_note": "netuid -> on-chain SubnetIdentity.github_repo for the subnet-repo-fleet reconciler; paginated (aggregated to completion by run_subnet_identity); the endpoint does not provide the owner ss58"
     }
   }
 }

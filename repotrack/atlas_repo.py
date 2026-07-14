@@ -613,6 +613,12 @@ def _collect_range(clone_dir: str, prev_sha: str,
     }
 
 
+# Public reuse surface (subnet-repo-fleet): the fleet reconciler drives this
+# range collector per clone to record changes in the same recorded shape.
+# Additive alias only — the subtensor singleton pipeline is unchanged.
+collect_range = _collect_range
+
+
 DEFAULT_RUNTIME_MANIFEST = "runtime/src/lib.rs"
 _SPEC_VERSION_RE = re.compile(r"spec_version\s*:\s*(\d+)")
 

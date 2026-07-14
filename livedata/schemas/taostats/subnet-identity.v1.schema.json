@@ -1,0 +1,31 @@
+{
+  "_source": "TaoStats /api/subnet/identity/v1 discovery sample 2026-07-14 (2-call focused probe, limit=2, page 1+2). {pagination, data} envelope; per-item on-chain SubnetIdentity fields, all nullable except netuid. github_repo is str|null. The endpoint does NOT carry the subnet owner ss58 (that is on /api/subnet/latest/v1) — the fleet fingerprint therefore keys on the normalized repo URL. total_items 129 / total_pages 1 at limit=200 (whole map in one call). Extra fields (subnet_url, discord, description, logo_url, subnet_contact, additional, summary, tags, twitter) are tolerated by the validator.",
+  "type": "object",
+  "required": ["data", "pagination"],
+  "properties": {
+    "pagination": {
+      "type": "object",
+      "required": ["current_page", "total_pages"],
+      "properties": {
+        "current_page": {"type": "integer"},
+        "total_pages": {"type": "integer"},
+        "next_page": {"type": ["integer", "null"]},
+        "prev_page": {"type": ["integer", "null"]},
+        "per_page": {"type": ["integer", "null"]},
+        "total_items": {"type": ["integer", "null"]}
+      }
+    },
+    "data": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["netuid"],
+        "properties": {
+          "netuid": {"type": "integer"},
+          "subnet_name": {"type": ["string", "null"]},
+          "github_repo": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

@@ -94,6 +94,21 @@ def payloads() -> Dict[str, Any]:
                       "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
                       "hash": "0x" + "d" * 64, "events_count": 1,
                       "extrinsics_count": 1}]},
+        "/api/subnet/identity/v1": {
+            "pagination": {"current_page": 1, "next_page": None,
+                           "prev_page": None, "per_page": 200,
+                           "total_items": 2, "total_pages": 1},
+            "data": [
+                {"netuid": 0, "subnet_name": "Root", "github_repo": None,
+                 "subnet_url": None, "discord": None, "description": None,
+                 "logo_url": None, "subnet_contact": None, "additional": None,
+                 "summary": None, "tags": None, "twitter": None},
+                {"netuid": 1, "subnet_name": "Apex",
+                 "github_repo": "https://github.com/macrocosm-os/apex",
+                 "subnet_url": "https://macrocosmos.ai", "discord": "",
+                 "description": "d", "logo_url": "l", "subnet_contact": "",
+                 "additional": None, "summary": "s", "tags": ["ai"],
+                 "twitter": "@macrocosmos"}]},
     }
 
 
