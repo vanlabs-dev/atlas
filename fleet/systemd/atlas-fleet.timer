@@ -1,0 +1,14 @@
+# Atlas subnet-repo-fleet timer — every 6h (config update_interval_hours=6),
+# offset to :20 and independent of the hourly repotrack timer so 100+ blobless
+# fetches never crowd the subtensor update window. Staleness: 6h ×
+# stale_multiplier=3 → a slot reads stale after 18h without a successful fetch.
+[Unit]
+Description=Atlas subnet-repo-fleet reconcile timer
+
+[Timer]
+OnCalendar=*-*-* 00/6:20:00
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

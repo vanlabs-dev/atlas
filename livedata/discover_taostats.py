@@ -59,6 +59,16 @@ def discover(taoswap_report_path: Optional[str]) -> int:
         session.probe("blocks-page2", "/api/block/v1",
                       params={"limit": 1, "page": 2},
                       note="pagination sample")
+        session.probe("subnet-identity", "/api/subnet/identity/v1",
+                      params={"limit": 2},
+                      note="subnet-repo-fleet source: netuid -> "
+                           "SubnetIdentity.github_repo; confirm the endpoint "
+                           "does NOT carry the owner ss58 (fingerprint keys "
+                           "on the repo URL)")
+        session.probe("subnet-identity-page2", "/api/subnet/identity/v1",
+                      params={"limit": 2, "page": 2},
+                      note="identity pagination shape (next_page / "
+                           "total_pages / total_items)")
 
         # -- safe negative tests (ATLAS-API-005): auth + params
         session.probe("missing-auth", "/api/price/latest/v1",
@@ -194,6 +204,14 @@ def _propose_envelopes(session: dc.DiscoverySession) -> Dict[str, Any]:
             "expected_cadence": "~12s block cadence",
             "max_upstream_age_s": 120, "max_local_age_s": 60,
             "status": "PROPOSED"}
+    if by_name.get("subnet-identity", {}).get("ok"):
+        proposals["subnet_identity_taostats"] = {
+            "must_hit_provider": True,
+            "expected_cadence": "near-live identity (owner-edited, rarely)",
+            "max_upstream_age_s": None, "max_local_age_s": 60,
+            "status": "PROPOSED",
+            "note": "no upstream timestamp; completeness + status is the "
+                    "fleet mass-discard guard"}
     return proposals
 
 

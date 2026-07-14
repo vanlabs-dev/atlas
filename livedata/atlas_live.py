@@ -781,6 +781,27 @@ def _pp_chain_head_taostats(payload, params):
         "block_reference": head["block_number"]}
 
 
+def _pp_subnet_identity_taostats(payload, params):
+    """One page of the netuid -> on-chain SubnetIdentity map. The endpoint
+    does not carry the owner ss58, so `owner_ss58` is None (the fleet
+    fingerprint keys on the normalized repo URL). Pagination metadata is
+    surfaced for the aggregator to page to completion."""
+    rows = payload["data"]
+    pagination = payload.get("pagination") or {}
+    subnets = [{"netuid": row["netuid"],
+                "github_repo": row.get("github_repo"),
+                "subnet_name": row.get("subnet_name"),
+                "owner_ss58": None} for row in rows]
+    return {"values": {"subnets": subnets, "count": len(subnets),
+                       "current_page": pagination.get("current_page"),
+                       "total_pages": pagination.get("total_pages"),
+                       "next_page": pagination.get("next_page")},
+            "units": "netuid -> on-chain SubnetIdentity.github_repo "
+                     "(owner ss58 not provided by this endpoint)",
+            "upstream_timestamp": None,
+            "block_reference": None}
+
+
 POSTPROCESSORS = {
     "price_spot_coingecko": _pp_price_spot_coingecko,
     "price_daily_taoswap": _pp_price_daily_taoswap,
@@ -790,6 +811,7 @@ POSTPROCESSORS = {
     "subnets_taostats": _pp_subnets_taostats,
     "metagraph_taostats": _pp_metagraph_taostats,
     "chain_head_taostats": _pp_chain_head_taostats,
+    "subnet_identity_taostats": _pp_subnet_identity_taostats,
 }
 
 
@@ -943,6 +965,56 @@ def run_operation(connection: sqlite3.Connection, config: Dict[str, Any],
         # chain-runtime-upgrade notifier class reads these read-only).
         record_spec_observation(connection, response["values"])
     return response
+
+
+# ---------------------------------------------------------------------------
+# subnet-identity aggregator — pages the identity operation to completion
+# and returns the fleet-consumable netuid->identity map. A failed or
+# unfinished pagination is reported degraded (complete=False) so the fleet's
+# mass-discard guard treats it as untrusted and makes no destructive change.
+# ---------------------------------------------------------------------------
+
+
+def run_subnet_identity(connection, config, ledger, env=None,
+                        max_pages: int = 200, run_op=None) -> Dict[str, Any]:
+    run_op = run_op or run_operation
+    subnets: List[Dict[str, Any]] = []
+    last: Optional[Dict[str, Any]] = None
+    page = 1
+    pages_fetched = 0
+    while pages_fetched < max_pages:
+        result = run_op(connection, config, ledger, "subnet_identity_taostats",
+                        dynamic_params={"page": page}, interactive=False,
+                        env=env)
+        pages_fetched += 1
+        if result.get("status") != "ok":
+            return {"status": "live-unavailable",
+                    "freshness_status": "unknown-upstream",
+                    "block_reference": None,
+                    "values": {"subnets": subnets, "count": len(subnets),
+                               "complete": False},
+                    "error": result.get("error") or {
+                        "category": "pagination-failed",
+                        "message": "page %d did not validate" % page}}
+        last = result
+        values = result["values"]
+        subnets.extend(values["subnets"])
+        next_page = values.get("next_page")
+        total_pages = values.get("total_pages")
+        if not next_page or (total_pages and page >= total_pages):
+            return {"status": "ok",
+                    "freshness_status": last["freshness_status"],
+                    "block_reference": None,
+                    "values": {"subnets": subnets, "count": len(subnets),
+                               "complete": True}}
+        page = next_page if isinstance(next_page, int) else page + 1
+    return {"status": "live-unavailable",
+            "freshness_status": "unknown-upstream", "block_reference": None,
+            "values": {"subnets": subnets, "count": len(subnets),
+                       "complete": False},
+            "error": {"category": "pagination-incomplete",
+                      "message": "exceeded %d pages without completing"
+                                 % max_pages}}
 
 
 # ---------------------------------------------------------------------------
