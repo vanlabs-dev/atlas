@@ -40,6 +40,13 @@ envelope).
   count; a breach removes the clone and marks the slot `quarantined`.
 - **Per-slot fail-closed**: an unreachable, invalid-URL, oversized, or
   disk-limited repo is recorded and skipped, never blocking other slots.
+  A repo that will not clone (placeholder URL, private repo the
+  public-read-only token cannot see, deleted/moved) is retried with an
+  escalating **backoff** (`unreachable_backoff_hours`) so it stops burning
+  a clone slot every pass; a fix (new repo URL → new fingerprint) re-points
+  immediately, bypassing the backoff. Per-slot failures are recorded by
+  status, never counted as process errors, so the scheduled unit stays
+  healthy while dead repos exist.
 - **Mass-discard guard**: `discard` and `repoint` run only when the
   identity fetch is validated, fresh, and paginated to completion; a
   degraded fetch makes no destructive change and only advances known-good

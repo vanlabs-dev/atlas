@@ -128,6 +128,7 @@ SLOT_COLUMNS = (
     "netuid", "github_repo", "owner_ss58", "fingerprint", "epoch",
     "default_branch", "status", "local_sha", "clone_size_bytes",
     "first_seen_block", "last_reconciled", "last_fetch_success",
+    "clone_attempts", "next_attempt_at",
 )
 
 SCHEMA_SQL = """
@@ -143,7 +144,9 @@ CREATE TABLE IF NOT EXISTS slots (
     clone_size_bytes INTEGER,
     first_seen_block INTEGER,
     last_reconciled TEXT,
-    last_fetch_success TEXT
+    last_fetch_success TEXT,
+    clone_attempts INTEGER,
+    next_attempt_at TEXT
 );
 CREATE TABLE IF NOT EXISTS epochs (
     id INTEGER PRIMARY KEY,
@@ -185,6 +188,15 @@ def open_store(db_path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     connection = sqlite3.connect(db_path)
     connection.executescript(SCHEMA_SQL)
+    # Additive migration: pre-backoff stores lack the retry-backoff columns;
+    # existing rows stay NULL (= never failed, retry immediately).
+    columns = {row[1] for row in connection.execute(
+        "PRAGMA table_info(slots)")}
+    for column, coltype in (("clone_attempts", "INTEGER"),
+                            ("next_attempt_at", "TEXT")):
+        if column not in columns:
+            connection.execute(
+                "ALTER TABLE slots ADD COLUMN %s %s" % (column, coltype))
     connection.commit()
     return connection
 
@@ -238,6 +250,21 @@ SKIP = "skip"         # recorded terminal state (e.g. quarantined), no action
 DEFERRED = "deferred"  # a clone/repoint held back by the per-pass bound
 
 
+# Escalating retry backoff for repos that will not clone (placeholder URLs,
+# private repos the public-read-only token cannot see, deleted/moved repos).
+# A fix (new repo URL) changes the fingerprint and re-points immediately,
+# bypassing this — so only persistently-dead repos are throttled.
+DEFAULT_BACKOFF_HOURS = [6, 24, 72, 168]
+
+
+def _next_attempt_at(now_iso: str, attempts: int,
+                     schedule: Optional[List[int]] = None) -> str:
+    schedule = schedule or DEFAULT_BACKOFF_HOURS
+    hours = schedule[min(max(attempts, 1), len(schedule)) - 1]
+    now = datetime.datetime.fromisoformat(now_iso)
+    return (now + datetime.timedelta(hours=hours)).isoformat()
+
+
 def _action(action: str, netuid: int, url: Optional[str] = None,
             fingerprint: Optional[str] = None,
             owner_ss58: Optional[str] = None,
@@ -247,8 +274,16 @@ def _action(action: str, netuid: int, url: Optional[str] = None,
             "subnet_name": subnet_name, "reason": reason}
 
 
+def _backed_off(slot: Dict[str, Any], now: Optional[str]) -> bool:
+    """True when a persistently-unreachable slot is still inside its retry
+    backoff window (so it is left untouched this pass, not re-attempted)."""
+    next_at = slot.get("next_attempt_at")
+    return bool(now and next_at and now < next_at)
+
+
 def build_plan(desired: List[Dict[str, Any]], registry: List[Dict[str, Any]],
-               fetch_ok: bool = True) -> List[Dict[str, Any]]:
+               fetch_ok: bool = True,
+               now: Optional[str] = None) -> List[Dict[str, Any]]:
     """Diff the desired identity map against the registry into a per-slot
     plan. Exactly one action per slot from
     {clone, update, repoint, discard, no-repo, skip}.
@@ -296,6 +331,8 @@ def build_plan(desired: List[Dict[str, Any]], registry: List[Dict[str, Any]],
             plan.append(_action(CLONE, netuid, reason="new", **common))
         elif existing["fingerprint"] == fp:
             status = existing.get("status")
+            if status == "unreachable" and _backed_off(existing, now):
+                continue  # persistently dead repo — throttled until due
             if status in ("pending", "cloning", "unreachable", "disk-limited"):
                 plan.append(_action(CLONE, netuid, reason="resume", **common))
             elif status == "quarantined":
@@ -694,7 +731,24 @@ def _handle_deferred(connection: sqlite3.Connection, action: Dict[str, Any],
 
 
 _Pass = collections.namedtuple(
-    "_Pass", "clone_root caps token block now actor setup update disk_check")
+    "_Pass", "clone_root caps token block now actor setup update disk_check "
+             "backoff")
+
+
+def _record_attempt(connection: sqlite3.Connection, netuid: int,
+                    base_attempts: Optional[int], state: Dict[str, Any],
+                    now: str, backoff: Optional[List[int]]) -> None:
+    """Maintain the retry-backoff bookkeeping after a clone attempt: a
+    success clears it; an unreachable result escalates the delay."""
+    if state["status"] == "active":
+        connection.execute("UPDATE slots SET clone_attempts = 0, "
+                           "next_attempt_at = NULL WHERE netuid = ?", (netuid,))
+    elif state["status"] == "unreachable":
+        attempts = (base_attempts or 0) + 1
+        connection.execute(
+            "UPDATE slots SET clone_attempts = ?, next_attempt_at = ? "
+            "WHERE netuid = ?",
+            (attempts, _next_attempt_at(now, attempts, backoff), netuid))
 
 
 def _default_disk_free(path: str) -> Optional[int]:
@@ -761,6 +815,9 @@ def _apply_action(connection: sqlite3.Connection, action: Dict[str, Any],
                           caps=ctx.caps)
         _persist_clone(connection, netuid, epoch, action, state, ctx.block,
                        ctx.now)
+        _record_attempt(connection, netuid,
+                        existing.get("clone_attempts") if existing else 0,
+                        state, ctx.now, ctx.backoff)
         audit(connection, ctx.actor, "clone", netuid,
               "%s -> %s" % (action["reason"], state["status"]))
         # a non-active clone (unreachable / quarantined) is a recorded
@@ -783,6 +840,7 @@ def _apply_action(connection: sqlite3.Connection, action: Dict[str, Any],
                           caps=ctx.caps)
         _persist_clone(connection, netuid, epoch, action, state, ctx.block,
                        ctx.now)
+        _record_attempt(connection, netuid, 0, state, ctx.now, ctx.backoff)
         audit(connection, ctx.actor, "repoint", netuid,
               "epoch %s -> %d, %s" % (old.get("epoch") if old else "-",
                                       epoch, state["status"]))
@@ -828,15 +886,17 @@ def reconcile(connection: sqlite3.Connection,
     ctx = _Pass(clone_root=clone_root, caps=config.get("caps"), token=token,
                 block=None, now=now, actor=actor,
                 setup=setup or setup_clone, update=update or update_clone,
-                disk_check=disk_check)
+                disk_check=disk_check,
+                backoff=config.get("unreachable_backoff_hours"))
 
     fetch_ok = _identity_ok(identity_result)
     desired = _desired_from(identity_result) if fetch_ok else []
     if fetch_ok:
         ctx = ctx._replace(block=identity_result.get("block_reference"))
     registry = all_slots(connection)
-    plan = apply_bound(build_plan(desired, registry, fetch_ok=fetch_ok),
-                       config.get("max_new_clones_per_pass"))
+    plan = apply_bound(
+        build_plan(desired, registry, fetch_ok=fetch_ok, now=now),
+        config.get("max_new_clones_per_pass"))
 
     # Per-slot failure outcomes (unreachable / quarantined / fetch-failed …)
     # are bucketed dynamically by their status, never as process "errors" —

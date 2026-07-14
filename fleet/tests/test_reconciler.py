@@ -88,6 +88,31 @@ class BuildPlanTests(unittest.TestCase):
         self.assertEqual(len(acts[fleet.NO_REPO]), 1)
         self.assertEqual(acts[fleet.NO_REPO][0]["reason"], "unsupported-host")
 
+    def test_unreachable_within_backoff_produces_no_action(self):
+        reg = [slot(9, "https://github.com/o/r", status="unreachable")]
+        reg[0]["next_attempt_at"] = "2999-01-01T00:00:00+00:00"
+        plan = fleet.build_plan([desired(9, "https://github.com/o/r")], reg,
+                                fetch_ok=True, now="2026-07-14T00:00:00+00:00")
+        self.assertEqual(plan, [])  # backed off — dead repo not retried
+
+    def test_unreachable_past_backoff_is_retried(self):
+        reg = [slot(9, "https://github.com/o/r", status="unreachable")]
+        reg[0]["next_attempt_at"] = "2020-01-01T00:00:00+00:00"
+        plan = fleet.build_plan([desired(9, "https://github.com/o/r")], reg,
+                                fetch_ok=True, now="2026-07-14T00:00:00+00:00")
+        self.assertEqual([a["netuid"] for a in by_action(plan)[fleet.CLONE]],
+                         [9])
+
+    def test_unreachable_repointed_on_fix_bypasses_backoff(self):
+        # owner replaces a placeholder with a real repo → fingerprint changes
+        # → immediate re-point, not subject to the unreachable backoff
+        reg = [slot(9, "https://github.com/o/placeholder",
+                    status="unreachable")]
+        reg[0]["next_attempt_at"] = "2999-01-01T00:00:00+00:00"
+        plan = fleet.build_plan([desired(9, "https://github.com/o/real")], reg,
+                                fetch_ok=True, now="2026-07-14T00:00:00+00:00")
+        self.assertIn(fleet.REPOINT, by_action(plan))
+
     def test_disk_limited_slot_resumes_as_clone(self):
         registry = [slot(9, "https://github.com/o/r", status="disk-limited")]
         plan = fleet.build_plan(
