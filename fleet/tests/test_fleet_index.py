@@ -207,6 +207,19 @@ class PurgeAndFreshnessTests(IndexBase):
         self.assertEqual(_indexed_paths(self.conn, 1), ["README.md"])
         self.assertIsNotNone(self.state_of(1))
 
+    def test_freshness_tolerates_missing_index_tables(self):
+        # A reconcile store that has never built the index (fresh deploy):
+        # freshness must report zeros, never raise "no such table".
+        bare = os.path.join(self.tmp, "bare.db")
+        conn = fleet.open_store(bare)  # reconcile tables only, no index tables
+        try:
+            self.assertEqual(idx.index_freshness(conn),
+                             {"indexed_slots": 0, "stale_slots": 0,
+                              "total_indexed_files": 0})
+            self.assertFalse(idx.index_freshness(conn, netuid=1)["indexed"])
+        finally:
+            conn.close()
+
     def test_freshness_reports_coverage_and_staleness(self):
         _o1, c1 = self.clone_of(1, {"README.md": "one\n"})
         _o2, c2 = self.clone_of(2, {"README.md": "two\n", "b.py": "b=1\n"})

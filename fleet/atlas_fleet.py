@@ -1181,8 +1181,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.command == "status":
             connection = open_store(config["db"])
             try:
-                print(json.dumps(fleet_status(connection), indent=2,
-                                 sort_keys=True))
+                summary = fleet_status(connection)
+                summary["index"] = _fleet_index().index_freshness(connection)
+                print(json.dumps(summary, indent=2, sort_keys=True))
             finally:
                 connection.close()
             return 0
