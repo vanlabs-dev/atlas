@@ -62,6 +62,20 @@ class BackfillTests(td.DriverTestBase):
         self.clone1()
         self.assertEqual(fleet.main(["--config", self.cfg_file(), "index"]), 0)
 
+    def test_cli_status_includes_index_coverage(self):
+        import contextlib
+        import io
+        self.clone1()  # inline-indexed by reconcile
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = fleet.main(["--config", self.cfg_file(), "status"])
+        self.assertEqual(rc, 0)
+        out = json.loads(buf.getvalue())
+        self.assertIn("index", out)
+        self.assertGreaterEqual(out["index"]["indexed_slots"], 1)
+        self.assertEqual(out["index"]["stale_slots"], 0)
+        self.assertGreaterEqual(out["index"]["total_indexed_files"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

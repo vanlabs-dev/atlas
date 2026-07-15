@@ -218,12 +218,26 @@ def index_slot(connection: Any, netuid: int, epoch: int, clone_dir: str,
 # ---------------------------------------------------------------------------
 
 
+def _index_present(connection: Any) -> bool:
+    return connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND "
+        "name='index_state'").fetchone() is not None
+
+
 def index_freshness(connection: Any,
                     netuid: Optional[int] = None) -> Dict[str, Any]:
     """Index coverage relative to the clones' local SHAs. With a netuid: that
     slot's per-slot detail; without: fleet-wide counts. A slot is `stale` when
     it is indexed but its clone's `slots.local_sha` has advanced past the
-    recorded indexed SHA."""
+    recorded indexed SHA. Tolerates a store whose index has never been built
+    (reports zeros / unindexed) so callers like `status` never fail closed."""
+    if not _index_present(connection):
+        if netuid is not None:
+            return {"netuid": netuid, "indexed": False, "stale": False,
+                    "status": None, "local_sha": None, "indexed_sha": None,
+                    "epoch": None, "files": 0}
+        return {"indexed_slots": 0, "stale_slots": 0,
+                "total_indexed_files": 0}
     if netuid is not None:
         row = connection.execute(
             "SELECT s.status, s.local_sha, i.epoch, i.indexed_sha, i.files "
