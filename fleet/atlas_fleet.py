@@ -411,6 +411,40 @@ def _repotrack() -> Any:
     return _RT
 
 
+_FI: Any = None
+
+
+def _fleet_index() -> Any:
+    """Lazy import of the shared FTS indexer (change: fleet-search). Kept as a
+    module reference so its functions stay monkeypatchable in tests."""
+    global _FI
+    if _FI is None:
+        import atlas_fleet_index  # noqa: E402  (same dir, stdlib-pure import)
+        _FI = atlas_fleet_index
+    return _FI
+
+
+def _update_index_directive(result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Map an `update_clone` result to the index work it implies, or None.
+
+    Incremental (changed paths) ONLY on a clean fast-forward with a complete,
+    non-truncated change range; a truncated range, a non-fast-forward reset, or
+    a `record-failed` advance (clone moved but no range) fall back to a full
+    walk (`changed_paths=None`). `no-change` and every failure index nothing —
+    mirrors repotrack's update-path guard (atlas_repo.py incremental-vs-full)."""
+    status = result.get("status")
+    if status == "ok":
+        rng = result.get("range") or {}
+        if result.get("fast_forward") and not rng.get("files_truncated"):
+            paths = [item["path"] for item in rng.get("files", [])]
+            return {"changed_paths": paths, "local_sha": result.get("new_sha")}
+        return {"changed_paths": None, "local_sha": result.get("new_sha")}
+    if status == "record-failed":
+        return {"changed_paths": None,
+                "local_sha": result.get("local_sha") or result.get("new_sha")}
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Git runner — fixed-argument, no shell. An optional token is injected via
 # GIT_CONFIG_* environment (http.extraHeader), so it reaches the network
@@ -732,7 +766,7 @@ def _handle_deferred(connection: sqlite3.Connection, action: Dict[str, Any],
 
 _Pass = collections.namedtuple(
     "_Pass", "clone_root caps token block now actor setup update disk_check "
-             "backoff")
+             "backoff index_cfg")
 
 
 def _record_attempt(connection: sqlite3.Connection, netuid: int,
@@ -775,25 +809,37 @@ def _apply_action(connection: sqlite3.Connection, action: Dict[str, Any],
     netuid = action["netuid"]
     clone_dir = os.path.join(ctx.clone_root, str(netuid))
 
+    def _walk(epoch: int, changed_paths: Optional[List[str]],
+              local_sha: Optional[str]) -> Dict[str, Any]:
+        return {"netuid": netuid, "epoch": epoch, "clone_dir": clone_dir,
+                "changed_paths": changed_paths, "local_sha": local_sha}
+
     if kind == NO_REPO:
         upsert_slot(connection, {"netuid": netuid, "github_repo": None,
                                  "status": _norepo_status(action["reason"]),
                                  "last_reconciled": ctx.now})
         audit(connection, ctx.actor, "no-repo", netuid, action["reason"])
         summary["no-repo"] += 1
+        return None
     elif kind == DISCARD:
         _rmtree(clone_dir)
         _close_epoch_all(connection, netuid, ctx.now)
         connection.execute("DELETE FROM slots WHERE netuid = ?", (netuid,))
+        # purge in the SAME transaction as the slot delete — no window where a
+        # search returns a hit for a discarded slot.
+        _fleet_index().purge_slot(connection, netuid)
         audit(connection, ctx.actor, "discard", netuid,
               action.get("reason", ""))
         summary["discard"] += 1
+        return None
     elif kind == SKIP:
         audit(connection, ctx.actor, "skip", netuid, action.get("reason", ""))
         summary["skip"] += 1
+        return None
     elif kind == DEFERRED:
         _handle_deferred(connection, action, ctx.now)
         summary["deferred"] += 1
+        return None
     elif kind == CLONE:
         if not ctx.disk_check():
             upsert_slot(connection, {
@@ -804,7 +850,7 @@ def _apply_action(connection: sqlite3.Connection, action: Dict[str, Any],
             audit(connection, ctx.actor, "disk-limited", netuid,
                   action.get("reason", ""))
             summary["disk-limited"] += 1
-            return
+            return None
         existing = get_slot(connection, netuid)
         if existing and existing.get("epoch"):
             epoch = existing["epoch"]
@@ -824,16 +870,21 @@ def _apply_action(connection: sqlite3.Connection, action: Dict[str, Any],
         # per-slot outcome, not a process error — bucket it by its status
         _bump(summary, "clone" if state["status"] == "active"
               else state["status"])
+        return (_walk(epoch, None, state.get("local_sha"))
+                if state["status"] == "active" else None)
     elif kind == REPOINT:
         if not ctx.disk_check():
             audit(connection, ctx.actor, "disk-limited", netuid,
                   "repoint deferred")
             summary["disk-limited"] += 1
-            return
+            return None
         old = get_slot(connection, netuid)
         if old and old.get("epoch"):
             _close_epoch(connection, netuid, old["epoch"], ctx.now)
         _rmtree(clone_dir)
+        # the old project's index rows are stale the moment we re-point —
+        # purge them in this transaction before the new tree is indexed.
+        _fleet_index().purge_slot(connection, netuid)
         epoch = _next_epoch(connection, netuid)
         _open_epoch(connection, netuid, epoch, action, ctx.block, ctx.now)
         state = ctx.setup(clone_dir, action["url"], token=ctx.token,
@@ -846,17 +897,23 @@ def _apply_action(connection: sqlite3.Connection, action: Dict[str, Any],
                                       epoch, state["status"]))
         _bump(summary, "repoint" if state["status"] == "active"
               else state["status"])
+        return (_walk(epoch, None, state.get("local_sha"))
+                if state["status"] == "active" else None)
     elif kind == UPDATE:
         slot = get_slot(connection, netuid)
         if not slot or not slot.get("default_branch") or not slot.get(
                 "local_sha"):
-            return  # not a cloned slot yet; a later pass will clone it
+            return None  # not a cloned slot yet; a later pass will clone it
         result = ctx.update(clone_dir, slot["default_branch"],
                             slot["local_sha"], token=ctx.token)
         _persist_update(connection, netuid, slot["epoch"], result, ctx.now)
         audit(connection, ctx.actor, "update", netuid, result["status"])
         _bump(summary, "update" if result["status"] in (
             "ok", "no-change", "record-failed") else result["status"])
+        spec = _update_index_directive(result)
+        return (_walk(slot["epoch"], spec["changed_paths"], spec["local_sha"])
+                if spec else None)
+    return None
 
 
 def reconcile(connection: sqlite3.Connection,
@@ -887,7 +944,12 @@ def reconcile(connection: sqlite3.Connection,
                 block=None, now=now, actor=actor,
                 setup=setup or setup_clone, update=update or update_clone,
                 disk_check=disk_check,
-                backoff=config.get("unreachable_backoff_hours"))
+                backoff=config.get("unreachable_backoff_hours"),
+                index_cfg=config.get("index"))
+
+    # The shared FTS index (change: fleet-search) lives in this same store;
+    # ensure its tables exist before any purge/index runs this pass.
+    _fleet_index().ensure_schema(connection)
 
     fetch_ok = _identity_ok(identity_result)
     desired = _desired_from(identity_result) if fetch_ok else []
@@ -905,9 +967,33 @@ def reconcile(connection: sqlite3.Connection,
                "update": 0, "repoint": 0, "discard": 0, "no-repo": 0,
                "deferred": 0, "skip": 0, "disk-limited": 0}
     for action in plan:
-        _apply_action(connection, action, ctx, summary)
-        connection.commit()
+        directive = _apply_action(connection, action, ctx, summary)
+        connection.commit()  # slot transition is durable before indexing
+        if directive:
+            _run_index_directive(connection, directive, ctx, summary)
     return summary
+
+
+def _run_index_directive(connection: sqlite3.Connection,
+                         directive: Dict[str, Any], ctx: "_Pass",
+                         summary: Dict[str, int]) -> None:
+    """Apply one slot's index walk in its own transaction. On any failure only
+    the index is rolled back — the already-committed clone/update is preserved
+    (per-slot fail-closed, mirroring repotrack's separate index transaction)."""
+    netuid = directive["netuid"]
+    try:
+        _fleet_index().index_slot(
+            connection, netuid, directive["epoch"], directive["clone_dir"],
+            ctx.index_cfg, changed_paths=directive.get("changed_paths"),
+            local_sha=directive.get("local_sha"))
+        connection.commit()
+        _bump(summary, "indexed")
+    except Exception as exc:  # noqa: BLE001 — index failure must not fail the pass
+        connection.rollback()
+        audit(connection, ctx.actor, "index-failed", netuid,
+              redact(str(exc))[:300])
+        connection.commit()
+        _bump(summary, "index-failed")
 
 
 # ---------------------------------------------------------------------------
@@ -941,6 +1027,54 @@ def fleet_status(connection: sqlite3.Connection) -> Dict[str, Any]:
     return {"total_slots": len(slots), "by_status": by_status,
             "total_clone_bytes": total_bytes, "last_reconcile": last_reconcile,
             "stalest": stalest}
+
+
+def backfill_index(connection: sqlite3.Connection, config: Dict[str, Any],
+                   netuid: Optional[int] = None, rebuild: bool = False,
+                   actor: str = "fleet") -> Dict[str, Any]:
+    """Standalone (re)index of already-cloned slots (change: fleet-search).
+
+    Walks the active clones — or one netuid — and indexes those whose index is
+    missing, stale (indexed SHA != local SHA), or on an old indexer schema;
+    `rebuild` purges first and re-walks unconditionally. This backfills clones
+    that predate the index (the deployed fleet) and repairs drift, without
+    requiring a clone to change first. Per-slot fail-closed: one slot's index
+    error is recorded and skipped, never aborting the run."""
+    fidx = _fleet_index()
+    fidx.ensure_schema(connection)
+    clone_root = config.get("clone_root") or DEFAULT_CLONE_ROOT
+    index_cfg = config.get("index")
+    slots = ([get_slot(connection, netuid)] if netuid is not None
+             else all_slots(connection))
+    summary = {"considered": 0, "indexed": 0, "skipped": 0, "failed": 0}
+    for slot in slots:
+        if (not slot or slot.get("status") != "active"
+                or not slot.get("local_sha")):
+            continue
+        nid = slot["netuid"]
+        clone_dir = os.path.join(clone_root, str(nid))
+        if not _is_git_clone(clone_dir):
+            summary["skipped"] += 1
+            continue
+        summary["considered"] += 1
+        try:
+            if rebuild:
+                fidx.purge_slot(connection, nid)
+            outcome = fidx.index_slot(connection, nid, slot.get("epoch"),
+                                      clone_dir, index_cfg,
+                                      local_sha=slot.get("local_sha"))
+            connection.commit()
+            if outcome["mode"] != "noop":
+                summary["indexed"] += 1
+            audit(connection, actor, "index", nid, outcome["mode"])
+            connection.commit()
+        except Exception as exc:  # noqa: BLE001 — per-slot fail-closed
+            connection.rollback()
+            audit(connection, actor, "index-failed", nid,
+                  redact(str(exc))[:300])
+            connection.commit()
+            summary["failed"] += 1
+    return summary
 
 
 def _resolve(path: str) -> str:
@@ -1037,6 +1171,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     reconcile_parser = subparsers.add_parser("reconcile")
     reconcile_parser.add_argument("--identity-file", default=None)
     reconcile_parser.add_argument("--max-new", type=int, default=None)
+    index_parser = subparsers.add_parser("index")
+    index_parser.add_argument("--netuid", type=int, default=None)
+    index_parser.add_argument("--rebuild", action="store_true")
     args = parser.parse_args(argv)
 
     try:
@@ -1065,6 +1202,16 @@ def main(argv: Optional[List[str]] = None) -> int:
             # regardless of individual dead/oversized repos (recorded per
             # slot). A degraded identity fetch exits 1 to surface it.
             return 0 if summary["fetch_ok"] else 1
+        if args.command == "index":
+            connection = open_store(config["db"])
+            try:
+                summary = backfill_index(connection, config,
+                                         netuid=args.netuid,
+                                         rebuild=args.rebuild)
+                print(json.dumps(summary, indent=2, sort_keys=True))
+            finally:
+                connection.close()
+            return 0
     except FleetError as exc:
         print("fatal: %s" % redact(str(exc)), file=sys.stderr)
         return 2

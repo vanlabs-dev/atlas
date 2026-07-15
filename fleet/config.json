@@ -1,5 +1,5 @@
 {
-  "_comment": "subnet-repo-fleet policy. `clone_root`/`db` are relative to the repo root (gitignored var/). `caps` bound each untrusted clone (bytes via git object size; files via tree entry count) — a breach quarantines the slot. `min_free_bytes` is the disk ceiling: below it, new clones are held as `disk-limited` and retried when space frees. `max_new_clones_per_pass` spreads cold-start across passes. `unreachable_backoff_hours` throttles repos that will not clone (placeholder URLs, private repos the public-read-only token cannot see, deleted/moved) with an escalating retry delay per consecutive failure — a fix (new repo URL) changes the fingerprint and re-points immediately, bypassing the backoff. `update_interval_hours` × `stale_multiplier` drives per-slot staleness. GITHUB_TOKEN (optional) is read from the 0600 .env at runtime, never from here.",
+  "_comment": "subnet-repo-fleet policy. `clone_root`/`db` are relative to the repo root (gitignored var/). `caps` bound each untrusted clone (bytes via git object size; files via tree entry count) — a breach quarantines the slot. `min_free_bytes` is the disk ceiling: below it, new clones are held as `disk-limited` and retried when space frees. `max_new_clones_per_pass` spreads cold-start across passes. `unreachable_backoff_hours` throttles repos that will not clone (placeholder URLs, private repos the public-read-only token cannot see, deleted/moved) with an escalating retry delay per consecutive failure — a fix (new repo URL) changes the fingerprint and re-points immediately, bypassing the backoff. `update_interval_hours` × `stale_multiplier` drives per-slot staleness. GITHUB_TOKEN (optional) is read from the 0600 .env at runtime, never from here. `index` (change: fleet-search) drives the shared FTS index over the clones: `extensions` is a polyglot allowlist of source/config/doc file types, `max_file_bytes` caps per-file index size (binaries are skipped by content sniff); the size cap naturally drops lockfiles/minified bundles.",
   "db": "var/fleet/fleet.db",
   "clone_root": "var/fleet/clones",
   "max_new_clones_per_pass": 8,
@@ -7,5 +7,9 @@
   "min_free_bytes": 5368709120,
   "unreachable_backoff_hours": [6, 24, 72, 168],
   "update_interval_hours": 6,
-  "stale_multiplier": 3
+  "stale_multiplier": 3,
+  "index": {
+    "extensions": [".rs", ".toml", ".md", ".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".sol", ".move", ".vy", ".java", ".rb", ".c", ".h", ".cpp", ".hpp", ".sh", ".yml", ".yaml", ".json", ".txt", ".cfg", ".ini", ".proto"],
+    "max_file_bytes": 524288
+  }
 }

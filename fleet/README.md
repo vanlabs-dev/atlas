@@ -8,9 +8,9 @@ state. Each pass clones what is new, updates what exists, re-points what
 churned, and discards what deregistered — reusing repotrack's journaled
 update primitives and never building, testing, or executing subnet code.
 
-Downstream uses of the maintained clones (search, diffing, alerts) are
-out of scope here; this delivers the self-healing, change-tracked fleet
-those features build on.
+The self-healing, change-tracked fleet is the substrate; the **fleet-search**
+change (see below) builds the first downstream use — a read-only code-search
+surface over the clones. Diffing / alerts remain out of scope.
 
 ## Identity source (the "on chain detail") — discovery-gated
 
@@ -74,6 +74,10 @@ once-off fleet tracking-policy confirmation.
 - `change_ranges` — repotrack's recorded range shape (commits, per-file
   ±, tags), scoped to `(netuid, epoch)`.
 - `audit` — one redacted row per reconcile action.
+- `fleet_files` + `fleet_files_fts` + `index_state` — the shared FTS index
+  (change: fleet-search), scoped by `(netuid, epoch)`; owned by
+  `atlas_fleet_index.py`, created on first index run (the reconcile store's
+  own schema is untouched).
 
 ## Commands
 
@@ -82,12 +86,54 @@ python3 fleet/atlas_fleet.py status                       # registry summary
 python3 fleet/atlas_fleet.py reconcile --identity-file F   # manual / seed pass
 python3 fleet/atlas_fleet.py reconcile --max-new N         # override per-pass bound
 python3 fleet/atlas_fleet.py reconcile                     # auto source (live TaoStats subnet/identity)
+python3 fleet/atlas_fleet.py index                         # backfill/repair the search index (all active slots)
+python3 fleet/atlas_fleet.py index --netuid N              # (re)index one subnet
+python3 fleet/atlas_fleet.py index --rebuild               # purge + full re-walk
 ```
 
 `GITHUB_TOKEN` (optional) is read from the 0600 `.env`, injected per git
 invocation via `GIT_CONFIG_*` (never argv, never the clone's on-disk
 config), and registered for redaction. Absent, the fleet clones
 anonymously with a smaller per-pass budget.
+
+## Search index + MCP server (change: fleet-search)
+
+Reconcile keeps a shared `(netuid, epoch)`-scoped FTS index in step with the
+clones — a new clone / re-point fully indexes the tree, a clean fast-forward
+update indexes incrementally (a truncated range, a history-rewrite reset, or a
+record-failed advance fall back to a full walk), and discard / re-point purge in
+the slot transaction so no search ever returns a hit for a gone slot. Indexing
+is per-slot fail-closed and transactionally isolated: an index error rolls back
+only the index, never the recorded clone/update. The index reuses repotrack's
+pure `_indexable` / `_walk_tree` / `local_sha` helpers — it does not fork
+`run_index`, and it never builds, tests, or executes subnet code.
+
+`atlas_fleet_server.py` — stdio JSON-RPC, three read-only tools for Hermes:
+
+- `fleet_search(query, netuid?, max_results?)` — FTS across all subnets (or one
+  netuid), citing netuid + repository + path + indexed SHA + snippet; zero hits
+  return `no-fleet-evidence`. The query is reduced to allowlisted tokens
+  (FTS-operator-safe).
+- `fleet_file(netuid, path, start_line?, end_line?)` — bounded read from a
+  subnet's clone, served only while the slot is active, tree-clean, and its
+  indexed SHA equals the clone's live local SHA (else a staleness refusal).
+- `fleet_status(netuid?)` — fleet + index coverage (indexed / stale slot counts,
+  total indexed files); per-netuid detail with honest staleness.
+
+The store opens `mode=ro`; missing store or an unbuilt index fails closed as
+`fleet-search-unavailable`. The only write is the size-capped redacted
+`var/fleet/tool-audit.jsonl`. Register alongside `atlas-repo`:
+
+```yaml
+# hermes config.yaml (mcp servers section)
+atlas-fleet:
+  command: python3
+  args: ["/home/pi/atlas/fleet/atlas_fleet_server.py"]
+```
+
+Before it is useful the index must exist: run `python3 fleet/atlas_fleet.py
+index` once to backfill the already-cloned slots, verify coverage with
+`fleet_status`, then register the server.
 
 ## Scheduling — every 6h, independent of repotrack
 
@@ -107,8 +153,14 @@ Verify with `systemctl list-timers atlas-fleet.timer` and
 Deployed and seeded on the Pi: **104 active blobless clones** (~851 MB),
 10 unreachable (backed off), 1 invalid-url, 14 no-repo = 129 subnets. The
 reconcile pipeline is accepted on-device (blobless, push-disabled,
-token-safe, per-slot fail-closed all verified against real data). Search
-indexing / MCP / Telegram fleet alerts remain deferred to later features.
+token-safe, per-slot fail-closed all verified against real data).
+
+**fleet-search** adds the shared FTS index + the read-only `atlas-fleet` MCP
+server (see above); code landed and green off-device (124 fleet tests, repotrack
+unchanged). Operator steps on the Pi: `git pull`, run `python3
+fleet/atlas_fleet.py index` once to backfill the 104 clones, verify with
+`fleet_status`, then register `atlas-fleet` in the Hermes config. Telegram fleet
+alerts / diffing remain deferred to later features.
 
 ## Before it is self-maintaining — operator steps
 
