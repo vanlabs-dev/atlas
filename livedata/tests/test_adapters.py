@@ -49,8 +49,17 @@ class AdapterHarness(unittest.TestCase):
 
 class HappyPathTests(AdapterHarness):
     def test_every_operation_returns_the_full_envelope(self):
+        extras = {
+            "metagraph_taoswap": {"netuid": 1, "limit": 10},
+            "metagraph_taostats": {"netuid": 1, "limit": 10},
+            "portfolio_balance_taoswap": {
+                "account": "5EcUreZxeehdR5qssdtVPP7yZPemKqhbuEc5gdG9pwcSF69m"},
+            "portfolio_pnl_apy_taoswap": {
+                "account": "5EcUreZxeehdR5qssdtVPP7yZPemKqhbuEc5gdG9pwcSF69m"},
+            "subnet_identity_taostats": {"page": 1},
+        }
         for op in self.config["operations"]:
-            result = self.run_op(op)
+            result = self.run_op(op, dynamic_params=extras.get(op))
             self.assertEqual(result["status"], "ok", "%s: %s" % (op,
                              result))
             for field in ENVELOPE_FIELDS:
@@ -72,7 +81,37 @@ class HappyPathTests(AdapterHarness):
         self.assertEqual(subnet["netuid"], 1)
         self.assertEqual(subnet["conviction"]["takeover_enforced"],
                          False)
+        self.assertEqual(subnet["emission_miner_burn"], 10.5)
+        self.assertEqual(subnet["emission_miner_burn_unit"],
+                         "percent_0_100")
+        self.assertEqual(subnet["root_proportion"], 0.15)
+        self.assertEqual(subnet["moving_price_tao"], 0.0084)
         self.assertEqual(result["block_reference"], 8602000)
+        self.assertIn("0-100", result["units"])
+
+    def test_metagraph_taoswap_sorts_by_emission(self):
+        result = self.run_op("metagraph_taoswap",
+                             dynamic_params={"netuid": 1, "limit": 10})
+        neurons = result["values"]["neurons"]
+        self.assertEqual(result["values"]["netuid"], 1)
+        self.assertEqual(neurons[0]["uid"], 1)  # higher emission first
+        self.assertEqual(neurons[0]["incentive"], 0.9)
+        self.assertEqual(result["values"]["sorted_by"], "emission_desc")
+
+    def test_blocks_taoswap_head(self):
+        result = self.run_op("blocks_taoswap")
+        self.assertEqual(result["values"]["block_number"], 8602147)
+        self.assertIsNone(result["values"]["spec_version"])
+
+    def test_portfolio_balance_and_pnl(self):
+        acct = "5EcUreZxeehdR5qssdtVPP7yZPemKqhbuEc5gdG9pwcSF69m"
+        bal = self.run_op("portfolio_balance_taoswap",
+                          dynamic_params={"account": acct})
+        self.assertTrue(bal["values"]["account_known"])
+        self.assertEqual(bal["values"]["held_netuids"], [1, 93])
+        pnl = self.run_op("portfolio_pnl_apy_taoswap",
+                          dynamic_params={"account": acct})
+        self.assertIn("apy", pnl["values"])
 
     def test_chain_head_carries_enactment_flag(self):
         result = self.run_op("chain_head_taostats")

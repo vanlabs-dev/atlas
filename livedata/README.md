@@ -54,10 +54,16 @@ UNKNOWN, politeness budgets applied (never assumed unlimited).
 
 `live_price` (CoinGecko spot + TaoSwap daily close, cross-checked at 5%
 pairwise tolerance; conflicts surfaced, never averaged, never
-TaoStats), `live_subnets` (TaoSwap incl. conviction/ownership state;
-optional TaoStats protocol params), `live_metagraph` (TaoStats),
-`live_network_stats` (TaoSwap), `live_chain_head` (TaoStats — block,
-timestamp, **spec_version: ≥ 425 = conviction ownership enacted**),
+TaoStats), `live_subnets` (TaoSwap rich aggregates: emission share,
+**emission_miner_burn 0–100%**, root_proportion, moving price, excess
+TAO emission, flows, active_miners, identity/github, dereg, conviction;
+optional TaoStats protocol params), `live_burn_leaderboard` (one-shot
+TaoSwap burn ranking with filters), `live_metagraph` (**default TaoSwap
+keyless** full neurons with incentive/emission; optional
+`source=taostats`), `live_network_stats` (TaoSwap), `live_chain_head`
+(default TaoStats for `spec_version`; optional `source=taoswap` block
+head only), `live_portfolio` (TaoSwap coldkey balance + PnL/APY; ss58
+or aliases SECURE/5FART/CRUSTY from `config.wallet_aliases`),
 `live_status` (health events, quota, last successes; no provider
 calls).
 

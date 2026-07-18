@@ -62,7 +62,7 @@ class ServerTests(unittest.TestCase):
     def setUp(self):
         self.fixture.overrides.clear()
 
-    def test_handshake_and_six_tools(self):
+    def test_handshake_and_tools(self):
         payloads = call_server(self.config_path, [
             {"jsonrpc": "2.0", "id": 1, "method": "initialize",
              "params": {"protocolVersion": "2025-06-18"}},
@@ -71,8 +71,9 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payloads[1]["serverInfo"]["name"], "atlas-live")
         self.assertEqual(
             sorted(tool["name"] for tool in payloads[2]["tools"]),
-            ["live_chain_head", "live_metagraph", "live_network_stats",
-             "live_price", "live_status", "live_subnets"])
+            ["live_burn_leaderboard", "live_chain_head", "live_metagraph",
+             "live_network_stats", "live_portfolio", "live_price",
+             "live_status", "live_subnets"])
 
     def test_price_two_providers_no_taostats(self):
         before = self.fixture.count("/api/price/latest/v1")
@@ -149,8 +150,53 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payloads[1]["error"]["category"], "invalid")
         self.assertEqual(payloads[2]["error"]["category"], "invalid")
         self.assertEqual(payloads[3]["status"], "ok")
-        self.assertEqual(payloads[3]["values"]["neurons"][0]["hotkey"],
-                         "5A" + "e" * 46)
+        # TaoSwap default: sorted by emission desc → uid 1 first
+        self.assertEqual(payloads[3]["values"]["neurons"][0]["uid"], 1)
+        self.assertEqual(payloads[3]["values"]["neurons"][0]["incentive"],
+                         0.9)
+        self.assertEqual(payloads[3]["operation"], "metagraph_taoswap")
+
+    def test_portfolio_tool(self):
+        acct = "5EcUreZxeehdR5qssdtVPP7yZPemKqhbuEc5gdG9pwcSF69m"
+        # inject aliases into written config
+        self.config["wallet_aliases"] = {
+            "SECURE": {"ss58": acct, "role": "primary", "ledger": True},
+        }
+        path = write_config(self.tmp.name, self.config)
+        payloads = call_server(path, [
+            tool_call(1, "live_portfolio", {"account": "bad"}),
+            tool_call(2, "live_portfolio",
+                      {"account": acct, "kind": "both"}),
+            tool_call(3, "live_portfolio",
+                      {"account": "SECURE", "kind": "balance"}),
+        ])
+        self.assertEqual(payloads[1]["error"]["category"], "invalid")
+        self.assertEqual(payloads[2]["status"], "ok")
+        self.assertTrue(payloads[2]["balance"]["values"]["account_known"])
+        self.assertIn("apy", payloads[2]["pnl_apy"]["values"])
+        self.assertEqual(payloads[3]["status"], "ok")
+        self.assertEqual(payloads[3].get("alias"), "SECURE")
+
+    def test_burn_leaderboard(self):
+        payloads = call_server(self.config_path, [
+            tool_call(1, "live_burn_leaderboard",
+                      {"limit": 5, "min_burn": 1}),
+        ])
+        result = payloads[1]
+        self.assertEqual(result["status"], "ok")
+        board = result["values"]["leaderboard"]
+        self.assertTrue(board)
+        self.assertGreaterEqual(board[0]["emission_miner_burn"], 1)
+        self.assertIn("zero_burn_high_emission", result["values"])
+
+    def test_subnets_exposes_miner_burn(self):
+        payloads = call_server(self.config_path, [
+            tool_call(1, "live_subnets", {"netuid": 1}),
+        ])
+        subnet = payloads[1]["values"]["subnets"][0]
+        self.assertEqual(subnet["emission_miner_burn"], 10.5)
+        self.assertEqual(subnet["emission_miner_burn_unit"],
+                         "percent_0_100")
 
     def test_chain_head_enactment_watch(self):
         payloads = call_server(self.config_path,

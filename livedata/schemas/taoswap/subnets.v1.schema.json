@@ -1,5 +1,5 @@
 {
-  "_source": "TaoSwap /v2/subnets/ report 20260712T013740Z-f50d283e + full-item key sample 2026-07-12; subnet identifier is `id` (not netuid); root row may carry nulls — only `id` is required per item",
+  "_source": "TaoSwap /v2/subnets/ report 20260712T013740Z-f50d283e + full-item key sample 2026-07-12; widened 2026-07-15 for emission_miner_burn and related emission diagnostics. Subnet id is `id` (not netuid); root row may carry nulls — only `id` is required per item. Extras tolerated.",
   "type": "object",
   "required": ["results"],
   "properties": {
@@ -14,8 +14,29 @@
           "name": {"type": ["string", "null"]},
           "symbol": {"type": ["string", "null"]},
           "price": {"type": ["number", "null"]},
+          "moving_price": {"type": ["number", "null"]},
           "alpha_stake": {"type": ["number", "null"]},
           "emission_percent": {"type": ["number", "null"]},
+          "emission_ema_percent": {"type": ["number", "null"]},
+          "emission_miner_burn": {"type": ["number", "null"]},
+          "emission_value": {"type": ["number", "null"]},
+          "emission_is_enabled": {"type": ["boolean", "null"]},
+          "excess_tao_emission": {"type": ["number", "null"]},
+          "excess_tao_emission_percent": {"type": ["number", "null"]},
+          "tao_in_emission": {"type": ["number", "null"]},
+          "alpha_in_emission": {"type": ["number", "null"]},
+          "root_proportion": {"type": ["number", "null"]},
+          "active_miners": {"type": ["integer", "null"]},
+          "inflow": {"type": ["number", "null"]},
+          "outflow": {"type": ["number", "null"]},
+          "root_in_pool": {"type": ["number", "null"]},
+          "alpha_in_pool": {"type": ["number", "null"]},
+          "registration_cost": {"type": ["number", "null"]},
+          "tempo": {"type": ["integer", "null"]},
+          "blocks_since_epoch": {"type": ["integer", "null"]},
+          "owner": {"type": ["string", "null"]},
+          "identity": {"type": ["object", "null"]},
+          "dereg": {"type": ["object", "null"]},
           "conviction": {"type": ["object", "null"]}
         }
       }

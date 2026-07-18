@@ -1,0 +1,42 @@
+{
+  "_source": "TaoSwap /metagraph/{id}/ live probe 2026-07-15; subnet summary + neurons array. Only structural required fields pinned.",
+  "type": "object",
+  "required": ["subnet", "neurons"],
+  "properties": {
+    "subnet": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {"type": "integer"},
+        "name": {"type": ["string", "null"]},
+        "symbol": {"type": ["string", "null"]},
+        "price": {"type": ["number", "null"]},
+        "emission_value": {"type": ["number", "null"]},
+        "registration_cost": {"type": ["number", "null"]},
+        "blocks_since_epoch": {"type": ["integer", "null"]},
+        "tempo": {"type": ["integer", "null"]}
+      }
+    },
+    "count": {"type": ["integer", "null"]},
+    "neurons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["uid"],
+        "properties": {
+          "uid": {"type": "integer"},
+          "hotkey": {"type": ["string", "null"]},
+          "coldkey": {"type": ["string", "null"]},
+          "stake": {"type": ["number", "null"]},
+          "incentive": {"type": ["number", "null"]},
+          "emission": {"type": ["number", "null"]},
+          "emission_tao": {"type": ["number", "null"]},
+          "dividends": {"type": ["number", "null"]},
+          "vtrust": {"type": ["number", "null"]},
+          "is_validator": {"type": ["boolean", "null"]},
+          "is_owner": {"type": ["boolean", "null"]}
+        }
+      }
+    }
+  }
+}
