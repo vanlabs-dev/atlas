@@ -25,9 +25,24 @@ priority — a live chain upgrade surfaces before repo alerts in the same scan:
 | Class | Source | Trigger |
 |---|---|---|
 | `chain-runtime-upgrade` | `var/livedata/livedata.db` (`spec_upgrades`) | the **live** Finney runtime `spec_version` changed (the network changed) |
+| `fleet-signal` | `var/fleet/fleet.db` (`signal_events`, read **strictly read-only**) | fleet-signals queue (change: fleet-signals): `narrative-cluster` / `watchlist` / `econ-code` page immediately; `signal-digest` rows are held durably in `pending_signal`, ride the next instant fleet alert, or flush via `digest_backstop_hours` — never paged, never dropped |
 | `repository-update` | `var/repotrack/repotrack.db` (`change_ranges`) | a **significant** tracked commit range (Phase 3 timer); churn is digested, not paged |
 | `schema-drift` | `var/livedata/livedata.db` (`integration_health`) | a live provider response stopped validating (Phase 4) |
 | `knowledge-ingestion` | `var/knowledge/knowledge.db` (`intake_runs`) | a new ingest run staged units for review (Phase 2) |
+
+**Fleet signal alerts** carry the term/subnet facts as single-fact `·`
+lines (cluster: members, first mover with date and `code` SHA, adoption
+window, fleet prevalence; watchlist: term, source file, commit; econ-code:
+range SHAs, commit count, matched files) plus one entry-price line (alpha
+in TAO) when the fleet's price snapshot is already recorded — a pending
+snapshot omits the line and never delays delivery. Terms and paths
+originate in untrusted subnet repos: escaped, length-bounded, data only.
+The delivery watermark lives in this module's ledger (never in the fleet
+store); ledger dedup keys are the fleet's own per-class dedup keys
+(cluster: term+episode; watchlist: term+netuid+epoch; econ: range id), so
+even a watermark reset cannot double-send. Extraction runs in the fleet
+unit and this scan runs in the repo unit — delivery may lag extraction by
+up to one cycle by design.
 
 **Repository alert tiering** (signal-tiering, 2026-07-13). Each tracked commit
 range is classified from recorded facts (changed paths + the recorded runtime

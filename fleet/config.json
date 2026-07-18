@@ -11,5 +11,19 @@
   "index": {
     "extensions": [".rs", ".toml", ".md", ".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".sol", ".move", ".vy", ".java", ".rb", ".c", ".h", ".cpp", ".hpp", ".sh", ".yml", ".yaml", ".json", ".txt", ".cfg", ".ini", ".proto"],
     "max_file_bytes": 524288
+  },
+  "signals": {
+    "_comment": "fleet-signals policy (change: fleet-signals). Omitted keys fall back to code defaults in atlas_fleet_signals.DEFAULT_SIGNALS_CFG. `watchlist` is the operator-curated instant-alert term list: plain entries match as substrings of normalized terms, `re:` entries as case-insensitive regex (an invalid pattern is skipped and surfaced in `signals status`, never a crash) — EDIT THIS LIST to taste. `cluster` (k adopters within window_days) and `novelty_max_adopters` are strawmen: run `backfill` then `calibrate` on-device and set them from the evidence. `econ_cooldown_hours` dampens paging (never recording) for busy subnets. `outcome_horizons_days` drive the effectiveness ledger; price retention never drops below the longest horizon + 7d.",
+    "model_ids": true,
+    "range_caps": {"max_files": 200, "max_commits": 100},
+    "term_max_length": 120,
+    "max_terms_per_range": 200,
+    "novelty_max_adopters": 10,
+    "cluster": {"k": 3, "window_days": 14},
+    "watchlist": ["re:^vllm", "re:^sglang", "re:^verl$", "re:^trl$", "re:^lmdeploy", "re:^tensorrt", "chutes", "targon"],
+    "econ_paths": ["reward", "incentive", "scoring", "emission", "set_weights", "mechanism"],
+    "econ_cooldown_hours": 24,
+    "outcome_horizons_days": [1, 7, 30],
+    "price_retention_days": 120
   }
 }
