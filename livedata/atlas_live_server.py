@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 """Atlas live-data MCP server — fail-closed current Bittensor data.
 
-Six READ-ONLY named tools over the approved provider contracts
-(ATLAS-TOOL-002/003/004, ATLAS-LIVE-001…008; gates of 2026-07-12):
+Tools (ATLAS-TOOL-002/003/004, ATLAS-LIVE-001…008; gates of 2026-07-12,
+widened 2026-07-15 for rich TaoSwap surfaces):
 
 - live_price          — TAO/USD: CoinGecko spot + TaoSwap daily close,
                         cross-checked (5% tolerance); NEVER TaoStats (Q30)
-- live_subnets        — TaoSwap subnet aggregates (+conviction state);
-                        optional TaoStats protocol params per netuid
-- live_metagraph      — TaoStats per-subnet neuron detail (quota-budgeted)
+- live_subnets        — TaoSwap subnet aggregates incl. emission_miner_burn
+                        (0-100%), root_proportion, moving price, excess TAO,
+                        flows, conviction/ownership; optional TaoStats
+                        protocol params per netuid
+- live_metagraph      — DEFAULT TaoSwap keyless metagraph (incentive /
+                        emission / stake per neuron); optional source=taostats
 - live_network_stats  — TaoSwap network snapshot
-- live_chain_head     — TaoStats chain head incl. spec_version (the
-                        conviction enactment watch)
-- live_status         — integration health, per-provider quota
-                        (local estimate vs provider-reported), last calls
+- live_chain_head     — TaoStats chain head incl. spec_version (conviction
+                        enactment watch). Optional source=taoswap for block
+                        head only (no spec_version).
+- live_portfolio      — TaoSwap portfolio balance + PnL/APY for a coldkey (ss58 or aliases SECURE/5FART/CRUSTY)
+- live_burn_leaderboard — TaoSwap miner-incentive burn ranking (0-100%)
+- live_status         — integration health, per-provider quota, last calls
 
 Every success carries the full ATLAS-LIVE-003 metadata envelope; every
 failure is a structured `live-unavailable` — a cached value is returned
@@ -41,7 +46,7 @@ sys.path.insert(0, _MODULE_DIR)
 import atlas_live as al  # noqa: E402
 
 SERVER_NAME = "atlas-live"
-SERVER_VERSION = "0.1.0"
+SERVER_VERSION = "0.2.1"
 PROTOCOL_VERSION = "2025-06-18"
 SUPPORTED_PROTOCOL_VERSIONS = ("2024-11-05", "2025-03-26", "2025-06-18")
 
@@ -75,11 +80,14 @@ TOOLS: List[Dict[str, Any]] = [
     {
         "name": "live_subnets",
         "description": (
-            "CURRENT Bittensor subnet state (TaoSwap): alpha price, "
-            "stake, emission share, and conviction/ownership status "
-            "(contested, takeover eligibility) per subnet. Optional "
-            "netuid filter; set include_protocol_params for on-chain "
-            "parameters (TaoStats, quota-budgeted)."),
+            "CURRENT Bittensor subnet state (TaoSwap, keyless): alpha "
+            "price + moving_price, stake/pools, emission_percent, "
+            "emission_miner_burn (0-100 percent of miner incentive "
+            "withheld), emission_ema_percent, excess_tao_emission*, "
+            "root_proportion, flows, active_miners, identity/github, "
+            "dereg risk, and conviction/ownership status. Optional "
+            "netuid filter; set include_protocol_params for TaoStats "
+            "on-chain params (quota-budgeted)."),
         "inputSchema": {
             "type": "object",
             "properties": dict(_LAST_KNOWN, **{
@@ -92,15 +100,20 @@ TOOLS: List[Dict[str, Any]] = [
     {
         "name": "live_metagraph",
         "description": (
-            "CURRENT neuron/validator detail for one subnet (TaoStats, "
-            "quota-budgeted): hotkeys, coldkeys, stake, rewards, "
-            "owner/immunity flags. Requires netuid."),
+            "CURRENT neuron detail for one subnet. DEFAULT source is "
+            "TaoSwap (keyless): hotkeys, coldkeys, stake, incentive, "
+            "emission, dividends, vtrust, daily rewards, validator/owner "
+            "flags — sorted by emission desc. Optional source=taostats "
+            "(quota-budgeted, thinner fields). Requires netuid."),
         "inputSchema": {
             "type": "object",
             "properties": dict(_LAST_KNOWN, **{
                 "netuid": {"type": "integer", "minimum": 0},
                 "limit": {"type": "integer", "minimum": 1,
-                          "maximum": 25},
+                          "maximum": 64},
+                "source": {"type": "string",
+                           "enum": ["taoswap", "taostats"],
+                           "description": "default taoswap (keyless)"},
             }),
             "required": ["netuid"],
             "additionalProperties": False,
@@ -118,13 +131,76 @@ TOOLS: List[Dict[str, Any]] = [
     {
         "name": "live_chain_head",
         "description": (
-            "CURRENT chain head (TaoStats, quota-budgeted): block "
-            "number, timestamp, and runtime spec_version — "
-            "spec_version >= 425 means conviction-based subnet "
-            "ownership is enacted (as of 2026-07-12 it is NOT: "
-            "spec 424)."),
-        "inputSchema": {"type": "object", "properties": dict(_LAST_KNOWN),
-                        "additionalProperties": False},
+            "CURRENT chain head. DEFAULT source=taostats (quota-budgeted): "
+            "block number, timestamp, and runtime spec_version — "
+            "spec_version >= 425 means conviction-based subnet ownership "
+            "is enacted. source=taoswap is keyless block metadata only "
+            "(no spec_version)."),
+        "inputSchema": {
+            "type": "object",
+            "properties": dict(_LAST_KNOWN, **{
+                "source": {"type": "string",
+                           "enum": ["taostats", "taoswap"],
+                           "description": "default taostats (has "
+                                          "spec_version)"},
+            }),
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "live_portfolio",
+        "description": (
+            "CURRENT coldkey portfolio from TaoSwap (keyless): balance "
+            "history snapshot (rank, value_change, held_netuids, per-subnet "
+            "holdings) and/or PnL+APY. account may be an ss58 coldkey OR a "
+            "configured alias (SECURE, 5FART, CRUSTY). kind="
+            "balance|pnl|both (default both). Public addresses only."),
+        "inputSchema": {
+            "type": "object",
+            "properties": dict(_LAST_KNOWN, **{
+                "account": {
+                    "type": "string",
+                    "description": "ss58 coldkey OR wallet alias "
+                                   "(SECURE / 5FART / CRUSTY)",
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": ["balance", "pnl", "both"],
+                    "description": "default both",
+                },
+            }),
+            "required": ["account"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "live_burn_leaderboard",
+        "description": (
+            "CURRENT miner-incentive burn ranking from one TaoSwap "
+            "/v2/subnets/ call (keyless). emission_miner_burn is 0-100 "
+            "percent. Useful filters: min_burn, max_burn, only_enabled, "
+            "exclude_full_burn (drop 100% burn parked subnets), limit "
+            "(default 25). Also returns top zero-burn high-emission "
+            "subnets for contrast."),
+        "inputSchema": {
+            "type": "object",
+            "properties": dict(_LAST_KNOWN, **{
+                "limit": {"type": "integer", "minimum": 1,
+                          "maximum": 128},
+                "min_burn": {"type": "number", "minimum": 0,
+                             "maximum": 100},
+                "max_burn": {"type": "number", "minimum": 0,
+                             "maximum": 100},
+                "only_enabled": {"type": "boolean",
+                                 "description": "only emission_is_enabled "
+                                                "subnets"},
+                "exclude_full_burn": {
+                    "type": "boolean",
+                    "description": "drop subnets with burn == 100 "
+                                   "(default false)"},
+            }),
+            "additionalProperties": False,
+        },
     },
     {
         "name": "live_status",
@@ -263,20 +339,74 @@ class LiveTools:
             result["protocol_params"] = params
         return result
 
-    def metagraph(self, netuid, limit,
+    def metagraph(self, netuid, limit, source,
                   include_last_known) -> Dict[str, Any]:
-        return self._run("metagraph_taostats",
+        source = (source or "taoswap").lower()
+        if source == "taostats":
+            # TaoStats path keeps historical limit max 25
+            if limit is not None:
+                limit = max(1, min(int(limit), 25))
+            return self._run("metagraph_taostats",
+                             dynamic_params={"netuid": netuid,
+                                             "limit": limit or 10},
+                             include_last_known=include_last_known)
+        # TaoSwap keyless default
+        if limit is not None:
+            limit = max(1, min(int(limit), 64))
+        return self._run("metagraph_taoswap",
                          dynamic_params={"netuid": netuid,
-                                         "limit": limit or 10},
+                                         "limit": limit or 25},
                          include_last_known=include_last_known)
 
     def network_stats(self, include_last_known) -> Dict[str, Any]:
         return self._run("network_stats_taoswap",
                          include_last_known=include_last_known)
 
-    def chain_head(self, include_last_known) -> Dict[str, Any]:
+    def chain_head(self, source, include_last_known) -> Dict[str, Any]:
+        source = (source or "taostats").lower()
+        if source == "taoswap":
+            return self._run("blocks_taoswap",
+                             include_last_known=include_last_known)
         return self._run("chain_head_taostats",
                          include_last_known=include_last_known)
+
+    def portfolio(self, account: str, kind: str,
+                  include_last_known: bool) -> Dict[str, Any]:
+        kind = (kind or "both").lower()
+        out: Dict[str, Any] = {
+            "status": "ok",
+            "account": account,
+            "provider": "taoswap",
+            "kind": kind,
+            "note": "Public coldkey portfolio via TaoSwap (keyless). "
+                    "Some amount fields may be in rao (1e9 rao = 1 TAO).",
+        }
+        failed = []
+        if kind in ("balance", "both"):
+            bal = self._run("portfolio_balance_taoswap",
+                            dynamic_params={"account": account},
+                            include_last_known=include_last_known)
+            out["balance"] = bal
+            if bal.get("status") != "ok":
+                failed.append("balance")
+        if kind in ("pnl", "both"):
+            pnl = self._run("portfolio_pnl_apy_taoswap",
+                            dynamic_params={"account": account},
+                            include_last_known=include_last_known)
+            out["pnl_apy"] = pnl
+            if pnl.get("status") != "ok":
+                failed.append("pnl")
+        if failed and (
+                (kind == "balance" and "balance" in failed)
+                or (kind == "pnl" and "pnl" in failed)
+                or (kind == "both" and len(failed) == 2)):
+            out["status"] = "live-unavailable"
+            out["message"] = "portfolio provider call(s) failed: %s" % (
+                ", ".join(failed))
+        elif failed:
+            out["partial"] = True
+            out["failed_parts"] = failed
+        return out
 
     def status(self) -> Dict[str, Any]:
         config, connection, ledger = self._context()
@@ -309,6 +439,104 @@ class LiveTools:
             connection.close()
 
 
+
+    def burn_leaderboard(self, limit, min_burn, max_burn, only_enabled,
+                         exclude_full_burn,
+                         include_last_known) -> Dict[str, Any]:
+        result = self._run("subnets_taoswap",
+                           include_last_known=include_last_known)
+        if result.get("status") != "ok":
+            return result
+        limit = max(1, min(int(limit or 25), 128))
+        min_burn = 0.0 if min_burn is None else float(min_burn)
+        max_burn = 100.0 if max_burn is None else float(max_burn)
+        rows = []
+        zero_burn_high = []
+        for subnet in result["values"].get("subnets") or []:
+            burn = subnet.get("emission_miner_burn")
+            if burn is None:
+                continue
+            try:
+                burn_f = float(burn)
+            except (TypeError, ValueError):
+                continue
+            em = subnet.get("emission_percent")
+            try:
+                em_f = float(em) if em is not None else 0.0
+            except (TypeError, ValueError):
+                em_f = 0.0
+            entry = {
+                "netuid": subnet.get("netuid"),
+                "name": subnet.get("name"),
+                "emission_miner_burn": burn_f,
+                "emission_percent": em_f,
+                "emission_is_enabled": subnet.get("emission_is_enabled"),
+                "active_miners": subnet.get("active_miners"),
+                "root_proportion": subnet.get("root_proportion"),
+                "moving_price_tao": subnet.get("moving_price_tao"),
+                "alpha_price_tao": subnet.get("alpha_price_tao"),
+            }
+            if burn_f == 0 and em_f > 1.0:
+                zero_burn_high.append(entry)
+            if only_enabled and not subnet.get("emission_is_enabled"):
+                continue
+            if exclude_full_burn and burn_f >= 100.0:
+                continue
+            if not (min_burn <= burn_f <= max_burn):
+                continue
+            rows.append(entry)
+        rows.sort(key=lambda r: (-r["emission_miner_burn"],
+                                 -r["emission_percent"]))
+        zero_burn_high.sort(key=lambda r: -r["emission_percent"])
+        return {
+            "status": "ok",
+            "provider": result.get("provider"),
+            "operation": "burn_leaderboard_from_subnets_taoswap",
+            "request_completed": result.get("request_completed"),
+            "block_reference": result.get("block_reference"),
+            "units": "emission_miner_burn and emission_percent are 0-100",
+            "validation_status": result.get("validation_status"),
+            "freshness_status": result.get("freshness_status"),
+            "values": {
+                "leaderboard": rows[:limit],
+                "count": min(len(rows), limit),
+                "matched": len(rows),
+                "filters": {
+                    "limit": limit,
+                    "min_burn": min_burn,
+                    "max_burn": max_burn,
+                    "only_enabled": bool(only_enabled),
+                    "exclude_full_burn": bool(exclude_full_burn),
+                },
+                "zero_burn_high_emission": zero_burn_high[:10],
+                "note": "Burn is miner incentive withheld (owner/immune "
+                        "hotkey), not chain buys. 100% burn usually kills "
+                        "network emission share via (1 - miner_burn).",
+            },
+        }
+
+    def resolve_account(self, account_or_alias: str) -> Dict[str, Any]:
+        """Resolve wallet alias from config.wallet_aliases or pass ss58."""
+        raw = (account_or_alias or "").strip()
+        config = al.load_config(self.config_path)
+        aliases = config.get("wallet_aliases") or {}
+        # allow case-insensitive alias match, skip underscore keys
+        alias_map = {k.upper(): v for k, v in aliases.items()
+                     if not str(k).startswith("_") and isinstance(v, dict)}
+        hit = alias_map.get(raw.upper())
+        if hit and hit.get("ss58"):
+            return {
+                "account": hit["ss58"],
+                "alias": raw.upper() if raw.upper() in alias_map
+                else next(k for k, v in aliases.items()
+                          if isinstance(v, dict)
+                          and v.get("ss58") == hit["ss58"]),
+                "role": hit.get("role"),
+                "ledger": hit.get("ledger"),
+            }
+        return {"account": raw, "alias": None}
+
+
 class AuditLog:
     """Append-only, size-capped, redacted call log (ATLAS-TOOL-004)."""
 
@@ -334,6 +562,17 @@ class AuditLog:
             pass  # auditing must never break the tool path
 
 
+def _valid_ss58(account: str) -> bool:
+    if not isinstance(account, str):
+        return False
+    # Substrate ss58 is base58; Bittensor addresses commonly start with 5
+    # and are 47–48 chars. Keep this a light structural check only.
+    if not (40 <= len(account) <= 50):
+        return False
+    alphabet = set("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
+    return all(ch in alphabet for ch in account)
+
+
 def handle_tool_call(tools: LiveTools, audit: AuditLog, name: str,
                      arguments: Dict[str, Any]) -> Dict[str, Any]:
     include_last_known = bool(arguments.get("include_last_known"))
@@ -355,21 +594,71 @@ def handle_tool_call(tools: LiveTools, audit: AuditLog, name: str,
         elif name == "live_metagraph":
             netuid = arguments.get("netuid")
             limit = arguments.get("limit")
+            source = arguments.get("source") or "taoswap"
             if not isinstance(netuid, int) or isinstance(netuid, bool) \
                     or netuid < 0:
                 payload = structured_error(
                     "invalid", "netuid must be a non-negative integer",
                     retry_safe=False)
+            elif source not in ("taoswap", "taostats"):
+                payload = structured_error(
+                    "invalid", "source must be 'taoswap' or 'taostats'",
+                    retry_safe=False)
             else:
                 if not isinstance(limit, int) or isinstance(limit, bool) \
-                        or not 1 <= limit <= 25:
+                        or not 1 <= limit <= 64:
                     limit = None
-                payload = tools.metagraph(netuid, limit,
+                payload = tools.metagraph(netuid, limit, source,
                                           include_last_known)
         elif name == "live_network_stats":
             payload = tools.network_stats(include_last_known)
         elif name == "live_chain_head":
-            payload = tools.chain_head(include_last_known)
+            source = arguments.get("source") or "taostats"
+            if source not in ("taostats", "taoswap"):
+                payload = structured_error(
+                    "invalid", "source must be 'taostats' or 'taoswap'",
+                    retry_safe=False)
+            else:
+                payload = tools.chain_head(source, include_last_known)
+        elif name == "live_portfolio":
+            account_raw = arguments.get("account")
+            kind = arguments.get("kind") or "both"
+            resolved = tools.resolve_account(str(account_raw or ""))
+            account = resolved["account"]
+            if not _valid_ss58(account or ""):
+                payload = structured_error(
+                    "invalid",
+                    "account must be an ss58 coldkey or known alias "
+                    "(SECURE, 5FART, CRUSTY)",
+                    retry_safe=False)
+            elif kind not in ("balance", "pnl", "both"):
+                payload = structured_error(
+                    "invalid", "kind must be balance|pnl|both",
+                    retry_safe=False)
+            else:
+                payload = tools.portfolio(str(account), kind,
+                                          include_last_known)
+                if isinstance(payload, dict) and resolved.get("alias"):
+                    payload["alias"] = resolved["alias"]
+                    payload["alias_role"] = resolved.get("role")
+                    payload["alias_ledger"] = resolved.get("ledger")
+        elif name == "live_burn_leaderboard":
+            limit = arguments.get("limit")
+            min_burn = arguments.get("min_burn")
+            max_burn = arguments.get("max_burn")
+            only_enabled = bool(arguments.get("only_enabled"))
+            exclude_full = bool(arguments.get("exclude_full_burn"))
+            if limit is not None and (
+                    not isinstance(limit, int)
+                    or isinstance(limit, bool)
+                    or not 1 <= limit <= 128):
+                payload = structured_error(
+                    "invalid", "limit must be integer 1..128",
+                    retry_safe=False)
+            else:
+                payload = tools.burn_leaderboard(
+                    limit, min_burn, max_burn, only_enabled,
+                    exclude_full, include_last_known)
         elif name == "live_status":
             payload = tools.status()
         else:

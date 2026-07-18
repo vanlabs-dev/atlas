@@ -457,6 +457,30 @@ class FourHeadsTests(unittest.TestCase):
         self.assertIn("live chain spec unavailable", events[0]["text"])
         self.assertIn("repository event only", events[0]["text"])
 
+    def test_read_live_spec_resolves_relative_path_from_any_cwd(self):
+        """systemd oneshot has no WorkingDirectory; config uses repo-relative
+        live_db. Relative open must still hit var/livedata, not $HOME/var."""
+        rel = "var/livedata/livedata.db"
+        # Nested layout mirrors production var/livedata/livedata.db under tmp.
+        prod_layout = os.path.join(self.tmp.name, "var", "livedata")
+        os.makedirs(prod_layout, exist_ok=True)
+        prod_db = os.path.join(prod_layout, "livedata.db")
+        seed_livedata(prod_db, live_spec=431)
+        old_root = tg._REPO_ROOT
+        old_cwd = os.getcwd()
+        try:
+            tg._REPO_ROOT = self.tmp.name
+            os.chdir("/tmp")  # not the atlas tree; relative open would fail
+            live = tg.read_live_spec(rel)
+            self.assertIsNotNone(live)
+            assert live is not None  # narrow for type checkers
+            self.assertEqual(live["spec_version"], 431)
+            self.assertIn("live Finney spec 431",
+                          tg._both_clocks_line(432, live))
+        finally:
+            tg._REPO_ROOT = old_root
+            os.chdir(old_cwd)
+
     def test_churn_survives_scans_and_clears_only_on_delivery(self):
         posts = []
         summary = tg.notify_scan(self.config, "tok12345", "42", self.store,

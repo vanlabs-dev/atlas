@@ -45,6 +45,24 @@
     "jitter_seconds": [0.5, 2.0]
   },
   "price_tolerance_pairwise": 0.05,
+  "wallet_aliases": {
+    "_comment": "Operator public coldkeys only (no seeds/keys). Aliases resolve for live_portfolio account=.",
+    "SECURE": {
+      "ss58": "5EcUreZxeehdR5qssdtVPP7yZPemKqhbuEc5gdG9pwcSF69m",
+      "role": "primary subnet investments + TAO",
+      "ledger": true
+    },
+    "5FART": {
+      "ss58": "5FartJgfyxgxymn72BRDgA4yRo3C43RtLQd6LJqLxjChCdu6",
+      "role": "subnet miners (Bitcast + planned)",
+      "ledger": true
+    },
+    "CRUSTY": {
+      "ss58": "5Fmw8rgoRBquGBy4q3d27SxPFVJEEHXUHWek8UrwAbqXY3pt",
+      "role": "open non-Ledger wallet for agent management",
+      "ledger": false
+    }
+  },
   "operations": {
     "price_spot_coingecko": {
       "provider": "coingecko",
@@ -69,10 +87,12 @@
       "provider": "taoswap",
       "path": "/v2/subnets/",
       "params": {},
+      "client_params": ["netuid"],
       "schema": "taoswap/subnets.v1",
       "envelope": {"must_hit_provider": true,
                    "max_upstream_age_s": 3600, "max_local_age_s": 60,
-                   "expected_cadence": "near-live aggregates"}
+                   "expected_cadence": "near-live aggregates"},
+      "_note": "Post-processor surfaces emission_miner_burn (0-100 percent), root_proportion, moving_price, excess_tao_*, etc. client_params.netuid is a local filter only."
     },
     "validators_taoswap": {
       "provider": "taoswap",
@@ -91,6 +111,47 @@
       "envelope": {"must_hit_provider": true,
                    "max_upstream_age_s": 172800, "max_local_age_s": 60,
                    "expected_cadence": "daily snapshot"}
+    },
+    "metagraph_taoswap": {
+      "provider": "taoswap",
+      "path": "/metagraph/{netuid}/",
+      "params": {},
+      "client_params": ["limit"],
+      "schema": "taoswap/metagraph.v1",
+      "envelope": {"must_hit_provider": true,
+                   "max_upstream_age_s": 3600, "max_local_age_s": 60,
+                   "expected_cadence": "per-epoch"},
+      "_note": "Keyless full-subnet metagraph. client_params.limit caps pruned neurons (default 25, max 64)."
+    },
+    "blocks_taoswap": {
+      "provider": "taoswap",
+      "path": "/blocks/",
+      "params": {"page_size": 1},
+      "schema": "taoswap/blocks.v1",
+      "envelope": {"must_hit_provider": true,
+                   "max_upstream_age_s": 120, "max_local_age_s": 60,
+                   "expected_cadence": "~12s block cadence"},
+      "_note": "Chain head without runtime spec_version — use chain_head_taostats when spec is needed."
+    },
+    "portfolio_balance_taoswap": {
+      "provider": "taoswap",
+      "path": "/portfolio-balance/",
+      "params": {},
+      "schema": "taoswap/portfolio-balance.v1",
+      "envelope": {"must_hit_provider": true,
+                   "max_upstream_age_s": 172800, "max_local_age_s": 60,
+                   "expected_cadence": "daily portfolio snapshot"},
+      "_note": "Requires dynamic_params.account (ss58 coldkey)."
+    },
+    "portfolio_pnl_apy_taoswap": {
+      "provider": "taoswap",
+      "path": "/portfolio-pnl-apy/",
+      "params": {},
+      "schema": "taoswap/portfolio-pnl-apy.v1",
+      "envelope": {"must_hit_provider": true,
+                   "max_upstream_age_s": 172800, "max_local_age_s": 60,
+                   "expected_cadence": "daily portfolio snapshot"},
+      "_note": "Requires dynamic_params.account (ss58 coldkey)."
     },
     "subnets_taostats": {
       "provider": "taostats",

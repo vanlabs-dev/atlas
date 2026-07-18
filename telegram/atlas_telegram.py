@@ -204,9 +204,10 @@ def run_id() -> str:
             + "-" + secretsmod.token_hex(4))
 
 
-def resolve(path: str, repo_root: str = _REPO_ROOT) -> str:
+def resolve(path: str, repo_root: Optional[str] = None) -> str:
     path = os.path.expanduser(path)
-    return path if os.path.isabs(path) else os.path.join(repo_root, path)
+    root = _REPO_ROOT if repo_root is None else repo_root
+    return path if os.path.isabs(path) else os.path.join(root, path)
 
 
 # ---------------------------------------------------------------------------
@@ -590,10 +591,16 @@ def _resolve_repo_watermark(conn: sqlite3.Connection,
 
 def read_live_spec(live_db: Optional[str]) -> Optional[Dict[str, Any]]:
     """Last-seen live runtime spec_version from livedata's store,
-    read-only. None when unavailable — the caller degrades honestly."""
+    read-only. None when unavailable — the caller degrades honestly.
+
+    Paths are resolved against the Atlas repo root (same as source_db).
+    Config stores relative paths like ``var/livedata/livedata.db``; the
+    hourly systemd unit has no WorkingDirectory, so opening the relative
+    path from cwd would miss the store and always report live unavailable.
+    """
     if not live_db:
         return None
-    conn = open_source_ro(live_db)
+    conn = open_source_ro(resolve(live_db))
     if conn is None:
         return None
     try:

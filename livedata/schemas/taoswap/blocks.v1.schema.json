@@ -1,0 +1,9 @@
+{
+  "_source": "TaoSwap /blocks/ discovery 20260712T013740Z-f50d283e; results is a map keyed by block id. No spec_version on this provider.",
+  "type": "object",
+  "required": ["results"],
+  "properties": {
+    "results": {"type": "object"},
+    "pagination": {"type": ["object", "null"]}
+  }
+}

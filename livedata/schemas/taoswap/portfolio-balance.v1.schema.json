@@ -1,0 +1,14 @@
+{
+  "_source": "TaoSwap /portfolio-balance/?account= live probe 2026-07-15",
+  "type": "object",
+  "required": ["account_known"],
+  "properties": {
+    "account_known": {"type": "boolean"},
+    "coldkey_swap": {"type": ["object", "null"]},
+    "rank": {"type": ["object", "null"]},
+    "value_change": {"type": ["object", "null"]},
+    "subnet_value_change": {"type": ["object", "null"]},
+    "held_netuids": {"type": ["array", "null"]},
+    "results": {"type": ["array", "object", "null"]}
+  }
+}

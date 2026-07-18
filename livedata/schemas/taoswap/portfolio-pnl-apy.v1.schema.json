@@ -1,0 +1,11 @@
+{
+  "_source": "TaoSwap /portfolio-pnl-apy/?account= live probe 2026-07-15",
+  "type": "object",
+  "required": ["account_known"],
+  "properties": {
+    "account_known": {"type": "boolean"},
+    "as_of": {"type": ["string", "null"]},
+    "apy": {"type": ["object", "null"]},
+    "pnl": {"type": ["object", "null"]}
+  }
+}

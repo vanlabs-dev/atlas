@@ -28,6 +28,7 @@ import datetime
 import json
 import os
 import random
+import re
 import sqlite3
 import sys
 import time
@@ -658,6 +659,55 @@ def _pp_price_daily_taoswap(payload, params):
             "block_reference": None}
 
 
+_CONVICTION_KEYS = (
+    "king_is_owner", "is_contested", "takeover_eligible",
+    "takeover_enforced", "gate_ceiling_pct", "total_locked_pct_supply",
+    "holder_count", "owner_conviction_pct", "age_days",
+    "takeover_age_ok", "owner_emission_share", "as_of_block",
+    "king", "total_locked",
+)
+
+_SUBNET_SCALAR_KEYS = (
+    # prices / stake / pools
+    ("alpha_price_tao", "price"),
+    ("moving_price_tao", "moving_price"),
+    ("alpha_stake", "alpha_stake"),
+    ("root_in_pool", "root_in_pool"),
+    ("alpha_in_pool", "alpha_in_pool"),
+    ("alpha_outstanding", "alpha_outstanding"),
+    ("root_proportion", "root_proportion"),
+    # emission diagnostics (TaoSwap: *_percent are 0-100)
+    ("emission_percent", "emission_percent"),
+    ("emission_ema_percent", "emission_ema_percent"),
+    ("emission_miner_burn", "emission_miner_burn"),
+    ("emission_value", "emission_value"),
+    ("emission_is_enabled", "emission_is_enabled"),
+    ("emission_evolution_d_1", "emission_evolution_d_1"),
+    ("emission_evolution_d_30", "emission_evolution_d_30"),
+    ("excess_tao_emission", "excess_tao_emission"),
+    ("excess_tao_emission_percent", "excess_tao_emission_percent"),
+    ("tao_in_emission", "tao_in_emission"),
+    ("alpha_in_emission", "alpha_in_emission"),
+    ("alpha_out_emission", "alpha_out_emission"),
+    # flows / activity
+    ("inflow", "inflow"),
+    ("outflow", "outflow"),
+    ("active_miners", "active_miners"),
+    ("registration_cost", "registration_cost"),
+    ("tempo", "tempo"),
+    ("blocks_since_epoch", "blocks_since_epoch"),
+    ("volume_24h", "volume_24h"),
+    ("volume_24h_usd", "volume_24h_usd"),
+    ("market_cap", "market_cap"),
+    ("fdv", "fdv"),
+    ("holders_count", "holders_count"),
+    ("top10_share", "top10_share"),
+    ("hhi_normalized", "hhi_normalized"),
+    ("nakamoto_coefficient", "nakamoto_coefficient"),
+    ("owner", "owner"),
+)
+
+
 def _pp_subnets_taoswap(payload, params):
     netuid = params.get("netuid")
     rows = payload["results"]
@@ -669,24 +719,188 @@ def _pp_subnets_taoswap(payload, params):
     pruned = []
     for row in rows[:130]:
         conviction = row.get("conviction") or {}
-        pruned.append({
+        identity = row.get("identity") or {}
+        dereg = row.get("dereg") or {}
+        item = {
             "netuid": row.get("id"),
             "name": row.get("name"),
             "symbol": row.get("symbol"),
-            "alpha_price_tao": row.get("price"),
-            "alpha_stake": row.get("alpha_stake"),
-            "emission_percent": row.get("emission_percent"),
-            "conviction": {key: conviction.get(key) for key in (
-                "king_is_owner", "is_contested", "takeover_eligible",
-                "takeover_enforced", "gate_ceiling_pct",
-                "total_locked_pct_supply", "holder_count")}
-            if conviction else None,
-        })
+        }
+        for out_key, src_key in _SUBNET_SCALAR_KEYS:
+            item[out_key] = row.get(src_key)
+        item["identity"] = {
+            "name": identity.get("name"),
+            "url": identity.get("url"),
+            "github": identity.get("github"),
+            "description": identity.get("description"),
+        } if identity else None
+        item["dereg"] = {
+            "is_immune": dereg.get("is_immune"),
+            "risk_level": dereg.get("risk_level"),
+            "prune_rank": dereg.get("prune_rank"),
+            "immunity_end_block": dereg.get("immunity_end_block"),
+        } if dereg else None
+        item["conviction"] = (
+            {key: conviction.get(key) for key in _CONVICTION_KEYS}
+            if conviction else None)
+        # Explicit unit note for the burn field consumers.
+        item["emission_miner_burn_unit"] = "percent_0_100"
+        pruned.append(item)
     block = (payload.get("dereg_context") or {}).get("current_block")
     return {"values": {"subnets": pruned, "count": len(pruned)},
-            "units": "alpha prices in TAO; percentages 0-100",
+            "units": ("alpha prices in TAO; emission_percent / "
+                      "emission_miner_burn / excess_tao_emission_percent "
+                      "are 0-100 (NOT 0-1 fractions)"),
             "upstream_timestamp": None,
             "block_reference": block}
+
+
+def _pp_metagraph_taoswap(payload, params):
+    limit = params.get("limit")
+    try:
+        limit = int(limit) if limit is not None else 25
+    except (TypeError, ValueError):
+        limit = 25
+    limit = max(1, min(limit, 64))
+    subnet = payload.get("subnet") or {}
+    neurons = list(payload.get("neurons") or [])
+
+    def _emission(neuron):
+        try:
+            return float(neuron.get("emission") or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    neurons.sort(key=_emission, reverse=True)
+    pruned = []
+    for neuron in neurons[:limit]:
+        pruned.append({
+            "uid": neuron.get("uid"),
+            "hotkey": neuron.get("hotkey"),
+            "coldkey": neuron.get("coldkey"),
+            "is_validator": neuron.get("is_validator"),
+            "is_owner": neuron.get("is_owner"),
+            "stake": neuron.get("stake"),
+            "incentive": neuron.get("incentive"),
+            "emission": neuron.get("emission"),
+            "emission_tao": neuron.get("emission_tao"),
+            "emission_usd": neuron.get("emission_usd"),
+            "dividends": neuron.get("dividends"),
+            "vtrust": neuron.get("vtrust"),
+            "consensus": neuron.get("consensus"),
+            "daily_rewards": neuron.get("daily_rewards"),
+            "daily_rewards_alpha": neuron.get("daily_rewards_alpha"),
+            "daily_rewards_usd": neuron.get("daily_rewards_usd"),
+            "delegate_take": neuron.get("delegate_take"),
+            "status": neuron.get("status"),
+            "type": neuron.get("type"),
+        })
+    return {
+        "values": {
+            "netuid": subnet.get("id"),
+            "name": subnet.get("name"),
+            "symbol": subnet.get("symbol"),
+            "subnet": {
+                "price": subnet.get("price"),
+                "emission_value": subnet.get("emission_value"),
+                "registration_cost": subnet.get("registration_cost"),
+                "blocks_since_epoch": subnet.get("blocks_since_epoch"),
+                "tempo": subnet.get("tempo"),
+                "owner_ss58": (subnet.get("identity") or {}).get(
+                    "ss58_address"),
+            },
+            "neurons": pruned,
+            "count": len(pruned),
+            "total_neurons": payload.get("count") or len(
+                payload.get("neurons") or []),
+            "sorted_by": "emission_desc",
+        },
+        "units": "stake/emission as TaoSwap reports; incentive/dividends "
+                 "fractional; emission_tao in TAO",
+        "upstream_timestamp": None,
+        "block_reference": None,
+    }
+
+
+def _pp_blocks_taoswap(payload, params):
+    results = payload.get("results") or {}
+    if not results:
+        raise FatalLiveError("blocks endpoint returned no rows")
+    # results is a map keyed by block id (string or int)
+    blocks = []
+    for key, row in results.items():
+        if not isinstance(row, dict):
+            continue
+        blocks.append(row)
+    if not blocks:
+        raise FatalLiveError("blocks endpoint returned empty results map")
+    blocks.sort(key=lambda row: int(row.get("id") or 0), reverse=True)
+    head = blocks[0]
+    return {
+        "values": {
+            "block_number": head.get("id"),
+            "block_hash": (head.get("hash") or "")[:18],
+            "timestamp": head.get("timestamp"),
+            "is_final": head.get("is_final"),
+            "extrinsics_count": head.get("extrinsics_count"),
+            "events_count": head.get("events_count"),
+            "spec_version": None,
+            "spec_version_note": (
+                "TaoSwap /blocks/ does not expose runtime spec_version; "
+                "use live_chain_head (TaoStats) for that"),
+        },
+        "units": "block metadata only — no runtime spec",
+        "upstream_timestamp": head.get("timestamp"),
+        "block_reference": head.get("id"),
+    }
+
+
+def _pp_portfolio_balance_taoswap(payload, params):
+    account = params.get("account")
+    if not account:
+        raise FatalLiveError("portfolio-balance requires account=ss58")
+    held = payload.get("held_netuids")
+    if held is None and isinstance(payload.get("results"), list):
+        held = []
+    return {
+        "values": {
+            "account": account,
+            "account_known": payload.get("account_known"),
+            "rank": payload.get("rank"),
+            "value_change": payload.get("value_change"),
+            "held_netuids": held,
+            # Keep subnet_value_change / results — useful but large; cap
+            # held list only. Full results stay for agent inspection.
+            "subnet_value_change": payload.get("subnet_value_change"),
+            "results": payload.get("results"),
+            "coldkey_swap": payload.get("coldkey_swap"),
+        },
+        "units": "portfolio balances; some tao deltas may be in rao "
+                 "(1 TAO = 1e9 rao) depending on field",
+        "upstream_timestamp": ((payload.get("rank") or {}).get("as_of")
+                               and (payload["rank"]["as_of"]
+                                    + "T00:00:00+00:00")) or None,
+        "block_reference": None,
+    }
+
+
+def _pp_portfolio_pnl_apy_taoswap(payload, params):
+    account = params.get("account")
+    if not account:
+        raise FatalLiveError("portfolio-pnl-apy requires account=ss58")
+    return {
+        "values": {
+            "account": account,
+            "account_known": payload.get("account_known"),
+            "as_of": payload.get("as_of"),
+            "apy": payload.get("apy"),
+            "pnl": payload.get("pnl"),
+        },
+        "units": "APY percent; PnL fields as TaoSwap reports "
+                 "(some amounts in rao)",
+        "upstream_timestamp": payload.get("as_of"),
+        "block_reference": None,
+    }
 
 
 def _pp_validators_taoswap(payload, params):
@@ -808,6 +1022,10 @@ POSTPROCESSORS = {
     "subnets_taoswap": _pp_subnets_taoswap,
     "validators_taoswap": _pp_validators_taoswap,
     "network_stats_taoswap": _pp_network_stats_taoswap,
+    "metagraph_taoswap": _pp_metagraph_taoswap,
+    "blocks_taoswap": _pp_blocks_taoswap,
+    "portfolio_balance_taoswap": _pp_portfolio_balance_taoswap,
+    "portfolio_pnl_apy_taoswap": _pp_portfolio_pnl_apy_taoswap,
     "subnets_taostats": _pp_subnets_taostats,
     "metagraph_taostats": _pp_metagraph_taostats,
     "chain_head_taostats": _pp_chain_head_taostats,
@@ -874,6 +1092,30 @@ def run_operation(connection: sqlite3.Connection, config: Dict[str, Any],
     params.update(dynamic_params or {})
     params_key = json.dumps(params, sort_keys=True)
 
+    # Path templating: /metagraph/{netuid}/ → fill from params, then strip
+    # path keys + client-only keys from the query string.
+    path = operation["path"]
+    path_keys: List[str] = []
+    if "{" in path:
+        path_keys = re.findall(r"\{(\w+)\}", path)
+        format_kwargs = {}
+        for key in path_keys:
+            if params.get(key) is None:
+                raise FatalLiveError(
+                    "operation %s requires path param %r" % (op_name, key))
+            format_kwargs[key] = params[key]
+        try:
+            path = path.format(**format_kwargs)
+        except (KeyError, ValueError) as exc:
+            raise FatalLiveError("bad path template %s: %s"
+                                 % (operation["path"], exc))
+    client_keys = set(operation.get("client_params") or [])
+    query_params = {
+        key: value for key, value in params.items()
+        if key not in path_keys and key not in client_keys
+        and value is not None
+    }
+
     refusal = ledger.acquire(provider, interactive=interactive)
     if refusal is not None:
         audit_call(connection, provider, op_name, params, _utc_now(),
@@ -889,7 +1131,7 @@ def run_operation(connection: sqlite3.Connection, config: Dict[str, Any],
             provider_key(config, provider, env)
 
     started = _utc_now()
-    result = http_get(config, provider, operation["path"], params=params,
+    result = http_get(config, provider, path, params=query_params,
                       headers=headers,
                       timeout=config["providers"][provider].get(
                           "timeout_seconds"))
