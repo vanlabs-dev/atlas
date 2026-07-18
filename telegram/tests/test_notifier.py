@@ -581,8 +581,10 @@ class InterpretiveBreakdownTests(unittest.TestCase):
              "deletions": 1}], ["feat(admin-utils): new hyperparam setter"])
         seed_livedata(self.live)
         text = self.only_event()["text"]
-        self.assertIn("core protocol change: admin-utils (governance params)",
-                      text)
+        # Headline is the short category; the pallet + domain detail lives in
+        # the body, not repeated in the (bold) headline.
+        self.assertIn("subtensor repo · core protocol change", text)
+        self.assertNotIn("core protocol change: admin-utils", text)
         self.assertIn("pallets · admin-utils (governance params)", text)
 
     def test_unknown_dir_is_surfaced_not_hidden(self):
@@ -641,11 +643,36 @@ class InterpretiveBreakdownTests(unittest.TestCase):
         seed_custom(self.db, files, ["feat(subtensor): rewrite emissions"])
         seed_livedata(self.live)
         text = self.only_event()["text"]
-        self.assertIn("core protocol change: subtensor "
-                      "(staking/emissions/weights)", text)
+        self.assertIn("subtensor repo · core protocol change", text)
+        self.assertIn("pallets · subtensor (staking/emissions/weights)", text)
         self.assertNotIn("LIGHT protocol touch", text)
         # compact k-suffix on core line churn (5000 -> 5k, 1000 -> 1k)
         self.assertIn("protocol changed · pallets 1 files +5k/-1k", text)
+
+    def test_spacing_groups_and_mono_sha(self):
+        # Operator layout feedback 2026-07-15: blank lines separate signal
+        # (protocol+pallets), noise (housekeeping), commits, and trailer;
+        # the SHA range renders as a <code> entity in HTML and as plain
+        # text (no stray sentinels) in the fallback body.
+        seed_custom(self.db, [
+            {"path": "pallets/subtensor/src/x.rs", "additions": 7,
+             "deletions": 0},
+            {"path": ".github/w.yml", "additions": 1, "deletions": 0}],
+            ["feat(subtensor): guard weights", "ci: cache"])
+        seed_livedata(self.live)
+        event = self.only_event()
+        text, html = event["text"], event["html"]
+        self.assertIn("pallets · subtensor (staking/emissions/weights)"
+                      "\n\nhousekeeping ·", text)
+        self.assertIn("\n\n• feat(subtensor): guard weights", text)
+        self.assertIn("\n\nfrom recorded change data", text)
+        self.assertIn("<code>%s → %s</code>"
+                      % (tg.SHA_BASE[:12] if hasattr(tg, "SHA_BASE")
+                         else SHA_BASE[:12], SHA_1[:12]), html)
+        self.assertNotIn("\x01", text)
+        self.assertNotIn("\x01", html)
+        self.assertNotIn("\x02", text)
+        self.assertNotIn("\x02", html)
 
     def test_body_within_budget_and_no_em_dashes(self):
         files = [{"path": "vendor/lib%d.rs" % i, "additions": 40,

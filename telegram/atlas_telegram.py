@@ -391,17 +391,34 @@ def _typography(text: str) -> str:
     return text.replace("—", "-").replace("–", "-")
 
 
+# Inline-mono markers (operator layout feedback 2026-07-15). Composed
+# header lines may wrap a span in these sentinels; render_html turns the
+# span into a <code> entity AFTER escaping (so the span itself is still
+# escaped), render_plain strips them. Imported free text (subjects, dir
+# names) never legitimately contains control chars — both renderers strip
+# stray sentinels from the expandable/trailer so recorded data can never
+# smuggle an unbalanced tag into the HTML body.
+_MONO_OPEN = "\x01"
+_MONO_CLOSE = "\x02"
+
+
+def _strip_mono(text: str) -> str:
+    return text.replace(_MONO_OPEN, "").replace(_MONO_CLOSE, "")
+
+
 def render_html(headline: str, lines: List[str], expandable: str,
                 trailer: Optional[str], max_chars: int) -> str:
     """Compose the supported-tag HTML body, shrinking the expandable
     content (never the markup) until the result fits max_chars."""
-    headline = _typography(headline)
+    headline = _strip_mono(_typography(headline))
     lines = [_typography(line) for line in lines]
-    expandable = _typography(expandable)
-    trailer = _typography(trailer) if trailer else trailer
+    expandable = _strip_mono(_typography(expandable))
+    trailer = _strip_mono(_typography(trailer)) if trailer else trailer
     for _ in range(4):
         parts = ["<b>%s</b>" % html_escape(headline)]
-        parts.extend(html_escape(line) for line in lines)
+        parts.extend(html_escape(line)
+                     .replace(_MONO_OPEN, "<code>")
+                     .replace(_MONO_CLOSE, "</code>") for line in lines)
         if expandable:
             parts.append("<blockquote expandable>%s</blockquote>"
                          % html_escape(expandable))
@@ -428,7 +445,7 @@ def render_plain(headline: str, lines: List[str], expandable: str,
         parts.append(expandable)
     if trailer:
         parts.append(trailer)
-    return _typography("\n".join(parts))[:max_chars]
+    return _strip_mono(_typography("\n".join(parts)))[:max_chars]
 
 
 # ---------------------------------------------------------------------------
@@ -757,11 +774,13 @@ def _repo_verdict(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
         total_files = sum(a["files"] for a in areas) or 1
         if core_files / total_files < policy["light_touch_ratio"]:
             return "large sync · LIGHT protocol touch"
-    # (5) Core change: name the pallet domains when present.
+    # (5) Core change. The headline stays the short category only; the
+    #     pallets touched and their domains are already enumerated in the
+    #     body's "pallets ·" line, so repeating them here just makes the
+    #     bold title wrap (operator feedback 2026-07-14: fix layout, keep
+    #     the information).
     if core:
-        domains = _pallet_domains(rng["file_entries"], policy["pallet_map"])
-        surfaced = domains[:3] or [a["area"] for a in core[:3]]
-        return "core protocol change: %s" % " · ".join(surfaced)
+        return "core protocol change"
     # (6) Node/network only.
     if node:
         return "node / network change"
@@ -773,40 +792,53 @@ def _breakdown_lines(rng: Dict[str, Any], areas: List[Dict[str, Any]],
                      policy: Dict[str, Any]) -> str:
     """Interpreted breakdown: one fact per line, signal split from noise,
     built only from already-recorded fields (operator feedback 2026-07-14:
-    'none of the info really tells me anything')."""
-    lines: List[str] = []
+    'none of the info really tells me anything'). Groups are separated by
+    a blank line (operator layout feedback 2026-07-15: break the wall of
+    text) — signal, then noise/context, then commits, then the trailer."""
     core = [a for a in areas if a["cls"] == CORE]
     unknown = [a for a in areas if a["cls"] == UNKNOWN]
     node = [a for a in areas if a["cls"] == NODE]
     noise = [a for a in areas if a["cls"] == NOISE]
+
+    signal: List[str] = []
     if core:
-        lines.append("protocol changed · " + " · ".join(
+        signal.append("protocol changed · " + " · ".join(
             _area_churn(a) for a in core[:6]))
         domains = _pallet_domains(rng["file_entries"], policy["pallet_map"])
         if domains:
-            lines.append("pallets · " + " · ".join(domains[:4]))
+            signal.append("pallets · " + " · ".join(domains[:4]))
     if unknown:
-        lines.append("NEW / unclassified area · " + " · ".join(
+        signal.append("NEW / unclassified area · " + " · ".join(
             _area_churn(a) for a in unknown[:6]))
+
+    context: List[str] = []
     if node:
-        lines.append("node / network · " + " · ".join(
+        context.append("node / network · " + " · ".join(
             "%s (%d)" % (a["area"], a["files"]) for a in node[:6]))
     if noise:
-        lines.append("housekeeping · " + " · ".join(
+        context.append("housekeeping · " + " · ".join(
             "%s (%d)" % (a["area"], a["files"]) for a in noise[:8]))
     if rng["tags"]:
-        lines.append("tags · " + " · ".join(rng["tags"][:10]))
+        context.append("tags · " + " · ".join(rng["tags"][:10]))
+
+    commits_group: List[str] = []
     commits = _filter_commits(rng["commits"])
     if commits:
-        lines.extend("• " + subject[:100] for subject in commits[:5])
+        commits_group.extend("• " + subject[:100] for subject in commits[:5])
     else:
-        lines.append("• no feature or fix commits in range (tooling only)")
+        commits_group.append(
+            "• no feature or fix commits in range (tooling only)")
     if rng["commits_truncated"]:
-        lines.append("commit list truncated at cap · sample only")
+        commits_group.append("commit list truncated at cap · sample only")
+
+    trailer_group: List[str] = []
     if rng["files_truncated"] or rng["non_fast_forward"]:
-        lines.append("counts are a lower bound · change record incomplete")
-    lines.append("from recorded change data · effects not verified")
-    return "\n".join(lines)
+        trailer_group.append(
+            "counts are a lower bound · change record incomplete")
+    trailer_group.append("from recorded change data · effects not verified")
+
+    groups = [signal, context, commits_group, trailer_group]
+    return "\n\n".join("\n".join(g) for g in groups if g)
 
 
 def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
@@ -819,8 +851,8 @@ def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
     verdict = _repo_verdict(rng, live, areas, policy)
     headline = "Atlas · subtensor repo · %s" % verdict
     lines = [
-        "%s → %s · %d commit(s)%s · %d file(s)%s"
-        % (rng["prev_sha"][:12], rng["new_sha"][:12],
+        "%s%s → %s%s · %d commit(s)%s · %d file(s)%s"
+        % (_MONO_OPEN, rng["prev_sha"][:12], rng["new_sha"][:12], _MONO_CLOSE,
            len(rng["commits"]), "+" if rng["commits_truncated"] else "",
            len(rng["files"]), "+" if rng["files_truncated"] else ""),
         _both_clocks_line(new_spec, live),
