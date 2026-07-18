@@ -86,6 +86,11 @@ CREATE TABLE IF NOT EXISTS pending_churn (
     dominant_area TEXT NOT NULL,
     detected_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS pending_signal (
+    event_row_id INTEGER PRIMARY KEY,
+    line TEXT NOT NULL,
+    detected_at TEXT NOT NULL
+);
 """
 
 # Repository-range significance policy defaults (config-overridable).
@@ -1080,9 +1085,258 @@ def knowledge_ingestion_events(source_db: str, watermark: Optional[str],
         conn.close()
 
 
+# ---------------------------------------------------------------------------
+# Fleet-signal adapter (change: fleet-signals) — narrative-cluster /
+# watchlist / econ-code instant alerts + durable signal digest lines,
+# from the fleet store's signal_events queue. The fleet store is opened
+# STRICTLY read-only; this class's delivery watermark lives in this
+# module's own ledger like every other source.
+# ---------------------------------------------------------------------------
+
+DEFAULT_SIGNAL_BACKSTOP_HOURS = 24
+_FLEET_SOURCE_LINE = "source: fleet repositories (code), not the live chain"
+
+
+def _pending_signal_rows(store: sqlite3.Connection
+                         ) -> List[Tuple[int, str, str]]:
+    return store.execute(
+        "SELECT event_row_id, line, detected_at FROM pending_signal "
+        "ORDER BY event_row_id ASC").fetchall()
+
+
+def _signal_digest_line(pending: List[Tuple[int, str, str]]) -> str:
+    return ("fleet signal digest · %d item(s): %s"
+            % (len(pending), " · ".join(row[1] for row in pending[:12])))
+
+
+def _subnet_label(conn: sqlite3.Connection, netuid: Optional[int]) -> str:
+    """`SN<netuid> (owner/repo)` when the fleet registry knows the repo,
+    else just `SN<netuid>`. Repo text is recorded data — display only."""
+    if netuid is None:
+        return "fleet"
+    label = "SN%d" % netuid
+    try:
+        row = conn.execute("SELECT github_repo FROM slots WHERE netuid = ?",
+                           (netuid,)).fetchone()
+    except sqlite3.Error:
+        return label
+    if row and row[0]:
+        tail = "/".join(str(row[0]).rstrip("/").split("/")[-2:])
+        if tail:
+            label += " (%s)" % tail[:60]
+    return label
+
+
+def _entry_price_line(conn: sqlite3.Connection,
+                      event_row_id: int) -> Optional[str]:
+    """One entry-price line (alpha in TAO) when snapshots are available;
+    None (line omitted, delivery never delayed) while pending."""
+    try:
+        rows = conn.execute(
+            "SELECT netuid, price_tao, status FROM signal_entries "
+            "WHERE event_id = ? ORDER BY netuid ASC",
+            (event_row_id,)).fetchall()
+    except sqlite3.Error:
+        return None
+    parts = []
+    for netuid, price, status in rows:
+        if status in ("recorded", "late") and price is not None:
+            parts.append("SN%d %.6g τ" % (netuid, price))
+    return ("entry price · " + " · ".join(parts[:8])) if parts else None
+
+
+def _build_cluster_event(conn: sqlite3.Connection, row_id: int,
+                         payload: Dict[str, Any], created_at: str,
+                         dedup_key: str, pending: List[Tuple[int, str, str]],
+                         max_chars: int) -> Dict[str, Any]:
+    term = str(payload.get("term") or "?")[:120]
+    members = payload.get("members") or []
+    first = payload.get("first_mover") or {}
+    prevalence = payload.get("prevalence") or {}
+    headline = "Atlas · subnet fleet · narrative cluster · %s" % term
+    lines = [
+        "members · %s · adopted within %sd"
+        % (" · ".join("SN%s" % m.get("netuid") for m in members[:8]),
+           payload.get("window_days", "?")),
+    ]
+    if first:
+        lines.append("first mover · SN%s · %s · %s%s%s"
+                     % (first.get("netuid"),
+                        str(first.get("adopted_at") or "")[:10],
+                        _MONO_OPEN,
+                        str(first.get("commit_sha") or "-")[:12],
+                        _MONO_CLOSE))
+    if prevalence:
+        lines.append("prevalence · %s/%s active subnets"
+                     % (prevalence.get("adopters", "?"),
+                        prevalence.get("active_slots", "?")))
+    price = _entry_price_line(conn, row_id)
+    if price:
+        lines.append(price)
+    lines.append(_FLEET_SOURCE_LINE)
+    trailer = _signal_digest_line(pending) if pending else None
+    plain = render_plain(headline, lines, "", trailer, max_chars)
+    html = render_html(headline, lines, "", trailer, max_chars)
+    return {"event_id": "fleet-signal:%s" % dedup_key,
+            "event_class": "narrative-cluster", "created_at": created_at,
+            "text": plain, "html": html,
+            "digest_signal_ids": [row[0] for row in pending]}
+
+
+def _build_watchlist_event(conn: sqlite3.Connection, row_id: int,
+                           payload: Dict[str, Any], created_at: str,
+                           dedup_key: str,
+                           pending: List[Tuple[int, str, str]],
+                           max_chars: int) -> Dict[str, Any]:
+    term = str(payload.get("term") or "?")[:120]
+    netuid = payload.get("netuid")
+    headline = "Atlas · %s · watchlist term · %s" % (
+        _subnet_label(conn, netuid), term)
+    lines = []
+    if payload.get("source_file"):
+        lines.append("file · %s%s%s" % (
+            _MONO_OPEN, str(payload["source_file"])[:120], _MONO_CLOSE))
+    if payload.get("commit_sha"):
+        lines.append("commit · %s%s%s" % (
+            _MONO_OPEN, str(payload["commit_sha"])[:12], _MONO_CLOSE))
+    price = _entry_price_line(conn, row_id)
+    if price:
+        lines.append(price)
+    lines.append(_FLEET_SOURCE_LINE)
+    trailer = _signal_digest_line(pending) if pending else None
+    plain = render_plain(headline, lines, "", trailer, max_chars)
+    html = render_html(headline, lines, "", trailer, max_chars)
+    return {"event_id": "fleet-signal:%s" % dedup_key,
+            "event_class": "watchlist", "created_at": created_at,
+            "text": plain, "html": html,
+            "digest_signal_ids": [row[0] for row in pending]}
+
+
+def _build_econ_event(conn: sqlite3.Connection, row_id: int,
+                      payload: Dict[str, Any], created_at: str,
+                      dedup_key: str, pending: List[Tuple[int, str, str]],
+                      max_chars: int) -> Dict[str, Any]:
+    netuid = payload.get("netuid")
+    headline = "Atlas · %s · incentive-code change" % _subnet_label(conn,
+                                                                    netuid)
+    commits_suffix = "+" if payload.get("commits_truncated") else ""
+    lines = [
+        "%s%s → %s%s · %s commit(s)%s"
+        % (_MONO_OPEN, str(payload.get("prev_sha") or "-")[:12],
+           str(payload.get("new_sha") or "-")[:12], _MONO_CLOSE,
+           payload.get("commit_count", "?"), commits_suffix),
+        "files · " + " · ".join(
+            str(path)[:80] for path in (payload.get("files") or [])[:4]),
+    ]
+    price = _entry_price_line(conn, row_id)
+    if price:
+        lines.append(price)
+    lines.append(_FLEET_SOURCE_LINE)
+    trailer = _signal_digest_line(pending) if pending else None
+    plain = render_plain(headline, lines, "", trailer, max_chars)
+    html = render_html(headline, lines, "", trailer, max_chars)
+    return {"event_id": "fleet-signal:%s" % dedup_key,
+            "event_class": "econ-code", "created_at": created_at,
+            "text": plain, "html": html,
+            "digest_signal_ids": [row[0] for row in pending]}
+
+
+def _build_signal_digest_event(pending: List[Tuple[int, str, str]],
+                               max_chars: int) -> Dict[str, Any]:
+    headline = "Atlas · subnet fleet · signal digest"
+    lines = ["adoption and dampened-signal notes · no instant alert due",
+             _FLEET_SOURCE_LINE]
+    body = _signal_digest_line(pending)
+    plain = render_plain(headline, lines, body, None, max_chars)
+    html = render_html(headline, lines, body, None, max_chars)
+    return {"event_id": "fleet-signal-digest:%d" % pending[-1][0],
+            "event_class": "signal-digest", "created_at": _utc_now(),
+            "text": plain, "html": html,
+            "digest_signal_ids": [row[0] for row in pending]}
+
+
+def fleet_signal_events(source_db: str, watermark: Optional[str],
+                        ctx: Optional[Dict[str, Any]] = None
+                        ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Fleet signal queue → tiered notifier events. Instant classes page
+    (with class-specific ledger dedup via their fleet dedup keys); digest
+    rows are persisted durably in pending_signal BEFORE the watermark
+    passes them, ride the next instant fleet alert, and are flushed by a
+    backstop digest — never paged, never dropped (churn mechanics)."""
+    conn = open_source_ro(source_db)
+    if conn is None:
+        return [], watermark
+    try:
+        present = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND "
+            "name = 'signal_events'").fetchone()
+        if present is None:
+            return [], watermark  # fleet-signals not deployed yet
+        last_id = int(watermark) if watermark else 0
+        rows = conn.execute(
+            "SELECT id, class, tier, netuid, term, dedup_key, payload_json, "
+            "created_at FROM signal_events WHERE id > ? ORDER BY id ASC "
+            "LIMIT 50", (last_id,)).fetchall()
+
+        ctx = ctx or {}
+        config = ctx.get("config") or {}
+        spec = ctx.get("spec") or {}
+        store: Optional[sqlite3.Connection] = ctx.get("connection")
+        max_chars = int(config.get("message_max_chars", 3500))
+
+        events: List[Dict[str, Any]] = []
+        high = last_id
+        for (row_id, event_class, tier, _netuid, _term, dedup_key,
+             payload_json, created_at) in rows:
+            high = max(high, int(row_id))
+            payload = json.loads(payload_json)
+            if tier != "instant":
+                line = redact(str(payload.get("line") or ""))[:200]
+                if store is not None and line:
+                    store.execute(
+                        "INSERT OR IGNORE INTO pending_signal (event_row_id, "
+                        "line, detected_at) VALUES (?, ?, ?)",
+                        (row_id, line, _utc_now()))
+                continue
+            pending = _pending_signal_rows(store) if store is not None else []
+            if event_class == "narrative-cluster":
+                events.append(_build_cluster_event(
+                    conn, row_id, payload, created_at, dedup_key, pending,
+                    max_chars))
+            elif event_class == "watchlist":
+                events.append(_build_watchlist_event(
+                    conn, row_id, payload, created_at, dedup_key, pending,
+                    max_chars))
+            else:  # econ-code (and any future instant class: fail visible)
+                events.append(_build_econ_event(
+                    conn, row_id, payload, created_at, dedup_key, pending,
+                    max_chars))
+
+        if not events and store is not None:
+            pending = _pending_signal_rows(store)
+            if pending:
+                backstop = float(spec.get(
+                    "digest_backstop_hours",
+                    DEFAULT_SIGNAL_BACKSTOP_HOURS)) * 3600
+                oldest = pending[0][2]
+                try:
+                    age = (datetime.datetime.now(tz=datetime.timezone.utc)
+                           - datetime.datetime.fromisoformat(oldest)
+                           ).total_seconds()
+                except ValueError:
+                    age = backstop + 1
+                if age > backstop:
+                    events.append(_build_signal_digest_event(pending,
+                                                             max_chars))
+        return events, (str(high) if high else watermark)
+    finally:
+        conn.close()
+
+
 _ADAPTERS: Dict[str, Callable[..., Tuple[List[Dict[str, Any]],
                                          Optional[str]]]] = {
     "chain-runtime-upgrade": chain_runtime_upgrade_events,
+    "fleet-signal": fleet_signal_events,
     "repository-update": repository_update_events,
     "schema-drift": schema_drift_events,
     "knowledge-ingestion": knowledge_ingestion_events,
@@ -1218,6 +1472,12 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
                     connection.executemany(
                         "DELETE FROM pending_churn WHERE range_id = ?",
                         [(rid,) for rid in event["digest_range_ids"]])
+                if (status == STATUS_DELIVERED
+                        and event.get("digest_signal_ids")):
+                    # Same contract for fleet signal digest lines.
+                    connection.executemany(
+                        "DELETE FROM pending_signal WHERE event_row_id = ?",
+                        [(rid,) for rid in event["digest_signal_ids"]])
             except Exception as exc:  # never let one event break the loop
                 counts["error"] += 1
                 ledger_record(connection, event["event_id"],

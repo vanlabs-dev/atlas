@@ -29,6 +29,12 @@
       "enabled": true,
       "source_db": "var/livedata/livedata.db"
     },
+    "fleet-signal": {
+      "_comment": "Fleet-signals queue (change: fleet-signals): narrative-cluster / watchlist / econ-code instant alerts + durable signal digest lines from the fleet store, read STRICTLY read-only. Priority below chain upgrades, above subtensor repo alerts. digest_backstop_hours flushes pending digest lines as a standalone summary when no instant alert rides them.",
+      "enabled": true,
+      "source_db": "var/fleet/fleet.db",
+      "digest_backstop_hours": 24
+    },
     "repository-update": {
       "enabled": true,
       "source_db": "var/repotrack/repotrack.db",

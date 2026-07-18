@@ -78,6 +78,11 @@ once-off fleet tracking-policy confirmation.
   (change: fleet-search), scoped by `(netuid, epoch)`; owned by
   `atlas_fleet_index.py`, created on first index run (the reconcile store's
   own schema is untouched).
+- `signal_*` tables — the fleet-signals ledger (change: fleet-signals);
+  owned by `atlas_fleet_signals.py`, additive, created on first signals
+  run. The store runs WAL + busy-timeout so the Telegram notifier (a
+  different scheduled unit) can read `signal_events` read-only while a
+  reconcile writes; write access stays with fleet-side processes only.
 
 ## Commands
 
@@ -134,6 +139,70 @@ atlas-fleet:
 Before it is useful the index must exist: run `python3 fleet/atlas_fleet.py
 index` once to backfill the already-cloned slots, verify coverage with
 `fleet_status`, then register the server.
+
+## Signals — narrative radar + econ-code alerts (change: fleet-signals)
+
+Every reconcile pass ends with an inline, fail-isolated signals pass
+(`atlas_fleet_signals.run_pass`): epoch-open seeding → diff-scoped term
+extraction → detection → price/outcome measurement. A signals failure is
+audited (`signals-failed`) and never counts as a reconcile process error.
+
+- **Term ledger.** Change ranges past a durable watermark are diffed on a
+  narrow scan surface: structured manifests (`requirements*.txt`,
+  `pyproject.toml`, `package.json`, `Cargo.toml`, `setup.py/.cfg`;
+  lockfiles and vendor/test paths excluded) for dependency terms, plus
+  model-id regex families over added lines of code/config text files
+  (config kill-switch: `signals.model_ids`). First adoption per
+  `(term, netuid, epoch)` — a re-pointed slot never inherits its
+  predecessor's adoptions. A complete fast-forward range with no
+  scan-surface files costs zero git calls; a truncated/non-fast-forward
+  record NEVER takes that free path (the path list is rebuilt with a
+  capped `--name-only` diff). Over-cap giant ranges degrade to
+  manifests-only, visibly (digest note). Terms are adversarial input:
+  length-capped, per-range count-capped, rendered as data.
+- **Detection.** Watchlist (config `signals.watchlist`, plain or `re:`
+  entries, validated at load — an invalid pattern is skipped and shown in
+  `signals status`) pages on first adoption per subnet. A term still
+  under the novelty ceiling clusters when the k-th distinct subnet
+  adopts it within the window — ONE instant event per term episode, ever;
+  later adopters become digest lines. Econ-code path matches
+  (reward/incentive/scoring/emission vocabulary) page once per change
+  range with a per-netuid cooldown (`econ_cooldown_hours`, default 24 —
+  dampens paging, never recording). Events queue append-only in
+  `signal_events` for the notifier.
+- **Effectiveness ledger.** Instant events snapshot alpha price in TAO at
+  event creation (clusters: per member) via the KEYLESS TaoSwap subnets
+  operation through the live-data layer — at most one fetch per pass,
+  only when something needs it, zero TaoStats quota; the full fleet
+  price vector is stored so horizon outcomes (default 1/7/30d) compare
+  against the fleet-median baseline over the identical window. States
+  are honest: `pending` / `recorded` / `late` / `unavailable` — a failed
+  fetch never delays an alert. `effectiveness` reports per class ×
+  horizon medians vs baseline; it ranks nothing and recommends nothing.
+- **Two-unit scheduling.** Extraction runs here (fleet unit); the
+  Telegram scan runs in the repo unit — delivery may lag extraction by up
+  to one scheduling cycle (~1h), accepted by design: every signal class
+  moves on a days-to-weeks clock.
+
+```
+python3 fleet/atlas_fleet_signals.py status          # watermark/ledger/queue
+python3 fleet/atlas_fleet_signals.py extract         # standalone pass (also inline on reconcile)
+python3 fleet/atlas_fleet_signals.py backfill        # SILENT historical manifest seed (real commit dates)
+python3 fleet/atlas_fleet_signals.py seed-modelids   # SILENT model-id prevalence seed (from the FTS index)
+python3 fleet/atlas_fleet_signals.py calibrate       # replay ledger over a (k, window, novelty) grid — read-only
+python3 fleet/atlas_fleet_signals.py effectiveness   # per-class × horizon report — read-only
+```
+
+**Deploy order on the Pi**: `git pull` → `backfill` → `seed-modelids` →
+`calibrate` (pick `cluster.k` / `cluster.window_days` /
+`novelty_max_adopters` from the evidence, edit `signals.watchlist` to
+taste) → `telegram/atlas_telegram.py init` (seeds the notifier's
+`fleet-signal` watermark; never rolls back) → the next hourly runs do the
+rest. First run self-installs quietly even without the manual steps: the
+extraction watermark seeds to the newest range and all pre-existing
+epochs seed silently — no alert flood is possible from history. The
+first meaningful `effectiveness` read comes after the 30-day horizon
+matures.
 
 ## Scheduling — every 6h, independent of repotrack
 

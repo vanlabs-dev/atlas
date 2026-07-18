@@ -186,7 +186,16 @@ CREATE TABLE IF NOT EXISTS audit (
 
 def open_store(db_path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
-    connection = sqlite3.connect(db_path)
+    connection = sqlite3.connect(db_path, timeout=10)
+    # WAL + busy timeout (change: fleet-signals): the Telegram notifier
+    # reads this store read-only from a DIFFERENT scheduled unit while a
+    # reconcile may be writing — readers must never error or block the
+    # writer. Write access stays exclusively with fleet-side processes.
+    try:
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA busy_timeout=10000")
+    except sqlite3.Error:
+        pass  # a filesystem that rejects WAL still gets a working store
     connection.executescript(SCHEMA_SQL)
     # Additive migration: pre-backoff stores lack the retry-backoff columns;
     # existing rows stay NULL (= never failed, retry immediately).
@@ -422,6 +431,20 @@ def _fleet_index() -> Any:
         import atlas_fleet_index  # noqa: E402  (same dir, stdlib-pure import)
         _FI = atlas_fleet_index
     return _FI
+
+
+_FS: Any = None
+
+
+def _fleet_signals() -> Any:
+    """Lazy import of the signals module (change: fleet-signals). Module
+    reference so its functions stay monkeypatchable in tests."""
+    global _FS
+    if _FS is None:
+        sys.path.insert(0, _MODULE_DIR)
+        import atlas_fleet_signals  # noqa: E402
+        _FS = atlas_fleet_signals
+    return _FS
 
 
 def _update_index_directive(result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -971,6 +994,20 @@ def reconcile(connection: sqlite3.Connection,
         connection.commit()  # slot transition is durable before indexing
         if directive:
             _run_index_directive(connection, directive, ctx, summary)
+
+    # Signals pass (change: fleet-signals) — inline after every range is
+    # recorded, so the notifier's next scan can deliver this hour's
+    # events. Fail-isolated: a signals failure is audited and never
+    # counts as a reconcile process error.
+    try:
+        summary["signals"] = _fleet_signals().run_pass(connection, config,
+                                                       now=now)
+    except Exception as exc:  # noqa: BLE001 — extraction never fails the pass
+        connection.rollback()
+        audit(connection, actor, "signals-failed", None,
+              redact(str(exc))[:300])
+        connection.commit()
+        summary["signals"] = {"error": redact(str(exc))[:120]}
     return summary
 
 
