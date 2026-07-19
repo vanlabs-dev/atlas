@@ -8,9 +8,12 @@ state. Each pass clones what is new, updates what exists, re-points what
 churned, and discards what deregistered — reusing repotrack's journaled
 update primitives and never building, testing, or executing subnet code.
 
-The self-healing, change-tracked fleet is the substrate; the **fleet-search**
-change (see below) builds the first downstream use — a read-only code-search
-surface over the clones. Diffing / alerts remain out of scope.
+The self-healing, change-tracked fleet is the substrate; three downstream
+changes build on it (all below): **fleet-search** (a read-only code-search
+surface + `atlas-fleet` MCP server), **fleet-signals** (narrative / watchlist /
+econ-code alerts + an effectiveness ledger), and **fleet-rotation-metrics**
+(emission-redirect map, epoch-scoped activity + branch pulse, momentum /
+quadrant, and a ranked LAN-only "attention board" dashboard).
 
 ## Identity source (the "on chain detail") — discovery-gated
 
@@ -83,6 +86,13 @@ once-off fleet tracking-policy confirmation.
   run. The store runs WAL + busy-timeout so the Telegram notifier (a
   different scheduled unit) can read `signal_events` read-only while a
   reconcile writes; write access stays with fleet-side processes only.
+- `metric_*` tables — the fleet-rotation-metrics store (change:
+  fleet-rotation-metrics); owned by `atlas_fleet_metrics.py`, additive,
+  created on first metrics run: `metric_emission_routes` +
+  `metric_emission_scan` (the per-`(netuid,epoch,sha)` emission-redirect
+  map, sha-gated), `metric_activity` (windowed epoch-scoped commit/author
+  counts), `metric_branch_tips` (per-pass `ls-remote` tip snapshots for the
+  branch-pulse metric), `metric_state`.
 
 ## Commands
 
@@ -204,6 +214,70 @@ epochs seed silently — no alert flood is possible from history. The
 first meaningful `effectiveness` read comes after the 30-day horizon
 matures.
 
+## Rotation metrics + attention dashboard (change: fleet-rotation-metrics)
+
+Every reconcile pass, after signals, runs an inline fail-isolated metrics
+pass (`atlas_fleet_metrics.run_pass`) that turns the fleet into a rotation
+cockpit — read-only over the clones and store, additive tables only, never
+executing subnet code, per-slot fail-closed:
+
+- **Emission-redirect map.** Scans each active slot's reward/weight/scoring
+  code paths for routing symbols (burn / partner / treasury / owner /
+  royalty), recording one route per `(kind, symbol, file)` with `file:line`
+  evidence, its fraction when a lone `0..1` literal is parseable (NULL
+  otherwise), and a destination hotkey when present. A matched symbol is
+  only recorded when it reads as a proportion (name carries
+  fraction/share/pct/take/…) or carries a fraction or a hotkey — so
+  incidental family-word variables (`is_burn`, `burn_uid`) are not mistaken
+  for splits. Subnets whose economics load from a remote URL at runtime are
+  flagged **opaque** (values not fabricated). Rescanned only when a slot's
+  `local_sha` moves.
+- **Epoch-scoped activity + branch pulse.** Windowed default-branch
+  commit/author counts (7/30/90d); all-time totals kept as context only,
+  excluded from ranking so inherited fork history can't inflate a subnet.
+  The reconcile pass records a per-slot `git ls-remote --heads` tip snapshot
+  (no fetch, no dating); `changed_tips` between passes is the branch-pulse
+  metric, so a live subnet working off its default branch is not mistaken
+  for abandoned.
+- **Momentum + quadrant.** Alpha-price momentum reused from the signals
+  `signal_prices` panel (no new API call, no backfill; missing history →
+  `n/a`), and a percentile-rank quadrant. Ranks evidence; recommends
+  nothing.
+
+The **dashboard** (`atlas_fleet_dashboard.py`) assembles one explicitly-
+scored "attention board" — subnets ordered from look-here to safely-ignore
+by a legible score (fresh econ-code/branch changes rank highest, then
+divergence, emission severity, abandonment; opacity deduped into one grouped
+line) — and renders a single self-contained HTML page (inline CSS/JS, no
+external asset, no secret) atomically into `var/fleet/www/`. It is served
+LAN-only by `atlas-dashboard.service` (`python3 -m http.server`, bound to the
+Pi's LAN IP; the dedicated `www/` dir + bind address are the security
+boundary — the store, clones, and journals are never under the served root).
+
+```
+python3 fleet/atlas_fleet_metrics.py status        # coverage + failure summary
+python3 fleet/atlas_fleet_metrics.py pass           # branch tips + activity + emissions + render (also inline on reconcile)
+python3 fleet/atlas_fleet_metrics.py emissions      # sha-gated emission-map scan
+python3 fleet/atlas_fleet_metrics.py report         # combined ranked JSON view
+python3 fleet/atlas_fleet_dashboard.py board        # ranked head (JSON), no render
+python3 fleet/atlas_fleet_dashboard.py render       # write var/fleet/www/index.html
+```
+
+**Deploy on the Pi**: `git pull` → the hourly reconcile runs the metrics +
+render inline automatically. Install the LAN server (sudo):
+
+```
+sudo cp ~/atlas/fleet/systemd/atlas-dashboard.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now atlas-dashboard.service
+# browse http://<pi-lan-ip>:8480/   (edit --bind in the unit if the IP differs)
+```
+
+The board is intentionally thin at the top until price history accrues:
+momentum needs ≥2 `signal_prices` snapshots, so divergence (the largest
+score driver) lights up over the first days; until then it ranks on
+emission / freshness / abandonment alone, honestly showing `n/a` momentum.
+
 ## Scheduling — every 6h, independent of repotrack
 
 Unit files in [systemd/](systemd/); installation needs sudo:
@@ -217,19 +291,27 @@ sudo systemctl enable --now atlas-fleet.timer
 Verify with `systemctl list-timers atlas-fleet.timer` and
 `python3 fleet/atlas_fleet.py status`.
 
-## Status (2026-07-15)
+## Status (2026-07-19)
 
-Deployed and seeded on the Pi: **104 active blobless clones** (~851 MB),
+Deployed and seeded on the Pi: **104 active blobless clones** (~2.7 GB),
 10 unreachable (backed off), 1 invalid-url, 14 no-repo = 129 subnets. The
 reconcile pipeline is accepted on-device (blobless, push-disabled,
 token-safe, per-slot fail-closed all verified against real data).
 
-**fleet-search** adds the shared FTS index + the read-only `atlas-fleet` MCP
-server (see above); code landed and green off-device (124 fleet tests, repotrack
-unchanged). Operator steps on the Pi: `git pull`, run `python3
-fleet/atlas_fleet.py index` once to backfill the 104 clones, verify with
-`fleet_status`, then register `atlas-fleet` in the Hermes config. Telegram fleet
-alerts / diffing remain deferred to later features.
+- **fleet-search** — shared FTS index + read-only `atlas-fleet` MCP server;
+  deployed + archived.
+- **fleet-signals** — narrative / watchlist / econ-code alerts + the
+  effectiveness ledger; deployed + archived.
+- **fleet-rotation-metrics** — metrics + the ranked LAN dashboard;
+  implemented, tested (full fleet suite 214 green off-device), committed
+  (`17f8e28`), delta specs synced into live specs. On the Pi the metrics
+  pass has run over all 104 clones (43 emission routes, e.g. SN54 = 35%
+  partner) and the board renders; `atlas-dashboard.service` is installed and
+  serves the board locally. **Open:** the board is not yet reachable from the
+  operator's browser (LISTEN on `192.168.0.150:8480`, SSH/ping to the Pi work
+  but port 8480 does not, and the Pi has no host firewall installed —
+  under diagnosis; likely a hardening-loaded kernel netfilter ruleset). The
+  change is **not yet archived** pending that access confirmation.
 
 ## Before it is self-maintaining — operator steps
 
