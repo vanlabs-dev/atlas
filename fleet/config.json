@@ -25,5 +25,37 @@
     "econ_cooldown_hours": 24,
     "outcome_horizons_days": [1, 7, 30],
     "price_retention_days": 120
+  },
+  "metrics": {
+    "_comment": "fleet-rotation-metrics policy (change: fleet-rotation-metrics). Omitted keys fall back to code defaults in atlas_fleet_metrics.DEFAULT_METRICS_CFG. Read-only over the clones; the metrics step runs inline after signals on the hourly pass (kill-switch: set `enabled` false). Emission map: a file is scanned when its path carries an `econ_path_tokens` word and a `scan_extensions` suffix (tests/vendor/docs excluded); `route_families` classify an assigned symbol into a routing kind (first keyword match wins — order families specific→general); `opacity_tokens` co-occurring with econ vocab flag a subnet whose economics load remotely (no numbers invented). `ls_remote_ref_cap` bounds the branch-pulse tip snapshot. `momentum_windows` reuse the signals price panel (no new API call); missing history renders n/a. `placeholder_orgs` are dropped from the team-concentration view.",
+    "enabled": true,
+    "econ_path_tokens": ["reward", "incentive", "scoring", "score", "emission", "weight", "set_weights", "payout", "mechanism", "burn"],
+    "scan_extensions": [".py"],
+    "route_families": {
+      "burn": ["burn"],
+      "partner": ["partner"],
+      "royalty": ["royalty", "commission", "kickback"],
+      "treasury": ["treasury", "devfund", "devwallet", "teamwallet"],
+      "owner": ["ownertake", "ownercut", "ownershare", "ownerfee", "ownerpct", "ownerpercent"]
+    },
+    "proportion_tokens": ["fraction", "share", "pct", "percent", "ratio", "take", "cut", "split", "alloc"],
+    "opacity_tokens": ["remote_config", "remoteconfig", "fetch_config", "config_url", "dynamic_config", "remote_weights"],
+    "route_cap_per_subnet": 40,
+    "max_scan_files_per_slot": 400,
+    "activity_windows": [7, 30, 90],
+    "ls_remote_ref_cap": 200,
+    "momentum_windows": [7, 30],
+    "placeholder_orgs": ["deprecated", "orgs", "username", "user", "example", "your-org", "owner"]
+  },
+  "dashboard": {
+    "_comment": "fleet-rotation-metrics ranked 'attention board' (change: fleet-rotation-metrics). Rendered inline after the metrics pass into `www_dir` (served LAN-only by atlas-dashboard.service — a dedicated dir holding ONLY the rendered page, never the store/clones). Ranking rules v2: one explicit attention score per subnet, shown per row; `head_min_score`/`mid_min_score` set the LOOK-HERE vs SKIM floors; `head_count`/`mid_count` cap each tier; fresh events (econ-code change within `fresh_hours`, or ≥`pulse_spike` changed branch tips) get a boost large enough to reach the head; pure-opaque-no-other-signal subnets collapse into one grouped line. Set `enabled` false to skip rendering.",
+    "enabled": true,
+    "www_dir": "var/fleet/www",
+    "head_count": 10,
+    "mid_count": 24,
+    "head_min_score": 28,
+    "mid_min_score": 12,
+    "pulse_spike": 5,
+    "fresh_hours": 2
   }
 }

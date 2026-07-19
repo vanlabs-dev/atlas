@@ -447,6 +447,20 @@ def _fleet_signals() -> Any:
     return _FS
 
 
+_FM: Any = None
+
+
+def _fleet_metrics() -> Any:
+    """Lazy import of the metrics module (change: fleet-rotation-metrics).
+    Module reference so its functions stay monkeypatchable in tests."""
+    global _FM
+    if _FM is None:
+        sys.path.insert(0, _MODULE_DIR)
+        import atlas_fleet_metrics  # noqa: E402
+        _FM = atlas_fleet_metrics
+    return _FM
+
+
 def _update_index_directive(result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Map an `update_clone` result to the index work it implies, or None.
 
@@ -1008,6 +1022,22 @@ def reconcile(connection: sqlite3.Connection,
               redact(str(exc))[:300])
         connection.commit()
         summary["signals"] = {"error": redact(str(exc))[:120]}
+
+    # Metrics pass (change: fleet-rotation-metrics) — inline after signals so
+    # this hour's branch-tip snapshot, windowed activity, and sha-gated
+    # emission scan are current for the report/dashboard. Records branch tips
+    # for the pass (one cheap ls-remote per active slot; the modified
+    # subnet-repo-fleet spec). Fail-isolated: a metrics failure is audited and
+    # never counts as a reconcile process error.
+    try:
+        summary["metrics"] = _fleet_metrics().run_pass(connection, config,
+                                                       now=now, token=token)
+    except Exception as exc:  # noqa: BLE001 — metrics never fail the pass
+        connection.rollback()
+        audit(connection, actor, "metrics-failed", None,
+              redact(str(exc))[:300])
+        connection.commit()
+        summary["metrics"] = {"error": redact(str(exc))[:120]}
     return summary
 
 

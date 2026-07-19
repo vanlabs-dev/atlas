@@ -1,0 +1,35 @@
+# Atlas rotation-cockpit dashboard server (fleet-rotation-metrics §7.3).
+#
+# Serves ONLY the rendered board — var/fleet/www/, a directory that holds
+# the single self-contained index.html and nothing else. The fleet store,
+# clones, and journals are NOT under this root and cannot be reached through
+# it: the dedicated directory + LAN bind address are the security boundary.
+# The page itself is regenerated each metrics pass; this unit only serves it.
+#
+# Bind address: set it to the Pi's LAN IP (default here 192.168.0.150) so the
+# board is reachable from your other devices but never from outside the home
+# network. Change --bind to 127.0.0.1 for host-only, or to the current LAN IP
+# if it differs. Port 8480 (see config `dashboard`, informational — the port
+# is set here, not read from config).
+#
+# Install (operator, needs sudo):
+#   sudo cp ~/atlas/fleet/systemd/atlas-dashboard.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now atlas-dashboard.service
+#   # then browse http://192.168.0.150:8480/ from any device on the LAN
+[Unit]
+Description=Atlas rotation-cockpit dashboard (LAN-only static server)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/atlas/var/fleet/www
+ExecStart=/usr/bin/python3 -m http.server 8480 --bind 192.168.0.150 --directory /home/pi/atlas/var/fleet/www
+Restart=on-failure
+RestartSec=10
+Nice=15
+
+[Install]
+WantedBy=multi-user.target
