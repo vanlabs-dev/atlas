@@ -52,5 +52,5 @@
 
 - [x] 7.1 `fleet/README.md` section (signals pipeline, invariants, two-unit scheduling and accepted ≤1-cycle lag, CLI) + `telegram/README.md` class table update; document threshold calibration and starter-watchlist editing
 - [x] 7.2 Full local test pass (fleet + telegram suites) on the workstation
-- [ ] 7.3 On-device (Pi): git pull, run `backfill`, `seed-modelids`, then `calibrate`; operator sets `(k, T, novelty)` + edits watchlist; run `atlas_telegram.py init`; verify next fleet-unit run extracts and next repo-unit scan delivers (or stays silent) correctly
+- [x] 7.3 On-device (Pi): git pull, run `backfill`, `seed-modelids`, then `calibrate`; operator sets `(k, T, novelty)` + edits watchlist; run `atlas_telegram.py init`; verify next fleet-unit run extracts and next repo-unit scan delivers (or stays silent) correctly
 - [ ] 7.4 Operator sign-off: first week of live signals reviewed for noise; thresholds adjusted in config if needed
