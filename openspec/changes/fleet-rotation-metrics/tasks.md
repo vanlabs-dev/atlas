@@ -110,7 +110,7 @@ value before any dashboard exists; branch pulse and the served page follow.
 
 ## 9. Sync + archive
 
-- [ ] 9.1 Run `openspec validate fleet-rotation-metrics`; sync delta specs into
+- [x] 9.1 Run `openspec validate fleet-rotation-metrics`; sync delta specs into
   the live specs (`fleet-rotation-metrics` new spec + `subnet-repo-fleet` branch
   -tips requirement).
 - [ ] 9.2 Update memory (atlas-fleet-sweep-findings → shipped; note dashboard
