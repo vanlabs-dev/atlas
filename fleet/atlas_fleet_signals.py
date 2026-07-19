@@ -310,9 +310,12 @@ _REQ_LINE_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?"
 # Quoted requirement strings need a VERSION OPERATOR terminator — a bare
 # quoted word ("myproj", "README.md") is any string, not evidence of a
 # dependency (precision over recall; poetry/cargo styles are covered by
-# the key = version rule).
-_QUOTED_REQ_RE = re.compile(r"['\"]([A-Za-z0-9][A-Za-z0-9._-]*)"
-                            r"(?:\[[^\]]*\])?\s*[<>=!~;]")
+# the key = version rule). The spec must sit at the START of the quoted
+# string: a PEP 508 environment marker after ';' ("numpy>=1.0;
+# python_version >= '3.8'") is a condition, not a dependency.
+_QUOTED_STRING_RE = re.compile(r"['\"]([^'\"]+)['\"]")
+_QUOTED_REQ_SPEC_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)"
+                                 r"(?:\[[^\]]*\])?\s*[<>=!~;]")
 _TOML_KEY_VER_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*=\s*"
                               r"(?:\"[~^<>=]{0,2}\d|\{)")
 _PKGJSON_DEP_RE = re.compile(r"\"(@?[A-Za-z0-9][A-Za-z0-9._/-]*)\"\s*:\s*"
@@ -323,6 +326,16 @@ _VERSION_SHAPED_RE = re.compile(r"^\d+(\.\d+)*$")
 _TOML_NOISE_KEYS = frozenset((
     "version", "python", "python-requires", "requires-python", "edition",
     "rust-version", "name", "description", "readme", "license", "channel"))
+
+# PEP 508 environment-marker names — conditions, never dependencies.
+# Rejected at normalization so no parser path (quoted specs, poetry
+# `markers = "python_version >= '3.8'"` values, TOML keys) can ledger one.
+_MARKER_NAMES = frozenset((
+    "python_version", "python_full_version", "sys_platform", "sys.platform",
+    "platform_machine", "platform_system", "platform_release",
+    "platform_version", "platform_python_implementation",
+    "implementation_name", "implementation_version", "os_name", "os.name",
+    "extra"))
 
 
 def normalize_dep(raw: str, max_length: int) -> Optional[str]:
@@ -336,7 +349,7 @@ def normalize_dep(raw: str, max_length: int) -> Optional[str]:
         return None
     term = match.group(0).rstrip(".")
     if (len(term) < 2 or len(term) > max_length
-            or _VERSION_SHAPED_RE.match(term)):
+            or _VERSION_SHAPED_RE.match(term) or term in _MARKER_NAMES):
         return None
     return term
 
@@ -353,11 +366,21 @@ def _dep_terms_requirements(lines: Sequence[str]) -> List[str]:
     return terms
 
 
+def _quoted_req_terms(line: str) -> List[str]:
+    """Requirement names from quoted strings, spec anchored at the start
+    of each string so environment markers can never match."""
+    terms = []
+    for quoted in _QUOTED_STRING_RE.finditer(line):
+        spec = _QUOTED_REQ_SPEC_RE.match(quoted.group(1))
+        if spec:
+            terms.append(spec.group(1))
+    return terms
+
+
 def _dep_terms_pyproject(lines: Sequence[str]) -> List[str]:
     terms = []
     for line in lines:
-        for match in _QUOTED_REQ_RE.finditer(line):
-            terms.append(match.group(1))
+        terms.extend(_quoted_req_terms(line))
         toml = _TOML_KEY_VER_RE.match(line)
         if toml and toml.group(1).lower() not in _TOML_NOISE_KEYS:
             terms.append(toml.group(1))
@@ -379,8 +402,7 @@ def _dep_terms_cargo(lines: Sequence[str]) -> List[str]:
 
 
 def _dep_terms_setup(lines: Sequence[str]) -> List[str]:
-    return [match.group(1) for line in lines
-            for match in _QUOTED_REQ_RE.finditer(line)]
+    return [term for line in lines for term in _quoted_req_terms(line)]
 
 
 def dep_terms_for(path: str, lines: Sequence[str],

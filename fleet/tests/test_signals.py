@@ -196,6 +196,26 @@ class TestSurface(unittest.TestCase):
             'edition = "2021"', '[dependencies]'], CFG)
         self.assertEqual(terms, ["serde", "tokio"])
 
+    def test_environment_markers_never_become_terms(self):
+        # PEP 508 markers after ';' inside a quoted spec (the deployed
+        # 'python_version' ledger-noise case), standalone poetry marker
+        # values, and marker-shaped TOML keys must all yield nothing.
+        terms = sig.dep_terms_for("pyproject.toml", [
+            "dependencies = [\"numpy>=1.0; python_version >= '3.8'\"]",
+            "markers = \"python_version >= '3.9'\"",
+            "python_version = \"3.10\"",
+            "requires = [\"tomli>=1.1; sys_platform == 'win32'\"]"], CFG)
+        self.assertEqual(terms, ["numpy", "tomli"])
+        terms = sig.dep_terms_for("setup.py", [
+            "install_requires=[\"pandas>=2.0; platform_machine!='arm'\"],"],
+            CFG)
+        self.assertEqual(terms, ["pandas"])
+        terms = sig.dep_terms_for("requirements.txt", [
+            "numpy>=1.0; python_version < '3.11'"], CFG)
+        self.assertEqual(terms, ["numpy"])
+        for marker in ("python_version", "sys_platform", "extra"):
+            self.assertIsNone(sig.normalize_dep(marker, 120))
+
     def test_normalization_bounds(self):
         self.assertIsNone(sig.normalize_dep("x", 120))
         self.assertIsNone(sig.normalize_dep("123", 120))
