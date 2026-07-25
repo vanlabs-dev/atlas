@@ -348,6 +348,19 @@ class TestEconVerdictCard(FleetSignalBase):
         self.assertNotIn("%3Cscript%3E", body)  # raw tag never emitted
         self.assertIn("%26lt%3B", body)         # escaped &lt;
 
+    def test_layout_has_bold_labels_blank_lines_and_wordsafe_clip(self):
+        payload = dict(ECON_VERDICT_PAYLOAD, range_id=41,
+                       what_changed="alpha beta gamma " * 40)  # long, spaced
+        add_event(self.fleet_db, "econ-code", "instant", "econ:41", payload,
+                  netuid=64)
+        _summary, sent = self.scan()
+        body = sent[0]
+        self.assertIn("%3Cb%3Ewhy", body)            # <b>why  (bold label)
+        self.assertIn("%3Cb%3Esignificance", body)   # <b>significance
+        self.assertIn("%E2%80%A6", body)             # … word-safe clip
+        self.assertLess(body.count("gamma"), 40)     # clipped, not the full run
+        self.assertIn("%0A%0A", body)                # blank-line separation
+
     def test_partial_view_flagged(self):
         payload = dict(ECON_VERDICT_PAYLOAD, range_id=33, partial_view=True)
         add_event(self.fleet_db, "econ-code", "instant", "econ:33", payload,

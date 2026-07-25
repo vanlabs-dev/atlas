@@ -406,10 +406,15 @@ def _typography(text: str) -> str:
 # smuggle an unbalanced tag into the HTML body.
 _MONO_OPEN = "\x01"
 _MONO_CLOSE = "\x02"
+# Bold-span sentinels (econ card labels). Like the mono pair: converted to
+# <b>/</b> AFTER escaping in render_html body lines, stripped everywhere else.
+_BOLD_OPEN = "\x03"
+_BOLD_CLOSE = "\x04"
 
 
 def _strip_mono(text: str) -> str:
-    return text.replace(_MONO_OPEN, "").replace(_MONO_CLOSE, "")
+    return (text.replace(_MONO_OPEN, "").replace(_MONO_CLOSE, "")
+            .replace(_BOLD_OPEN, "").replace(_BOLD_CLOSE, ""))
 
 
 def render_html(headline: str, lines: List[str], expandable: str,
@@ -424,7 +429,9 @@ def render_html(headline: str, lines: List[str], expandable: str,
         parts = ["<b>%s</b>" % html_escape(headline)]
         parts.extend(html_escape(line)
                      .replace(_MONO_OPEN, "<code>")
-                     .replace(_MONO_CLOSE, "</code>") for line in lines)
+                     .replace(_MONO_CLOSE, "</code>")
+                     .replace(_BOLD_OPEN, "<b>")
+                     .replace(_BOLD_CLOSE, "</b>") for line in lines)
         if expandable:
             parts.append("<blockquote expandable>%s</blockquote>"
                          % html_escape(expandable))
@@ -1212,33 +1219,53 @@ def _build_watchlist_event(conn: sqlite3.Connection, row_id: int,
             "digest_signal_ids": [row[0] for row in pending]}
 
 
-# Verdict text bound — repo/model-derived free text, escaped at render by
-# render_html; bounded here so a card stays scannable.
-_VERDICT_MAX = 200
+# Verdict free-text bounds (repo/model-derived; escaped at render). Clipped
+# at a word boundary so a card never cuts mid-word.
+_WHAT_MAX = 160
+_WHY_MAX = 160
+_EVIDENCE_MAX = 220
 
 _ECON_SIGNIFICANCE_CLASS = {"high": "material incentive-code change",
                             "med": "notable incentive-code change"}
 _ECON_DIRECTION_LABEL = {
     "emissions_up": "emissions ↑", "emissions_down": "emissions ↓",
-    "reshuffle": "winners/losers reshuffle", "neutral": "neutral",
-    "unknown": "unclear"}
+    "reshuffle": "winners / losers reshuffle", "neutral": "no net effect",
+    "unknown": "direction unclear"}
+
+
+def _clip(text: Any, limit: int) -> Optional[str]:
+    """Trim to `limit` chars on a word boundary, appending … when cut.
+    None/blank in → None out."""
+    if text is None:
+        return None
+    value = " ".join(str(text).split())  # collapse whitespace/newlines
+    if not value:
+        return None
+    if len(value) <= limit:
+        return value
+    return value[:limit].rsplit(" ", 1)[0].rstrip(" ,.;:—-") + "…"
 
 
 def _econ_provenance(payload: Dict[str, Any],
                      price: Optional[str]) -> List[str]:
-    """Provenance as its own labeled single-fact lines (SHA range, commits,
-    files, entry price) — grouped into the expandable blockquote, never
-    crammed onto one line."""
+    """Provenance as its own labeled single-fact lines. Files show as
+    basenames (full paths wrap into mush on a phone), capped with a +N tail."""
     commits_suffix = "+" if payload.get("commits_truncated") else ""
-    prov = ["commits · %s%s → %s%s · %s commit(s)%s"
-            % (_MONO_OPEN, str(payload.get("prev_sha") or "-")[:12],
+    prov = ["%scommits ·%s %s%s → %s%s · %s commit(s)%s"
+            % (_BOLD_OPEN, _BOLD_CLOSE,
+               _MONO_OPEN, str(payload.get("prev_sha") or "-")[:12],
                str(payload.get("new_sha") or "-")[:12], _MONO_CLOSE,
                payload.get("commit_count", "?"), commits_suffix)]
-    files = [str(path)[:80] for path in (payload.get("files") or [])[:4]]
+    files = [str(path) for path in (payload.get("files") or [])]
     if files:
-        prov.append("files · " + " · ".join(files))
+        shown = [f.rstrip("/").rsplit("/", 1)[-1][:48] for f in files[:3]]
+        line = "%sfiles ·%s %s" % (_BOLD_OPEN, _BOLD_CLOSE, " · ".join(shown))
+        if len(files) > 3:
+            line += " · +%d more" % (len(files) - 3)
+        prov.append(line)
     if price:
-        prov.append(price)
+        prov.append("%sentry ·%s %s" % (_BOLD_OPEN, _BOLD_CLOSE,
+                                        price.replace("entry price · ", "")))
     return prov
 
 
@@ -1255,37 +1282,33 @@ def _build_econ_event(conn: sqlite3.Connection, row_id: int,
     if unjudged:
         # Judge could not read this change — page it, but say so plainly.
         headline = "Atlas · %s · incentive-code change · unjudged" % label
-        lines = ["verdict unavailable · judge could not read this change"]
+        lines = ["", "verdict unavailable · judge could not read this change"]
         groups = [_econ_provenance(payload, price)]
     elif significance:
-        # Meaning-first card: the change and its read stay visible; the SHA /
-        # files / price provenance tucks into the expandable blockquote so
-        # the card is scannable at a glance, not a wall of text.
+        # Meaning-first card. Each fact sits on its own line, separated by
+        # blank lines, so it reads as a card at a glance rather than a
+        # paragraph. Provenance tucks into the expandable blockquote.
         klass = _ECON_SIGNIFICANCE_CLASS.get(significance,
                                              "incentive-code change")
         headline = "Atlas · %s · %s" % (label, klass)
-        narrative = []
-        what = payload.get("what_changed")
-        why = payload.get("why_it_matters")
+        lines = [""]  # blank line under the headline
+        what = _clip(payload.get("what_changed"), _WHAT_MAX)
+        why = _clip(payload.get("why_it_matters"), _WHY_MAX)
         if what:
-            narrative.append(str(what)[:_VERDICT_MAX])
+            lines.append(what)
         if why:
-            narrative.append("why · " + str(why)[:_VERDICT_MAX])
-        lines = list(narrative)
-        if narrative:
-            lines.append("")  # blank line separates narrative from the read
-        sig_line = "significance · %s · %s" % (
-            significance,
-            _ECON_DIRECTION_LABEL.get(payload.get("direction"), "unclear"))
+            lines += ["", "%swhy ·%s %s" % (_BOLD_OPEN, _BOLD_CLOSE, why)]
+        read = "%ssignificance ·%s %s%s%s · %s" % (
+            _BOLD_OPEN, _BOLD_CLOSE, _BOLD_OPEN, significance, _BOLD_CLOSE,
+            _ECON_DIRECTION_LABEL.get(payload.get("direction"),
+                                      "direction unclear"))
         if payload.get("partial_view"):
-            sig_line += " · partial view"
-        lines.append(sig_line)
+            read += " · partial view"
+        lines += ["", read]
         groups = []
-        evidence = payload.get("evidence")
+        evidence = _clip(payload.get("evidence"), _EVIDENCE_MAX)
         if evidence:
-            groups.append(["based on · %s%s%s"
-                           % (_MONO_OPEN, str(evidence)[:_VERDICT_MAX],
-                              _MONO_CLOSE)])
+            groups.append(["based on · %s" % evidence])
         groups.append(_econ_provenance(payload, price))
     else:
         # Legacy / gate-off event (no verdict in payload).
