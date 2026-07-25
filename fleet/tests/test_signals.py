@@ -831,5 +831,165 @@ class TestRunPass(SignalsBase):
         self.assertIn("extract", summary["signals"])
 
 
+# ---------------------------------------------------------------------------
+# Econ-alert intelligence gate (change: econ-alert-intelligence-gate)
+# ---------------------------------------------------------------------------
+
+def _stub_judge(significance="high", direction="emissions_up", evidence="e",
+                counter=None):
+    def judge(diff_text, files, context):
+        if counter is not None:
+            counter.append((files, context))
+        status = "ok" if significance != sig.ejudge.UNJUDGED else "unjudged"
+        return {"status": status, "significance": significance,
+                "direction": direction, "what_changed": "raised weight cap",
+                "why_it_matters": "shifts emissions", "evidence": evidence}
+    return judge
+
+
+class TestEconGate(SignalsBase):
+    def _gate_config(self, **judge_over):
+        judge = {"enabled": True, "toolset": "plain", "max_calls_per_run": 20,
+                 "max_calls_per_day": 200, "max_diff_bytes": 20000,
+                 "high_stakes_paths": ["mechanism", "set_weights", "emission"]}
+        judge.update(judge_over)
+        cfg = dict(self.config)
+        cfg["signals"] = dict(cfg.get("signals") or {}, judge=judge)
+        return cfg
+
+    def _instant_econ(self):
+        return self.conn.execute(
+            "SELECT payload_json FROM signal_events WHERE class='econ-code' "
+            "AND tier='instant' ORDER BY id").fetchall()
+
+    def test_material_change_pages_with_verdict(self):
+        origin, clone_dir, state = self.make_slot(
+            60, {"validator/reward.py": "W = 0.1\n"})
+        self.advance(60, origin, clone_dir, "validator/reward.py",
+                     "W = 0.25\n", state["local_sha"])
+        sig.run_extract(self.conn, self._gate_config(),
+                        judge=_stub_judge("high"))
+        rows = self._instant_econ()
+        self.assertEqual(len(rows), 1)
+        payload = json.loads(rows[0][0])
+        self.assertEqual(payload["significance"], "high")
+        self.assertEqual(payload["what_changed"], "raised weight cap")
+        outcome = self.conn.execute(
+            "SELECT outcome FROM signal_econ_verdicts").fetchone()[0]
+        self.assertEqual(outcome, "instant")
+
+    def test_cosmetic_change_dropped_but_recorded(self):
+        origin, clone_dir, state = self.make_slot(
+            61, {"validator/reward.py": "W = 0.1\n"})
+        self.advance(61, origin, clone_dir, "validator/reward.py",
+                     "W = 0.1  # tidy\n", state["local_sha"])
+        sig.run_extract(self.conn, self._gate_config(),
+                        judge=_stub_judge("none", evidence=""))
+        self.assertEqual(len(self._instant_econ()), 0)
+        digests = self.conn.execute(
+            "SELECT COUNT(*) FROM signal_events WHERE class='signal-digest'"
+        ).fetchone()[0]
+        self.assertEqual(digests, 0)
+        row = self.conn.execute(
+            "SELECT outcome, significance FROM signal_econ_verdicts"
+        ).fetchone()
+        self.assertEqual(tuple(row), ("drop", "none"))
+
+    def test_high_stakes_none_floors_to_digest(self):
+        origin, clone_dir, state = self.make_slot(
+            62, {"core/mechanism.rs": "fn w() {}\n"})
+        self.advance(62, origin, clone_dir, "core/mechanism.rs",
+                     "fn w() { /* x */ }\n", state["local_sha"])
+        sig.run_extract(self.conn, self._gate_config(),
+                        judge=_stub_judge("none", evidence=""))
+        self.assertEqual(len(self._instant_econ()), 0)
+        digest = self.conn.execute(
+            "SELECT COUNT(*) FROM signal_events WHERE dedup_key LIKE "
+            "'econ-digest:%'").fetchone()[0]
+        self.assertEqual(digest, 1)
+        outcome = self.conn.execute(
+            "SELECT outcome FROM signal_econ_verdicts").fetchone()[0]
+        self.assertEqual(outcome, "digest")
+
+    def test_high_breaks_cooldown(self):
+        origin, clone_dir, state = self.make_slot(
+            63, {"validator/reward.py": "W = 0.1\n"})
+        _r, sha = self.advance(63, origin, clone_dir, "validator/reward.py",
+                               "W = 0.2\n", state["local_sha"])
+        sig.run_extract(self.conn, self._gate_config(), judge=_stub_judge("high"))
+        self.advance(63, origin, clone_dir, "validator/reward.py",
+                     "W = 0.3\n", sha)
+        sig.run_extract(self.conn, self._gate_config(), judge=_stub_judge("high"))
+        self.assertEqual(len(self._instant_econ()), 2)
+
+    def test_med_respects_cooldown(self):
+        origin, clone_dir, state = self.make_slot(
+            64, {"validator/reward.py": "W = 0.1\n"})
+        _r, sha = self.advance(64, origin, clone_dir, "validator/reward.py",
+                               "W = 0.2\n", state["local_sha"])
+        sig.run_extract(self.conn, self._gate_config(), judge=_stub_judge("high"))
+        self.advance(64, origin, clone_dir, "validator/reward.py",
+                     "W = 0.3\n", sha)
+        sig.run_extract(self.conn, self._gate_config(), judge=_stub_judge("med"))
+        self.assertEqual(len(self._instant_econ()), 1)
+        cooldown = self.conn.execute(
+            "SELECT COUNT(*) FROM signal_events WHERE dedup_key LIKE "
+            "'econ-cooldown:%'").fetchone()[0]
+        self.assertEqual(cooldown, 1)
+
+    def test_cache_hit_skips_the_judge(self):
+        origin, clone_dir, state = self.make_slot(
+            65, {"validator/reward.py": "W = 0.1\n"})
+        self.advance(65, origin, clone_dir, "validator/reward.py",
+                     "W = 0.2\n", state["local_sha"])
+        sig.run_extract(self.conn, self._gate_config(), judge=_stub_judge("high"))
+        # reprocess the same range: content hash hits the cache
+        sig.state_set(self.conn, "range_watermark", "0")
+        self.conn.commit()
+        calls = []
+        sig.run_extract(self.conn, self._gate_config(),
+                        judge=_stub_judge("high", counter=calls))
+        self.assertEqual(calls, [])
+        verdicts = self.conn.execute(
+            "SELECT COUNT(*) FROM signal_econ_verdicts").fetchone()[0]
+        self.assertEqual(verdicts, 1)  # idempotent — one row
+
+    def test_budget_exhaustion_ships_unjudged(self):
+        origin, clone_dir, state = self.make_slot(
+            66, {"validator/reward.py": "W = 0.1\n"})
+        self.advance(66, origin, clone_dir, "validator/reward.py",
+                     "W = 0.2\n", state["local_sha"])
+        calls = []
+        sig.run_extract(self.conn, self._gate_config(max_calls_per_run=0),
+                        judge=_stub_judge("high", counter=calls))
+        self.assertEqual(calls, [])  # judge never called
+        rows = self._instant_econ()
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(json.loads(rows[0][0])["unjudged"])
+
+    def test_gate_off_keeps_legacy_behaviour(self):
+        origin, clone_dir, state = self.make_slot(
+            67, {"validator/reward.py": "W = 0.1\n"})
+        self.advance(67, origin, clone_dir, "validator/reward.py",
+                     "W = 0.2\n", state["local_sha"])
+        sig.run_extract(self.conn, self.config)  # no judge, gate off
+        rows = self._instant_econ()
+        self.assertEqual(len(rows), 1)
+        self.assertNotIn("significance", json.loads(rows[0][0]))
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM signal_econ_verdicts").fetchone()[0], 0)
+
+    def test_status_surfaces_gate_counters(self):
+        origin, clone_dir, state = self.make_slot(
+            68, {"validator/reward.py": "W = 0.1\n"})
+        self.advance(68, origin, clone_dir, "validator/reward.py",
+                     "W = 0.25\n", state["local_sha"])
+        sig.run_extract(self.conn, self._gate_config(), judge=_stub_judge("high"))
+        status = sig.signals_status(self.conn)
+        self.assertIn("econ_gate", status)
+        self.assertEqual(status["econ_gate"]["verdicts"].get("instant"), 1)
+        self.assertGreaterEqual(status["econ_gate"]["calls_today"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

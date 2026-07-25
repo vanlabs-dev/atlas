@@ -45,6 +45,9 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_MODULE_DIR)
 
+sys.path.insert(0, _MODULE_DIR)
+import atlas_econ_judge as ejudge  # noqa: E402
+
 SIGNALS_VERSION = "0.1.0"
 
 # Event classes / tiers (the notifier renders these; keep names stable).
@@ -151,6 +154,23 @@ CREATE TABLE IF NOT EXISTS signal_outcomes (
     filled_at TEXT,
     UNIQUE (event_id, netuid, horizon_days)
 );
+CREATE TABLE IF NOT EXISTS signal_econ_verdicts (
+    content_hash TEXT PRIMARY KEY,
+    netuid INTEGER NOT NULL,
+    range_id INTEGER,
+    prev_sha TEXT,
+    new_sha TEXT,
+    matched_files TEXT NOT NULL,
+    significance TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    what_changed TEXT,
+    why_it_matters TEXT,
+    evidence TEXT,
+    outcome TEXT NOT NULL,
+    partial_view INTEGER NOT NULL DEFAULT 0,
+    model_id TEXT,
+    created_at TEXT NOT NULL
+);
 """
 
 # ---------------------------------------------------------------------------
@@ -216,6 +236,41 @@ def signals_cfg(config: Dict[str, Any]) -> Dict[str, Any]:
             continue
         merged[key] = value
     return merged
+
+
+# Econ-alert intelligence gate (change: econ-alert-intelligence-gate).
+# Defaults OFF: with `enabled` false (or no `toolset`), econ detection keeps
+# today's path-match-and-page behaviour, so enabling/disabling is the whole
+# rollback. `toolset` is the no-tools identifier from `hermes tools list` on
+# the box (one-shot mode bypasses approvals, so a restriction is mandatory).
+# Auth is the Hermes X OAuth subscription — no key, provider, or model id here.
+DEFAULT_JUDGE_CFG: Dict[str, Any] = {
+    "enabled": False,
+    "hermes_path": "~/.local/bin/hermes",
+    "toolset": "",
+    "timeout_seconds": 120,
+    "max_calls_per_run": 20,
+    "max_calls_per_day": 200,
+    "max_diff_bytes": 20000,
+    "high_stakes_paths": ["mechanism", "set_weights", "emission"],
+}
+
+
+def judge_cfg(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge the operator's `signals.judge` block under the code defaults, so
+    a partial config keeps the rest of the defaults."""
+    merged = dict(DEFAULT_JUDGE_CFG)
+    for key, value in (cfg.get("judge") or {}).items():
+        if key == "_comment":
+            continue
+        merged[key] = value
+    return merged
+
+
+def _gate_active(jcfg: Dict[str, Any]) -> bool:
+    """The gate runs only when explicitly enabled AND given a toolset; any
+    misconfiguration falls back to the legacy econ path (fail-safe)."""
+    return bool(jcfg.get("enabled") and jcfg.get("toolset"))
 
 
 def _utc_now() -> str:
@@ -723,10 +778,220 @@ def _range_paths(range_row: Dict[str, Any], clone_dir: str,
     return rebuilt, notes
 
 
+# ---------------------------------------------------------------------------
+# Econ-alert intelligence gate — read the diff, judge significance, then
+# route (alert / digest / drop). Reuses the local clone (read-only git) and
+# the Hermes X OAuth subscription via the injected judge. See the
+# econ-alert-intelligence-gate change.
+# ---------------------------------------------------------------------------
+
+def _fetch_econ_diff(clone_dir: str, prev_sha: str, new_sha: str,
+                     econ_files: Sequence[str], max_bytes: int,
+                     git: Optional[Callable[..., Tuple[int, str, str]]] = None
+                     ) -> Tuple[str, bool, bool]:
+    """(diff_text, partial_view, ok). Read-only unified diff of the matched
+    econ files from the local clone, byte-bounded. `ok` is False when the
+    clone/diff is unavailable — the caller then ships `unjudged`."""
+    git = git or _fleet()._run_git
+    try:
+        code, out, err = git(clone_dir, [
+            "diff", "--no-renames", "--unified=3", prev_sha, new_sha, "--"
+        ] + list(econ_files[:_DIFF_PATH_BATCH]))
+    except Exception:  # noqa: BLE001 — missing clone → unjudged, never raise
+        return "", False, False
+    if code != 0:
+        return "", False, False
+    encoded = out.encode("utf-8", "replace")
+    if len(encoded) > max_bytes:
+        return encoded[:max_bytes].decode("utf-8", "ignore"), True, True
+    return out, False, True
+
+
+def _is_high_stakes(econ_files: Sequence[str], jcfg: Dict[str, Any]) -> bool:
+    tokens = [t.lower() for t in jcfg.get("high_stakes_paths") or ()]
+    return any(tok in p.lower() for p in econ_files for tok in tokens)
+
+
+def _route_outcome(significance: str, high_stakes: bool
+                   ) -> Tuple[str, bool]:
+    """(route, break_cooldown) from a verdict significance.
+    route ∈ instant | digest | drop. `high` breaks the per-netuid cooldown;
+    a high-stakes path floors `none` up to a digest so it is never dropped."""
+    if significance == "high":
+        return "instant", True
+    if significance in ("med", ejudge.UNJUDGED):
+        return "instant", False
+    if significance == "low":
+        return "digest", False
+    # none
+    return ("digest" if high_stakes else "drop"), False
+
+
+def _judge_day_key(now: str) -> str:
+    return "judge_calls:%s" % now[:10]
+
+
+def _budget_allows(connection: sqlite3.Connection, jcfg: Dict[str, Any],
+                   budget: Optional[Dict[str, int]], now: str) -> bool:
+    if budget is not None and budget.get("run", 0) >= jcfg["max_calls_per_run"]:
+        return False
+    today = int(state_get(connection, _judge_day_key(now)) or 0)
+    return today < jcfg["max_calls_per_day"]
+
+
+def _budget_consume(connection: sqlite3.Connection,
+                    budget: Optional[Dict[str, int]], now: str) -> None:
+    if budget is not None:
+        budget["run"] = budget.get("run", 0) + 1
+    key = _judge_day_key(now)
+    state_set(connection, key, str(int(state_get(connection, key) or 0) + 1))
+
+
+def _emit_econ_legacy(connection: sqlite3.Connection, cfg: Dict[str, Any],
+                      range_row: Dict[str, Any], netuid: int,
+                      econ_files: List[str], now: str,
+                      summary: Dict[str, Any]) -> None:
+    """Pre-gate behaviour: page every matching range, dampen repeats within
+    the per-netuid cooldown to a digest line. Used when the gate is off."""
+    cooldown_cutoff = (_parse_iso(now) - datetime.timedelta(
+        hours=cfg["econ_cooldown_hours"])).isoformat()
+    recent = connection.execute(
+        "SELECT id FROM signal_events WHERE class = ? AND tier = ? AND "
+        "netuid = ? AND created_at >= ?",
+        (CLASS_ECON, TIER_INSTANT, netuid, cooldown_cutoff)).fetchone()
+    if recent:
+        if queue_digest_line(
+                connection, "econ-cooldown:%d" % range_row["id"],
+                "SN%d further incentive-code change %s · in cooldown"
+                % (netuid, range_row["new_sha"][:12]), now, netuid=netuid):
+            summary["events"]["digest"] = summary["events"].get("digest", 0) + 1
+    else:
+        payload = {"netuid": netuid, "range_id": range_row["id"],
+                   "prev_sha": range_row["prev_sha"],
+                   "new_sha": range_row["new_sha"],
+                   "files": econ_files[:12],
+                   "commit_count": range_row["commit_count"],
+                   "commits_truncated": range_row["commits_truncated"]}
+        if queue_event(connection, CLASS_ECON, TIER_INSTANT, netuid, None,
+                       "econ:%d" % range_row["id"], payload, now):
+            summary["events"]["econ"] = summary["events"].get("econ", 0) + 1
+
+
+def _emit_econ_gated(connection: sqlite3.Connection, cfg: Dict[str, Any],
+                     jcfg: Dict[str, Any], range_row: Dict[str, Any],
+                     netuid: int, econ_files: List[str], clone_dir: str,
+                     now: str,
+                     judge: Optional[Callable[..., Dict[str, Any]]],
+                     budget: Optional[Dict[str, int]],
+                     summary: Dict[str, Any],
+                     git: Optional[Callable[..., Tuple[int, str, str]]]
+                     ) -> None:
+    """Gate one econ candidate: reuse cached verdict or judge the diff, then
+    route. Never raises for judge/diff problems — worst case is `unjudged`."""
+    prev_sha, new_sha = range_row["prev_sha"], range_row["new_sha"]
+    content_hash = ejudge.econ_content_hash(prev_sha, new_sha, econ_files)
+    cached = ejudge.verdict_lookup(connection, content_hash)
+    if cached:
+        verdict = {"status": ("ok" if cached["significance"]
+                              in ejudge.VALID_SIGNIFICANCE else ejudge.UNJUDGED),
+                   "significance": cached["significance"],
+                   "direction": cached["direction"],
+                   "what_changed": cached["what_changed"],
+                   "why_it_matters": cached["why_it_matters"],
+                   "evidence": cached["evidence"]}
+        partial_view = cached["partial_view"]
+    else:
+        diff_text, partial_view, diff_ok = _fetch_econ_diff(
+            clone_dir, prev_sha, new_sha, econ_files,
+            jcfg["max_diff_bytes"], git=git)
+        if not diff_ok:
+            verdict = ejudge._unjudged("diff unavailable")
+        elif not _budget_allows(connection, jcfg, budget, now):
+            verdict = ejudge._unjudged("judge budget exhausted")
+        else:
+            active_judge = judge or ejudge.make_default_judge(jcfg)
+            verdict = active_judge(diff_text, econ_files,
+                                   {"netuid": netuid,
+                                    "partial_view": partial_view})
+            _budget_consume(connection, budget, now)
+
+    significance = verdict.get("significance") or ejudge.UNJUDGED
+    high_stakes = _is_high_stakes(econ_files, jcfg)
+    route, break_cooldown = _route_outcome(significance, high_stakes)
+
+    if not cached:
+        ejudge.verdict_record(connection, content_hash, netuid,
+                              range_row["id"], prev_sha, new_sha, econ_files,
+                              verdict, route, partial_view, now)
+
+    if route == "drop":
+        summary["events"]["econ-drop"] = (
+            summary["events"].get("econ-drop", 0) + 1)
+        return
+
+    if route == "digest":
+        line = _econ_digest_line(netuid, new_sha, significance, verdict,
+                                 high_stakes)
+        if queue_digest_line(connection, "econ-digest:%d" % range_row["id"],
+                             line, now, netuid=netuid):
+            summary["events"]["econ-digest"] = (
+                summary["events"].get("econ-digest", 0) + 1)
+        return
+
+    # route == "instant": respect cooldown unless the verdict breaks through.
+    if not break_cooldown:
+        cooldown_cutoff = (_parse_iso(now) - datetime.timedelta(
+            hours=cfg["econ_cooldown_hours"])).isoformat()
+        recent = connection.execute(
+            "SELECT id FROM signal_events WHERE class = ? AND tier = ? AND "
+            "netuid = ? AND created_at >= ?",
+            (CLASS_ECON, TIER_INSTANT, netuid, cooldown_cutoff)).fetchone()
+        if recent:
+            if queue_digest_line(
+                    connection, "econ-cooldown:%d" % range_row["id"],
+                    "SN%d further incentive-code change %s · in cooldown"
+                    % (netuid, new_sha[:12]), now, netuid=netuid):
+                summary["events"]["digest"] = (
+                    summary["events"].get("digest", 0) + 1)
+            return
+
+    unjudged = significance == ejudge.UNJUDGED
+    payload = {"netuid": netuid, "range_id": range_row["id"],
+               "prev_sha": prev_sha, "new_sha": new_sha,
+               "files": econ_files[:12],
+               "commit_count": range_row["commit_count"],
+               "commits_truncated": range_row["commits_truncated"],
+               "significance": None if unjudged else significance,
+               "direction": verdict.get("direction"),
+               "what_changed": verdict.get("what_changed"),
+               "why_it_matters": verdict.get("why_it_matters"),
+               "evidence": None if unjudged else verdict.get("evidence"),
+               "partial_view": bool(partial_view),
+               "unjudged": unjudged}
+    if queue_event(connection, CLASS_ECON, TIER_INSTANT, netuid, None,
+                   "econ:%d" % range_row["id"], payload, now):
+        key = "econ-unjudged" if unjudged else "econ"
+        summary["events"][key] = summary["events"].get(key, 0) + 1
+
+
+def _econ_digest_line(netuid: int, new_sha: str, significance: str,
+                      verdict: Dict[str, Any], high_stakes: bool) -> str:
+    what = str(verdict.get("what_changed") or "").strip()
+    if high_stakes and significance == "none":
+        tail = "high-stakes path · low-signal verdict"
+    elif what:
+        tail = "minor · %s" % what[:100]
+    else:
+        tail = "minor incentive-code change"
+    return "SN%d incentive-code change %s · %s" % (netuid, new_sha[:12], tail)
+
+
 def process_range(connection: sqlite3.Connection, cfg: Dict[str, Any],
                   matchers: Sequence[Any], regexes: Sequence[Any],
                   range_row: Dict[str, Any], clone_dir: str, now: str,
-                  git: Optional[Callable[..., Tuple[int, str, str]]] = None
+                  git: Optional[Callable[..., Tuple[int, str, str]]] = None,
+                  judge: Optional[Callable[..., Dict[str, Any]]] = None,
+                  budget: Optional[Dict[str, int]] = None
                   ) -> Dict[str, Any]:
     """Extract + detect over one change range. Never raises for per-range
     problems — the outcome is recorded in signal_range_log by the caller."""
@@ -790,34 +1055,18 @@ def process_range(connection: sqlite3.Connection, cfg: Dict[str, Any],
             for key, count in emitted.items():
                 summary["events"][key] = summary["events"].get(key, 0) + count
 
-    # Econ-code detection: recorded/rebuilt path metadata only, no blobs.
+    # Econ-code detection: recorded/rebuilt path metadata selects candidates;
+    # the gate (when enabled) reads the diff and judges before emitting.
     econ_files = [p for p in paths if is_econ_path(p, cfg)]
     if econ_files:
-        cooldown_cutoff = (_parse_iso(now) - datetime.timedelta(
-            hours=cfg["econ_cooldown_hours"])).isoformat()
-        recent = connection.execute(
-            "SELECT id FROM signal_events WHERE class = ? AND tier = ? AND "
-            "netuid = ? AND created_at >= ?",
-            (CLASS_ECON, TIER_INSTANT, netuid, cooldown_cutoff)).fetchone()
-        if recent:
-            if queue_digest_line(
-                    connection, "econ-cooldown:%d" % range_row["id"],
-                    "SN%d further incentive-code change %s · in cooldown"
-                    % (netuid, range_row["new_sha"][:12]), now,
-                    netuid=netuid):
-                summary["events"]["digest"] = (
-                    summary["events"].get("digest", 0) + 1)
+        jcfg = judge_cfg(cfg)
+        if _gate_active(jcfg):
+            _emit_econ_gated(connection, cfg, jcfg, range_row, netuid,
+                             econ_files, clone_dir, now, judge, budget,
+                             summary, git)
         else:
-            payload = {"netuid": netuid, "range_id": range_row["id"],
-                       "prev_sha": range_row["prev_sha"],
-                       "new_sha": range_row["new_sha"],
-                       "files": econ_files[:12],
-                       "commit_count": range_row["commit_count"],
-                       "commits_truncated": range_row["commits_truncated"]}
-            if queue_event(connection, CLASS_ECON, TIER_INSTANT, netuid, None,
-                           "econ:%d" % range_row["id"], payload, now):
-                summary["events"]["econ"] = (
-                    summary["events"].get("econ", 0) + 1)
+            _emit_econ_legacy(connection, cfg, range_row, netuid, econ_files,
+                              now, summary)
     return summary
 
 
@@ -837,7 +1086,8 @@ def _decode_range(row: Tuple[Any, ...]) -> Dict[str, Any]:
 
 def run_extract(connection: sqlite3.Connection, config: Dict[str, Any],
                 now: Optional[str] = None,
-                git: Optional[Callable[..., Tuple[int, str, str]]] = None
+                git: Optional[Callable[..., Tuple[int, str, str]]] = None,
+                judge: Optional[Callable[..., Dict[str, Any]]] = None
                 ) -> Dict[str, Any]:
     """Process every change range past the extraction watermark. Each
     range commits on its own; a failed range is logged `extract-failed`
@@ -849,6 +1099,14 @@ def run_extract(connection: sqlite3.Connection, config: Dict[str, Any],
     regexes = _model_regexes(cfg)
     if invalid:
         state_set(connection, "watchlist_invalid", json.dumps(invalid))
+
+    # Build the real Hermes judge once per pass when the gate is on and no
+    # judge was injected (tests pass a stub). `budget` bounds model calls
+    # across the whole pass.
+    jcfg = judge_cfg(cfg)
+    if judge is None and _gate_active(jcfg):
+        judge = ejudge.make_default_judge(jcfg)
+    budget: Dict[str, int] = {"run": 0}
 
     watermark = int(state_get(connection, "range_watermark") or 0)
     rows = connection.execute(
@@ -864,7 +1122,8 @@ def run_extract(connection: sqlite3.Connection, config: Dict[str, Any],
         summary["ranges"] += 1
         try:
             outcome = process_range(connection, cfg, matchers, regexes,
-                                    range_row, clone_dir, now, git=git)
+                                    range_row, clone_dir, now, git=git,
+                                    judge=judge, budget=budget)
         except Exception as exc:  # noqa: BLE001 — per-range fail-closed
             connection.rollback()
             connection.execute(
@@ -1206,7 +1465,8 @@ def run_pass(connection: sqlite3.Connection, config: Dict[str, Any],
              now: Optional[str] = None,
              git: Optional[Callable[..., Tuple[int, str, str]]] = None,
              price_fetcher: Optional[Callable[
-                 [], Optional[Dict[int, Optional[float]]]]] = None
+                 [], Optional[Dict[int, Optional[float]]]]] = None,
+             judge: Optional[Callable[..., Dict[str, Any]]] = None
              ) -> Dict[str, Any]:
     """The hourly signals pass, invoked inline after reconcile records
     its ranges. First run installs quietly: the extraction watermark
@@ -1228,7 +1488,8 @@ def run_pass(connection: sqlite3.Connection, config: Dict[str, Any],
     connection.commit()
 
     summary = {"seed": seed_epochs(connection, config, now=now, git=git),
-               "extract": run_extract(connection, config, now=now, git=git),
+               "extract": run_extract(connection, config, now=now, git=git,
+                                      judge=judge),
                "measure": run_measurement(connection, config, now=now,
                                           price_fetcher=price_fetcher)}
     return summary
@@ -1488,8 +1749,20 @@ def signals_status(connection: sqlite3.Connection) -> Dict[str, Any]:
         "adoptions": {"rows": adoptions[0], "terms": adoptions[1]},
         "events": events,
         "outcomes": outcome_states,
+        "econ_gate": _econ_gate_status(connection),
         "watchlist_invalid": json.loads(invalid) if invalid else [],
     }
+
+
+def _econ_gate_status(connection: sqlite3.Connection) -> Dict[str, Any]:
+    """Verdict counters for the intelligence gate: how many candidates were
+    alerted / digested / dropped / left unjudged, plus today's model-call
+    tally. Reads the audit table so dropped changes stay visible."""
+    verdicts = {row[0]: row[1] for row in connection.execute(
+        "SELECT outcome, COUNT(*) FROM signal_econ_verdicts GROUP BY outcome")}
+    calls_today = state_get(connection, _judge_day_key(_utc_now()))
+    return {"verdicts": verdicts,
+            "calls_today": int(calls_today) if calls_today else 0}
 
 
 def main(argv: Optional[List[str]] = None) -> int:
