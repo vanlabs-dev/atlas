@@ -295,5 +295,83 @@ class TestFleetSignalAlerts(FleetSignalBase):
             "scrub-refused": 0, "error": 0})
 
 
+# ---------------------------------------------------------------------------
+# Econ verdict card (change: econ-alert-intelligence-gate)
+# ---------------------------------------------------------------------------
+
+ECON_VERDICT_PAYLOAD = {
+    "netuid": 64, "range_id": 30, "prev_sha": "a" * 40, "new_sha": "b" * 40,
+    "files": ["validator/reward.py"], "commit_count": 5,
+    "commits_truncated": False, "significance": "high",
+    "direction": "emissions_up", "what_changed": "latency penalty removed",
+    "why_it_matters": "favors slow high-quality miners",
+    "evidence": "del latency_penalty", "partial_view": False,
+    "unjudged": False,
+}
+
+
+class TestEconVerdictCard(FleetSignalBase):
+    def test_material_card_leads_with_meaning(self):
+        add_event(self.fleet_db, "econ-code", "instant", "econ:30",
+                  ECON_VERDICT_PAYLOAD, netuid=64,
+                  entry=[(64, 0.0265, "recorded")])
+        _summary, sent = self.scan()
+        body = sent[0]
+        self.assertIn("material+incentive-code+change", body)
+        self.assertIn("latency+penalty+removed", body)
+        self.assertIn("favors+slow", body)
+        self.assertIn("significance", body)
+        self.assertIn("high", body)
+        self.assertIn("based+on", body)
+        self.assertIn("blockquote", body)             # details are collapsible
+        self.assertIn("0.0265", body)                 # price in the details
+        self.assertNotIn("not+the+live+chain", body)  # disclaimer dropped
+
+    def test_unjudged_card_is_marked(self):
+        payload = dict(ECON_VERDICT_PAYLOAD, range_id=31, significance=None,
+                       unjudged=True, what_changed=None, why_it_matters=None,
+                       evidence=None)
+        add_event(self.fleet_db, "econ-code", "instant", "econ:31", payload,
+                  netuid=64)
+        _summary, sent = self.scan()
+        body = sent[0]
+        self.assertIn("unjudged", body)
+        self.assertIn("verdict+unavailable", body)
+
+    def test_verdict_text_is_html_escaped(self):
+        payload = dict(ECON_VERDICT_PAYLOAD, range_id=32,
+                       what_changed="<script>alert(1)</script>")
+        add_event(self.fleet_db, "econ-code", "instant", "econ:32", payload,
+                  netuid=64)
+        _summary, sent = self.scan()
+        body = sent[0]
+        self.assertNotIn("%3Cscript%3E", body)  # raw tag never emitted
+        self.assertIn("%26lt%3B", body)         # escaped &lt;
+
+    def test_partial_view_flagged(self):
+        payload = dict(ECON_VERDICT_PAYLOAD, range_id=33, partial_view=True)
+        add_event(self.fleet_db, "econ-code", "instant", "econ:33", payload,
+                  netuid=64)
+        _summary, sent = self.scan()
+        self.assertIn("partial+view", sent[0])
+
+    def test_html_400_falls_back_to_plain(self):
+        add_event(self.fleet_db, "econ-code", "instant", "econ:34",
+                  dict(ECON_VERDICT_PAYLOAD, range_id=34), netuid=64)
+        attempts = []
+
+        def poster(url, data, timeout):
+            body = data.decode("utf-8")
+            attempts.append(body)
+            if "parse_mode=HTML" in body:
+                return 400, "Bad Request: can't parse entities"
+            return 200, '{"ok":true}'
+
+        summary = tg.notify_scan(self.config, "tok-x", "chat-1", self.store,
+                                 poster=poster)
+        self.assertEqual(summary["classes"]["fleet-signal"]["delivered"], 1)
+        self.assertTrue(any("parse_mode=HTML" not in b for b in attempts))
+
+
 if __name__ == "__main__":
     unittest.main()

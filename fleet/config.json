@@ -24,7 +24,18 @@
     "econ_paths": ["reward", "incentive", "scoring", "emission", "set_weights", "mechanism"],
     "econ_cooldown_hours": 24,
     "outcome_horizons_days": [1, 7, 30],
-    "price_retention_days": 120
+    "price_retention_days": 120,
+    "judge": {
+      "_comment": "econ-alert intelligence gate (change: econ-alert-intelligence-gate). DEFAULTS OFF: with `enabled` false (or an empty `toolset`) econ detection keeps the legacy path-match-and-page behaviour — flipping `enabled` is the whole rollback. When on, each econ candidate's diff is read from the local clone and judged by Grok via the local Hermes one-shot CLI (reuses the ratified X OAuth subscription — NO api key, provider, or model id here; the model is whatever Hermes is configured to use). `toolset` is the no-tools identifier from `hermes tools list` on the box (one-shot mode bypasses approvals, so a restriction is mandatory) — the gate stays off until it is set. `high/med` verdicts page (high breaks the per-netuid cooldown), `low` digests, `none` drops (a `high_stakes_paths` match floors it to a digest so consensus/weight/emission changes are never silently dropped). `max_calls_per_run`/`max_calls_per_day` cap model calls (over-budget or timeout ships `unjudged`, never blocks the pass); `max_diff_bytes` bounds the diff fed to the judge. The extract systemd unit must resolve `hermes_path` with a healthy OAuth session. Deploy is forward-only (no historical re-judging).",
+      "enabled": true,
+      "hermes_path": "/home/pi/.local/bin/hermes",
+      "toolset": "todo",
+      "timeout_seconds": 120,
+      "max_calls_per_run": 20,
+      "max_calls_per_day": 200,
+      "max_diff_bytes": 20000,
+      "high_stakes_paths": ["mechanism", "set_weights", "emission"]
+    }
   },
   "metrics": {
     "_comment": "fleet-rotation-metrics policy (change: fleet-rotation-metrics). Omitted keys fall back to code defaults in atlas_fleet_metrics.DEFAULT_METRICS_CFG. Read-only over the clones; the metrics step runs inline after signals on the hourly pass (kill-switch: set `enabled` false). Emission map: a file is scanned when its path carries an `econ_path_tokens` word and a `scan_extensions` suffix (tests/vendor/docs excluded); `route_families` classify an assigned symbol into a routing kind (first keyword match wins — order families specific→general); `opacity_tokens` co-occurring with econ vocab flag a subnet whose economics load remotely (no numbers invented). `ls_remote_ref_cap` bounds the branch-pulse tip snapshot. `momentum_windows` reuse the signals price panel (no new API call); missing history renders n/a. `placeholder_orgs` are dropped from the team-concentration view.",

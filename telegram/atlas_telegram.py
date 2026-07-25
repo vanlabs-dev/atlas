@@ -1212,29 +1212,93 @@ def _build_watchlist_event(conn: sqlite3.Connection, row_id: int,
             "digest_signal_ids": [row[0] for row in pending]}
 
 
+# Verdict text bound — repo/model-derived free text, escaped at render by
+# render_html; bounded here so a card stays scannable.
+_VERDICT_MAX = 200
+
+_ECON_SIGNIFICANCE_CLASS = {"high": "material incentive-code change",
+                            "med": "notable incentive-code change"}
+_ECON_DIRECTION_LABEL = {
+    "emissions_up": "emissions ↑", "emissions_down": "emissions ↓",
+    "reshuffle": "winners/losers reshuffle", "neutral": "neutral",
+    "unknown": "unclear"}
+
+
+def _econ_provenance(payload: Dict[str, Any],
+                     price: Optional[str]) -> List[str]:
+    """Provenance as its own labeled single-fact lines (SHA range, commits,
+    files, entry price) — grouped into the expandable blockquote, never
+    crammed onto one line."""
+    commits_suffix = "+" if payload.get("commits_truncated") else ""
+    prov = ["commits · %s%s → %s%s · %s commit(s)%s"
+            % (_MONO_OPEN, str(payload.get("prev_sha") or "-")[:12],
+               str(payload.get("new_sha") or "-")[:12], _MONO_CLOSE,
+               payload.get("commit_count", "?"), commits_suffix)]
+    files = [str(path)[:80] for path in (payload.get("files") or [])[:4]]
+    if files:
+        prov.append("files · " + " · ".join(files))
+    if price:
+        prov.append(price)
+    return prov
+
+
 def _build_econ_event(conn: sqlite3.Connection, row_id: int,
                       payload: Dict[str, Any], created_at: str,
                       dedup_key: str, pending: List[Tuple[int, str, str]],
                       max_chars: int) -> Dict[str, Any]:
     netuid = payload.get("netuid")
-    headline = "Atlas · %s · incentive-code change" % _subnet_label(conn,
-                                                                    netuid)
-    commits_suffix = "+" if payload.get("commits_truncated") else ""
-    lines = [
-        "%s%s → %s%s · %s commit(s)%s"
-        % (_MONO_OPEN, str(payload.get("prev_sha") or "-")[:12],
-           str(payload.get("new_sha") or "-")[:12], _MONO_CLOSE,
-           payload.get("commit_count", "?"), commits_suffix),
-        "files · " + " · ".join(
-            str(path)[:80] for path in (payload.get("files") or [])[:4]),
-    ]
+    label = _subnet_label(conn, netuid)
+    significance = payload.get("significance")
+    unjudged = bool(payload.get("unjudged"))
     price = _entry_price_line(conn, row_id)
-    if price:
-        lines.append(price)
-    lines.append(_FLEET_SOURCE_LINE)
+
+    if unjudged:
+        # Judge could not read this change — page it, but say so plainly.
+        headline = "Atlas · %s · incentive-code change · unjudged" % label
+        lines = ["verdict unavailable · judge could not read this change"]
+        groups = [_econ_provenance(payload, price)]
+    elif significance:
+        # Meaning-first card: the change and its read stay visible; the SHA /
+        # files / price provenance tucks into the expandable blockquote so
+        # the card is scannable at a glance, not a wall of text.
+        klass = _ECON_SIGNIFICANCE_CLASS.get(significance,
+                                             "incentive-code change")
+        headline = "Atlas · %s · %s" % (label, klass)
+        narrative = []
+        what = payload.get("what_changed")
+        why = payload.get("why_it_matters")
+        if what:
+            narrative.append(str(what)[:_VERDICT_MAX])
+        if why:
+            narrative.append("why · " + str(why)[:_VERDICT_MAX])
+        lines = list(narrative)
+        if narrative:
+            lines.append("")  # blank line separates narrative from the read
+        sig_line = "significance · %s · %s" % (
+            significance,
+            _ECON_DIRECTION_LABEL.get(payload.get("direction"), "unclear"))
+        if payload.get("partial_view"):
+            sig_line += " · partial view"
+        lines.append(sig_line)
+        groups = []
+        evidence = payload.get("evidence")
+        if evidence:
+            groups.append(["based on · %s%s%s"
+                           % (_MONO_OPEN, str(evidence)[:_VERDICT_MAX],
+                              _MONO_CLOSE)])
+        groups.append(_econ_provenance(payload, price))
+    else:
+        # Legacy / gate-off event (no verdict in payload).
+        headline = "Atlas · %s · incentive-code change" % label
+        lines = []
+        groups = [_econ_provenance(payload, price)]
+
+    # Blank-line-separated groups inside one expandable blockquote (house
+    # style, matching the subtensor repo breakdown).
+    expandable = "\n\n".join("\n".join(g) for g in groups if g)
     trailer = _signal_digest_line(pending) if pending else None
-    plain = render_plain(headline, lines, "", trailer, max_chars)
-    html = render_html(headline, lines, "", trailer, max_chars)
+    plain = render_plain(headline, lines, expandable, trailer, max_chars)
+    html = render_html(headline, lines, expandable, trailer, max_chars)
     return {"event_id": "fleet-signal:%s" % dedup_key,
             "event_class": "econ-code", "created_at": created_at,
             "text": plain, "html": html,

@@ -176,10 +176,24 @@ audited (`signals-failed`) and never counts as a reconcile process error.
   under the novelty ceiling clusters when the k-th distinct subnet
   adopts it within the window — ONE instant event per term episode, ever;
   later adopters become digest lines. Econ-code path matches
-  (reward/incentive/scoring/emission vocabulary) page once per change
-  range with a per-netuid cooldown (`econ_cooldown_hours`, default 24 —
-  dampens paging, never recording). Events queue append-only in
-  `signal_events` for the notifier.
+  (reward/incentive/scoring/emission vocabulary) become **candidates**; the
+  cooldown (`econ_cooldown_hours`, default 24 — dampens paging, never
+  recording) still applies. Events queue append-only in `signal_events`
+  for the notifier.
+- **Intelligence gate (change: econ-alert-intelligence-gate, `signals.judge`,
+  default OFF).** When enabled, an econ candidate is not paged on the path
+  match alone: its diff is read from the local clone and judged by Grok via
+  the local Hermes one-shot CLI (reuses the ratified X OAuth subscription —
+  no key/provider/model id in fleet code). The evidence-grounded verdict
+  (`significance` high/med/low/none, `direction`) routes it: `high`/`med`
+  page a meaning-first card (`high` breaks the cooldown), `low` digests,
+  `none` drops — but a `high_stakes_paths` match (mechanism/set_weights/
+  emission) floors a drop to a digest so the most dangerous changes are never
+  silently lost. Verdicts (including drops and `unjudged`) persist in
+  `signal_econ_verdicts`, content-hash keyed so re-runs are idempotent and
+  cached; budget/timeout ship `unjudged` rather than block. Off = the legacy
+  behaviour above (every candidate pages). See `signals status` →
+  `econ_gate` for candidate/alert/digest/drop/unjudged counters.
 - **Effectiveness ledger.** Instant events snapshot alpha price in TAO at
   event creation (clusters: per member) via the KEYLESS TaoSwap subnets
   operation through the live-data layer — at most one fetch per pass,
