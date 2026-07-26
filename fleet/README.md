@@ -318,14 +318,14 @@ token-safe, per-slot fail-closed all verified against real data).
   effectiveness ledger; deployed + archived.
 - **fleet-rotation-metrics** — metrics + the ranked LAN dashboard;
   implemented, tested (full fleet suite 214 green off-device), committed
-  (`17f8e28`), delta specs synced into live specs. On the Pi the metrics
-  pass has run over all 104 clones (43 emission routes, e.g. SN54 = 35%
-  partner) and the board renders; `atlas-dashboard.service` is installed and
-  serves the board locally. **Open:** the board is not yet reachable from the
-  operator's browser (LISTEN on `192.168.0.150:8480`, SSH/ping to the Pi work
-  but port 8480 does not, and the Pi has no host firewall installed —
-  under diagnosis; likely a hardening-loaded kernel netfilter ruleset). The
-  change is **not yet archived** pending that access confirmation.
+  (`17f8e28`), delta specs synced into live specs, deployed + archived.
+  On the Pi the metrics pass runs inline each fleet pass over all active
+  clones (43 emission routes, e.g. SN54 = 35% partner) and the board renders;
+  `atlas-dashboard.service` serves it at `http://192.168.0.150:8480/`
+  (LAN only). The Phase 1 hardening firewall (`/etc/nftables.conf`,
+  default-deny inbound) initially dropped port 8480; amended 2026-07-26 with
+  a LAN-scoped accept (`ip saddr 192.168.0.0/24 tcp dport 8480 accept`) and
+  reachability + traversal-containment verified from another LAN device.
 
 ## Before it is self-maintaining — operator steps
 
