@@ -103,9 +103,9 @@ value before any dashboard exists; branch pulse and the served page follow.
   (netuid 54 = 35% partner, burn-mechanics breadth).
 - [x] 8.2 Run `activity` backfill from local `git log`; confirm chutes/
   computehorde are not fade-flagged once branch pulse has ≥2 passes.
-- [ ] 8.3 Install + start `atlas-dashboard.service`; confirm LAN reachability
+- [x] 8.3 Install + start `atlas-dashboard.service`; confirm LAN reachability
   from another device and that only `www/` is served.
-- [ ] 8.4 Let the hourly pass run one cycle; verify metrics + render fire inline
+- [x] 8.4 Let the hourly pass run one cycle; verify metrics + render fire inline
   without affecting reconcile/signals, and `status` reports healthy coverage.
 
 ## 9. Sync + archive
@@ -113,5 +113,5 @@ value before any dashboard exists; branch pulse and the served page follow.
 - [x] 9.1 Run `openspec validate fleet-rotation-metrics`; sync delta specs into
   the live specs (`fleet-rotation-metrics` new spec + `subnet-repo-fleet` branch
   -tips requirement).
-- [ ] 9.2 Update memory (atlas-fleet-sweep-findings → shipped; note dashboard
+- [x] 9.2 Update memory (atlas-fleet-sweep-findings → shipped; note dashboard
   URL/port and any config knobs tuned on-device) and archive the change.
