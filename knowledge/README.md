@@ -11,7 +11,7 @@ ATLAS-RET-001…007, and ATLAS-TOOL-001…004 via OpenSpec change
 | file | role |
 |---|---|
 | [`corpus/`](corpus/SOURCES.md) | verbatim snapshot + provenance + re-sync procedure |
-| [`supersession-markers.json`](supersession-markers.json) | known-stale claims marked `conflicting` at ingest (currently: conviction activation) |
+| [`supersession-markers.json`](supersession-markers.json) | known-stale claims marked `conflicting` at ingest (currently: none — the 2026-07-28 re-sync absorbed all markers) |
 | [`atlas_kb.py`](atlas_kb.py) | `ingest` (hash-verified, stages units + validation report) · `activate` (operator gate) · `status` |
 | [`atlas_kb_server.py`](atlas_kb_server.py) | stdio MCP server: `knowledge_search` / `knowledge_get_evidence` / `knowledge_status` — replaces `atlas-test` |
 | [`benchmark/`](benchmark/) | 26-exchange retrieval benchmark (battery, scorer, threshold sheet) — closes the deferred ATLAS-HERMES-003 retrieval criterion and re-tests MV-RI-4 |

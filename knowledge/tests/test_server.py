@@ -43,15 +43,26 @@ class ServerTests(unittest.TestCase):
         for field in ("unit_id", "source_file", "heading_path",
                       "coverage_date", "evidence_state", "content"):
             self.assertIn(field, top)
-        self.assertEqual(top["coverage_date"], "2026-06-25")
+        self.assertEqual(top["coverage_date"], "2026-07-28")
 
     def test_conflict_surfaced(self):
-        payloads = call_server(self.db, [tool_call(
-            1, "knowledge_search",
-            {"query": "conviction ownership transfer"})])
-        top = payloads[1]["results"][0]
-        self.assertEqual(top["evidence_state"], "conflicting")
-        self.assertIn("spec_version >= 425", top["conflict_note"])
+        # The real corpus has no markers since the 2026-07-28 re-sync;
+        # verify surfacing behavior with a synthetic marker instead.
+        import json as _json
+        with tempfile.TemporaryDirectory() as tmp:
+            markers = os.path.join(tmp, "markers.json")
+            with open(markers, "w", encoding="utf-8") as handle:
+                _json.dump([{"match": "emission gate",
+                             "state": "conflicting",
+                             "note": "synthetic test marker"}], handle)
+            db, _run, _report = ingest_real_corpus(
+                tmp, markers_file=markers)
+            payloads = call_server(db, [tool_call(
+                1, "knowledge_search", {"query": "emission gate"})])
+            top = payloads[1]["results"][0]
+            self.assertEqual(top["evidence_state"], "conflicting")
+            self.assertEqual(top["conflict_note"],
+                             "synthetic test marker")
 
     def test_insufficient_evidence_is_structured(self):
         payloads = call_server(self.db, [tool_call(
@@ -74,7 +85,7 @@ class ServerTests(unittest.TestCase):
         result = payloads[1]
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["active_run"], self.run_id)
-        self.assertIn("conflicting", result["units_by_state"])
+        self.assertIn("confirmed", result["units_by_state"])
 
     def test_structured_errors(self):
         payloads = call_server(self.db, [
