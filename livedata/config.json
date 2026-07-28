@@ -47,7 +47,7 @@
   "price_tolerance_pairwise": 0.05,
   "gate_signal": {
     "_comment": "Emission-gate crossing signal (change: gate-crossing-signal). DEFAULTS OFF: `enabled` false makes poll-gate inert and the Telegram gate-crossing class silent — flipping it is the whole rollback. Reads the spec-440 gate state (theta/q/h) from finney via keyless JSON-RPC state_getStorage on PINNED pre-verified keys (twox128('SubtensorModule') ++ twox128(item); verified against live Finney 2026-07-28), all at one finalized block. Null storage is normal (Substrate never writes ValueQuery defaults): null q/h uses assumed_defaults marked assumed-default provenance (spec-440 code defaults — live q was ALREADY explicit 0.75 on 2026-07-28); null/zero theta records gate-inactive. Demand shares come from the subnets_taoswap panel of the same pass, normalized over ALL non-root subnets (the chain's bar universe includes emission-disabled subnets). hysteresis_pct is the relative band around theta a share must exit on confirm_polls consecutive polls to flip a side; absence_clear_polls clears a vanished netuid's side (netuid-reuse guard). rpc_endpoints are tried in order; verify reachability from the Pi at deploy and record the choice in docs/decisions.md.",
-    "enabled": false,
+    "enabled": true,
     "rpc_endpoints": ["https://entrypoint-finney.opentensor.ai"],
     "storage_keys": {
       "EmissionGateBar": "0x658faa385070e074c85bf6b568cf05557c9b0d2964cc73e7519676c3cc4d5df9",
