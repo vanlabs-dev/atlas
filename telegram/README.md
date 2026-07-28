@@ -25,6 +25,7 @@ priority — a live chain upgrade surfaces before repo alerts in the same scan:
 | Class | Source | Trigger |
 |---|---|---|
 | `chain-runtime-upgrade` | `var/livedata/livedata.db` (`spec_upgrades`) | the **live** Finney runtime `spec_version` changed (the network changed) |
+| `gate-crossing` | `var/livedata/livedata.db` (`gate_events`) | a subnet's demand share crossed the spec-440 emission-gate bar in either direction (change: gate-crossing-signal) — an economic cliff event; instant tier with a per-netuid cooldown |
 | `fleet-signal` | `var/fleet/fleet.db` (`signal_events`, read **strictly read-only**) | fleet-signals queue (change: fleet-signals): `narrative-cluster` / `watchlist` / `econ-code` page immediately; `signal-digest` rows are held durably in `pending_signal`, ride the next instant fleet alert, or flush via `digest_backstop_hours` — never paged, never dropped |
 | `repository-update` | `var/repotrack/repotrack.db` (`change_ranges`) | a **significant** tracked commit range (Phase 3 timer); churn is digested, not paged |
 | `schema-drift` | `var/livedata/livedata.db` (`integration_health`) | a live provider response stopped validating (Phase 4) |
@@ -43,6 +44,16 @@ store); ledger dedup keys are the fleet's own per-class dedup keys
 even a watermark reset cannot double-send. Extraction runs in the fleet
 unit and this scan runs in the repo unit — delivery may lag extraction by
 up to one cycle by design.
+
+**Gate-crossing alerts** page confirmed crossings only (livedata applies
+the hysteresis and 2-poll confirmation before an event exists). The body
+is single-fact `·` lines — netuid, demand share, bar, relative margin —
+and names each figure's source (`shares: TaoSwap panel · bar: chain RPC ·
+block N`), plus an `emission is DISABLED` note when the crossing subnet
+earns zero either way. Both directions page (a cliff either way);
+`cooldown_hours` (per netuid, default 24) records further events in the
+ledger as `suppressed` instead of paging — never dropped. The watermark is
+the livedata `gate_events` row id.
 
 **Repository alert tiering** (signal-tiering, 2026-07-13). Each tracked commit
 range is classified from recorded facts (changed paths + the recorded runtime
@@ -109,14 +120,15 @@ Run `init` before enabling any schedule, or the first `scan` treats the
 whole backlog as new. Re-run `init` after an upgrade to seed only new classes
 (it never rolls a seeded watermark back); the pre-tiering SHA-valued
 repository watermark migrates itself to a `change_ranges.id` on the first
-scan (no history replay). **Schedule (decided 2026-07-12):** the hourly
-`atlas-repotrack-update.service` runs two best-effort `ExecStartPost=-…`
-steps after the repo update — first `livedata/atlas_live.py poll-chain-head`
+scan (no history replay). **Schedule (decided 2026-07-12; gate poll added 2026-07-28):** the hourly
+`atlas-repotrack-update.service` runs three best-effort `ExecStartPost=-…`
+steps after the repo update — `livedata/atlas_live.py poll-chain-head`
 (one non-interactive TaoStats call so a live upgrade is detected promptly),
-then `atlas_telegram.py scan`. The ordering matters: the poll records a fresh
-upgrade event *before* the scan reads it, so it alerts in the same run. Both
-are best-effort — a notifier or provider failure never fails the repo unit
-(isolation).
+then `livedata/atlas_live.py poll-gate` (the emission-gate pass; inert
+unless `gate_signal.enabled`), then `atlas_telegram.py scan`. The ordering
+matters: each poll records fresh events *before* the scan reads them, so
+they alert in the same run. All are best-effort — a notifier or provider
+failure never fails the repo unit (isolation).
 
 Config: [config.json](config.json). Setup: [docs/operator-setup.md](docs/operator-setup.md).
 Tests: `python -m pytest telegram/tests -q` (or `python3 -m unittest discover
