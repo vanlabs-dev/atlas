@@ -37,8 +37,10 @@ per-netuid cooldown window SHALL be recorded but not paged — never dropped.
 The alert body SHALL state the netuid, direction, demand share, bar value,
 margin, and the source of each figure (panel-derived share vs chain-read
 bar) as single-fact lines in the established message style (HTML with
-plain-text fallback, no em or en dashes). When the class is disabled it
-SHALL be absent from the scan without affecting the other classes.
+plain-text fallback, no em or en dashes), and SHALL note when the crossing
+subnet is currently emission-disabled (the crossing is informational — the
+subnet earns zero either way). When the class is disabled it SHALL be
+absent from the scan without affecting the other classes.
 
 #### Scenario: Confirmed crossing pages once
 
