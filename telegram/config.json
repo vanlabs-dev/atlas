@@ -31,7 +31,7 @@
     },
     "gate-crossing": {
       "_comment": "Emission-gate crossing alerts (change: gate-crossing-signal). DISABLED at ship time — enable together with livedata gate_signal.enabled at deploy (the whole rollback is flipping both back). Reads livedata's gate_events read-only past a row-id watermark. Instant tier, priority just below chain upgrades; cooldown_hours dampens per-netuid paging (suppressed events are recorded in the ledger, never dropped).",
-      "enabled": false,
+      "enabled": true,
       "source_db": "var/livedata/livedata.db",
       "cooldown_hours": 24
     },

@@ -168,12 +168,13 @@ class GateAdapterTests(unittest.TestCase):
 
     def test_adapter_registered_and_class_config_present(self):
         self.assertIn("gate-crossing", tg._ADAPTERS)
-        # The shipped repo config carries the class disabled by default.
+        # The shipped repo config carries the class (its enabled flag is
+        # deploy state, not asserted here).
         import json
         with open(tg.CONFIG_FILE, "r", encoding="utf-8") as handle:
             shipped = json.load(handle)
         spec = shipped["classes"]["gate-crossing"]
-        self.assertFalse(spec["enabled"])
+        self.assertIn("enabled", spec)
         self.assertEqual(spec["source_db"], "var/livedata/livedata.db")
 
     def test_disabled_class_is_absent_from_scan(self):
