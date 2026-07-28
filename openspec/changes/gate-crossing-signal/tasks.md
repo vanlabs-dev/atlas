@@ -73,17 +73,17 @@
 
 ## 5. Deploy (Pi) and acceptance
 
-- [ ] 5.1 `git pull` on the Pi; verify the three pinned keys against the
+- [x] 5.1 `git pull` on the Pi; verify the three pinned keys against the
       live chain FROM the Pi (theta decodes in-bounds; q/h value-or-null
       as expected — q was explicit 0.75 and h null on 2026-07-28); choose
       and record the RPC endpoint; run `poll-gate` once manually to seed
       (silent) and inspect `livedata status`
-- [ ] 5.2 Enable `gate_signal.enabled`; run a scan pass end-to-end; send
+- [x] 5.2 Enable `gate_signal.enabled`; run a scan pass end-to-end; send
       a `test --class gate-crossing` alert and confirm delivery
 - [ ] 5.3 Operator installs the updated service unit (`sudo cp` +
       `daemon-reload`); verify the hourly pass runs poll-gate before the
       Telegram scan
-- [ ] 5.4 Record acceptance in `docs/decisions.md` (evidence: endpoint,
+- [x] 5.4 Record acceptance in `docs/decisions.md` (evidence: endpoint,
       observed theta/q/h with provenance, seeded sides count, first
       recorded events if any, suppressions); set a calibration read date
       for `hysteresis_pct`/cooldown
