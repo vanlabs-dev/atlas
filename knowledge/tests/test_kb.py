@@ -49,10 +49,14 @@ class IngestTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
 
-    def test_ingest_records_and_marks_conflict(self):
+    def test_ingest_records_real_corpus(self):
+        # The 2026-07-28 re-sync absorbed all supersession markers, so the
+        # real corpus stages with no conflicting units.
         db, run_id, report = ingest_real_corpus(self.tmp.name,
                                                 activate=False)
-        self.assertEqual(report["unit_counts_by_state"]["conflicting"], 1)
+        self.assertNotIn("conflicting", report["unit_counts_by_state"])
+        self.assertGreater(
+            report["unit_counts_by_state"].get("confirmed", 0), 0)
         self.assertEqual(report["secret_scan_findings"], [])
         self.assertEqual(report["duplicate_unit_ids"], [])
         connection = sqlite3.connect(db)
@@ -60,17 +64,36 @@ class IngestTests(unittest.TestCase):
             run = connection.execute(
                 "SELECT coverage_date, parser_version FROM intake_runs "
                 "WHERE run_id = ?", (run_id,)).fetchone()
-            self.assertEqual(run, ("2026-06-25", akb.PARSER_VERSION))
-            conflict = connection.execute(
-                "SELECT heading_path, conflict_note FROM units WHERE "
-                "evidence_state = 'conflicting'").fetchone()
-            self.assertIn("Conviction", conflict[0])
-            self.assertIn("spec_version >= 425", conflict[1])
+            self.assertEqual(run, ("2026-07-28", akb.PARSER_VERSION))
             self.assertEqual(connection.execute(
                 "SELECT count(*) FROM units WHERE active = 1"
             ).fetchone()[0], 0, "units must stage inactive")
         finally:
             connection.close()
+
+    def test_markers_mark_conflicts(self):
+        markers = os.path.join(self.tmp.name, "markers.json")
+        with open(markers, "w", encoding="utf-8") as handle:
+            json.dump([{"match": "emission gate",
+                        "state": "conflicting",
+                        "note": "synthetic test marker"}], handle)
+        db, run_id, report = ingest_real_corpus(self.tmp.name,
+                                                activate=False,
+                                                markers_file=markers)
+        self.assertGreaterEqual(
+            report["unit_counts_by_state"]["conflicting"], 1)
+        connection = sqlite3.connect(db)
+        try:
+            conflict = connection.execute(
+                "SELECT conflict_note FROM units WHERE "
+                "evidence_state = 'conflicting'").fetchone()
+            self.assertEqual(conflict[0], "synthetic test marker")
+        finally:
+            connection.close()
+        with open(os.path.join(self.tmp.name,
+                               "validation-report-%s.md" % run_id),
+                  "r", encoding="utf-8") as handle:
+            self.assertIn("Marked conflicts", handle.read())
 
     def test_activation_flips_active_and_audits(self):
         db, run_id, _report = ingest_real_corpus(self.tmp.name,
@@ -129,7 +152,7 @@ class IngestTests(unittest.TestCase):
                                "validation-report-%s.md" % run_id),
                   "r", encoding="utf-8") as handle:
             summary = handle.read()
-        self.assertIn("Marked conflicts", summary)
+        self.assertIn("## Activation", summary)
 
     def test_bad_marker_file_is_fatal(self):
         path = os.path.join(self.tmp.name, "markers.json")

@@ -7,21 +7,22 @@ Verbatim snapshot of the confirmed July 2026 Bittensor corpus (decision
 | field | value |
 |---|---|
 | Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
-| Sync date | 2026-07-12 |
-| Coverage date | 2026-06-25 (last upstream edit) |
+| Sync date | 2026-07-28 |
+| Coverage date | 2026-07-28 (last upstream edit) |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Known staleness at snapshot time
 
-`ground-truth.md` states conviction ownership transfer is "NOT yet active" —
-**verified still true on-chain 2026-07-12** (Phase 3 repo evidence + Phase 4
-chain evidence: mainnet runs spec 424; the enforcement code is spec 425,
-unreleased; activation was announced 2026-07-02 but enactment is pending —
-see the decision log's chain-evidence entry). Ingest marks the affected
-units `conflicting` via
-[../supersession-markers.json](../supersession-markers.json) so retrieval
-surfaces the announced-but-pending status; the marker (and eventually the
-corpus itself) updates when the chain head reports spec_version ≥ 425.
+None. The 2026-07-28 re-sync absorbed the prior conviction marker (the
+2026-07-12 snapshot said ownership transfer was "NOT yet active"; the
+enforcement went live with spec 432 on 2026-07-16, and the corpus now says
+so) and added the July 2026 emission-model changes, each verified against
+the merged subtensor code (tags v432/v440) and the live Finney runtime
+(spec_version 440 confirmed via RPC on 2026-07-28): root_prop removed from
+the emission share (spec 432, live 2026-07-16) and the Hill emission gate
+(spec 440, live 2026-07-27, defaults q = 0.61 / h = 3, both sudo-settable).
+[../supersession-markers.json](../supersession-markers.json) is empty; add
+new markers there if a corpus claim goes stale before the next re-sync.
 
 ## Re-sync procedure
 

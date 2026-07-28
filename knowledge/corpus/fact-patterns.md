@@ -28,19 +28,24 @@ Fix: Current daily emission is ~3,600 TAO (0.5 TAO/block) after the first halvin
 ### 3. Outdated emission model
 Patterns: "emissions based on net tao flows", "taoflow determines/drives emissions", "flow-based emissions", "net staking flows determine emissions" (when NOT describing Taoflow as the historical November 2025 to June 2026 model)
 
-Fix: As of June 2026, emissions are PRICE-based again (subtensor v3.4.6-421). emission_share is proportional to root_prop x EMA price x (1 - miner_burn), normalized across emit-enabled subnets. Taoflow (flow-based) applied only from November 2025 to June 2026. A correct price-based description must NOT be flagged.
+Fix: As of June 2026, emissions are PRICE-based again (subtensor v3.4.6-421), and the price model itself has since evolved: root_prop was removed from the share on 2026-07-16 (spec 432), and an emission gate was added on 2026-07-27 (spec 440). The CURRENT share is EMA price x (1 - miner_burn), normalized across emit-enabled subnets, then passed through a Hill gate that collapses below-bar (low-demand) subnets toward zero and redistributes to above-bar subnets. Taoflow (flow-based) applied only from November 2025 to June 2026. A correct price-based description must NOT be flagged.
+
+### 3a. Outdated price-based formula (root_prop in the share, or no gate)
+Patterns: "root_prop x EMA price", "root proportion weights/determines emission share", any CURRENT-tense share formula that includes root_prop, or any claim that every subnet with demand earns a proportional share (ignoring the gate).
+
+Fix: Since 2026-07-16 (spec 432) root_prop does NOT weight emission share (it still caps alpha injection and splits root dividends). Since 2026-07-27 (spec 440) the normalized share additionally passes through the emission gate: gate(s) = s^h / (s^h + theta^h), where theta is the q-mass bar over demand shares recomputed every 360 blocks (defaults q = 0.61, h = 3; both sudo-settable, never state as permanent). Below-bar subnets' emission collapses toward zero; above-bar subnets receive more than their raw demand share.
 
 ### 3b. Mechanic applied to the wrong emission era (temporal misattribution)
 Pattern: any past-tense claim ("was", "were", "historically", "used to", "before the change", "has always") that applies a mechanic from a different era than the one in effect then. Most common: stating or implying that miner_burn affected a subnet's emission share BEFORE June 2026 (e.g. "burning was costing them emission share", "miner_burn has always cut the network share").
 
-**Check**: For any past-tense claim about a mechanic, confirm the mechanic existed in the emission model active during that period. The (1 - miner_burn) coupling between miner_burn and emission share is the June 2026 price-based model ONLY. Under Taoflow (November 2025 to June 2026) emission share was set by net TAO flows, so miner_burn did NOT affect emission share. Under the original price-based dTAO (to November 2025) the ground truth does not establish a miner_burn coupling either, so do not assume one.
+**Check**: For any past-tense claim about a mechanic, confirm the mechanic existed in the emission model active during that period. The eras: original dTAO price-based (February 2025 to November 2025); Taoflow net-flows (November 2025 to June 2026); price-based with root_prop weighting (June 2026, spec 421, to 2026-07-16, spec 432); ungated price x (1 - miner_burn) (2026-07-16 to 2026-07-27); gated (2026-07-27, spec 440, onward). The (1 - miner_burn) coupling exists in ALL the post-June-2026 price eras but NOT before: under Taoflow emission share was set by net TAO flows, so miner_burn did NOT affect emission share, and under the original dTAO the ground truth does not establish a coupling either. root_prop weighted the share ONLY June 2026 to 2026-07-16. The emission gate exists ONLY from 2026-07-27.
 
-Fix: Use the model in effect THEN. For a subnet that burned historically and is now setting miner_burn to 0%: under Taoflow burning did not touch emission share; the June 2026 price-based model put miner_burn in the formula via (1 - miner_burn), so burning is now self-taxing at the network level. If unsure which era a past event sits in, drop the historical claim. Never apply the current coupling retroactively.
+Fix: Use the model in effect THEN. For a subnet that burned historically and is now setting miner_burn to 0%: under Taoflow burning did not touch emission share; every post-June-2026 price model puts miner_burn in the formula via (1 - miner_burn), so burning is now self-taxing at the network level. If unsure which era a past event sits in, drop the historical claim. Never apply a current mechanic (gate, root_prop removal, miner_burn coupling) retroactively.
 
 ### 4. Root validators voting on emissions
 Pattern: "root validators vote/voting/decide/determine emissions"
 
-Fix: Root validator voting was replaced by dTAO in February 2025. Emissions are now price-based: root_prop x EMA price x (1 - miner_burn), normalized across emit-enabled subnets.
+Fix: Root validator voting was replaced by dTAO in February 2025. Emissions are now gated price-based: EMA price x (1 - miner_burn), normalized across emit-enabled subnets, then passed through the emission gate.
 
 ### 5. Validators mine
 Pattern: "validators mine/mining/produce work"

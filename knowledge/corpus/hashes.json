@@ -1,10 +1,10 @@
 {
   "origin": "D:/Coding/Bittensor/IntoOps/intoops-routines/references (source of truth)",
-  "sync_date": "2026-07-12",
-  "coverage_date": "2026-06-25",
+  "sync_date": "2026-07-28",
+  "coverage_date": "2026-07-28",
   "files": {
-    "ground-truth.md": "f92a474a312894f6bace1b65bd2bcab87932d2e7dbe10ee5603c7dfd5578d10d",
-    "fact-patterns.md": "f8554a0c253ef83eca1cacc4c04535b3560608e10a2b9d05d9b9d8d3abe523f4",
+    "ground-truth.md": "5fa158de271e15d8ca145162d21688c7e23b6cb73e28a1e559e2670517e9246e",
+    "fact-patterns.md": "44fc14d52225e1a3adcf21d1fef29505e8fd114f13f6652bea0c0f58997f79c1",
     "negative-claim-rules.md": "bee65dbf186771440eecd4656314ac0f4e9d6daed3e49fbf823d32fd39066b69"
   },
   "note": "sha256 over newline-normalized (LF) bytes; see load_corpus"

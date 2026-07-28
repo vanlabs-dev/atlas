@@ -1,7 +1,1 @@
-[
-  {
-    "match": "Future ownership transfer",
-    "state": "conflicting",
-    "note": "Corpus (coverage 2026-06-25) says conviction ownership transfer is NOT yet active — verified STILL TRUE on-chain 2026-07-12 (mainnet spec_version 424; the enforcement code is spec 425, unreleased). Opentensor ANNOUNCED activation 2026-07-02 ('activates tomorrow') but enactment is pending. This claim will flip when the chain head reports spec_version >= 425 — check the atlas-live live_chain_head tool for current status. See docs/decisions.md chain-evidence entry of 2026-07-12."
-  }
-]
+[]

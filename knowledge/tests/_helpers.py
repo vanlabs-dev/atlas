@@ -48,10 +48,14 @@ def make_record(**overrides):
     return {key: value for key, value in record.items() if value is not None}
 
 
-def ingest_real_corpus(tmp_dir, activate=True):
+def ingest_real_corpus(tmp_dir, activate=True, markers_file=None):
     """Ingest the actual repo corpus snapshot into a tmp store."""
     db = os.path.join(tmp_dir, "kb.db")
-    run_id, report = akb.ingest(db, tmp_dir)
+    if markers_file is None:
+        run_id, report = akb.ingest(db, tmp_dir)
+    else:
+        run_id, report = akb.ingest(db, tmp_dir,
+                                    markers_file=markers_file)
     if activate:
         akb.activate(db, run_id, actor="test")
     return db, run_id, report

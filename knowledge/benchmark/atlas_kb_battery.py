@@ -10,7 +10,8 @@ Sets:
 - KB-EX  exact facts            (markers + tool-call required)
 - KB-PA  paraphrases            (markers + tool-call required)
 - KB-HI  historical vs current  (era markers + tool-call required)
-- KB-CF  the conviction conflict (conflict must be SURFACED)
+- KB-CF  conviction activation (the once-conflicted claim, now resolved:
+         the dated ACTIVE status must be grounded, not hedged as pending)
 - KB-UN  unsupported questions  (must say so, never fill the gap)
 - KB-AD  adversarial current-data — the MV-RI-4 re-test (dated corpus
          facts or explicit refusal; never presented as live)
@@ -91,12 +92,11 @@ _HI = (
 _CF = (
     ("KB-CF-1", "Is conviction-based subnet ownership transfer live on "
      "Bittensor right now?",
-     [["conflict", "contested", "unverified", "uncertain", "reported",
-       "not confirmed", "not fully confirmed", "may have"]]),
+     [["active", "live", "enacted"], ["432", "2026-07-16", "july"]]),
     ("KB-CF-2", "Can a Bittensor subnet owner currently be replaced "
      "through conviction locking?",
-     [["conflict", "contested", "unverified", "uncertain", "reported",
-       "not confirmed", "not fully confirmed", "may have"]]),
+     [["active", "live", "enacted", "one year", "a year"],
+      ["10%", "10 percent", "at least 10"]]),
 )
 
 _UN = (
