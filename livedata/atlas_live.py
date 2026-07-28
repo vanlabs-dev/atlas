@@ -101,11 +101,44 @@ CREATE TABLE IF NOT EXISTS spec_upgrades (
     new_spec INTEGER NOT NULL,
     block_reference INTEGER
 );
+CREATE TABLE IF NOT EXISTS gate_state (
+    id INTEGER PRIMARY KEY,
+    observed_at TEXT NOT NULL,
+    block_hash TEXT,
+    block_number INTEGER,
+    gate_active INTEGER NOT NULL,
+    theta REAL,
+    q REAL NOT NULL,
+    q_provenance TEXT NOT NULL,
+    h REAL NOT NULL,
+    h_provenance TEXT NOT NULL,
+    endpoint TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS gate_sides (
+    netuid INTEGER PRIMARY KEY,
+    side TEXT NOT NULL,
+    pending_side TEXT,
+    pending_count INTEGER NOT NULL DEFAULT 0,
+    miss_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS gate_events (
+    id INTEGER PRIMARY KEY,
+    observed_at TEXT NOT NULL,
+    netuid INTEGER NOT NULL,
+    direction TEXT NOT NULL,
+    share REAL NOT NULL,
+    theta REAL NOT NULL,
+    prev_side TEXT NOT NULL,
+    emission_enabled INTEGER,
+    block_number INTEGER
+);
 """
 
 META_LAST_LIVE_SPEC = "last_live_spec"
 META_LAST_LIVE_SPEC_BLOCK = "last_live_spec_block"
 META_LAST_LIVE_SPEC_OBSERVED = "last_live_spec_observed_at"
+META_GATE_ACTIVE = "gate_active"
 
 
 class FatalLiveError(Exception):
@@ -1260,6 +1293,355 @@ def run_subnet_identity(connection, config, ledger, env=None,
 
 
 # ---------------------------------------------------------------------------
+# Emission-gate poll (change: gate-crossing-signal). Reads the spec-440
+# gate state — theta (EmissionGateBar), q (EmissionBarQuantile), h
+# (EmissionGateExponent) — from finney via keyless allowlisted JSON-RPC
+# `state_getStorage` on PINNED pre-verified keys, all at one finalized
+# block. Null storage is a defined state (Substrate never writes
+# ValueQuery defaults): null q/h persists the documented per-runtime
+# default marked `assumed-default`; null/zero theta persists gate-inactive.
+# Demand shares come from the TaoSwap subnets panel of the SAME pass,
+# normalized over ALL non-root panel subnets (the chain's bar universe
+# includes emission-disabled subnets — they are zeroed only after gating).
+# Crossing events are hysteresis-guarded and lifecycle-safe; the notifier
+# reads gate_events read-only past a row-id watermark.
+# ---------------------------------------------------------------------------
+
+GATE_PROVIDER = "finney-rpc"
+GATE_OPERATION = "poll_gate"
+GATE_ABOVE = "above"
+GATE_BELOW = "below"
+GATE_FELL_BELOW = "fell-below"
+GATE_ROSE_ABOVE = "rose-above"
+_GATE_ITEMS = ("EmissionGateBar", "EmissionBarQuantile",
+               "EmissionGateExponent")
+
+
+def _rpc_call(config: Dict[str, Any], method: str, params: List[Any],
+              endpoint: Optional[str] = None) -> Dict[str, Any]:
+    """One JSON-RPC POST across the configured endpoint list (first
+    endpoint that answers wins). Returns {ok, result?, endpoint} or
+    {ok: False, error} — never raises on transport failure, redacts every
+    error string. Bounded attempts per endpoint (reuses the retry policy)."""
+    gcfg = config.get("gate_signal") or {}
+    endpoints = [endpoint] if endpoint else list(
+        gcfg.get("rpc_endpoints") or [])
+    if not endpoints:
+        return {"ok": False, "error": "no rpc_endpoints configured"}
+    timeout = float(gcfg.get("rpc_timeout_seconds")
+                    or config["request_timeout_seconds"])
+    attempts = int(config["retry"]["default_attempts"])
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method,
+                       "params": params}).encode("utf-8")
+    last_error = "no endpoint reachable"
+    for url in endpoints:
+        for attempt in range(1, attempts + 1):
+            try:
+                request = urllib.request.Request(
+                    url, data=body, method="POST",
+                    headers={"User-Agent": USER_AGENT,
+                             "Content-Type": "application/json",
+                             "Accept": "application/json"})
+                with urllib.request.urlopen(request,
+                                            timeout=timeout) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                if "error" in payload and payload["error"] is not None:
+                    last_error = "rpc error for %s: %s" % (
+                        method, payload["error"])
+                    break  # a structured RPC error will not improve on retry
+                return {"ok": True, "result": payload.get("result"),
+                        "endpoint": url}
+            except (urllib.error.URLError, TimeoutError, OSError,
+                    ValueError) as exc:
+                last_error = "rpc failure for %s at %s: %s" % (
+                    method, url, exc)
+                if attempt < attempts:
+                    time.sleep(random.uniform(
+                        *config["retry"]["jitter_seconds"]))
+    return {"ok": False, "error": redact(last_error)}
+
+
+def decode_u64f64(hex_payload: str) -> float:
+    """Decode a SCALE U64F64 storage payload (16 bytes little-endian,
+    value = raw / 2^64). Raises ValueError on any malformed input."""
+    if not isinstance(hex_payload, str) or not hex_payload.startswith("0x"):
+        raise ValueError("not a 0x hex payload")
+    data = bytes.fromhex(hex_payload[2:])
+    if len(data) != 16:
+        raise ValueError("expected 16 bytes, got %d" % len(data))
+    return int.from_bytes(data, "little") / float(2 ** 64)
+
+
+def poll_gate_state(connection: sqlite3.Connection,
+                    config: Dict[str, Any],
+                    rpc: Optional[Any] = None) -> Dict[str, Any]:
+    """Read theta/q/h at one finalized block and persist ONE gate_state
+    observation. Fail-closed: transport failure or an out-of-bounds decode
+    records a health event and persists nothing. Null semantics per the
+    gate-crossing-signal spec: null q/h -> assumed per-runtime default;
+    null/zero theta -> gate-inactive observation."""
+    gcfg = config.get("gate_signal") or {}
+    rpc = rpc or (lambda method, params: _rpc_call(config, method, params))
+    keys = gcfg.get("storage_keys") or {}
+    defaults = gcfg.get("assumed_defaults") or {}
+    for item in _GATE_ITEMS:
+        if item not in keys:
+            raise FatalLiveError("gate_signal.storage_keys missing %r" % item)
+
+    head = rpc("chain_getFinalizedHead", [])
+    if not head.get("ok") or not head.get("result"):
+        health_event(connection, GATE_PROVIDER, GATE_OPERATION,
+                     "provider-failure",
+                     head.get("error") or "no finalized head")
+        return {"ok": False, "error": "finalized head unavailable"}
+    block_hash = head["result"]
+    endpoint = head.get("endpoint") or "unknown"
+
+    header = rpc("chain_getHeader", [block_hash])
+    block_number: Optional[int] = None
+    if header.get("ok") and isinstance(header.get("result"), dict):
+        try:
+            block_number = int(str(header["result"].get("number")), 16)
+        except (TypeError, ValueError):
+            block_number = None
+
+    raw: Dict[str, Optional[str]] = {}
+    for item in _GATE_ITEMS:
+        read = rpc("state_getStorage", [keys[item], block_hash])
+        if not read.get("ok"):
+            health_event(connection, GATE_PROVIDER, GATE_OPERATION,
+                         "provider-failure",
+                         read.get("error") or ("read failed: %s" % item))
+            return {"ok": False, "error": "storage read failed: %s" % item}
+        raw[item] = read.get("result")  # None == key unset on chain
+
+    def _decode_or_default(item: str, low: float, high: float,
+                           low_inclusive: bool) -> Tuple[float, str]:
+        value = raw[item]
+        if value is None:
+            default = defaults.get(item)
+            if default is None:
+                raise ValueError("%s unset on chain and no assumed "
+                                 "default configured" % item)
+            return float(default), "assumed-default"
+        decoded = decode_u64f64(value)
+        ok_low = decoded >= low if low_inclusive else decoded > low
+        if not (ok_low and decoded <= high):
+            raise ValueError("%s out of bounds: %r" % (item, decoded))
+        return decoded, "explicit"
+
+    try:
+        theta_raw = raw["EmissionGateBar"]
+        theta: Optional[float] = None
+        if theta_raw is not None:
+            theta = decode_u64f64(theta_raw)
+            if not (0.0 <= theta < 1.0):
+                raise ValueError("EmissionGateBar out of bounds: %r" % theta)
+        q, q_provenance = _decode_or_default(
+            "EmissionBarQuantile", 0.0, 1.0, low_inclusive=False)
+        h, h_provenance = _decode_or_default(
+            "EmissionGateExponent", 1.0, 8.0, low_inclusive=True)
+    except ValueError as exc:
+        health_event(connection, GATE_PROVIDER, GATE_OPERATION,
+                     "validation-failure", str(exc))
+        return {"ok": False, "error": "gate state failed validation"}
+
+    gate_active = bool(theta and theta > 0.0)
+    previous = connection.execute(
+        "SELECT q, q_provenance, h, h_provenance FROM gate_state "
+        "ORDER BY id DESC LIMIT 1").fetchone()
+    connection.execute(
+        "INSERT INTO gate_state (observed_at, block_hash, block_number, "
+        "gate_active, theta, q, q_provenance, h, h_provenance, endpoint) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (_utc_now(), block_hash, block_number, int(gate_active),
+         theta if gate_active else None, q, q_provenance, h, h_provenance,
+         endpoint))
+    connection.commit()
+    params_changed = bool(
+        previous is not None
+        and (previous[0], previous[1], previous[2], previous[3])
+        != (q, q_provenance, h, h_provenance))
+    return {"ok": True, "gate_active": gate_active, "theta": theta,
+            "q": q, "q_provenance": q_provenance,
+            "h": h, "h_provenance": h_provenance,
+            "block_number": block_number, "block_hash": block_hash,
+            "endpoint": endpoint, "params_changed": params_changed}
+
+
+def compute_demand_shares(subnets: List[Dict[str, Any]]
+                          ) -> Tuple[Dict[int, float],
+                                     Dict[int, Optional[bool]]]:
+    """Demand shares from the validated TaoSwap panel: moving price
+    weighted by (1 - miner_burn), normalized over ALL non-root panel
+    subnets (emission-disabled INCLUDED — the chain zeroes them only
+    after the bar is computed). Returns ({netuid: share}, {netuid:
+    emission_is_enabled}); empty shares when nothing normalizes."""
+    weights: Dict[int, float] = {}
+    enabled: Dict[int, Optional[bool]] = {}
+    for row in subnets:
+        netuid = row.get("netuid")
+        price = row.get("moving_price_tao")
+        if not isinstance(netuid, int) or netuid == 0:
+            continue
+        if not isinstance(price, (int, float)) or price < 0:
+            continue  # no priced entry -> no share this pass
+        burn = row.get("emission_miner_burn")
+        factor = 1.0
+        if isinstance(burn, (int, float)):
+            factor = 1.0 - min(max(float(burn), 0.0), 100.0) / 100.0
+        weights[netuid] = float(price) * factor
+        enabled[netuid] = (bool(row["emission_is_enabled"])
+                           if row.get("emission_is_enabled") is not None
+                           else None)
+    total = sum(weights.values())
+    if total <= 0.0:
+        return {}, enabled
+    return {netuid: weight / total
+            for netuid, weight in weights.items()}, enabled
+
+
+def update_gate_sides(connection: sqlite3.Connection,
+                      gcfg: Dict[str, Any], theta: float,
+                      shares: Dict[int, float],
+                      enabled: Dict[int, Optional[bool]],
+                      block_number: Optional[int]) -> List[Dict[str, Any]]:
+    """Advance per-netuid gate sides and record confirmed crossing events.
+    Hysteresis: a side flips only after the share sits beyond the
+    relative band around theta on `confirm_polls` consecutive polls.
+    Lifecycle: first sight seeds silently; absence for
+    `absence_clear_polls` polls clears the side (netuid-reuse guard).
+    Idempotent across restarts: state lives in gate_sides."""
+    band = float(gcfg.get("hysteresis_pct", 10)) / 100.0
+    confirm = max(1, int(gcfg.get("confirm_polls", 2)))
+    absence = max(1, int(gcfg.get("absence_clear_polls", 3)))
+    upper = theta * (1.0 + band)
+    lower = theta * (1.0 - band)
+    now = _utc_now()
+
+    existing = {
+        row[0]: {"side": row[1], "pending_side": row[2],
+                 "pending_count": row[3], "miss_count": row[4]}
+        for row in connection.execute(
+            "SELECT netuid, side, pending_side, pending_count, miss_count "
+            "FROM gate_sides")}
+
+    events: List[Dict[str, Any]] = []
+    for netuid in sorted(shares):
+        share = shares[netuid]
+        zone = (GATE_ABOVE if share > upper
+                else GATE_BELOW if share < lower else "band")
+        row = existing.get(netuid)
+        if row is None:
+            seed = GATE_ABOVE if share >= theta else GATE_BELOW
+            connection.execute(
+                "INSERT INTO gate_sides (netuid, side, pending_side, "
+                "pending_count, miss_count, updated_at) "
+                "VALUES (?, ?, NULL, 0, 0, ?)", (netuid, seed, now))
+            continue
+        side = row["side"]
+        pending_side, pending_count = row["pending_side"], row["pending_count"]
+        if zone == "band" or zone == side:
+            pending_side, pending_count = None, 0
+        else:
+            pending_count = (pending_count + 1 if pending_side == zone
+                             else 1)
+            pending_side = zone
+            if pending_count >= confirm:
+                direction = (GATE_FELL_BELOW if zone == GATE_BELOW
+                             else GATE_ROSE_ABOVE)
+                cursor = connection.execute(
+                    "INSERT INTO gate_events (observed_at, netuid, "
+                    "direction, share, theta, prev_side, emission_enabled, "
+                    "block_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (now, netuid, direction, share, theta, side,
+                     (None if enabled.get(netuid) is None
+                      else int(bool(enabled.get(netuid)))), block_number))
+                events.append({"id": cursor.lastrowid, "netuid": netuid,
+                               "direction": direction, "share": share,
+                               "theta": theta})
+                side = zone
+                pending_side, pending_count = None, 0
+        connection.execute(
+            "UPDATE gate_sides SET side = ?, pending_side = ?, "
+            "pending_count = ?, miss_count = 0, updated_at = ? "
+            "WHERE netuid = ?",
+            (side, pending_side, pending_count, now, netuid))
+
+    for netuid, row in existing.items():
+        if netuid in shares:
+            continue
+        misses = row["miss_count"] + 1
+        if misses >= absence:
+            connection.execute("DELETE FROM gate_sides WHERE netuid = ?",
+                               (netuid,))
+        else:
+            connection.execute(
+                "UPDATE gate_sides SET miss_count = ?, updated_at = ? "
+                "WHERE netuid = ?", (misses, now, netuid))
+    connection.commit()
+    return events
+
+
+def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
+                  ledger: QuotaLedger, rpc: Optional[Any] = None,
+                  run_op: Optional[Any] = None,
+                  env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """One full gate pass: chain state -> panel shares -> sides/events.
+    Inert when the kill-switch is off. A gate-inactive -> active
+    transition re-seeds every side silently (no events for the
+    transition pass)."""
+    gcfg = config.get("gate_signal") or {}
+    if not gcfg.get("enabled"):
+        return {"status": "disabled"}
+    run_op = run_op or run_operation
+
+    state = poll_gate_state(connection, config, rpc=rpc)
+    if not state.get("ok"):
+        return {"status": "live-unavailable", "error": state.get("error")}
+
+    summary: Dict[str, Any] = {
+        "status": "ok", "gate_active": state["gate_active"],
+        "theta": state["theta"], "q": state["q"],
+        "q_provenance": state["q_provenance"], "h": state["h"],
+        "h_provenance": state["h_provenance"],
+        "block_number": state["block_number"],
+        "params_changed": state["params_changed"],
+    }
+    was_active = meta_get(connection, META_GATE_ACTIVE) == "1"
+    if not state["gate_active"]:
+        meta_set(connection, META_GATE_ACTIVE, "0")
+        connection.commit()
+        summary["events_recorded"] = 0
+        summary["note"] = "gate inactive: no crossing events by design"
+        return summary
+    if not was_active:
+        # Inactive (or first-ever) -> active: every side re-seeds silently.
+        connection.execute("DELETE FROM gate_sides")
+    meta_set(connection, META_GATE_ACTIVE, "1")
+    connection.commit()
+
+    panel = run_op(connection, config, ledger, "subnets_taoswap",
+                   interactive=False, env=env)
+    if panel.get("status") != "ok":
+        summary["panel"] = "live-unavailable"
+        summary["events_recorded"] = 0
+        return summary
+    shares, enabled = compute_demand_shares(panel["values"]["subnets"])
+    if not shares:
+        summary["panel"] = "no-normalizable-shares"
+        summary["events_recorded"] = 0
+        return summary
+    events = update_gate_sides(connection, gcfg, state["theta"], shares,
+                               enabled, state["block_number"])
+    summary["sides_tracked"] = connection.execute(
+        "SELECT COUNT(*) FROM gate_sides").fetchone()[0]
+    summary["events_recorded"] = len(events)
+    summary["events"] = events
+    return summary
+
+
+# ---------------------------------------------------------------------------
 # CLI — scheduled chain-head poll (piggybacked on the hourly repo-update
 # service, before the Telegram scan line). Everything else in this module
 # is served through atlas_live_server.py when Hermes asks; this entry
@@ -1295,6 +1677,60 @@ def _cmd_poll_chain_head() -> int:
     return 0 if summary["status"] == "ok" else 1
 
 
+def _cmd_poll_gate() -> int:
+    config = load_config()
+    env = load_env()
+    connection = open_store(resolve(config["db"]))
+    try:
+        ledger = QuotaLedger(connection, config)
+        summary = run_gate_pass(connection, config, ledger, env=env)
+    finally:
+        connection.close()
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0 if summary["status"] in ("ok", "disabled") else 1
+
+
+def _cmd_status() -> int:
+    config = load_config()
+    db = resolve(config["db"])
+    if not os.path.exists(db):
+        print(json.dumps({"store": "absent", "db": db}))
+        return 0
+    connection = open_store(db)
+    try:
+        state_rows = connection.execute(
+            "SELECT observed_at, block_number, gate_active, theta, q, "
+            "q_provenance, h, h_provenance, endpoint FROM gate_state "
+            "ORDER BY id DESC LIMIT 5").fetchall()
+        sides = dict(connection.execute(
+            "SELECT side, COUNT(*) FROM gate_sides GROUP BY side"
+        ).fetchall())
+        event_rows = connection.execute(
+            "SELECT id, observed_at, netuid, direction, share, theta "
+            "FROM gate_events ORDER BY id DESC LIMIT 5").fetchall()
+        spec = {"spec_version": meta_get(connection, META_LAST_LIVE_SPEC),
+                "block": meta_get(connection, META_LAST_LIVE_SPEC_BLOCK),
+                "observed_at": meta_get(connection,
+                                        META_LAST_LIVE_SPEC_OBSERVED)}
+    finally:
+        connection.close()
+    print(json.dumps({
+        "gate_state_recent": [
+            {"observed_at": r[0], "block_number": r[1],
+             "gate_active": bool(r[2]), "theta": r[3],
+             "q": r[4], "q_provenance": r[5],
+             "h": r[6], "h_provenance": r[7], "endpoint": r[8]}
+            for r in state_rows],
+        "gate_sides": sides,
+        "gate_events_recent": [
+            {"id": r[0], "observed_at": r[1], "netuid": r[2],
+             "direction": r[3], "share": r[4], "theta": r[5]}
+            for r in event_rows],
+        "live_spec": spec,
+    }, indent=2, sort_keys=True))
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     import argparse
     parser = argparse.ArgumentParser(
@@ -1305,10 +1741,22 @@ def main(argv: Optional[List[str]] = None) -> int:
                    help="one validated chain-head read; records the live "
                         "runtime spec_version and an upgrade event on "
                         "change (non-interactive quota)")
+    sub.add_parser("poll-gate",
+                   help="one emission-gate pass: theta/q/h from finney "
+                        "RPC at a finalized block, demand shares from the "
+                        "TaoSwap panel, hysteresis-guarded crossing "
+                        "events (inert unless gate_signal.enabled)")
+    sub.add_parser("status",
+                   help="gate state / sides / recent crossing events + "
+                        "last live spec_version")
     args = parser.parse_args(argv)
     try:
         if args.command == "poll-chain-head":
             return _cmd_poll_chain_head()
+        if args.command == "poll-gate":
+            return _cmd_poll_gate()
+        if args.command == "status":
+            return _cmd_status()
     except FatalLiveError as exc:
         print("fatal: %s" % redact(str(exc)), file=sys.stderr)
         return 2
