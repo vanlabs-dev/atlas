@@ -17,12 +17,16 @@ the live signal.
   read of `EmissionGateBar` (theta) plus the sudo-settable parameters
   `EmissionBarQuantile` (q) and `EmissionGateExponent` (h), persisted per
   poll — governance moves of q/h become visible instead of silently wrong.
+  This is already necessary, not hypothetical: live Finney q was observed
+  at 0.75 on 2026-07-28 vs the 0.61 code default, moved by a root-origin
+  path that never appears in the AdminUtils extrinsic feed.
 - livedata computes each subnet's demand share (`moving_price x
-  (1 - miner_burn)`, normalized over emit-enabled subnets) from the TaoSwap
-  panel it already polls, compares it to theta, and records durable
-  gate-crossing events with hysteresis (no flapping, no stale-data writes,
-  no re-emission on restart) — mirroring the existing `spec_version`
-  upgrade-event pattern.
+  (1 - miner_burn)`) from the TaoSwap panel it already polls, normalized
+  over the chain's emit-to universe — including emission-disabled subnets,
+  which the chain zeroes only AFTER the bar is computed — compares it to
+  theta, and records durable gate-crossing events with hysteresis (no
+  flapping, no stale-data writes, no re-emission on restart) — mirroring
+  the existing `spec_version` upgrade-event pattern.
 - The Telegram notifier gains a fifth alert class, `gate-crossing`
   (instant tier, per-netuid cooldown): a confirmed crossing pages with
   direction, share vs bar, margin, and source provenance in the established
