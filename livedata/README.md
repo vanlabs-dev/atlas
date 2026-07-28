@@ -17,13 +17,17 @@ discovery_common.py    shared probe/report machinery (ATLAS-API-003/004/005)
 atlas_live.py          store, quota ledger, HTTP, pinned-schema validation,
                        per-operation adapters, the fail-closed pipeline;
                        also the `poll-chain-head` CLI (scheduled live-spec
-                       poll) and live `spec_version` upgrade recording
+                       poll), live `spec_version` upgrade recording, and
+                       the `poll-gate` / `status` CLIs (emission-gate
+                       state + crossing events, change: gate-crossing-signal)
 atlas_live_server.py   `atlas-live` stdio MCP server (six tools)
 schemas/               pinned per-endpoint schemas (drift = missing or
                        mistyped required field; extras tolerated)
 config.json            operator-approved contract: endpoints, freshness
-                       envelopes, budgets, tolerance (gates 2.3/4.3/5.3)
-tests/                 fixture-provider suite (36 tests, off-device)
+                       envelopes, budgets, tolerance (gates 2.3/4.3/5.3);
+                       `gate_signal` block (kill-switch, pinned storage
+                       keys, hysteresis policy)
+tests/                 fixture-provider suite (68 tests, off-device)
 ```
 
 ## The pipeline (every live call)
@@ -76,8 +80,30 @@ upgrade is detected promptly rather than only when Hermes happens to query.
 The Telegram `chain-runtime-upgrade` alert class reads that event store
 read-only; no extra TaoStats quota is spent by the notifier.
 
+**Emission-gate poll** (change: gate-crossing-signal, live 2026-07-28).
+`poll-gate` reads the spec-440 gate state — the bar theta
+(`EmissionGateBar`) plus the sudo-settable q (`EmissionBarQuantile`) and
+h (`EmissionGateExponent`) — from finney via keyless allowlisted JSON-RPC
+`state_getStorage` on pinned pre-verified keys, all at one finalized
+block (endpoint: `entrypoint-finney.opentensor.ai`). Null storage is a
+defined state: null q/h persists the documented per-runtime default
+marked `assumed-default` (live q was already explicit 0.75 on
+2026-07-28), null/zero theta persists gate-inactive. Demand shares come
+from the `subnets_taoswap` panel of the same pass, normalized over ALL
+non-root subnets (the chain's bar universe includes emission-disabled
+subnets — they are zeroed only after gating). Per-netuid sides flip only
+after the share exits a ±`hysteresis_pct` band around theta on
+`confirm_polls` consecutive polls; first sight seeds silently, absence
+for `absence_clear_polls` clears a side (netuid-reuse guard), and a
+gate-inactive→active transition re-seeds everything silently. Confirmed
+crossings land in `gate_events`; the Telegram `gate-crossing` class reads
+them read-only by row id. Kill-switch: `gate_signal.enabled` in
+[config.json](config.json).
+
 ```bash
 python3 livedata/atlas_live.py poll-chain-head   # one validated chain-head read; records live spec + upgrade event
+python3 livedata/atlas_live.py poll-gate         # one emission-gate pass: theta/q/h + shares -> crossing events
+python3 livedata/atlas_live.py status            # gate state / sides / recent crossings + last live spec
 ```
 
 Hermes registration (done 2026-07-12, alongside atlas-kb/atlas-repo):

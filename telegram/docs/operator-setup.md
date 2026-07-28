@@ -43,6 +43,7 @@ with a clear message if either the token or the chat id is missing.
 
 ```bash
 python telegram/atlas_telegram.py test --class chain-runtime-upgrade
+python telegram/atlas_telegram.py test --class gate-crossing
 python telegram/atlas_telegram.py test --class repository-update
 python telegram/atlas_telegram.py test --class schema-drift
 python telegram/atlas_telegram.py test --class knowledge-ingestion
