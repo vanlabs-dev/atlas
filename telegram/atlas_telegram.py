@@ -12,9 +12,10 @@ Fail-closed, stdlib-only, read-only toward the device except its own 0600
 
 - credentials resolved from operator env files (the wizard-written
   `~/.hermes/.env` is reused — no secret is duplicated into the repo);
-- four source adapters read existing stores read-only and surface only
+- source adapters read existing stores read-only and surface only
   events past a persisted per-source watermark:
     chain-runtime-upgrade <- var/livedata/livedata.db   (spec_upgrades)
+    gate-crossing         <- var/livedata/livedata.db   (gate_events)
     repository-update     <- var/repotrack/repotrack.db (change_ranges)
     schema-drift          <- var/livedata/livedata.db   (integration_health)
     knowledge-ingestion   <- var/knowledge/knowledge.db (intake_runs)
@@ -1092,6 +1093,99 @@ def knowledge_ingestion_events(source_db: str, watermark: Optional[str],
         conn.close()
 
 
+DEFAULT_GATE_COOLDOWN_HOURS = 24
+
+
+def _gate_cooldown_active(store: Optional[sqlite3.Connection],
+                          netuid: int, hours: float) -> bool:
+    """True when a gate-crossing alert for this netuid was DELIVERED
+    within the cooldown window (per-netuid paging damper — recorded
+    events are never dropped, only not paged)."""
+    if store is None or hours <= 0:
+        return False
+    cutoff = (datetime.datetime.now(tz=datetime.timezone.utc)
+              - datetime.timedelta(hours=hours)).isoformat()
+    row = store.execute(
+        "SELECT 1 FROM events WHERE event_class = 'gate-crossing' AND "
+        "status = ? AND event_id LIKE ? AND attempted_at >= ? LIMIT 1",
+        (STATUS_DELIVERED, "gate-crossing:%d:%%" % netuid,
+         cutoff)).fetchone()
+    return row is not None
+
+
+def gate_crossing_events(source_db: str, watermark: Optional[str],
+                         ctx: Optional[Dict[str, Any]] = None
+                         ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Confirmed emission-gate crossings recorded by livedata (change:
+    gate-crossing-signal) — a subnet's demand share crossed the spec-440
+    gate bar, an economic cliff in either direction. Instant tier with a
+    per-netuid cooldown: events inside the cooldown are recorded in the
+    delivery ledger as suppressed, never dropped. The share is
+    panel-derived (TaoSwap), the bar is chain-read; the body names both
+    sources."""
+    conn = open_source_ro(source_db)
+    if conn is None:
+        return [], watermark
+    try:
+        present = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND "
+            "name = 'gate_events'").fetchone()
+        if present is None:
+            return [], watermark  # gate signal not deployed yet
+        last_id = int(watermark) if watermark else 0
+        rows = conn.execute(
+            "SELECT id, observed_at, netuid, direction, share, theta, "
+            "prev_side, emission_enabled, block_number FROM gate_events "
+            "WHERE id > ? ORDER BY id ASC LIMIT 50", (last_id,)).fetchall()
+    finally:
+        conn.close()
+
+    ctx = ctx or {}
+    config = ctx.get("config") or {}
+    spec = ctx.get("spec") or {}
+    store: Optional[sqlite3.Connection] = ctx.get("connection")
+    max_chars = int(config.get("message_max_chars", 3500))
+    cooldown_hours = float(spec.get("cooldown_hours",
+                                    DEFAULT_GATE_COOLDOWN_HOURS))
+
+    events: List[Dict[str, Any]] = []
+    high = last_id
+    for (row_id, observed_at, netuid, direction, share, theta,
+         _prev_side, emission_enabled, block_number) in rows:
+        high = max(high, int(row_id))
+        event_id = "gate-crossing:%d:%d" % (netuid, row_id)
+        if store is not None and _gate_cooldown_active(
+                store, netuid, cooldown_hours):
+            ledger_record(store, event_id, "gate-crossing", observed_at,
+                          _utc_now(), STATUS_SUPPRESSED, 0,
+                          "per-netuid cooldown (%gh)" % cooldown_hours)
+            continue
+        fell = direction == "fell-below"
+        headline = ("Atlas · EMISSION GATE · subnet %d %s the bar"
+                    % (netuid, "fell BELOW" if fell else "rose ABOVE"))
+        margin_pct = ((share - theta) / theta * 100.0) if theta else 0.0
+        lines = [
+            "netuid %d · share %.3f%% · bar %.3f%% · margin %+.1f%%"
+            % (netuid, share * 100.0, theta * 100.0, margin_pct),
+            ("below-bar demand · gated emission collapses toward zero"
+             if fell else
+             "above-bar demand · earns an amplified emission share"),
+            "shares: TaoSwap panel · bar: chain RPC · block %s"
+            % (block_number if block_number is not None else "unknown"),
+            "observed: %s" % observed_at,
+        ]
+        if emission_enabled == 0:
+            lines.append("subnet emission is DISABLED · informational · "
+                         "earns zero either way")
+        plain = render_plain(headline, lines, "", None, max_chars)
+        html = render_html(headline, lines, "", None, max_chars)
+        events.append({"event_id": event_id,
+                       "event_class": "gate-crossing",
+                       "created_at": _utc_now(), "text": plain,
+                       "html": html})
+    return events, (str(high) if high else watermark)
+
+
 # ---------------------------------------------------------------------------
 # Fleet-signal adapter (change: fleet-signals) — narrative-cluster /
 # watchlist / econ-code instant alerts + durable signal digest lines,
@@ -1423,6 +1517,7 @@ def fleet_signal_events(source_db: str, watermark: Optional[str],
 _ADAPTERS: Dict[str, Callable[..., Tuple[List[Dict[str, Any]],
                                          Optional[str]]]] = {
     "chain-runtime-upgrade": chain_runtime_upgrade_events,
+    "gate-crossing": gate_crossing_events,
     "fleet-signal": fleet_signal_events,
     "repository-update": repository_update_events,
     "schema-drift": schema_drift_events,

@@ -2,74 +2,74 @@
 
 ## 1. livedata: gate-state RPC provider
 
-- [ ] 1.1 Add `gate_signal` config block to `livedata/config.json`:
+- [x] 1.1 Add `gate_signal` config block to `livedata/config.json`:
       enabled kill-switch (default false), RPC endpoint list, the three
       pinned storage keys as hex constants with item names + derivation
       documented in the `_comment`, per-runtime assumed defaults (q 0.61,
       h 3 for spec 440), `hysteresis_pct` default 10, `confirm_polls`
       default 2, `absence_clear_polls` default 3, timeout
-- [ ] 1.2 Implement the keyless JSON-RPC provider in
+- [x] 1.2 Implement the keyless JSON-RPC provider in
       `livedata/atlas_live.py`: fetch `chain_getFinalizedHead` once, then
       `state_getStorage(key, at=hash)` for the three pinned keys; stdlib
       HTTP, bounded retries per existing rules; persist the reference
       block with the observation
-- [ ] 1.3 Implement typed validation with null semantics: present values
+- [x] 1.3 Implement typed validation with null semantics: present values
       decode hex → little-endian u128 → U64F64 with bounds checks (theta
       [0,1), q (0,1), h [1,8]; out-of-bounds ⇒ health event, nothing
       persisted); null q/h ⇒ persist the assumed default marked
       `assumed-default`; null/zero theta ⇒ persist gate-inactive
-- [ ] 1.4 Add `gate_state` table + status surface (theta/q/h history with
+- [x] 1.4 Add `gate_state` table + status surface (theta/q/h history with
       provenance, reference block, last poll, q/h change and
       assumed-default→explicit transitions visible in `livedata status`)
 
 ## 2. livedata: shares, sides, and crossing events
 
-- [ ] 2.1 Compute demand shares from the validated TaoSwap subnets panel:
+- [x] 2.1 Compute demand shares from the validated TaoSwap subnets panel:
       `moving_price x (1 - miner_burn)` over ALL non-root panel subnets
       (emission-disabled included in normalization; `emission_is_enabled`
       carried as annotation); no extra provider calls; no panel ⇒ no
       events
-- [ ] 2.2 Implement per-netuid gate-side tracking: relative hysteresis
+- [x] 2.2 Implement per-netuid gate-side tracking: relative hysteresis
       band around theta + consecutive-poll confirmation; first observation
       seeds silently; absence for `absence_clear_polls` clears the side
       and reappearance re-seeds silently (netuid-reuse guard);
       gate-inactive→active re-seeds all sides silently
-- [ ] 2.3 Add `gate_events` table (netuid, direction, share, theta,
+- [x] 2.3 Add `gate_events` table (netuid, direction, share, theta,
       prev_side, emission_enabled, observed_at); event identity for
       downstream de-dup is the row id; restart never re-emits
-- [ ] 2.4 Add the `poll-gate` CLI command (inert when kill-switch off)
+- [x] 2.4 Add the `poll-gate` CLI command (inert when kill-switch off)
       and wire it into the pass ordering after `poll-chain-head`
 
 ## 3. telegram: gate-crossing class
 
-- [ ] 3.1 Add the `gate-crossing` event adapter to
+- [x] 3.1 Add the `gate-crossing` event adapter to
       `telegram/atlas_telegram.py`: read `var/livedata` gate events
       read-only past a persisted row-id watermark; class absent when
       disabled
-- [ ] 3.2 Implement instant-tier paging with per-netuid cooldown
+- [x] 3.2 Implement instant-tier paging with per-netuid cooldown
       (suppressed events recorded in the ledger, never dropped)
-- [ ] 3.3 Render the alert body: direction headline + single-fact lines
+- [x] 3.3 Render the alert body: direction headline + single-fact lines
       (netuid, share, bar, margin, figure sources, emission-disabled note
       when relevant), HTML with plain-text fallback, no em/en dashes;
       extend `init` to seed the new watermark
 
 ## 4. Tests (off-device)
 
-- [ ] 4.1 livedata provider: decode/bounds fixtures (valid theta/q/h,
+- [x] 4.1 livedata provider: decode/bounds fixtures (valid theta/q/h,
       junk hex, out-of-bounds ⇒ health event + nothing persisted), null
       q/h ⇒ assumed-default provenance, null/zero theta ⇒ gate-inactive,
       RPC failure ⇒ fail-closed, assumed-default→explicit transition
       surfaces in status, reference-block persistence
-- [ ] 4.2 livedata shares/events: normalization includes
+- [x] 4.2 livedata shares/events: normalization includes
       emission-disabled subnets (universe fixture with disabled entries);
       hysteresis matrix (crossing confirmed, wobble inside band, first
       seed silent, restart no-replay); lifecycle matrix (absence clears →
       reappearance seeds without event; gate-inactive→active re-seeds
       without events)
-- [ ] 4.3 telegram: adapter row-id watermarking, cooldown
+- [x] 4.3 telegram: adapter row-id watermarking, cooldown
       suppress-not-drop, message rendering (style rules incl.
       emission-disabled note), disabled-class inertness
-- [ ] 4.4 Full suites green: `livedata/tests`, `telegram/tests`
+- [x] 4.4 Full suites green: `livedata/tests`, `telegram/tests`
 
 ## 5. Deploy (Pi) and acceptance
 

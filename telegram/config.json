@@ -29,6 +29,12 @@
       "enabled": true,
       "source_db": "var/livedata/livedata.db"
     },
+    "gate-crossing": {
+      "_comment": "Emission-gate crossing alerts (change: gate-crossing-signal). DISABLED at ship time — enable together with livedata gate_signal.enabled at deploy (the whole rollback is flipping both back). Reads livedata's gate_events read-only past a row-id watermark. Instant tier, priority just below chain upgrades; cooldown_hours dampens per-netuid paging (suppressed events are recorded in the ledger, never dropped).",
+      "enabled": false,
+      "source_db": "var/livedata/livedata.db",
+      "cooldown_hours": 24
+    },
     "fleet-signal": {
       "_comment": "Fleet-signals queue (change: fleet-signals): narrative-cluster / watchlist / econ-code instant alerts + durable signal digest lines from the fleet store, read STRICTLY read-only. Priority below chain upgrades, above subtensor repo alerts. digest_backstop_hours flushes pending digest lines as a standalone summary when no instant alert rides them.",
       "enabled": true,

@@ -13,6 +13,11 @@
 # call within the 2/min self-cap) BEFORE the Telegram scan, so a live
 # runtime upgrade recorded by the poll is alerted in the same run rather
 # than an hour later. Best-effort like the scan (leading `-`).
+#
+# Gate-crossing signal: poll the emission-gate state (keyless finney RPC +
+# one TaoSwap panel call) after the chain-head poll and before the scan,
+# so a confirmed bar crossing is alerted in the same run. Inert until
+# livedata gate_signal.enabled is true. Best-effort (leading `-`).
 [Unit]
 Description=Atlas subtensor repository update
 Wants=network-online.target
@@ -23,4 +28,5 @@ Type=oneshot
 User=pi
 ExecStart=/usr/bin/python3 /home/pi/atlas/repotrack/atlas_repo.py update
 ExecStartPost=-/usr/bin/python3 /home/pi/atlas/livedata/atlas_live.py poll-chain-head
+ExecStartPost=-/usr/bin/python3 /home/pi/atlas/livedata/atlas_live.py poll-gate
 ExecStartPost=-/usr/bin/python3 /home/pi/atlas/telegram/atlas_telegram.py scan
