@@ -80,7 +80,7 @@
       (silent) and inspect `livedata status`
 - [x] 5.2 Enable `gate_signal.enabled`; run a scan pass end-to-end; send
       a `test --class gate-crossing` alert and confirm delivery
-- [ ] 5.3 Operator installs the updated service unit (`sudo cp` +
+- [x] 5.3 Operator installs the updated service unit (`sudo cp` +
       `daemon-reload`); verify the hourly pass runs poll-gate before the
       Telegram scan
 - [x] 5.4 Record acceptance in `docs/decisions.md` (evidence: endpoint,
