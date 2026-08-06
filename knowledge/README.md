@@ -14,7 +14,7 @@ ATLAS-RET-001…007, and ATLAS-TOOL-001…004 via OpenSpec change
 | [`supersession-markers.json`](supersession-markers.json) | known-stale claims marked `conflicting` at ingest (currently: none — the 2026-07-28 re-sync absorbed all markers) |
 | [`atlas_kb.py`](atlas_kb.py) | `ingest` (hash-verified, stages units + validation report) · `activate` (operator gate) · `status` |
 | [`atlas_kb_server.py`](atlas_kb_server.py) | stdio MCP server: `knowledge_search` / `knowledge_get_evidence` / `knowledge_status` — replaces `atlas-test` |
-| [`benchmark/`](benchmark/) | 26-exchange retrieval benchmark (battery, scorer, threshold sheet) — closes the deferred ATLAS-HERMES-003 retrieval criterion and re-tests MV-RI-4 |
+| [`benchmark/`](benchmark/) | 30-exchange retrieval benchmark (battery, scorer, threshold sheet) — closes the deferred ATLAS-HERMES-003 retrieval criterion and re-tests MV-RI-4 |
 
 ## How knowledge flows
 
@@ -34,9 +34,9 @@ ATLAS-RET-001…007, and ATLAS-TOOL-001…004 via OpenSpec change
 
 ## The benchmark (acceptance gate)
 
-26 tagged exchanges through live Hermes with the knowledge toolset:
-17 grounded (exact/paraphrase/historical/conflict — markers + tool-call
-required) and 9 refusal (unsupported/adversarial — the MV-RI-4 re-test:
+30 tagged exchanges through live Hermes with the knowledge toolset:
+20 grounded (exact/paraphrase/historical/conflict — markers + tool-call
+required) and 10 refusal (unsupported/adversarial — the MV-RI-4 re-test:
 dated corpus facts or explicit refusal, never a value presented as live).
 Reuses the generalized model-validation machinery (runner
 `hermes/modelval/run_battery.py --battery knowledge/benchmark/atlas_kb_battery.py`,
