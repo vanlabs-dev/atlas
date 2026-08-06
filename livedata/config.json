@@ -69,7 +69,7 @@
   },
   "chain_params": {
     "_comment": "Root-settable chain-parameter watch (change: network-drift-443). DEFAULTS OFF: `enabled` false makes the watch inert and the Telegram chain-parameter-change class silent — flipping it is the whole rollback. Watches discrete knobs whose flip changes network economics without leaving an AdminUtils extrinsic trail (the same reason the gate poll reads q/h rather than assuming code defaults). `source: gate-poll` items are NOT re-read: the gate poll already decodes them at its finalized block and hands them over, so each item is read once and has one history. `source: independent` items carry their own pinned key (twox128('SubtensorModule') ++ twox128(item), verified against live Finney 2026-08-06) and are read at the gate poll's block when it runs — but the watch is deliberately NOT gated by gate_signal.enabled, so rolling back the gate signal cannot silently stop watching the Root Reborn curation switch. Discrete values do not flap, so transitions need no hysteresis; a first observation seeds without emitting one, and a provenance-only change (assumed-default -> explicit at an unchanged value) is recorded but never paged.",
-    "enabled": false,
+    "enabled": true,
     "items": [
       {
         "item": "EmissionBarRank",
