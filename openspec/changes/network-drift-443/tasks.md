@@ -81,11 +81,11 @@
 
 ## 10. Deploy
 
-- [ ] 10.1 Ship to the Pi via `git pull` with the watch and its Telegram class disabled
-- [ ] 10.2 Verify one poll writes rank 32 `assumed-default` and bar mode `rank`, with crossing detection unchanged
-- [ ] 10.3 Verify the above-bar count reads 32 against an effective N of 32 with no divergence health event, confirming the share pipeline agrees with the chain
-- [ ] 10.4 Enable the watch; confirm all four items seed observations with no spurious transition events
-- [ ] 10.5 Seed the `chain-parameter-change` watermark, then enable the class, and confirm the scan picks it up without disturbing the other five
-- [ ] 10.6 Re-ingest the corpus on device and re-run the retrieval benchmark, recording the run id
-- [ ] 10.7 Record deployment acceptance and update the READMEs to the new standing
-- [ ] 10.8 Note for the ~2026-08-11 calibration read: events 1 to 26 predate bar-mode and prev-theta tracking, the four events at 2026-08-03T21:06 are migration artefacts rather than demand signals, and SN9's three crossings were share-side movement against a near-static bar
+- [x] 10.1 Ship to the Pi via `git pull` with the watch and its Telegram class disabled
+- [x] 10.2 Verify one poll writes rank 32 `assumed-default` and bar mode `rank`, with crossing detection unchanged
+- [ ] 10.3 Verify the above-bar count reads 32 against an effective N of 32 with no divergence health event, confirming the share pipeline agrees with the chain — **BLOCKED on the TaoSwap `/v2/subnets/` HTTP 500 outage that began 2026-08-06T03:34** (provider-side, unrelated to this change; the pass fails closed with `above_count` NULL as designed, and `gate_sides` still holds 32 above / 96 below from the last good pass). Re-run once TaoSwap recovers.
+- [x] 10.4 Enable the watch; confirm all four items seed observations with no spurious transition events
+- [x] 10.5 Seed the `chain-parameter-change` watermark, then enable the class, and confirm the scan picks it up without disturbing the other five
+- [x] 10.6 Re-ingest the corpus on device and re-run the retrieval benchmark, recording the run id
+- [x] 10.7 Record deployment acceptance and update the READMEs to the new standing
+- [x] 10.8 Note for the ~2026-08-11 calibration read: events 1 to 26 predate bar-mode and prev-theta tracking, the four events at 2026-08-03T21:06 are migration artefacts rather than demand signals, and SN9's three crossings were share-side movement against a near-static bar
