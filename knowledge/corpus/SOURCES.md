@@ -7,13 +7,33 @@ Verbatim snapshot of the confirmed July 2026 Bittensor corpus (decision
 | field | value |
 |---|---|
 | Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
-| Sync date | 2026-07-28 |
-| Coverage date | 2026-07-28 (last upstream edit) |
+| Sync date | 2026-08-06 |
+| Coverage date | 2026-08-06 (last upstream edit) |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Known staleness at snapshot time
 
-None. The 2026-07-28 re-sync absorbed the prior conviction marker (the
+None. The **2026-08-06 re-sync** (change: network-drift-443) brought the
+corpus from spec 440 to spec 443, verified against the merged subtensor code
+at tag v443 (`pallets/subtensor/src/coinbase/subnet_emissions.rs`,
+`pallets/subtensor/src/lib.rs`) and live Finney chain reads taken the same
+day. Two substantive changes:
+
+- **The emission gate bar is rank-pinned** (spec 441, PR #3014, live
+  2026-08-03). `EmissionBarRank` (N) pins theta to the Nth-largest positive
+  demand share; q-mass survives only as the N = 0 fallback, so a live
+  `EmissionBarQuantile` of 0.75 is inert. Chain-verified 2026-08-06: rank
+  unset, so the v443 code default of 32 applies and rank mode is active.
+  The v441 release notes state the default is 64 and are wrong. The prior
+  snapshot's q-mass description is superseded, not merely qualified, so it
+  was rewritten rather than marked.
+- **Root Reborn is live but curation-gated** (spec 441, live 2026-08-03).
+  Root dividends now flow into per-validator beta baskets, only
+  root-registered hotkeys earn them, and calls 122/123 are retired — but
+  `RootWeightSettingEnabled` is false on chain, so every fund runs the null
+  strategy and dividends accumulate in place.
+
+The prior re-sync (2026-07-28) absorbed the conviction marker (the
 2026-07-12 snapshot said ownership transfer was "NOT yet active"; the
 enforcement went live with spec 432 on 2026-07-16, and the corpus now says
 so) and added the July 2026 emission-model changes, each verified against

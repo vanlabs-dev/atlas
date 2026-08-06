@@ -72,6 +72,21 @@ Pattern: treating "miner burn" / emission_miner_burn as the same thing as chain 
 
 Fix: miner_burn is a THIRD distinct metric: the proportion (0..1) of a subnet's miner emission withheld from miners (sent to the owner/burn key) in a tempo, counted whether recycled or burned. Under the price-based model it scales the subnet's emission share via the (1 - miner_burn) term. It is NOT chain buys and NOT emission share. Keep all three terms distinct.
 
+### 7d. Emission gate bar described as a q-mass quantile
+Pattern: "the bar is the share at which cumulative demand crosses q", "subnets above the bar carry 75% of demand", or quoting EmissionBarQuantile as the thing that sets the bar.
+
+Fix: OUTDATED as of spec 441 (live 2026-08-03). The bar is selected by EmissionBarRank (N): when N > 0 theta is pinned to the Nth-largest positive demand share and the quantile is INERT. Q-mass is only the N = 0 fallback. Rank mode is currently active (N unset on chain, code default 32 at v443). Never state a live N, q, or h without a chain read, and never quote a live q as if it set the bar.
+
+### 7e. Bar crossing reported as a demand movement
+Pattern: "subnet X's demand rose above the bar" when what actually happened is that the bar moved.
+
+Fix: a rank-pinned bar IS a demand share, so it moves on its own as the distribution shifts, and a subnet can change side with a completely stationary share. Compare the bar to its previous value before attributing a crossing to the subnet. Worked example: the spec-441 bar reset on 2026-08-03 dropped theta about 14.5% in one poll and pushed subnets 49, 67, 79 and 81 above the bar without their shares moving.
+
+### 7f. Root dividends described as curated or reinvested
+Pattern: "root dividends are allocated across subnets by validator weights", "validators are deploying basket capital", or any claim that Root Reborn is actively reallocating.
+
+Fix: Root Reborn is live (spec 441) but its curation setter ships DISABLED. `RootWeightSettingEnabled` is false on chain, so every fund runs the null strategy and dividends accumulate in place on the origin subnet. What IS in force: only root-registered hotkeys earn root dividends (the remainder is recycled), root unstakes sit behind a hold interval, and calls 122/123 are retired. Do not describe curation as happening until governance flips the switch.
+
 ## WARNINGS (verify but don't block)
 
 ### 8. Em dashes

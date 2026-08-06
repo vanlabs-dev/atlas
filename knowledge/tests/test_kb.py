@@ -50,7 +50,7 @@ class IngestTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
 
     def test_ingest_records_real_corpus(self):
-        # The 2026-07-28 re-sync absorbed all supersession markers, so the
+        # The 2026-08-06 re-sync absorbed all supersession markers, so the
         # real corpus stages with no conflicting units.
         db, run_id, report = ingest_real_corpus(self.tmp.name,
                                                 activate=False)
@@ -64,7 +64,7 @@ class IngestTests(unittest.TestCase):
             run = connection.execute(
                 "SELECT coverage_date, parser_version FROM intake_runs "
                 "WHERE run_id = ?", (run_id,)).fetchone()
-            self.assertEqual(run, ("2026-07-28", akb.PARSER_VERSION))
+            self.assertEqual(run, ("2026-08-06", akb.PARSER_VERSION))
             self.assertEqual(connection.execute(
                 "SELECT count(*) FROM units WHERE active = 1"
             ).fetchone()[0], 0, "units must stage inactive")
