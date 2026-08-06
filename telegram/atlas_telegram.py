@@ -1133,10 +1133,35 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
         if present is None:
             return [], watermark  # gate signal not deployed yet
         last_id = int(watermark) if watermark else 0
+        # prev_theta and the bar-mode columns arrived with network-drift-443;
+        # a store written before that migration simply reports them NULL and
+        # the body then asserts neither a mode nor a movement.
+        has_prev = "prev_theta" in {
+            r[1] for r in conn.execute("PRAGMA table_info(gate_events)")}
+        state_cols = {r[1] for r in
+                      conn.execute("PRAGMA table_info(gate_state)")}
+        has_mode = {"bar_mode", "rank", "q"} <= state_cols
+
+        def _at_event(column: str) -> str:
+            """The gate observation in force when the crossing was recorded
+            — a crossing must stay interpretable with the mode of its own
+            pass, not whatever the bar is doing today."""
+            if not has_mode:
+                return "NULL"
+            return ("(SELECT s.%s FROM gate_state s "
+                    " WHERE s.observed_at <= e.observed_at "
+                    " ORDER BY s.id DESC LIMIT 1)" % column)
+
         rows = conn.execute(
-            "SELECT id, observed_at, netuid, direction, share, theta, "
-            "prev_side, emission_enabled, block_number FROM gate_events "
-            "WHERE id > ? ORDER BY id ASC LIMIT 50", (last_id,)).fetchall()
+            "SELECT e.id, e.observed_at, e.netuid, e.direction, e.share, "
+            "e.theta, e.prev_side, e.emission_enabled, e.block_number, "
+            + ("e.prev_theta, " if has_prev else "NULL, ")
+            + _at_event("bar_mode") + ", "
+            + _at_event("rank") + ", "
+            + _at_event("q") +
+            " FROM gate_events e "
+            "WHERE e.id > ? ORDER BY e.id ASC LIMIT 50",
+            (last_id,)).fetchall()
     finally:
         conn.close()
 
@@ -1151,7 +1176,8 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
     events: List[Dict[str, Any]] = []
     high = last_id
     for (row_id, observed_at, netuid, direction, share, theta,
-         _prev_side, emission_enabled, block_number) in rows:
+         _prev_side, emission_enabled, block_number, prev_theta,
+         bar_mode, bar_rank, bar_q) in rows:
         high = max(high, int(row_id))
         event_id = "gate-crossing:%d:%d" % (netuid, row_id)
         if store is not None and _gate_cooldown_active(
@@ -1174,6 +1200,30 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
             % (block_number if block_number is not None else "unknown"),
             "observed: %s" % observed_at,
         ]
+        # The bar's selection rule (change: network-drift-443). Never infer
+        # it: a q recorded while rank mode is active is inert.
+        if bar_mode == "rank":
+            lines.append("bar mode: rank-pinned at N %s · the bar is the "
+                         "Nth largest demand share and moves with the "
+                         "distribution" % bar_rank)
+        elif bar_mode == "q-mass":
+            lines.append("bar mode: q-mass at q %s" % bar_q)
+        # A rank-pinned bar is itself a demand share, so it moves on its own.
+        # Without this a subnet the bar descended onto reads as a subnet
+        # whose demand rose, which is what the 2026-08-03 reset produced.
+        if prev_theta is not None and prev_theta > 0:
+            bar_move = (theta - prev_theta) / prev_theta * 100.0
+            crossed_by_bar = (
+                (prev_theta > share >= theta) if not fell
+                else (prev_theta < share <= theta))
+            lines.append("bar moved %+.1f%% since the previous poll "
+                         "(%.3f%% to %.3f%%)"
+                         % (bar_move, prev_theta * 100.0, theta * 100.0))
+            lines.append("attribution: THE BAR MOVED onto this subnet · "
+                         "its demand share did not cross on its own"
+                         if crossed_by_bar else
+                         "attribution: the subnet's own demand share moved "
+                         "across the bar")
         if emission_enabled == 0:
             lines.append("subnet emission is DISABLED · informational · "
                          "earns zero either way")
@@ -1514,9 +1564,94 @@ def fleet_signal_events(source_db: str, watermark: Optional[str],
         conn.close()
 
 
+# ---------------------------------------------------------------------------
+# Chain-parameter change (change: network-drift-443) — a root-settable knob
+# that governs network economics moved. Rare and unconditionally material,
+# so: instant tier, NO cooldown, no digest. Suppressing the second flip of a
+# switch like the Root Reborn curation gate would be the wrong failure.
+# ---------------------------------------------------------------------------
+
+_PARAM_MODE_WORDS = {
+    ("EmissionBarRank", "to-rank"):
+        "the bar is now RANK-PINNED (q is inert)",
+    ("EmissionBarRank", "to-qmass"):
+        "the bar has fallen back to Q-MASS selection",
+}
+
+
+def chain_parameter_change_events(source_db: str, watermark: Optional[str],
+                                  ctx: Optional[Dict[str, Any]] = None
+                                  ) -> Tuple[List[Dict[str, Any]],
+                                             Optional[str]]:
+    """Root-settable chain parameters that changed value, recorded by
+    livedata. Reads the transition table read-only past this class's own
+    watermark, independent of every other class."""
+    conn = open_source_ro(source_db)
+    if conn is None:
+        return [], watermark
+    try:
+        present = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND "
+            "name = 'chain_param_events'").fetchone()
+        if present is None:
+            return [], watermark  # watch not deployed yet
+        last_id = int(watermark) if watermark else 0
+        rows = conn.execute(
+            "SELECT id, item, prev_value, new_value, prev_provenance, "
+            "new_provenance, observed_at, block_number "
+            "FROM chain_param_events WHERE id > ? ORDER BY id ASC LIMIT 50",
+            (last_id,)).fetchall()
+    finally:
+        conn.close()
+
+    ctx = ctx or {}
+    config = ctx.get("config") or {}
+    spec = ctx.get("spec") or {}
+    max_chars = int(config.get("message_max_chars", 3500))
+    # Operator-supplied text: rendered through the same escaping path as
+    # every other interpolated value.
+    governs = dict(spec.get("governs") or {})
+
+    events: List[Dict[str, Any]] = []
+    high = last_id
+    for (row_id, item, prev_value, new_value, prev_prov, new_prov,
+         observed_at, block_number) in rows:
+        high = max(high, int(row_id))
+        headline = "Atlas · CHAIN PARAMETER CHANGED · %s" % item
+        lines = [
+            "%s: %s to %s" % (item, prev_value, new_value),
+            "provenance: %s to %s" % (prev_prov, new_prov),
+            "reference block: %s · observed: %s"
+            % (block_number if block_number is not None else "unknown",
+               observed_at),
+        ]
+        if item == "EmissionBarRank":
+            moved = ("to-qmass" if new_value == "0"
+                     else "to-rank" if prev_value == "0" else None)
+            if moved:
+                lines.append(_PARAM_MODE_WORDS[(item, moved)])
+        if governs.get(item):
+            lines.append("governs: %s" % governs[item])
+        if item in ("EmissionBarRank", "EmissionBarQuantile",
+                    "EmissionGateExponent"):
+            # Explains the deliberate silence: the pass that recorded this
+            # re-seeded every side rather than paging |M - N| crossings.
+            lines.append("the bar was re-priced for EVERY subnet · "
+                         "per-subnet crossing alerts were withheld for "
+                         "that pass by design")
+        plain = render_plain(headline, lines, "", None, max_chars)
+        html = render_html(headline, lines, "", None, max_chars)
+        events.append({"event_id": "chain-parameter-change:%s" % row_id,
+                       "event_class": "chain-parameter-change",
+                       "created_at": _utc_now(), "text": plain,
+                       "html": html})
+    return events, (str(high) if high else watermark)
+
+
 _ADAPTERS: Dict[str, Callable[..., Tuple[List[Dict[str, Any]],
                                          Optional[str]]]] = {
     "chain-runtime-upgrade": chain_runtime_upgrade_events,
+    "chain-parameter-change": chain_parameter_change_events,
     "gate-crossing": gate_crossing_events,
     "fleet-signal": fleet_signal_events,
     "repository-update": repository_update_events,

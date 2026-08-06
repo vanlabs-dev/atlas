@@ -43,10 +43,10 @@ class ServerTests(unittest.TestCase):
         for field in ("unit_id", "source_file", "heading_path",
                       "coverage_date", "evidence_state", "content"):
             self.assertIn(field, top)
-        self.assertEqual(top["coverage_date"], "2026-07-28")
+        self.assertEqual(top["coverage_date"], "2026-08-06")
 
     def test_conflict_surfaced(self):
-        # The real corpus has no markers since the 2026-07-28 re-sync;
+        # The real corpus has no markers since the 2026-08-06 re-sync;
         # verify surfacing behavior with a synthetic marker instead.
         import json as _json
         with tempfile.TemporaryDirectory() as tmp:

@@ -52,16 +52,55 @@
     "storage_keys": {
       "EmissionGateBar": "0x658faa385070e074c85bf6b568cf05557c9b0d2964cc73e7519676c3cc4d5df9",
       "EmissionBarQuantile": "0x658faa385070e074c85bf6b568cf0555a772007dde2ed63e0f21b5f9d7f16650",
-      "EmissionGateExponent": "0x658faa385070e074c85bf6b568cf055588c70e8dd0cf4af3aeb977ba2eee1df4"
+      "EmissionGateExponent": "0x658faa385070e074c85bf6b568cf055588c70e8dd0cf4af3aeb977ba2eee1df4",
+      "EmissionBarRank": "0x658faa385070e074c85bf6b568cf0555d33bd686290d014475513443305882be"
     },
+    "_rank_comment": "EmissionBarRank (change: network-drift-443) arrived with spec 441 (PR #3014) and CHANGED THE BAR'S SELECTION RULE: when N > 0 theta is pinned to the Nth-largest POSITIVE demand share and EmissionBarQuantile is inert; q-mass selection only applies at N == 0. Codec is SCALE u16 (2 bytes LE), NOT the U64F64 the other three items use. The code default at tag v443 is 32 (pallets/subtensor/src/lib.rs, DefaultEmissionBarRank) — chosen because q=0.75 was crossing at about rank 28, so the upgrade was tuned not to shift the emission curve. NOTE: the v441 RELEASE NOTES say the default is 64 and are WRONG; the code is authoritative. Chain-verified 2026-08-06: the key is unset on Finney, so the default applies and rank mode is ACTIVE.",
     "assumed_defaults": {
       "EmissionBarQuantile": 0.61,
-      "EmissionGateExponent": 3.0
+      "EmissionGateExponent": 3.0,
+      "EmissionBarRank": 32
     },
     "hysteresis_pct": 10,
     "confirm_polls": 2,
     "absence_clear_polls": 3,
-    "rpc_timeout_seconds": 20
+    "rpc_timeout_seconds": 20,
+    "above_count_tolerance": 0
+  },
+  "chain_params": {
+    "_comment": "Root-settable chain-parameter watch (change: network-drift-443). DEFAULTS OFF: `enabled` false makes the watch inert and the Telegram chain-parameter-change class silent — flipping it is the whole rollback. Watches discrete knobs whose flip changes network economics without leaving an AdminUtils extrinsic trail (the same reason the gate poll reads q/h rather than assuming code defaults). `source: gate-poll` items are NOT re-read: the gate poll already decodes them at its finalized block and hands them over, so each item is read once and has one history. `source: independent` items carry their own pinned key (twox128('SubtensorModule') ++ twox128(item), verified against live Finney 2026-08-06) and are read at the gate poll's block when it runs — but the watch is deliberately NOT gated by gate_signal.enabled, so rolling back the gate signal cannot silently stop watching the Root Reborn curation switch. Discrete values do not flap, so transitions need no hysteresis; a first observation seeds without emitting one, and a provenance-only change (assumed-default -> explicit at an unchanged value) is recorded but never paged.",
+    "enabled": false,
+    "items": [
+      {
+        "item": "EmissionBarRank",
+        "source": "gate-poll",
+        "codec": "u16",
+        "default": 32,
+        "governs": "emission gate bar selection: N > 0 pins the bar to the Nth-largest demand share, N = 0 falls back to the q-mass quantile"
+      },
+      {
+        "item": "EmissionBarQuantile",
+        "source": "gate-poll",
+        "codec": "u64f64",
+        "default": 0.61,
+        "governs": "q-mass bar threshold, applied only when the bar rank is 0"
+      },
+      {
+        "item": "EmissionGateExponent",
+        "source": "gate-poll",
+        "codec": "u64f64",
+        "default": 3.0,
+        "governs": "Hill gate sharpness: how hard emission collapses below the bar"
+      },
+      {
+        "item": "RootWeightSettingEnabled",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf055543f3dc4dfa03eb004921d663110b49b0",
+        "codec": "bool",
+        "default": false,
+        "governs": "Root Reborn basket curation master switch: while false every fund runs the null strategy and root dividends accumulate in place"
+      }
+    ]
   },
   "wallet_aliases": {
     "_comment": "Operator public coldkeys only (no seeds/keys). Aliases resolve for live_portfolio account=.",

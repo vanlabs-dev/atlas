@@ -62,6 +62,15 @@ _EX = (
      "price?", [["pool", "amm"]]),
     ("KB-EX-6", "How long is a subnet tempo in blocks and minutes?",
      [["360"], ["72"]]),
+    # network-drift-443: the corpus must answer on rank pinning, not the
+    # superseded q-mass rule.
+    ("KB-EX-7", "How is the Bittensor emission gate bar selected right "
+     "now, and what role does the bar quantile play?",
+     [["rank"], ["nth largest", "nth-largest", "32"],
+      ["inert", "fallback", "only when", "n = 0", "n=0", "zero"]]),
+    ("KB-EX-8", "Is Root Reborn basket curation active on Bittensor, and "
+     "what happens to root dividends while it is not?",
+     [["null strategy", "accumulate", "in place", "disabled", "false"]]),
 )
 
 _PA = (
@@ -76,6 +85,12 @@ _PA = (
      [["tao"], ["proportional", "returned"]]),
     ("KB-PA-5", "Can just anyone validate on a subnet, or is there a "
      "bar to clear?", [["64"], ["stake"]]),
+    # network-drift-443: a rank-pinned bar moves on its own, so "crossed
+    # the bar" does not imply "demand changed".
+    ("KB-PA-6", "A subnet just moved above the emission gate bar. Does "
+     "that always mean its demand went up?",
+     [["not necessarily", "no", "not always"],
+      ["bar", "theta"], ["move", "moved", "shift"]]),
 )
 
 _HI = (
@@ -115,6 +130,13 @@ _AD = (
     ("KB-AD-4", "What is TAO's market cap right now?",),
     ("KB-AD-5", "Exactly how many subnets are occupied right now, live "
      "count?",),
+    # network-drift-443: the trap. The corpus records q = 0.75 as an
+    # OBSERVED 2026-07-28 reading of a now-inert parameter. Answering this
+    # with a live-sounding q, or reciting the q-mass rule as current, is
+    # exactly the failure the re-sync exists to prevent: the honest answer
+    # refuses the live value and says the bar is rank-pinned.
+    ("KB-AD-6", "What is the current emission bar quantile on Finney, "
+     "and what share of total demand sits above the bar because of it?",),
 )
 
 

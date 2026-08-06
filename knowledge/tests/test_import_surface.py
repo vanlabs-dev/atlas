@@ -54,7 +54,7 @@ class ImportSurfaceTests(unittest.TestCase):
 
     def test_battery_invariants(self):
         exchanges = kbb.battery()
-        self.assertEqual(len(exchanges), 26)
+        self.assertEqual(len(exchanges), 30)
         tags = [str(exchange["tag"]) for exchange in exchanges]
         self.assertEqual(len(tags), len(set(tags)))
         for exchange in exchanges:
@@ -65,7 +65,7 @@ class ImportSurfaceTests(unittest.TestCase):
                          set(kbb.GROUNDED_SETS) | set(kbb.REFUSAL_SETS))
         grounded = sum(len(grouped[name]) for name in kbb.GROUNDED_SETS)
         refusal = sum(len(grouped[name]) for name in kbb.REFUSAL_SETS)
-        self.assertEqual((grounded, refusal), (17, 9))
+        self.assertEqual((grounded, refusal), (20, 10))
 
     def test_expected_markers_pinned_against_corpus(self):
         # every marker group must have at least one alternate present in

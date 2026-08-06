@@ -112,7 +112,11 @@ CREATE TABLE IF NOT EXISTS gate_state (
     q_provenance TEXT NOT NULL,
     h REAL NOT NULL,
     h_provenance TEXT NOT NULL,
-    endpoint TEXT NOT NULL
+    endpoint TEXT NOT NULL,
+    rank INTEGER,
+    rank_provenance TEXT,
+    bar_mode TEXT,
+    above_count INTEGER
 );
 CREATE TABLE IF NOT EXISTS gate_sides (
     netuid INTEGER PRIMARY KEY,
@@ -131,6 +135,28 @@ CREATE TABLE IF NOT EXISTS gate_events (
     theta REAL NOT NULL,
     prev_side TEXT NOT NULL,
     emission_enabled INTEGER,
+    block_number INTEGER,
+    prev_theta REAL
+);
+CREATE TABLE IF NOT EXISTS chain_params (
+    id INTEGER PRIMARY KEY,
+    item TEXT NOT NULL,
+    value TEXT NOT NULL,
+    provenance TEXT NOT NULL,
+    observed_at TEXT NOT NULL,
+    block_number INTEGER,
+    block_hash TEXT
+);
+CREATE INDEX IF NOT EXISTS chain_params_item_id
+    ON chain_params (item, id DESC);
+CREATE TABLE IF NOT EXISTS chain_param_events (
+    id INTEGER PRIMARY KEY,
+    item TEXT NOT NULL,
+    prev_value TEXT NOT NULL,
+    new_value TEXT NOT NULL,
+    prev_provenance TEXT NOT NULL,
+    new_provenance TEXT NOT NULL,
+    observed_at TEXT NOT NULL,
     block_number INTEGER
 );
 """
@@ -268,6 +294,23 @@ def open_store(db_path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     connection = sqlite3.connect(db_path, timeout=10)
     connection.executescript(SCHEMA_SQL)
+    # Additive migration (change: network-drift-443). Stores written before
+    # rank-pinned bar selection lack these columns; existing rows stay NULL,
+    # which readers MUST treat as "unrecorded" rather than back-filling —
+    # theta really was q-mass-derived until the spec-441 bar reset.
+    for table, additions in (
+            ("gate_state", (("rank", "INTEGER"),
+                            ("rank_provenance", "TEXT"),
+                            ("bar_mode", "TEXT"),
+                            ("above_count", "INTEGER"))),
+            ("gate_events", (("prev_theta", "REAL"),))):
+        columns = {row[1] for row in connection.execute(
+            "PRAGMA table_info(%s)" % table)}
+        for column, coltype in additions:
+            if column not in columns:
+                connection.execute("ALTER TABLE %s ADD COLUMN %s %s"
+                                   % (table, column, coltype))
+    connection.commit()
     return connection
 
 
@@ -1314,7 +1357,9 @@ GATE_BELOW = "below"
 GATE_FELL_BELOW = "fell-below"
 GATE_ROSE_ABOVE = "rose-above"
 _GATE_ITEMS = ("EmissionGateBar", "EmissionBarQuantile",
-               "EmissionGateExponent")
+               "EmissionGateExponent", "EmissionBarRank")
+GATE_MODE_RANK = "rank"
+GATE_MODE_QMASS = "q-mass"
 
 
 def _rpc_call(config: Dict[str, Any], method: str, params: List[Any],
@@ -1361,15 +1406,56 @@ def _rpc_call(config: Dict[str, Any], method: str, params: List[Any],
     return {"ok": False, "error": redact(last_error)}
 
 
+def _payload_bytes(hex_payload: str) -> bytes:
+    if not isinstance(hex_payload, str) or not hex_payload.startswith("0x"):
+        raise ValueError("not a 0x hex payload")
+    return bytes.fromhex(hex_payload[2:])
+
+
 def decode_u64f64(hex_payload: str) -> float:
     """Decode a SCALE U64F64 storage payload (16 bytes little-endian,
     value = raw / 2^64). Raises ValueError on any malformed input."""
-    if not isinstance(hex_payload, str) or not hex_payload.startswith("0x"):
-        raise ValueError("not a 0x hex payload")
-    data = bytes.fromhex(hex_payload[2:])
+    data = _payload_bytes(hex_payload)
     if len(data) != 16:
         raise ValueError("expected 16 bytes, got %d" % len(data))
     return int.from_bytes(data, "little") / float(2 ** 64)
+
+
+def decode_u16(hex_payload: str) -> int:
+    """Decode a SCALE u16 storage payload (2 bytes little-endian).
+    Raises ValueError on any malformed input. Deliberately NOT
+    interchangeable with decode_u64f64: a fixed-point payload is 16 bytes
+    and fails the length check loudly rather than decoding to nonsense."""
+    data = _payload_bytes(hex_payload)
+    if len(data) != 2:
+        raise ValueError("expected 2 bytes, got %d" % len(data))
+    return int.from_bytes(data, "little")
+
+
+def decode_bool(hex_payload: str) -> bool:
+    """Decode a SCALE bool storage payload (1 byte, 0x00 or 0x01).
+    A correct-length byte that is neither encoding is rejected — length
+    checking alone would pass it."""
+    data = _payload_bytes(hex_payload)
+    if len(data) != 1:
+        raise ValueError("expected 1 byte, got %d" % len(data))
+    if data[0] not in (0, 1):
+        raise ValueError("not a SCALE bool: 0x%02x" % data[0])
+    return data[0] == 1
+
+
+# Codec is a property of the storage item, never inferred from the payload:
+# a length-based guess is unambiguous today and silently wrong for the first
+# item that shares a length with another codec.
+_CODECS = {"u64f64": decode_u64f64, "u16": decode_u16, "bool": decode_bool}
+
+
+def decode_by_codec(codec: str, hex_payload: str) -> Any:
+    """Decode a storage payload with the item's declared codec."""
+    decoder = _CODECS.get(codec)
+    if decoder is None:
+        raise ValueError("unknown codec %r" % codec)
+    return decoder(hex_payload)
 
 
 def poll_gate_state(connection: sqlite3.Connection,
@@ -1416,15 +1502,17 @@ def poll_gate_state(connection: sqlite3.Connection,
         raw[item] = read.get("result")  # None == key unset on chain
 
     def _decode_or_default(item: str, low: float, high: float,
-                           low_inclusive: bool) -> Tuple[float, str]:
+                           low_inclusive: bool,
+                           codec: str = "u64f64") -> Tuple[Any, str]:
         value = raw[item]
         if value is None:
             default = defaults.get(item)
             if default is None:
                 raise ValueError("%s unset on chain and no assumed "
                                  "default configured" % item)
-            return float(default), "assumed-default"
-        decoded = decode_u64f64(value)
+            return (int(default) if codec == "u16" else float(default),
+                    "assumed-default")
+        decoded = decode_by_codec(codec, value)
         ok_low = decoded >= low if low_inclusive else decoded > low
         if not (ok_low and decoded <= high):
             raise ValueError("%s out of bounds: %r" % (item, decoded))
@@ -1441,32 +1529,210 @@ def poll_gate_state(connection: sqlite3.Connection,
             "EmissionBarQuantile", 0.0, 1.0, low_inclusive=False)
         h, h_provenance = _decode_or_default(
             "EmissionGateExponent", 1.0, 8.0, low_inclusive=True)
+        # Rank is u16, NOT fixed-point (spec 441, PR #3014). N > 0 pins theta
+        # to the Nth-largest positive demand share and makes q inert.
+        rank, rank_provenance = _decode_or_default(
+            "EmissionBarRank", 0, 65535, low_inclusive=True, codec="u16")
     except ValueError as exc:
         health_event(connection, GATE_PROVIDER, GATE_OPERATION,
                      "validation-failure", str(exc))
         return {"ok": False, "error": "gate state failed validation"}
 
     gate_active = bool(theta and theta > 0.0)
+    # The bar mode is a property of THIS observation: a crossing recorded
+    # last week must stay interpretable with last week's mode. Derived from
+    # the effective rank, including an assumed-default one.
+    bar_mode = GATE_MODE_RANK if rank > 0 else GATE_MODE_QMASS
     previous = connection.execute(
-        "SELECT q, q_provenance, h, h_provenance FROM gate_state "
+        "SELECT theta FROM gate_state WHERE theta IS NOT NULL "
         "ORDER BY id DESC LIMIT 1").fetchone()
+    prev_theta = previous[0] if previous else None
     connection.execute(
         "INSERT INTO gate_state (observed_at, block_hash, block_number, "
-        "gate_active, theta, q, q_provenance, h, h_provenance, endpoint) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "gate_active, theta, q, q_provenance, h, h_provenance, endpoint, "
+        "rank, rank_provenance, bar_mode) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (_utc_now(), block_hash, block_number, int(gate_active),
          theta if gate_active else None, q, q_provenance, h, h_provenance,
-         endpoint))
+         endpoint, rank, rank_provenance, bar_mode))
     connection.commit()
-    params_changed = bool(
-        previous is not None
-        and (previous[0], previous[1], previous[2], previous[3])
-        != (q, q_provenance, h, h_provenance))
+    # Bar parameters are handed to the chain-parameter watch rather than
+    # re-read: one storage read per item, one durable history. This replaces
+    # the ephemeral `params_changed` flag, which detected q/h moves but was
+    # never persisted and never paged.
     return {"ok": True, "gate_active": gate_active, "theta": theta,
+            "prev_theta": prev_theta,
             "q": q, "q_provenance": q_provenance,
             "h": h, "h_provenance": h_provenance,
+            "rank": rank, "rank_provenance": rank_provenance,
+            "bar_mode": bar_mode,
             "block_number": block_number, "block_hash": block_hash,
-            "endpoint": endpoint, "params_changed": params_changed}
+            "endpoint": endpoint,
+            "bar_params": {
+                "EmissionBarRank": (rank, rank_provenance),
+                "EmissionBarQuantile": (q, q_provenance),
+                "EmissionGateExponent": (h, h_provenance)}}
+
+
+# ---------------------------------------------------------------------------
+# Chain-parameter watch (change: network-drift-443). Discrete root-settable
+# knobs whose flip changes network economics with no AdminUtils extrinsic
+# trail. Bar parameters arrive already decoded from the gate poll (one read
+# per item, one history); everything else is read here on its own pinned key.
+# Deliberately NOT gated by the gate kill-switch: rolling back the gate
+# signal must not silently stop watching the Root Reborn curation switch.
+# ---------------------------------------------------------------------------
+
+PARAM_PROVIDER = "finney-rpc"
+PARAM_OPERATION = "watch_chain_params"
+PARAM_SOURCE_GATE = "gate-poll"
+
+
+def param_value_text(value: Any) -> str:
+    """Canonical text form of a watched value, so persistence and equality
+    are exact and stable across int/float/bool without float re-formatting
+    surprises."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return repr(value)
+    raise ValueError("unsupported watched value type: %r" % type(value))
+
+
+def _record_param(connection: sqlite3.Connection, item: str, value: Any,
+                  provenance: str, block_number: Optional[int],
+                  block_hash: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Persist one observation and return a transition dict when the VALUE
+    changed against the last persisted observation. A first-ever observation
+    seeds without a transition (nothing to differ from); a provenance-only
+    change is recorded but is not a transition — governance pinning a knob
+    to the value it already had by default changes nothing economically."""
+    text = param_value_text(value)
+    previous = connection.execute(
+        "SELECT value, provenance FROM chain_params WHERE item = ? "
+        "ORDER BY id DESC LIMIT 1", (item,)).fetchone()
+    now = _utc_now()
+    connection.execute(
+        "INSERT INTO chain_params (item, value, provenance, observed_at, "
+        "block_number, block_hash) VALUES (?, ?, ?, ?, ?, ?)",
+        (item, text, provenance, now, block_number, block_hash))
+    transition: Optional[Dict[str, Any]] = None
+    if previous is not None and previous[0] != text:
+        cursor = connection.execute(
+            "INSERT INTO chain_param_events (item, prev_value, new_value, "
+            "prev_provenance, new_provenance, observed_at, block_number) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (item, previous[0], text, previous[1], provenance, now,
+             block_number))
+        transition = {"id": cursor.lastrowid, "item": item,
+                      "prev_value": previous[0], "new_value": text,
+                      "prev_provenance": previous[1],
+                      "new_provenance": provenance}
+    connection.commit()
+    return transition
+
+
+def run_chain_param_watch(connection: sqlite3.Connection,
+                          config: Dict[str, Any],
+                          rpc: Optional[Any] = None,
+                          bar_params: Optional[Dict[str, Any]] = None,
+                          block_hash: Optional[str] = None,
+                          block_number: Optional[int] = None
+                          ) -> Dict[str, Any]:
+    """Observe every configured watched item and record value transitions.
+
+    `bar_params` carries the gate poll's already-decoded {item: (value,
+    provenance)}; when absent (gate disabled, or the poll failed closed)
+    gate-sourced items are simply not observed this pass, which is honest
+    rather than silent. Independently sourced items are read at the gate
+    poll's block when one is supplied, otherwise at a head obtained here.
+    One unreadable item never blinds the rest."""
+    pcfg = config.get("chain_params") or {}
+    if not pcfg.get("enabled"):
+        return {"status": "disabled"}
+    rpc = rpc or (lambda method, params: _rpc_call(config, method, params))
+    items = list(pcfg.get("items") or [])
+    gate_values = bar_params or {}
+
+    independent = [i for i in items
+                   if i.get("source") != PARAM_SOURCE_GATE]
+    if independent and block_hash is None:
+        head = rpc("chain_getFinalizedHead", [])
+        if not head.get("ok") or not head.get("result"):
+            health_event(connection, PARAM_PROVIDER, PARAM_OPERATION,
+                         "provider-failure",
+                         head.get("error") or "no finalized head")
+            independent = []
+        else:
+            block_hash = head["result"]
+            header = rpc("chain_getHeader", [block_hash])
+            if header.get("ok") and isinstance(header.get("result"), dict):
+                try:
+                    block_number = int(str(header["result"].get("number")),
+                                       16)
+                except (TypeError, ValueError):
+                    block_number = None
+
+    observed: List[str] = []
+    skipped: List[str] = []
+    transitions: List[Dict[str, Any]] = []
+
+    for spec in items:
+        item = spec.get("item")
+        if not item:
+            continue
+        if spec.get("source") == PARAM_SOURCE_GATE:
+            if item not in gate_values:
+                skipped.append(item)
+                continue
+            value, provenance = gate_values[item]
+        else:
+            if item not in [i.get("item") for i in independent]:
+                skipped.append(item)
+                continue
+            key = spec.get("key")
+            if not key:
+                raise FatalLiveError(
+                    "chain_params item %r is independent but has no key"
+                    % item)
+            read = rpc("state_getStorage", [key, block_hash])
+            if not read.get("ok"):
+                health_event(connection, PARAM_PROVIDER, PARAM_OPERATION,
+                             "provider-failure",
+                             read.get("error") or ("read failed: %s" % item))
+                skipped.append(item)
+                continue  # one unreadable knob does not blind the others
+            payload = read.get("result")
+            if payload is None:
+                default = spec.get("default")
+                if default is None:
+                    health_event(connection, PARAM_PROVIDER,
+                                 PARAM_OPERATION, "validation-failure",
+                                 "%s unset and no default configured" % item)
+                    skipped.append(item)
+                    continue
+                value, provenance = default, "assumed-default"
+            else:
+                try:
+                    value = decode_by_codec(spec.get("codec", ""), payload)
+                except ValueError as exc:
+                    health_event(connection, PARAM_PROVIDER,
+                                 PARAM_OPERATION, "validation-failure",
+                                 str(exc))
+                    skipped.append(item)
+                    continue
+                provenance = "explicit"
+        transition = _record_param(connection, item, value, provenance,
+                                   block_number, block_hash)
+        observed.append(item)
+        if transition is not None:
+            transitions.append(transition)
+
+    return {"status": "ok", "observed": observed, "skipped": skipped,
+            "transitions": transitions,
+            "block_number": block_number}
 
 
 def compute_demand_shares(subnets: List[Dict[str, Any]]
@@ -1505,7 +1771,9 @@ def update_gate_sides(connection: sqlite3.Connection,
                       gcfg: Dict[str, Any], theta: float,
                       shares: Dict[int, float],
                       enabled: Dict[int, Optional[bool]],
-                      block_number: Optional[int]) -> List[Dict[str, Any]]:
+                      block_number: Optional[int],
+                      prev_theta: Optional[float] = None
+                      ) -> List[Dict[str, Any]]:
     """Advance per-netuid gate sides and record confirmed crossing events.
     Hysteresis: a side flips only after the share sits beyond the
     relative band around theta on `confirm_polls` consecutive polls.
@@ -1553,13 +1821,15 @@ def update_gate_sides(connection: sqlite3.Connection,
                 cursor = connection.execute(
                     "INSERT INTO gate_events (observed_at, netuid, "
                     "direction, share, theta, prev_side, emission_enabled, "
-                    "block_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "block_number, prev_theta) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (now, netuid, direction, share, theta, side,
                      (None if enabled.get(netuid) is None
-                      else int(bool(enabled.get(netuid)))), block_number))
+                      else int(bool(enabled.get(netuid)))), block_number,
+                     prev_theta))
                 events.append({"id": cursor.lastrowid, "netuid": netuid,
                                "direction": direction, "share": share,
-                               "theta": theta})
+                               "theta": theta, "prev_theta": prev_theta})
                 side = zone
                 pending_side, pending_count = None, 0
         connection.execute(
@@ -1600,13 +1870,24 @@ def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
     if not state.get("ok"):
         return {"status": "live-unavailable", "error": state.get("error")}
 
+    # The watch runs inside the pass so bar parameters are recorded at the
+    # gate observation's own block, with no second storage read.
+    watch = run_chain_param_watch(
+        connection, config, rpc=rpc, bar_params=state.get("bar_params"),
+        block_hash=state.get("block_hash"),
+        block_number=state.get("block_number"))
+    bar_param_change = [t for t in (watch.get("transitions") or [])
+                        if t["item"] in _GATE_ITEMS]
+
     summary: Dict[str, Any] = {
         "status": "ok", "gate_active": state["gate_active"],
         "theta": state["theta"], "q": state["q"],
         "q_provenance": state["q_provenance"], "h": state["h"],
         "h_provenance": state["h_provenance"],
+        "rank": state["rank"], "rank_provenance": state["rank_provenance"],
+        "bar_mode": state["bar_mode"],
         "block_number": state["block_number"],
-        "params_changed": state["params_changed"],
+        "chain_params": watch,
     }
     was_active = meta_get(connection, META_GATE_ACTIVE) == "1"
     if not state["gate_active"]:
@@ -1615,9 +1896,17 @@ def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
         summary["events_recorded"] = 0
         summary["note"] = "gate inactive: no crossing events by design"
         return summary
-    if not was_active:
+    if not was_active or bar_param_change:
         # Inactive (or first-ever) -> active: every side re-seeds silently.
+        # Same treatment for a bar-parameter change: it re-prices the bar for
+        # EVERY subnet at once, so the |M - N| crossings it induces belong to
+        # the parameter change, not to per-subnet demand. Paging them
+        # individually is what happened at the spec-441 bar reset on
+        # 2026-08-03 (four subnets reported as rising when the bar had fallen
+        # onto them), and it misinformed.
         connection.execute("DELETE FROM gate_sides")
+        if bar_param_change:
+            summary["reseeded"] = [t["item"] for t in bar_param_change]
     meta_set(connection, META_GATE_ACTIVE, "1")
     connection.commit()
 
@@ -1633,11 +1922,39 @@ def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
         summary["events_recorded"] = 0
         return summary
     events = update_gate_sides(connection, gcfg, state["theta"], shares,
-                               enabled, state["block_number"])
+                               enabled, state["block_number"],
+                               prev_theta=state.get("prev_theta"))
     summary["sides_tracked"] = connection.execute(
         "SELECT COUNT(*) FROM gate_sides").fetchone()[0]
     summary["events_recorded"] = len(events)
     summary["events"] = events
+
+    # Rank-mode invariant: the chain pins theta to the Nth-largest POSITIVE
+    # demand share, so exactly N positive shares sit at or above it. Counting
+    # them cross-checks the panel data, the normalization universe, and the
+    # theta read against the chain's own selection rule, for free. Counted
+    # from the shares rather than from gate_sides so Atlas-side hysteresis
+    # (an intentional smoothing artefact) cannot masquerade as disagreement.
+    above_count: Optional[int] = None
+    if state["bar_mode"] == GATE_MODE_RANK:
+        above_count = sum(1 for share in shares.values()
+                          if share > 0.0 and share >= state["theta"])
+        rank = int(state["rank"])
+        tolerance = int(gcfg.get("above_count_tolerance", 0))
+        connection.execute(
+            "UPDATE gate_state SET above_count = ? WHERE id = "
+            "(SELECT id FROM gate_state ORDER BY id DESC LIMIT 1)",
+            (above_count,))
+        connection.commit()
+        if abs(above_count - rank) > tolerance:
+            # Information, not an error: never suppresses events or discards
+            # the pass. It means Atlas and the chain disagree about demand.
+            health_event(
+                connection, GATE_PROVIDER, GATE_OPERATION,
+                "invariant-divergence",
+                "above-bar count %d vs rank %d at block %s"
+                % (above_count, rank, state["block_number"]))
+    summary["above_count"] = above_count
     return summary
 
 
@@ -1684,6 +2001,16 @@ def _cmd_poll_gate() -> int:
     try:
         ledger = QuotaLedger(connection, config)
         summary = run_gate_pass(connection, config, ledger, env=env)
+        if summary["status"] == "disabled":
+            # The gate signal is rolled back, but the chain-parameter watch
+            # is a separate concern: the Root Reborn curation switch has
+            # nothing to do with the gate, and a rollback of one must not
+            # silently stop the other. Bar parameters pause (that is where
+            # their values come from); independent items keep being read.
+            watch = run_chain_param_watch(connection, config)
+            if watch["status"] != "disabled":
+                summary = {"status": "ok", "gate": "disabled",
+                           "chain_params": watch}
     finally:
         connection.close()
     print(json.dumps(summary, indent=2, sort_keys=True))
@@ -1700,14 +2027,25 @@ def _cmd_status() -> int:
     try:
         state_rows = connection.execute(
             "SELECT observed_at, block_number, gate_active, theta, q, "
-            "q_provenance, h, h_provenance, endpoint FROM gate_state "
+            "q_provenance, h, h_provenance, endpoint, rank, "
+            "rank_provenance, bar_mode, above_count FROM gate_state "
             "ORDER BY id DESC LIMIT 5").fetchall()
         sides = dict(connection.execute(
             "SELECT side, COUNT(*) FROM gate_sides GROUP BY side"
         ).fetchall())
         event_rows = connection.execute(
-            "SELECT id, observed_at, netuid, direction, share, theta "
-            "FROM gate_events ORDER BY id DESC LIMIT 5").fetchall()
+            "SELECT id, observed_at, netuid, direction, share, theta, "
+            "prev_theta FROM gate_events ORDER BY id DESC LIMIT 5"
+        ).fetchall()
+        # Latest observation per watched item, plus recent transitions.
+        param_rows = connection.execute(
+            "SELECT item, value, provenance, observed_at, block_number "
+            "FROM chain_params WHERE id IN "
+            "(SELECT MAX(id) FROM chain_params GROUP BY item) "
+            "ORDER BY item").fetchall()
+        param_events = connection.execute(
+            "SELECT id, item, prev_value, new_value, observed_at "
+            "FROM chain_param_events ORDER BY id DESC LIMIT 5").fetchall()
         spec = {"spec_version": meta_get(connection, META_LAST_LIVE_SPEC),
                 "block": meta_get(connection, META_LAST_LIVE_SPEC_BLOCK),
                 "observed_at": meta_get(connection,
@@ -1719,13 +2057,24 @@ def _cmd_status() -> int:
             {"observed_at": r[0], "block_number": r[1],
              "gate_active": bool(r[2]), "theta": r[3],
              "q": r[4], "q_provenance": r[5],
-             "h": r[6], "h_provenance": r[7], "endpoint": r[8]}
+             "h": r[6], "h_provenance": r[7], "endpoint": r[8],
+             "rank": r[9], "rank_provenance": r[10], "bar_mode": r[11],
+             "above_count": r[12]}
             for r in state_rows],
         "gate_sides": sides,
         "gate_events_recent": [
             {"id": r[0], "observed_at": r[1], "netuid": r[2],
-             "direction": r[3], "share": r[4], "theta": r[5]}
+             "direction": r[3], "share": r[4], "theta": r[5],
+             "prev_theta": r[6]}
             for r in event_rows],
+        "chain_params_latest": [
+            {"item": r[0], "value": r[1], "provenance": r[2],
+             "observed_at": r[3], "block_number": r[4]}
+            for r in param_rows],
+        "chain_param_events_recent": [
+            {"id": r[0], "item": r[1], "prev_value": r[2],
+             "new_value": r[3], "observed_at": r[4]}
+            for r in param_events],
         "live_spec": spec,
     }, indent=2, sort_keys=True))
     return 0
