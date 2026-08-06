@@ -4,7 +4,7 @@
   "coverage_date": "2026-08-06",
   "files": {
     "ground-truth.md": "bb6463955f13e8639683946818bf228885d6391cd45c5666c4db13dd0d1887da",
-    "fact-patterns.md": "c3d62cd3ba20debbbebbc10f35c6d6e5192dcc3788553fdca7a73ff0d1884ad4",
+    "fact-patterns.md": "29c1056cf907e23e079fd5dc91f9ba10e1434d6605c0a6b7647ef327788bae3d",
     "negative-claim-rules.md": "bee65dbf186771440eecd4656314ac0f4e9d6daed3e49fbf823d32fd39066b69"
   },
   "note": "sha256 over newline-normalized (LF) bytes; see load_corpus"
