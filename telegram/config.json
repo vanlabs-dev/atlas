@@ -31,7 +31,7 @@
     },
     "chain-parameter-change": {
       "_comment": "Root-settable chain-parameter transitions (change: network-drift-443). DISABLED at ship time — enable together with livedata chain_params.enabled at deploy, and seed this class's watermark first so the seeded observations cannot backfill-flood. Reads livedata's chain_param_events read-only past a row-id watermark. Instant tier, priority just below chain upgrades. NO cooldown and no digest by design: a knob like the Root Reborn curation switch cannot burst, and suppressing a second flip would be the wrong failure. `governs` maps an item to the one-line description rendered in the body (escaped like every other value).",
-      "enabled": false,
+      "enabled": true,
       "source_db": "var/livedata/livedata.db",
       "governs": {
         "EmissionBarRank": "emission gate bar selection: N > 0 pins the bar to the Nth largest demand share, N = 0 falls back to the q-mass quantile",
