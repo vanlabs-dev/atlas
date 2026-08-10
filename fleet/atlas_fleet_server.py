@@ -44,7 +44,14 @@ sys.path.insert(0, os.path.join(_REPO_ROOT, "repotrack"))
 
 import atlas_fleet as flt  # noqa: E402  (stdlib-pure at import time)
 import atlas_fleet_index as fidx  # noqa: E402
+import atlas_fleet_mining as fmine  # noqa: E402  (pure read helpers)
 import atlas_repo as arp  # noqa: E402  (pure helpers: local_sha, tree-dirty)
+
+
+def _mining() -> Any:
+    """The mining module's read-only view helpers. Imported directly: it is
+    stdlib-pure at import time and opens nothing."""
+    return fmine
 
 SERVER_NAME = "atlas-fleet"
 SERVER_VERSION = "0.1.0"
@@ -60,6 +67,13 @@ AUDIT_MAX_BYTES = 5 * 1024 * 1024
 DEFAULT_MAX_RESULTS = 3
 MAX_MAX_RESULTS = 10
 MAX_FILE_LINES = 400
+
+# Mining triage (change: mining-triage). Bounded like every other surface.
+DEFAULT_BOARD_LIMIT = 10
+MAX_BOARD_LIMIT = 30
+DEFAULT_HISTORY_ROWS = 20
+MAX_HISTORY_ROWS = 100
+MINING_UNAVAILABLE = "mining-screen-unavailable"
 
 TOOLS: List[Dict[str, Any]] = [
     {
@@ -116,6 +130,65 @@ TOOLS: List[Dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {"netuid": {"type": "integer", "minimum": 0}},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "mining_board",
+        "description": (
+            "Ranked mining triage: which subnets a NEW INDEPENDENT MINER "
+            "could earn on, with the reason every excluded subnet was cut. "
+            "Each row carries net/gross TAO per month, alpha price, owner "
+            "capture (miner burn), earner count and top-10 concentration, "
+            "the declared hardware floor with the file it came from, and a "
+            "confidence marker. Alpha DISTRIBUTED per block is a protocol "
+            "constant, so ranking is driven by price, burn, and "
+            "concentration — never by emission quantity. Always report both "
+            "the economics and feasibility timestamps."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "minimum": 1,
+                          "maximum": MAX_BOARD_LIMIT},
+                "include_cut": {"type": "boolean",
+                                "description": "also return excluded "
+                                               "subnets with their reasons"},
+            },
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "mining_subnet",
+        "description": (
+            "One subnet's full mining picture: every recorded economics "
+            "field with its chain reference block, and every feasibility "
+            "finding with its evidence path and the commit it was scanned "
+            "at. Reports `unscanned` distinctly from infeasible."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"netuid": {"type": "integer", "minimum": 0}},
+            "required": ["netuid"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "mining_history",
+        "description": (
+            "Recorded mining observations for one subnet over time, so "
+            "'what changed' is answered from stored passes rather than "
+            "inferred. Reports insufficient-history until at least two "
+            "observations exist; never presents a single observation as a "
+            "trend."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "netuid": {"type": "integer", "minimum": 0},
+                "field": {"type": "string",
+                          "description": "restrict to one economics field"},
+                "limit": {"type": "integer", "minimum": 2,
+                          "maximum": MAX_HISTORY_ROWS},
+            },
+            "required": ["netuid"],
             "additionalProperties": False,
         },
     },
@@ -187,6 +260,158 @@ class FleetStore:
                 "fleet index not built — run atlas_fleet.py index first",
                 retry_safe=False)
         return context
+
+    # -- mining triage (change: mining-triage) ----------------------------
+
+    def _mining_guarded(self) -> Any:
+        """Context for the mining tools, or a structured fail-closed error.
+
+        A missing or never-populated store is an explicit named error, never
+        an empty successful result that reads like an answer.
+        """
+        try:
+            context = self._load()
+        except flt.FleetError as exc:
+            return structured_error(MINING_UNAVAILABLE, str(exc),
+                                    retry_safe=False)
+        if not os.path.exists(context["db"]):
+            return structured_error(
+                MINING_UNAVAILABLE,
+                "fleet store not found — run atlas_fleet_mining.py pass "
+                "first", retry_safe=False)
+        try:
+            connection = self._connect(context["db"])
+        except sqlite3.Error as exc:
+            return structured_error(MINING_UNAVAILABLE, str(exc),
+                                    retry_safe=True)
+        try:
+            present = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND "
+                "name='mine_econ'").fetchone() is not None
+            populated = present and connection.execute(
+                "SELECT 1 FROM mine_econ LIMIT 1").fetchone() is not None
+        except sqlite3.Error as exc:
+            connection.close()
+            return structured_error(MINING_UNAVAILABLE, str(exc),
+                                    retry_safe=True)
+        if not populated:
+            connection.close()
+            return structured_error(
+                MINING_UNAVAILABLE,
+                "mining screen has never been populated — run "
+                "atlas_fleet_mining.py pass first", retry_safe=False)
+        context["connection"] = connection
+        return context
+
+    @staticmethod
+    def _stamps(connection: sqlite3.Connection) -> Dict[str, Any]:
+        """Both clocks travel with every answer: economics move each pass,
+        feasibility only when a clone moves."""
+        econ = connection.execute(
+            "SELECT MAX(ts) FROM mine_econ").fetchone()[0]
+        try:
+            feas = connection.execute(
+                "SELECT value FROM mine_state WHERE key = "
+                "'last_feasibility_ts'").fetchone()
+        except sqlite3.Error:
+            feas = None
+        return {"econ_observed_at": econ,
+                "feasibility_scanned_at": feas[0] if feas else None}
+
+    def mining_board(self, limit: Optional[int],
+                     include_cut: bool) -> Dict[str, Any]:
+        context = self._mining_guarded()
+        if "connection" not in context:
+            return context
+        connection = context["connection"]
+        try:
+            view = _mining().report(connection, context["config"],
+                                    limit=limit, include_cut=include_cut)
+        except sqlite3.Error as exc:
+            return structured_error(MINING_UNAVAILABLE, str(exc),
+                                    retry_safe=True)
+        finally:
+            connection.close()
+        view.update(self._stamps_from_view(view))
+        return view
+
+    @staticmethod
+    def _stamps_from_view(view: Dict[str, Any]) -> Dict[str, Any]:
+        return {"econ_observed_at": view.get("econ_ts"),
+                "feasibility_scanned_at": view.get("feasibility_ts")}
+
+    def mining_subnet(self, netuid: int) -> Dict[str, Any]:
+        context = self._mining_guarded()
+        if "connection" not in context:
+            return context
+        connection = context["connection"]
+        try:
+            cursor = connection.execute(
+                "SELECT * FROM mine_econ WHERE netuid = ? "
+                "ORDER BY ts DESC LIMIT 1", (netuid,))
+            columns = [d[0] for d in cursor.description]
+            row = cursor.fetchone()
+            if row is None:
+                return dict(structured_error(
+                    "no-mining-evidence",
+                    "no mining observation recorded for netuid %s" % netuid,
+                    retry_safe=False), **self._stamps(connection))
+            econ = dict(zip(columns, row))
+            feature = _mining().latest_feasibility(connection).get(
+                int(netuid))
+            stamps = self._stamps(connection)
+        finally:
+            connection.close()
+        return {"status": "ok", "netuid": netuid, "economics": econ,
+                "feasibility": feature or {"verdict": "unknown",
+                                           "unscanned": True},
+                **stamps}
+
+    def mining_history(self, netuid: int, field: Optional[str],
+                       limit: int) -> Dict[str, Any]:
+        context = self._mining_guarded()
+        if "connection" not in context:
+            return context
+        connection = context["connection"]
+        try:
+            columns = [d[1] for d in connection.execute(
+                "PRAGMA table_info(mine_econ)")]
+            if field is not None and field not in columns:
+                return dict(structured_error(
+                    "invalid", "unknown field %r (available: %s)"
+                    % (field, ", ".join(sorted(columns))), retry_safe=False),
+                    **self._stamps(connection))
+            wanted = ["ts", "block_ref", "confidence"]
+            if field and field not in wanted:
+                wanted.append(field)
+            elif not field:
+                wanted += ["net_tao_month", "gross_tao_month", "price_tao",
+                           "miner_burn_pct", "earner_count",
+                           "top10_share_pct"]
+            rows = connection.execute(
+                "SELECT %s FROM mine_econ WHERE netuid = ? "
+                "ORDER BY ts DESC LIMIT ?" % ", ".join(wanted),
+                (netuid, limit)).fetchall()
+            stamps = self._stamps(connection)
+        except sqlite3.Error as exc:
+            connection.close()
+            return structured_error(MINING_UNAVAILABLE, str(exc),
+                                    retry_safe=True)
+        finally:
+            try:
+                connection.close()
+            except sqlite3.Error:
+                pass
+        observations = [dict(zip(wanted, row)) for row in rows]
+        if len(observations) < 2:
+            return dict(structured_error(
+                "insufficient-history",
+                "netuid %s has %d recorded observation(s); at least two are "
+                "needed before any change can be reported"
+                % (netuid, len(observations)), retry_safe=True),
+                observations=observations, **stamps)
+        return {"status": "ok", "netuid": netuid,
+                "observations": observations, **stamps}
 
     def _repos_for(self, connection: sqlite3.Connection,
                    netuids: List[int]) -> Dict[int, Optional[str]]:
@@ -407,6 +632,27 @@ def handle_tool_call(store: FleetStore, audit: AuditLog, name: str,
             payload = store.file(netuid, path, start_line, end_line)
     elif name == "fleet_status":
         payload = store.status(arguments.get("netuid"))
+    elif name == "mining_board":
+        limit = arguments.get("limit", DEFAULT_BOARD_LIMIT)
+        if not isinstance(limit, int) or not 1 <= limit <= MAX_BOARD_LIMIT:
+            limit = DEFAULT_BOARD_LIMIT
+        payload = store.mining_board(limit,
+                                     bool(arguments.get("include_cut")))
+    elif name in ("mining_subnet", "mining_history"):
+        netuid = arguments.get("netuid")
+        if not isinstance(netuid, int) or netuid < 0:
+            payload = structured_error(
+                "invalid", "netuid must be a non-negative integer",
+                retry_safe=False)
+        elif name == "mining_subnet":
+            payload = store.mining_subnet(netuid)
+        else:
+            rows = arguments.get("limit", DEFAULT_HISTORY_ROWS)
+            if not isinstance(rows, int) or not 2 <= rows <= MAX_HISTORY_ROWS:
+                rows = DEFAULT_HISTORY_ROWS
+            field = arguments.get("field")
+            payload = store.mining_history(
+                netuid, field if isinstance(field, str) else None, rows)
     else:
         payload = structured_error(
             "invalid", "unknown tool: %r (available: %s)"

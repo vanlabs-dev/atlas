@@ -327,6 +327,67 @@ token-safe, per-slot fail-closed all verified against real data).
   a LAN-scoped accept (`ip saddr 192.168.0.0/24 tcp dport 8480 accept`) and
   reachability + traversal-containment verified from another LAN device.
 
+## Mining triage — ranking subnets by what an entrant could earn (change: mining-triage)
+
+Runs inline after metrics in each pass (`atlas_fleet_mining.run_pass`),
+read-only, additive tables, fail-isolated per stage. **Defaults OFF in
+code**; the `mining` block in `config.json` is the opt-in and flipping
+`enabled` back to false is the whole rollback. It is the only part of the
+fleet pass that reaches a provider, and it does so only through livedata.
+
+What the economics turn on, all verified on-device 2026-08-07:
+
+- **`alpha_out_emission` is the base, not `alpha_in_emission`.** `alpha_out`
+  is the alpha distributed to participants (`run_coinbase.rs`: "Total alpha
+  emission per block remaining"); `alpha_in` is the capped TAO-side pool
+  injection, with the remainder appearing as `excess_tao_emission`.
+- **Quantity cannot rank.** `alpha_out` is 1.0 on all 127 non-root subnets,
+  so miner-accessible alpha is identical everywhere. Price, owner capture
+  and concentration are what separate subnets.
+- **`MinerBurned` is owner self-mining, measured not set.** `run_coinbase.rs`
+  computes it as the proportion of each tempo's miner incentive that landed
+  on owner or owner-associated immune hotkeys and was burned or recycled.
+  It withholds from the miner leg AND penalises the subnet's price share
+  next block; the share penalty is already inside the observed emission, so
+  the burn factor is applied exactly once. Verified against chain
+  `MinerBurned` (U96F32, **divide by 2^32**) on 127 of 128 subnets.
+- **Reward is winner-take-most.** `SubnetworkN` is 256 nearly everywhere
+  while 3 to 15 UIDs earn anything and the top ten take substantially all
+  of it. The headline is an **entrant** figure under a stated parity
+  assumption (pool shared among earners + 1), never incumbent income —
+  ranking on incumbent income puts the least enterable subnets on top.
+- **Gate-disabled subnets still pay alpha.** They lose the TAO inflow
+  backing it, so the price decays. Cut for that, not for absent payment.
+- **Collateral is dormant.** `CollateralLockShare` has zero keys chain-wide,
+  so registration is fully burned today. Watched for a transition, not
+  modelled as a cost.
+
+Chain reads live in `livedata/atlas_live.py` (`twox128`, `read_subnet_maps`),
+batched through `state_queryStorageAt` at one finalized block. These maps use
+the **Identity** hasher: the key is `twox128(pallet) ++ twox128(item) ++
+netuid_u16_le`, no twox64 concat. The derivation is self-tested against the
+three pinned gate keys already verified against live Finney; a mismatch
+blocks every derived read, because a wrong prefix returns an empty key set
+indistinguishable from an empty map.
+
+```
+python3 fleet/atlas_fleet_mining.py status
+python3 fleet/atlas_fleet_mining.py econ         # Stage A economics
+python3 fleet/atlas_fleet_mining.py feasibility  # Stage B sha-gated scan
+python3 fleet/atlas_fleet_mining.py report       # Stage C ranked JSON
+python3 fleet/atlas_fleet_mining.py render       # var/fleet/www/mining.html
+python3 fleet/atlas_fleet_mining.py pass         # all three (inline on reconcile)
+```
+
+Board at `http://<pi-lan-ip>:8480/mining.html`, served by the existing
+`atlas-dashboard.service`. Query surface: `mining_board`, `mining_subnet`,
+`mining_history` on the existing `atlas-fleet` MCP server, read-only,
+`mode=ro`, dual timestamps on every response (economics move each pass;
+feasibility only when a clone moves).
+
+Ranks evidence, recommends nothing. Holds no keys, submits no transaction,
+registers on nothing, runs no miner.
+
 ## Before it is self-maintaining — operator steps
 
 1. Install the timer (sudo) so passes run every 6h — see Scheduling above.

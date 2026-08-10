@@ -461,6 +461,20 @@ def _fleet_metrics() -> Any:
     return _FM
 
 
+_MN: Any = None
+
+
+def _fleet_mining() -> Any:
+    """Lazy import of the mining-triage module (change: mining-triage).
+    Module reference so its functions stay monkeypatchable in tests."""
+    global _MN
+    if _MN is None:
+        sys.path.insert(0, _MODULE_DIR)
+        import atlas_fleet_mining  # noqa: E402
+        _MN = atlas_fleet_mining
+    return _MN
+
+
 def _update_index_directive(result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Map an `update_clone` result to the index work it implies, or None.
 
@@ -1038,6 +1052,20 @@ def reconcile(connection: sqlite3.Connection,
               redact(str(exc))[:300])
         connection.commit()
         summary["metrics"] = {"error": redact(str(exc))[:120]}
+
+    # Mining triage (change: mining-triage) — inline after metrics so the
+    # screen sees this pass's fresh clones and index. Its own stages are
+    # individually fail-isolated; this guard is the outer one, so a mining
+    # failure is audited and never counts as a reconcile process error.
+    try:
+        summary["mining"] = _fleet_mining().run_pass(connection, config,
+                                                     now=now)
+    except Exception as exc:  # noqa: BLE001 — mining never fails the pass
+        connection.rollback()
+        audit(connection, actor, "mining-failed", None,
+              redact(str(exc))[:300])
+        connection.commit()
+        summary["mining"] = {"error": redact(str(exc))[:120]}
     return summary
 
 

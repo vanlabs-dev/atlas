@@ -90,6 +90,42 @@ present.
   report (it fails closed rather than guessing). Routine, non-firewall checks
   remain fine unprivileged.
 
+## Mining triage — chain findings (2026-08-07, change: mining-triage)
+
+Verified on the Pi against live Finney and the TaoSwap panel. Recorded here
+because each one corrects a belief that looked right and was not.
+
+- **`alpha_out_emission` is the miner-facing quantity, and it is a
+  constant.** 1.0 on all 127 non-root subnets. `alpha_in_emission` is the
+  capped TAO-side pool injection, not income. Consequence: emission quantity
+  carries no ranking information; price, owner capture and concentration do.
+- **`MinerBurned` is measured, not set.** `run_coinbase.rs` computes it as
+  the proportion of each tempo's miner incentive that landed on owner or
+  owner-associated immune hotkeys and was burned or recycled. It withholds
+  from the miner leg at distribution and penalises the subnet's price share
+  next block. TaoSwap's `emission_miner_burn` matches chain `MinerBurned`
+  on 127 of 128 subnets; one differs and is not yet explained.
+- **Codec and key layout, both got wrong first.** `MinerBurned` is U96F32,
+  divide by **2^32** — read at 2^64 it returns 0.0 for every subnet and
+  looks clean. These netuid maps use the **Identity** hasher, so the key
+  tail is the raw u16 with no twox64 concat — the wrong layout returns an
+  empty map for every netuid. Both now carry regression tests, and the
+  `twox128` derivation is self-tested against the three pinned gate keys.
+- **Miner registration collateral is live in code and dormant on chain.**
+  `CollateralLockShare` and `MinerCollateral` enumerate zero keys at
+  finalized head, against a working control (`MinerBurned` 128 keys,
+  `Owner` 300). Registration is fully burned today with no lockup. The
+  mechanism shipped around spec 435, is settable to 95 percent of the
+  registration price, and is recoverable only by earning emission
+  ("a position that stops earning emission keeps its remaining collateral
+  frozen indefinitely"). It is now in the chain-parameter watch as a
+  netuid-keyed item, seeded silently, so a subnet enabling it emits a
+  transition rather than quietly changing that subnet's entry risk.
+- **Field size is not competition.** `SubnetworkN` is 256 nearly everywhere
+  while 3 to 15 UIDs earn anything and the top ten take substantially all
+  of it. `active_miners` in the panel is the earner count less the owner's
+  earning hotkey (verified exactly across eight subnets).
+
 ## Still open
 
 **Gate calibration read (~2026-08-11) — carry these into it.** Three
@@ -110,8 +146,30 @@ findings from the 2026-08-06 drift work change what the read is looking at:
   worth questioning before tuning the band around it.
 
 **Deferred verification:** re-check the rank invariant (`above_count == 32`
-against an effective N of 32) once the TaoSwap `/v2/subnets/` outage that
-began 2026-08-06T03:34 clears.
+against an effective N of 32). The TaoSwap `/v2/subnets/` outage that began
+2026-08-06T03:34 **cleared by 2026-08-07T03:57** (HTTP 200, schema valid,
+block 8789861), so this is unblocked.
+
+**Mining triage, dated open items (2026-08-07):**
+
+- **Budget band, due 2026-08-21.** The hardware and capital envelope was
+  deliberately deferred to the data. `mining.budget_band` is null, which
+  leaves rent unknown and the hardware cut rung inert. Pick a band within
+  two weeks of the first board render. If it has not been picked by then,
+  the honest conclusion is that mining is not being pursued and the screen
+  should be disabled rather than maintained.
+- **The parity assumption is a model.** The headline entrant figure shares
+  the miner pool among earners + 1. It is labelled as a model on the board
+  and in the spec. It still flatters a one-earner subnet, where one earner
+  often means nobody else can compete rather than that a seat is open.
+  Replacing it needs incentive-vector churn over time, which needs history
+  the store does not yet have.
+- **Registration cost units.** The panel reports a median of 0.006, low
+  enough to question whether the field is TAO or alpha denominated. Confirm
+  against a chain read of the same subnet's `Burn` before the value is
+  presented as money.
+- **One subnet of 128** where chain `MinerBurned` and the panel disagree.
+  Identify it and decide whether it is tempo skew or a value to distrust.
 
 **No Phase 0/1/2 blockers remain** — PRD §21 items 1–11 (and the
 disk-threshold follow-up) were resolved 2026-07-11; items 12–15 (the corpus)

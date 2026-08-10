@@ -1458,6 +1458,319 @@ def decode_by_codec(codec: str, hex_payload: str) -> Any:
     return decoder(hex_payload)
 
 
+# ---------------------------------------------------------------------------
+# Storage-key derivation (change: mining-triage)
+#
+# The gate poll reads plain items on PINNED keys. A netuid-keyed map cannot be
+# pinned per subnet at 129 subnets x 4 items, so the prefix is derived. That
+# needs twox128, which needs xxh64, which is not installed on the device — so
+# it is implemented here and SELF-TESTED against the three gate keys that were
+# verified against live Finney on 2026-07-28. A derivation that reproduces all
+# three is correct; one that does not must block every derived read, because a
+# wrong prefix returns an empty key set that is indistinguishable from a map
+# that is genuinely empty.
+# ---------------------------------------------------------------------------
+
+SUBTENSOR_PALLET = "SubtensorModule"
+
+_XXH_M = (1 << 64) - 1
+_XXH_P1 = 11400714785074694791
+_XXH_P2 = 14029467366897019727
+_XXH_P3 = 1609587929392839161
+_XXH_P4 = 9650029242287828579
+_XXH_P5 = 2870177450012600261
+
+
+def _xxh_rotl(value: int, bits: int) -> int:
+    return ((value << bits) | (value >> (64 - bits))) & _XXH_M
+
+
+def _xxh_round(acc: int, chunk: int) -> int:
+    acc = (acc + chunk * _XXH_P2) & _XXH_M
+    return (_xxh_rotl(acc, 31) * _XXH_P1) & _XXH_M
+
+
+def _xxh_merge(acc: int, value: int) -> int:
+    acc ^= _xxh_round(0, value)
+    return (acc * _XXH_P1 + _XXH_P4) & _XXH_M
+
+
+def xxh64(data: bytes, seed: int = 0) -> int:
+    """XXH64 over `data`. Substrate's twox hashers are built from this."""
+    length = len(data)
+    index = 0
+    if length >= 32:
+        v1 = (seed + _XXH_P1 + _XXH_P2) & _XXH_M
+        v2 = (seed + _XXH_P2) & _XXH_M
+        v3 = seed & _XXH_M
+        v4 = (seed - _XXH_P1) & _XXH_M
+        while index + 32 <= length:
+            v1 = _xxh_round(v1, int.from_bytes(data[index:index + 8],
+                                               "little"))
+            index += 8
+            v2 = _xxh_round(v2, int.from_bytes(data[index:index + 8],
+                                               "little"))
+            index += 8
+            v3 = _xxh_round(v3, int.from_bytes(data[index:index + 8],
+                                               "little"))
+            index += 8
+            v4 = _xxh_round(v4, int.from_bytes(data[index:index + 8],
+                                               "little"))
+            index += 8
+        acc = (_xxh_rotl(v1, 1) + _xxh_rotl(v2, 7)
+               + _xxh_rotl(v3, 12) + _xxh_rotl(v4, 18)) & _XXH_M
+        for value in (v1, v2, v3, v4):
+            acc = _xxh_merge(acc, value)
+    else:
+        acc = (seed + _XXH_P5) & _XXH_M
+
+    acc = (acc + length) & _XXH_M
+    while index + 8 <= length:
+        acc ^= _xxh_round(0, int.from_bytes(data[index:index + 8], "little"))
+        acc = (_xxh_rotl(acc, 27) * _XXH_P1 + _XXH_P4) & _XXH_M
+        index += 8
+    if index + 4 <= length:
+        acc ^= (int.from_bytes(data[index:index + 4], "little")
+                * _XXH_P1) & _XXH_M
+        acc = (_xxh_rotl(acc, 23) * _XXH_P2 + _XXH_P3) & _XXH_M
+        index += 4
+    while index < length:
+        acc ^= (data[index] * _XXH_P5) & _XXH_M
+        acc = (_xxh_rotl(acc, 11) * _XXH_P1) & _XXH_M
+        index += 1
+
+    acc ^= acc >> 33
+    acc = (acc * _XXH_P2) & _XXH_M
+    acc ^= acc >> 29
+    acc = (acc * _XXH_P3) & _XXH_M
+    acc ^= acc >> 32
+    return acc
+
+
+def twox128(name: str) -> bytes:
+    """Substrate twox128: xxh64 at seeds 0 and 1, each little-endian."""
+    raw = name.encode("utf-8")
+    return (xxh64(raw, 0).to_bytes(8, "little")
+            + xxh64(raw, 1).to_bytes(8, "little"))
+
+
+def storage_prefix(pallet: str, item: str) -> str:
+    """Hex prefix for every entry of a storage item."""
+    return "0x" + (twox128(pallet) + twox128(item)).hex()
+
+
+def storage_key_identity_u16(pallet: str, item: str, netuid: int) -> str:
+    """Storage key for a netuid-keyed map using the Identity hasher: the key
+    tail is the raw u16, with no twox64 concat. Confirmed by enumerating each
+    prefix and observing 2-byte tails; an assumed twox64-concat layout returns
+    null for every netuid and looks exactly like an empty map."""
+    return storage_prefix(pallet, item) + int(netuid).to_bytes(
+        2, "little").hex()
+
+
+def verify_key_derivation(config: Dict[str, Any]) -> Dict[str, str]:
+    """Self-test the derivation against the pinned, live-verified gate keys.
+    Raises FatalLiveError on any mismatch so no derived-key read is attempted.
+    Free: the pinned keys are already in config and cost no network call."""
+    pinned = ((config.get("gate_signal") or {}).get("storage_keys") or {})
+    if not pinned:
+        raise FatalLiveError("no pinned storage keys to self-test against")
+    checked: Dict[str, str] = {}
+    for item, expected in sorted(pinned.items()):
+        derived = storage_prefix(SUBTENSOR_PALLET, item)
+        if derived != expected:
+            raise FatalLiveError(
+                "storage-key derivation self-test failed for %s: derived %s "
+                "does not match the pinned live-verified key" % (item,
+                                                                 derived))
+        checked[item] = derived
+    return checked
+
+
+def decode_u96f32(hex_payload: str) -> float:
+    """Decode a SCALE U96F32 storage payload (16 bytes little-endian,
+    value = raw / 2^32). The scale is the whole point: reading a U96F32 at
+    2^64 returns 0.0 for every realistic value, which looks like a clean
+    result rather than an error."""
+    data = _payload_bytes(hex_payload)
+    if len(data) != 16:
+        raise ValueError("expected 16 bytes, got %d" % len(data))
+    return int.from_bytes(data, "little") / float(2 ** 32)
+
+
+def _decode_compact(data: bytes, offset: int = 0) -> Tuple[int, int]:
+    """SCALE compact integer. Returns (value, bytes_consumed)."""
+    if offset >= len(data):
+        raise ValueError("compact prefix past end of payload")
+    flag = data[offset] & 0b11
+    if flag == 0:
+        return data[offset] >> 2, 1
+    if flag == 1:
+        if offset + 2 > len(data):
+            raise ValueError("truncated two-byte compact")
+        return int.from_bytes(data[offset:offset + 2], "little") >> 2, 2
+    if flag == 2:
+        if offset + 4 > len(data):
+            raise ValueError("truncated four-byte compact")
+        return int.from_bytes(data[offset:offset + 4], "little") >> 2, 4
+    width = (data[offset] >> 2) + 4
+    if offset + 1 + width > len(data):
+        raise ValueError("truncated big-integer compact")
+    return int.from_bytes(data[offset + 1:offset + 1 + width], "little"), \
+        1 + width
+
+
+def decode_vec_u16(hex_payload: str) -> List[int]:
+    """Decode a SCALE Vec<u16>: compact length prefix then that many
+    little-endian u16 values. A 256-element vector needs the two-byte compact
+    form, so all encoded forms must round-trip."""
+    data = _payload_bytes(hex_payload)
+    count, offset = _decode_compact(data, 0)
+    expected = offset + 2 * count
+    if len(data) != expected:
+        raise ValueError("Vec<u16> length mismatch: prefix says %d values "
+                         "(%d bytes) but payload is %d bytes"
+                         % (count, expected, len(data)))
+    return [int.from_bytes(data[offset + 2 * i:offset + 2 * i + 2], "little")
+            for i in range(count)]
+
+
+_CODECS["u96f32"] = decode_u96f32
+_CODECS["vec_u16"] = decode_vec_u16
+
+
+# Netuid-keyed maps the mining screen reads. Codec is a property of the item
+# and is never inferred from payload length.
+SUBNET_MAP_ITEMS: Dict[str, str] = {
+    "SubnetworkN": "u16",
+    "Incentive": "vec_u16",
+    "MinerBurned": "u96f32",
+    "CollateralLockShare": "u16",
+}
+
+# A map known to be written every tempo. If the control comes back empty the
+# read is not trusted: that is the signature of a wrong prefix, not of an
+# empty chain.
+SUBNET_MAP_CONTROL = "MinerBurned"
+
+_KEYS_PAGE = 400
+_QUERY_CHUNK = 256
+
+
+def _enumerate_map_keys(rpc: Any, prefix: str,
+                        block_hash: str) -> Tuple[List[str], List[int]]:
+    """Page a map prefix to completion. Returns (keys, netuids), rejecting
+    any key whose tail is not the 2-byte Identity layout rather than guessing
+    at a hasher."""
+    prefix_len = len(bytes.fromhex(prefix[2:]))
+    keys: List[str] = []
+    start = prefix
+    while True:
+        page = rpc("state_getKeysPaged", [prefix, _KEYS_PAGE, start,
+                                          block_hash])
+        if not page.get("ok"):
+            raise FatalLiveError(page.get("error") or "key enumeration failed")
+        batch = page.get("result") or []
+        if not batch:
+            break
+        keys.extend(batch)
+        if len(batch) < _KEYS_PAGE:
+            break
+        start = batch[-1]
+
+    netuids: List[int] = []
+    for key in keys:
+        tail = bytes.fromhex(key[2:])[prefix_len:]
+        if len(tail) != 2:
+            raise FatalLiveError(
+                "unexpected map key layout: %d-byte tail, expected the "
+                "2-byte Identity netuid" % len(tail))
+        netuids.append(int.from_bytes(tail, "little"))
+    return keys, netuids
+
+
+def read_subnet_maps(config: Dict[str, Any],
+                     items: Optional[Dict[str, str]] = None,
+                     rpc: Optional[Any] = None) -> Dict[str, Any]:
+    """Read netuid-keyed subnet maps at ONE finalized block.
+
+    Batched through `state_queryStorageAt` so a whole-network view is
+    internally consistent: assembling it from per-key reads spread over a
+    couple of minutes smears a moving chain across one reported snapshot.
+
+    Fail-closed: the key derivation is self-tested first, an empty control map
+    invalidates the whole read, and a per-netuid decode failure is recorded
+    against that netuid only.
+    """
+    items = items or SUBNET_MAP_ITEMS
+    rpc = rpc or (lambda method, params: _rpc_call(config, method, params))
+    verify_key_derivation(config)
+
+    head = rpc("chain_getFinalizedHead", [])
+    if not head.get("ok") or not head.get("result"):
+        return {"ok": False,
+                "error": head.get("error") or "no finalized head"}
+    block_hash = head["result"]
+
+    header = rpc("chain_getHeader", [block_hash])
+    block_number: Optional[int] = None
+    if header.get("ok") and isinstance(header.get("result"), dict):
+        try:
+            block_number = int(str(header["result"].get("number")), 16)
+        except (TypeError, ValueError):
+            block_number = None
+
+    key_to_slot: Dict[str, Tuple[str, int]] = {}
+    all_keys: List[str] = []
+    empty_items: List[str] = []
+    try:
+        for item in items:
+            prefix = storage_prefix(SUBTENSOR_PALLET, item)
+            keys, netuids = _enumerate_map_keys(rpc, prefix, block_hash)
+            if not keys:
+                empty_items.append(item)
+            for key, netuid in zip(keys, netuids):
+                key_to_slot[key] = (item, netuid)
+                all_keys.append(key)
+    except FatalLiveError as exc:
+        return {"ok": False, "error": redact(str(exc))}
+
+    if SUBNET_MAP_CONTROL in items and SUBNET_MAP_CONTROL in empty_items:
+        return {"ok": False,
+                "error": "control map %s enumerated empty; treating the read "
+                         "as a derivation or endpoint fault rather than an "
+                         "empty chain" % SUBNET_MAP_CONTROL}
+
+    values: Dict[str, Dict[int, Any]] = {item: {} for item in items}
+    failures: Dict[str, Dict[int, str]] = {item: {} for item in items}
+    for start in range(0, len(all_keys), _QUERY_CHUNK):
+        chunk = all_keys[start:start + _QUERY_CHUNK]
+        read = rpc("state_queryStorageAt", [chunk, block_hash])
+        if not read.get("ok"):
+            return {"ok": False,
+                    "error": read.get("error") or "batched read failed"}
+        for block in (read.get("result") or []):
+            for key, raw in (block.get("changes") or []):
+                slot = key_to_slot.get(key)
+                if slot is None:
+                    continue
+                item, netuid = slot
+                if raw is None:
+                    continue  # unset key: absent, not a failure
+                try:
+                    values[item][netuid] = decode_by_codec(items[item], raw)
+                except ValueError as exc:
+                    failures[item][netuid] = str(exc)
+
+    return {"ok": True,
+            "block_hash": block_hash,
+            "block_number": block_number,
+            "values": values,
+            "failures": {item: fails
+                         for item, fails in failures.items() if fails},
+            "empty_items": empty_items}
+
+
 def poll_gate_state(connection: sqlite3.Connection,
                     config: Dict[str, Any],
                     rpc: Optional[Any] = None) -> Dict[str, Any]:
@@ -1732,6 +2045,90 @@ def run_chain_param_watch(connection: sqlite3.Connection,
 
     return {"status": "ok", "observed": observed, "skipped": skipped,
             "transitions": transitions,
+            "block_number": block_number}
+
+
+# Netuid-keyed watched items reuse the chain_params tables with a composite
+# item name. That keeps one durable transition record and needs no migration
+# of a live on-device store; the netuid travels inside the item.
+_NETUID_ITEM_RE = re.compile(r"^(?P<item>[A-Za-z0-9_]+)\[(?P<netuid>\d+)\]$")
+
+# Substrate never writes ValueQuery defaults, so an absent key means the
+# documented default. For the collateral share that default is 0: unset means
+# the whole registration price is burned and nothing is locked.
+SUBNET_PARAM_DEFAULTS: Dict[str, Any] = {"CollateralLockShare": 0}
+
+
+def netuid_item(item: str, netuid: int) -> str:
+    """Composite watched-item name for a netuid-keyed storage item."""
+    return "%s[%d]" % (item, int(netuid))
+
+
+def parse_netuid_item(name: str) -> Tuple[str, Optional[int]]:
+    """Split a composite name back into (item, netuid); netuid is None for a
+    plain global item."""
+    match = _NETUID_ITEM_RE.match(name or "")
+    if match is None:
+        return name, None
+    return match.group("item"), int(match.group("netuid"))
+
+
+def run_subnet_param_watch(connection: sqlite3.Connection,
+                           config: Dict[str, Any],
+                           item: str,
+                           netuids: Any,
+                           values: Dict[int, Any],
+                           failures: Optional[Dict[int, str]] = None,
+                           block_hash: Optional[str] = None,
+                           block_number: Optional[int] = None
+                           ) -> Dict[str, Any]:
+    """Record one observation per subnet for a netuid-keyed watched item and
+    emit a transition when a subnet's value differs from its own previous
+    value.
+
+    Values are handed over by the caller's already-completed map read, the
+    same way the gate poll hands over the bar parameters, so the watch makes
+    no additional network call.
+
+    The observation universe is `netuids`, not the keys present in `values`:
+    a dormant map has no keys at all, and seeding only present keys would
+    mean the first subnet to enable the parameter seeds silently instead of
+    emitting the transition that is the entire point of watching it.
+    """
+    pcfg = config.get("chain_params") or {}
+    if not pcfg.get("enabled"):
+        return {"status": "disabled"}
+    if item not in SUBNET_PARAM_DEFAULTS:
+        raise FatalLiveError("no documented default for netuid-keyed item %r"
+                             % item)
+
+    default = SUBNET_PARAM_DEFAULTS[item]
+    failures = failures or {}
+    observed: List[str] = []
+    skipped: List[str] = []
+    transitions: List[Dict[str, Any]] = []
+
+    for netuid in sorted(set(int(n) for n in netuids)):
+        name = netuid_item(item, netuid)
+        if netuid in failures:
+            # An unreadable subnet records nothing rather than being written
+            # as its default, which would fabricate a transition on recovery.
+            skipped.append(name)
+            continue
+        if netuid in values:
+            value, provenance = values[netuid], "explicit"
+        else:
+            value, provenance = default, "assumed-default"
+        transition = _record_param(connection, name, value, provenance,
+                                   block_number, block_hash)
+        observed.append(name)
+        if transition is not None:
+            transition["netuid"] = netuid
+            transition["base_item"] = item
+            transitions.append(transition)
+
+    return {"status": "ok", "item": item, "observed": observed,
+            "skipped": skipped, "transitions": transitions,
             "block_number": block_number}
 
 
