@@ -61,6 +61,14 @@ _REPO_ROOT = os.path.dirname(_MODULE_DIR)
 
 MINING_VERSION = "0.1.0"
 
+# Bump when the feasibility scanner's LOGIC changes, not when the code moves.
+# Feasibility is sha-gated on the scanned commit, so a scanner fix would
+# otherwise never re-run against clones that have not moved, and the old
+# verdicts would sit there looking current. Learned the hard way: the first
+# VRAM parser matched no real min_compute.yml and its empty results were
+# already persisted.
+SCAN_VERSION = "2"
+
 BLOCKS_PER_DAY = 7200  # 12s blocks
 DAYS_PER_MONTH = 30.0
 
@@ -615,9 +623,36 @@ def prune_econ(connection: sqlite3.Connection, cfg: Dict[str, Any],
 # Stage B — feasibility over the existing index (never executes subnet code)
 # ---------------------------------------------------------------------------
 
-_VRAM_RE = re.compile(
-    r"(?:vram|gpu[_ ]?mem\w*|memory)\D{0,24}?(\d+(?:\.\d+)?)\s*(gb|gib)",
-    re.IGNORECASE)
+# Real min_compute.yml files (bittensor subnet template) write the value as a
+# bare YAML number with the unit in a trailing comment:
+#     min_vram: 24                    # Minimum GPU VRAM (GB)
+# The unit is therefore NOT adjacent to the number and must not be required.
+_MIN_VRAM_RE = re.compile(r"\bmin_vram\s*:\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
+_REC_VRAM_RE = re.compile(r"\brecommended_vram\s*:\s*(\d+(?:\.\d+)?)",
+                          re.IGNORECASE)
+# Fallback for files that write a unit inline rather than a template key.
+_INLINE_VRAM_RE = re.compile(
+    r"\bvram\b\D{0,24}?(\d+(?:\.\d+)?)\s*(?:gb|gib)", re.IGNORECASE)
+_MINER_SECTION_RE = re.compile(r"^\s*miner\s*:\s*$", re.IGNORECASE)
+_ROLE_SECTION_RE = re.compile(r"^\s*(miner|validator)\s*:\s*$", re.IGNORECASE)
+
+
+def _miner_section(text: str) -> str:
+    """The miner block of a min_compute declaration, when the file splits by
+    role. This is a MINING screen: reading the validator's requirement would
+    describe a machine we are not costing."""
+    lines = (text or "").splitlines()
+    start = None
+    for index, line in enumerate(lines):
+        if _MINER_SECTION_RE.match(line):
+            start = index + 1
+            break
+    if start is None:
+        return text or ""
+    for index in range(start, len(lines)):
+        if _ROLE_SECTION_RE.match(lines[index]):
+            return "\n".join(lines[start:index])
+    return "\n".join(lines[start:])
 
 
 def _excluded(path: str, cfg: Dict[str, Any]) -> bool:
@@ -626,12 +661,25 @@ def _excluded(path: str, cfg: Dict[str, Any]) -> bool:
     return any(part in parts for part in cfg.get("exclude_path_parts") or [])
 
 
-def parse_vram_gb(text: str) -> Optional[float]:
-    """Largest declared VRAM figure in a min_compute declaration. Largest,
-    not first: these files commonly list a recommended tier below a required
-    one, and under-reading the floor is the dangerous direction."""
-    found = [float(m.group(1)) for m in _VRAM_RE.finditer(text or "")]
-    return max(found) if found else None
+def parse_vram_gb(text: str) -> Tuple[Optional[float], Optional[str]]:
+    """The MINER's declared VRAM floor from a min_compute declaration.
+
+    Returns (gb, basis) where basis names which key it came from, because
+    `min_vram` is a floor and `recommended_vram` is not, and a board column
+    labelled "hardware floor" must not silently show the recommended tier.
+    Returns (None, None) when nothing is declared — never a fabricated zero.
+    """
+    section = _miner_section(text)
+    minimums = [float(m.group(1)) for m in _MIN_VRAM_RE.finditer(section)]
+    if minimums:
+        return max(minimums), "min_vram"
+    inline = [float(m.group(1)) for m in _INLINE_VRAM_RE.finditer(section)]
+    if inline:
+        return max(inline), "inline"
+    recommended = [float(m.group(1)) for m in _REC_VRAM_RE.finditer(section)]
+    if recommended:
+        return max(recommended), "recommended_vram"
+    return None, None
 
 
 def _line_of(content: str, index: int) -> int:
@@ -675,6 +723,7 @@ def scan_slot(connection: sqlite3.Connection, cfg: Dict[str, Any],
     min_compute_path: Optional[str] = None
     entrypoint_path: Optional[str] = None
     vram_gb: Optional[float] = None
+    vram_basis: Optional[str] = None
     gpu_hits: List[Dict[str, Any]] = []
     api_hits: List[Dict[str, Any]] = []
     considered = 0
@@ -699,14 +748,17 @@ def scan_slot(connection: sqlite3.Connection, cfg: Dict[str, Any],
             (row_id,)).fetchone()
         content = content_row[0] if content_row else ""
         if is_min_compute:
-            parsed = parse_vram_gb(content)
+            parsed, basis = parse_vram_gb(content)
             if parsed is not None:
                 vram_gb = max(vram_gb or 0.0, parsed)
+                vram_basis = basis
+                match = (_MIN_VRAM_RE.search(content)
+                         or _INLINE_VRAM_RE.search(content)
+                         or _REC_VRAM_RE.search(content))
                 evidence.append({"kind": "vram", "path": path,
-                                 "line": _line_of(
-                                     content,
-                                     _VRAM_RE.search(content).start()),
-                                 "value": parsed})
+                                 "line": _line_of(content, match.start())
+                                 if match else 1,
+                                 "value": parsed, "basis": basis})
         if len(gpu_hits) < limit:
             gpu_hits.extend(_find_tokens(content, cfg.get("gpu_tokens") or [],
                                          path, limit - len(gpu_hits)))
@@ -738,6 +790,7 @@ def scan_slot(connection: sqlite3.Connection, cfg: Dict[str, Any],
     return {"verdict": verdict, "reason": reason,
             "min_compute_path": min_compute_path,
             "entrypoint_path": entrypoint_path, "vram_gb": vram_gb,
+            "vram_basis": vram_basis,
             "closed_api": 1 if api_hits else 0, "evidence": evidence}
 
 
@@ -756,6 +809,15 @@ def run_feasibility(connection: sqlite3.Connection, config: Dict[str, Any],
     slots = ([fleet.get_slot(connection, netuid)] if netuid is not None
              else fleet.all_slots(connection))
     scanned = unchanged = skipped = failed = 0
+
+    # A scanner-logic change invalidates every stored verdict, because
+    # sha-gating alone would keep serving results the old scanner produced.
+    invalidated = 0
+    if state_get(connection, "scan_version") != SCAN_VERSION:
+        invalidated = connection.execute(
+            "DELETE FROM mine_feasibility").rowcount or 0
+        state_set(connection, "scan_version", SCAN_VERSION)
+        connection.commit()
 
     for slot in slots:
         if not slot or slot.get("status") != "active":
@@ -790,8 +852,9 @@ def run_feasibility(connection: sqlite3.Connection, config: Dict[str, Any],
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (slot["netuid"], epoch, sha, result["verdict"],
              result.get("min_compute_path"),
-             ("%.0f GB VRAM" % result["vram_gb"])
-             if result.get("vram_gb") else None,
+             ("%.0f GB VRAM (%s)" % (result["vram_gb"],
+                                     result.get("vram_basis") or "declared"))
+             if result.get("vram_gb") is not None else None,
              result.get("vram_gb"), result.get("entrypoint_path"),
              result.get("closed_api"),
              json.dumps({"reason": result.get("reason"),
@@ -801,7 +864,9 @@ def run_feasibility(connection: sqlite3.Connection, config: Dict[str, Any],
     state_set(connection, "last_feasibility_ts", now)
     connection.commit()
     return {"ok": True, "scanned": scanned, "unchanged": unchanged,
-            "skipped": skipped, "failed": failed, "ts": now}
+            "skipped": skipped, "failed": failed,
+            "invalidated_by_scanner_change": invalidated,
+            "scan_version": SCAN_VERSION, "ts": now}
 
 
 # ---------------------------------------------------------------------------
