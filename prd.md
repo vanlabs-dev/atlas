@@ -2017,6 +2017,16 @@ Recommended sequence:
 15. `atlas-phase-7-view-only-portfolio`
 16. `atlas-phase-7-alert-rules`
 
+**Sequence amendment (2026-08-07, change `mining-triage`).** Items 13 and 14
+(Phase 6) no longer come next. `mining-triage` was sequenced ahead of them
+by operator decision: Phase 6 is a health UI for a single-user LAN system
+whose health is already readable from the CLI and Telegram, while mining
+triage is the first capability in Atlas with a direct financial payoff, and
+its inputs were verified as computable at zero provider cost. Phase 6 keeps
+its scope and its blocking questions (§21 Q36-Q40); it simply follows rather
+than precedes. Nothing in §7 is relaxed: mining triage runs no miner, holds
+no key, and submits no transaction.
+
 Each proposal SHOULD include:
 
 - exact scope;

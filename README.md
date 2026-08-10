@@ -155,10 +155,22 @@ a controlled Telegram channel — inbound conversation via the native Hermes
 gateway (numeric-ID allowlist) and an outbound notifier (chain-runtime-upgrade,
 gate-crossing, repository-update, schema-drift, knowledge-ingestion; repo
 alerts tiered by significance) that scrubs secrets, records every delivery,
-de-duplicates, and stays isolated on failure. Per PRD §22, next is
-**Phase 6**: the monitoring frontend (local health API + monitoring-only
-UI). Its §21 blocking questions are open — Q36 access location, Q37 auth,
-Q38 LAN HTTPS/certs, Q39 first-screen health fields, Q40 retention.
+de-duplicates, and stays isolated on failure.
+
+**Next is `mining-triage`** (2026-08-07), sequenced ahead of Phase 6 by
+operator decision and recorded as a §22 amendment. A read-only screen
+ranking subnets by what a new independent miner could earn: emission-gate
+and owner-capture cuts, an entrant income figure under a stated parity
+assumption, concentration from the chain incentive vector, `file:line`
+feasibility evidence from the fleet clones, a second LAN-only board at
+`http://192.168.0.150:8480/mining.html`, and three read-only tools on the
+`atlas-fleet` MCP server. Every input is keyless, so it consumes zero
+TaoStats quota. It runs no miner, holds no key, and submits no transaction,
+so PRD §7 holds unchanged.
+
+**Phase 6** (monitoring frontend) follows rather than precedes. Its §21
+blocking questions stay open — Q36 access location, Q37 auth, Q38 LAN
+HTTPS/certs, Q39 first-screen health fields, Q40 retention.
 Watchpoints: the **gate-crossing calibration read (~2026-08-11)** — review
 recorded-vs-paged crossings, tune `hysteresis_pct`/`cooldown_hours` from
 evidence (the conviction-enactment watch closed 2026-07-28: spec 424→432

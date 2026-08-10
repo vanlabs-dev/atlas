@@ -69,12 +69,16 @@ class ServerBase(td.DriverTestBase):
 
 
 class ToolListTests(ServerBase):
-    def test_lists_three_read_only_tools(self):
+    def test_lists_the_read_only_tool_set(self):
+        """Three code-search tools plus the three mining-triage tools added
+        by the mining-triage change. All read-only."""
         payloads = call_server(self.config_path, [
             {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
             {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}])
         names = {tool["name"] for tool in payloads[2]["tools"]}
-        self.assertEqual(names, {"fleet_search", "fleet_file", "fleet_status"})
+        self.assertEqual(names, {"fleet_search", "fleet_file", "fleet_status",
+                                 "mining_board", "mining_subnet",
+                                 "mining_history"})
 
 
 class SearchTests(ServerBase):
