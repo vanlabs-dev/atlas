@@ -121,6 +121,22 @@ because each one corrects a belief that looked right and was not.
   frozen indefinitely"). It is now in the chain-parameter watch as a
   netuid-keyed item, seeded silently, so a subnet enabling it emits a
   transition rather than quietly changing that subnet's entry risk.
+- **The first VRAM parser matched nothing, and shipped.** Real subnet
+  `min_compute.yml` files write `min_vram: 24` as a bare YAML number with
+  the unit in a trailing comment, and split miner from validator. The
+  original regex required an adjacent `GB`, so it extracted zero floors from
+  all 34 indexed files while the board showed an empty hardware column. Now
+  fixed: the miner section is scoped, `min_vram` is the floor (not
+  `recommended_vram`, which is larger and is not a floor), the basis is
+  recorded alongside the number, and an absent declaration stays `None`
+  rather than becoming a fabricated zero. Verified against all 34 real
+  files: 20 declare a floor, 14 declare none and every one of those genuinely
+  has no VRAM key in its miner section.
+- **Feasibility needed a scanner version.** Scans are sha-gated on the
+  scanned commit, so a scanner-logic fix would never re-run against clones
+  that had not moved and the old verdicts would sit there looking current.
+  `SCAN_VERSION` in `atlas_fleet_mining.py` now invalidates every stored
+  verdict when the scanner's logic changes. Bump it on any scanner change.
 - **Field size is not competition.** `SubnetworkN` is 256 nearly everywhere
   while 3 to 15 UIDs earn anything and the top ten take substantially all
   of it. `active_miners` in the panel is the earner count less the owner's

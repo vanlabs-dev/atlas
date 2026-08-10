@@ -398,14 +398,44 @@ class TestEcon(MiningBase):
 # Stage B
 # ---------------------------------------------------------------------------
 
+# Verbatim shape of real subnet min_compute.yml files, sampled from the fleet
+# on the Pi 2026-08-10. The unit lives in a trailing COMMENT, not next to the
+# number, and miner/validator are separate sections. The first parser required
+# an adjacent unit and extracted nothing from any real file.
 MIN_COMPUTE = """
 version: '1.0'
 compute_spec:
   miner:
     gpu:
-      required: true
-      min_vram: 24 GB
-      recommended_vram: 80 GB
+      required: True                       # GPU needed for the miners
+      min_vram: 24                         # Minimum GPU VRAM (GB)
+      recommended_vram: 48                 # Recommended GPU VRAM (GB)
+    memory:
+      min_ram: 16          # Minimum RAM (GB)
+  validator:
+    gpu:
+      required: True
+      min_vram: 80                         # Minimum GPU VRAM (GB)
+      recommended_vram: 80
+"""
+
+MIN_COMPUTE_CPU = """
+compute_spec:
+  miner:
+    gpu:
+      required: False                      # No GPU required for the miners
+      min_vram: 0                          # Minimum GPU VRAM (GB)
+      recommended_vram: 0                  # Recommended GPU VRAM (GB)
+    memory:
+      min_ram: 16
+"""
+
+MIN_COMPUTE_NO_VRAM = """
+compute_spec:
+  miner:
+    gpu: false
+    ram:
+      min_ram: 8
 """
 
 MINER_GPU = "import torch\n\nx = torch.cuda.is_available()\n"
@@ -430,15 +460,54 @@ class TestFeasibility(MiningBase):
         self.index_file(1, "min_compute.yml", MIN_COMPUTE)
         self.index_file(1, "neurons/miner.py", MINER_CPU)
         out = mine.scan_slot(self.conn, mine.mining_cfg({}), 1, 1)
-        self.assertEqual(out["vram_gb"], 80.0)
+        self.assertEqual(out["vram_gb"], 24.0)
+        self.assertEqual(out["vram_basis"], "min_vram")
         vram = [e for e in out["evidence"] if e["kind"] == "vram"]
         self.assertTrue(vram)
         self.assertEqual(vram[0]["path"], "min_compute.yml")
         self.assertGreater(vram[0]["line"], 1)
 
-    def test_largest_declared_floor_wins(self):
-        """Under-reading the floor is the dangerous direction."""
-        self.assertEqual(mine.parse_vram_gb(MIN_COMPUTE), 80.0)
+    def test_bare_yaml_number_with_the_unit_in_a_comment(self):
+        """REGRESSION 2026-08-10: the first parser required the unit adjacent
+        to the number and extracted nothing from any real fleet file."""
+        self.assertEqual(mine.parse_vram_gb(MIN_COMPUTE),
+                         (24.0, "min_vram"))
+
+    def test_miner_section_wins_over_validator(self):
+        """A mining screen must not cost the validator's machine."""
+        gb, basis = mine.parse_vram_gb(MIN_COMPUTE)
+        self.assertEqual(gb, 24.0)          # miner min_vram, not 80
+        self.assertEqual(basis, "min_vram")
+
+    def test_floor_is_min_vram_not_recommended(self):
+        """The column is labelled a floor; recommended is not one."""
+        self.assertEqual(mine.parse_vram_gb(MIN_COMPUTE)[0], 24.0)
+
+    def test_declared_zero_vram_is_a_real_cpu_answer(self):
+        self.assertEqual(mine.parse_vram_gb(MIN_COMPUTE_CPU),
+                         (0.0, "min_vram"))
+
+    def test_absent_vram_is_none_not_zero(self):
+        self.assertEqual(mine.parse_vram_gb(MIN_COMPUTE_NO_VRAM),
+                         (None, None))
+
+    def test_inline_unit_form_still_parses(self):
+        self.assertEqual(
+            mine.parse_vram_gb("gpu:\n  vram: 40 GB\n")[0], 40.0)
+
+    def test_recommended_only_is_labelled_as_such(self):
+        gb, basis = mine.parse_vram_gb(
+            "compute_spec:\n  miner:\n    gpu:\n"
+            "      recommended_vram: 48   # Recommended GPU VRAM (GB)\n")
+        self.assertEqual(gb, 48.0)
+        self.assertEqual(basis, "recommended_vram")
+
+    def test_cpu_declaration_does_not_become_needs_gpu(self):
+        self.index_file(1, "min_compute.yml", MIN_COMPUTE_CPU)
+        self.index_file(1, "neurons/miner.py", MINER_CPU)
+        out = mine.scan_slot(self.conn, mine.mining_cfg({}), 1, 1)
+        self.assertEqual(out["vram_gb"], 0.0)
+        self.assertEqual(out["verdict"], mine.VERDICT_POSSIBLE)
 
     def test_gpu_tell_yields_needs_gpu(self):
         self.index_file(1, "neurons/miner.py", MINER_GPU)
@@ -508,6 +577,35 @@ class TestFeasibility(MiningBase):
         self.conn.commit()
         again = mine.run_feasibility(self.conn, self.config)
         self.assertEqual(again["scanned"], 1)
+
+    def test_scanner_version_change_invalidates_stored_verdicts(self):
+        """Sha-gating alone would serve old-scanner verdicts forever."""
+        self.index_file(1, "neurons/miner.py", MINER_CPU)
+        fleet.upsert_slot(self.conn, {
+            "netuid": 1, "github_repo": "https://github.com/o/r",
+            "epoch": 1, "status": "active", "default_branch": "main",
+            "local_sha": "sha-one"})
+        self.conn.commit()
+        mine.run_feasibility(self.conn, self.config)
+        second = mine.run_feasibility(self.conn, self.config)
+        self.assertEqual(second["unchanged"], 1)
+
+        mine.state_set(self.conn, "scan_version", "old")
+        self.conn.commit()
+        third = mine.run_feasibility(self.conn, self.config)
+        self.assertEqual(third["invalidated_by_scanner_change"], 1)
+        self.assertEqual(third["scanned"], 1)
+
+    def test_scanner_version_is_recorded_after_a_scan(self):
+        self.index_file(1, "neurons/miner.py", MINER_CPU)
+        fleet.upsert_slot(self.conn, {
+            "netuid": 1, "github_repo": "https://github.com/o/r",
+            "epoch": 1, "status": "active", "default_branch": "main",
+            "local_sha": "sha-one"})
+        self.conn.commit()
+        mine.run_feasibility(self.conn, self.config)
+        self.assertEqual(mine.state_get(self.conn, "scan_version"),
+                         mine.SCAN_VERSION)
 
     def test_inactive_slot_is_skipped(self):
         fleet.upsert_slot(self.conn, {
