@@ -1,0 +1,207 @@
+{
+ "pass": 2,
+ "rows_checked": 78,
+ "rejected_netuids": [],
+ "rejections": [],
+ "warnings": [
+  {
+   "netuid": 76,
+   "type": "implausible_citation",
+   "field": "gpu_evidence",
+   "value": "docs/miner_setup.md:15",
+   "note": "SSH-verified: line 15 is BLANK. The supporting content is at :14 ('## Requirements') and :16-21 (Linux host, btcli, inference API key, staked alpha - no GPU). Conclusion gpu_required 'no' is defensible but the cited line number is off-target."
+  },
+  {
+   "netuid": 70,
+   "type": "implausible_citation",
+   "field": "gpu_evidence",
+   "value": "README.md:88",
+   "note": "SSH-verified: line 88 is BLANK. Nearby :87 '### Required software' and :89-91 (Python >=3.10<3.13, wallet files, Cloudflare R2) carry the no-GPU signal. Cited line number is off-target."
+  },
+  {
+   "netuid": 15,
+   "type": "scope_mismatch",
+   "field": "gpu_evidence",
+   "value": "docker/validator/pyproject.toml:24",
+   "note": "SSH-verified line reads 'name = \"pytorch-cpu\"' but it lives under docker/validator/, i.e. VALIDATOR-scoped, used to justify a MINER gpu_required 'no'."
+  },
+  {
+   "netuid": 64,
+   "type": "weak_citation",
+   "field": "gpu_evidence",
+   "value": "README.md:32",
+   "note": "SSH-verified: 'GraVal is the graphics card validation library used to help ensure the GPUs that miners claim to be running are authentic/correct.' Implies miners run GPUs, but is a description of a validation library rather than a stated miner hardware requirement."
+  },
+  {
+   "netuid": 18,
+   "type": "internal_tension",
+   "field": "gpu_required/gpu_vram_gb",
+   "value": "no / 0",
+   "note": "gpu_required 'no' carrying a numeric gpu_vram_gb. Faithful to min_compute.yml but a downstream trap for consumers that treat numeric vram as 'GPU needed'."
+  },
+  {
+   "netuid": 50,
+   "type": "internal_tension",
+   "field": "gpu_required/gpu_vram_gb",
+   "value": "no / 0",
+   "note": "gpu_required 'no' carrying a numeric gpu_vram_gb (min_compute.yml:22-23)."
+  },
+  {
+   "netuid": 54,
+   "type": "internal_tension",
+   "field": "gpu_required/gpu_vram_gb",
+   "value": "no / 16",
+   "note": "gpu_required 'no' but min_vram 16 recorded (min_compute.yml:15-16). Most misleading of the 'no'+numeric rows."
+  },
+  {
+   "netuid": 63,
+   "type": "internal_tension",
+   "field": "gpu_required/gpu_vram_gb",
+   "value": "no / 0",
+   "note": "gpu_required 'no' carrying a numeric gpu_vram_gb (min_compute.yml:23)."
+  },
+  {
+   "netuid": 79,
+   "type": "internal_tension",
+   "field": "gpu_required/gpu_vram_gb",
+   "value": "no / 0",
+   "note": "gpu_required 'no' carrying a numeric gpu_vram_gb (min_compute.yml:17)."
+  },
+  {
+   "netuid": 83,
+   "type": "internal_tension",
+   "field": "gpu_required/gpu_vram_gb",
+   "value": "no / 8",
+   "note": "Carried forward from pass 1 and still present: min_compute.yml:24 required: False with min_vram: 8."
+  },
+  {
+   "netuid": 107,
+   "type": "internal_tension",
+   "field": "gpu_required/gpu_vram_gb",
+   "value": "no / 0",
+   "note": "gpu_required 'no' carrying a numeric gpu_vram_gb (min_compute.yml:24-25)."
+  },
+  {
+   "netuid": 4,
+   "type": "weak_citation",
+   "field": "gpu_evidence",
+   "value": "docs/miner/miner.md:24",
+   "note": "Carried forward from pass 1, unchanged: the cited line sits inside a JSON auction block ('TDX-VM-NVIDIA-H200'), which implies GPU supply rather than stating a miner hardware requirement."
+  },
+  {
+   "netuid": 123,
+   "type": "conservative_unknown",
+   "field": "gpu_vram_gb",
+   "value": "unknown",
+   "note": "Carried forward from pass 1, unchanged: min_compute.yml:2 pins 'NVIDIA GeForce RTX 4090' (24 GB) yet vram left unknown, inconsistent with netuid 106."
+  },
+  {
+   "netuid": 19,
+   "type": "enum_exception_applied",
+   "field": "setup_complexity",
+   "value": "unknown",
+   "note": "Pass-1 flagged this as an enum violation. SSH-confirmed the clone is a STUB (~/atlas/var/fleet/clones/19 contains only .git and a 22-line README.md), so 'unknown' falls under the stub exception. Downgraded to informational; no action needed."
+  },
+  {
+   "netuid": 121,
+   "type": "enum_exception_applied",
+   "field": "setup_complexity",
+   "value": "unknown",
+   "note": "Pass-1 flagged this as an enum violation. SSH-confirmed the clone is a STUB (~/atlas/var/fleet/clones/121 contains only .git, README.md and an assets/ image dir), so 'unknown' falls under the stub exception. Downgraded to informational; no action needed."
+  }
+ ],
+ "rows_verified_by_ssh": [
+  3,
+  6,
+  13,
+  15,
+  16,
+  19,
+  26,
+  40,
+  41,
+  43,
+  49,
+  51,
+  55,
+  56,
+  64,
+  68,
+  70,
+  76,
+  78,
+  81,
+  82,
+  91,
+  97,
+  98,
+  100,
+  112,
+  114,
+  120,
+  121,
+  124,
+  127
+ ],
+ "pass1_fixes_confirmed": [
+  {
+   "netuid": 3,
+   "pass1_rule": "repo_url_vs_clone_state",
+   "status": "fixed",
+   "evidence": "repo_url placeholder 'https://github.com/username/repo' replaced with 'unknown'; clone_state 'missing' re-verified by SSH on 2026-08-11 - `ls -d ~/atlas/var/fleet/clones/3` returns 'No such file or directory'. R4 no longer fires. All 16 keys present, no nulls."
+  },
+  {
+   "netuid": 16,
+   "pass1_rule": "null_value",
+   "status": "fixed",
+   "evidence": "prune_rank null -> \"unknown\". Pass-1 weak-citation warning also resolved: gpu_required 'yes' -> 'unknown' and gpu_evidence -> 'none' (legal because R2 only binds yes/no). SSH re-verified the cited support: README.md:25 'A CUDA-capable Linux host for validator inference' (validator-scoped), CONTRIBUTING.md:21 'Validator-only dependencies are GPU- and platform-sensitive', pyproject.toml:45-49 miner extra is bittensor-only, README.md:62 'thinker-miner submit'. Note text is accurate."
+  },
+  {
+   "netuid": 26,
+   "pass1_rule": "null_value",
+   "status": "fixed",
+   "evidence": "prune_rank null -> \"unknown\". SSH re-verified README.md:50 miner minimum '4 vCPU, 16 GB RAM, 50 GB SSD' (no GPU), :51 GPU listed only as Recommended, :55 validator minimum requires 12+ GB VRAM, :64 CUDA 'For GPU usage', requirements.txt:2 'torch==2.12.0' (no +cu). gpu_required 'no' is correct."
+  },
+  {
+   "netuid": 40,
+   "pass1_rule": "null_value",
+   "status": "fixed",
+   "evidence": "prune_rank null -> \"unknown\". SSH re-verified Dockerfile:30 'FROM nvidia/cuda:12.4.1-devel-ubuntu22.04 AS base' and Dockerfile:50 'pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu124'. gpu_required 'yes' with vram 'unknown' is supported."
+  },
+  {
+   "netuid": 78,
+   "pass1_rule": "null_value",
+   "status": "fixed",
+   "evidence": "prune_rank null -> \"unknown\". SSH re-verified miner_sample/example_repo/chute_config.yml:11 'gpu_count: 1' and :12 'min_vram_gb_per_gpu: 16', which backs gpu_vram_gb 16 with a file+line citation (R3 satisfied)."
+  },
+  {
+   "netuid": 81,
+   "pass1_rule": "repo_url_vs_clone_state",
+   "status": "fixed",
+   "evidence": "repo_url placeholder 'https://github.com/deprecated/deprecated' replaced with 'unknown'; clone_state 'missing' re-verified by SSH on 2026-08-11 - `ls -d ~/atlas/var/fleet/clones/81` returns 'No such file or directory'. R4 no longer fires. All 16 keys present, no nulls."
+  }
+ ],
+ "integrity_checks": {
+  "batch_row_counts": {
+   "batch_1": 10,
+   "batch_2": 10,
+   "batch_3": 10,
+   "batch_4": 10,
+   "batch_5": 10,
+   "batch_6": 10,
+   "batch_7": 10,
+   "batch_8": 8
+  },
+  "total_rows": 78,
+  "duplicate_netuids": 0,
+  "netuid_set_matches_survivors_json": true,
+  "all_rows_parse": true,
+  "key_order_exact_all_78": true,
+  "json_nulls_found": 0,
+  "burn_pct_all_match_raw_subnets": true,
+  "burn_pct_tolerance": 1e-06,
+  "collateral_corruption_detected": false,
+  "collateral_corruption_note": "Only batches 1,2,3,5,6 carry a post-pass-1 mtime (16:41) - exactly the batches holding netuids 3, 16/26, 40, 78, 81. batch_4, batch_7 and batch_8 were never re-written. All 72 untouched rows re-validated clean against every rule."
+ },
+ "ledger_appended_lines": 0
+}

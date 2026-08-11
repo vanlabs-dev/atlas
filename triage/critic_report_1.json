@@ -1,0 +1,151 @@
+{
+ "pass": 1,
+ "rows_checked": 78,
+ "rejected_netuids": [
+  3,
+  16,
+  26,
+  40,
+  78,
+  81
+ ],
+ "rejections": [
+  {
+   "netuid": 3,
+   "rule": "repo_url_vs_clone_state",
+   "value": "repo_url 'https://github.com/username/repo' (placeholder) but clone_state 'missing'; ~/atlas/var/fleet/clones/3 confirmed absent via SSH",
+   "stage": "critic_pass_1"
+  },
+  {
+   "netuid": 16,
+   "rule": "null_value",
+   "value": "prune_rank: null (must be \"unknown\")",
+   "stage": "critic_pass_1"
+  },
+  {
+   "netuid": 26,
+   "rule": "null_value",
+   "value": "prune_rank: null (must be \"unknown\")",
+   "stage": "critic_pass_1"
+  },
+  {
+   "netuid": 40,
+   "rule": "null_value",
+   "value": "prune_rank: null (must be \"unknown\")",
+   "stage": "critic_pass_1"
+  },
+  {
+   "netuid": 78,
+   "rule": "null_value",
+   "value": "prune_rank: null (must be \"unknown\")",
+   "stage": "critic_pass_1"
+  },
+  {
+   "netuid": 81,
+   "rule": "repo_url_vs_clone_state",
+   "value": "repo_url 'https://github.com/deprecated/deprecated' (placeholder) but clone_state 'missing'; ~/atlas/var/fleet/clones/81 confirmed absent via SSH",
+   "stage": "critic_pass_1"
+  }
+ ],
+ "warnings": [
+  {
+   "netuid": 3,
+   "type": "enum_violation",
+   "field": "setup_complexity",
+   "value": "unknown",
+   "note": "setup_complexity enum is {low,med,high}; 'unknown' is out of enum (row also rejected under R4)"
+  },
+  {
+   "netuid": 19,
+   "type": "enum_violation",
+   "field": "setup_complexity",
+   "value": "unknown",
+   "note": "setup_complexity enum is {low,med,high}; 'unknown' is out of enum"
+  },
+  {
+   "netuid": 81,
+   "type": "enum_violation",
+   "field": "setup_complexity",
+   "value": "unknown",
+   "note": "setup_complexity enum is {low,med,high}; 'unknown' is out of enum (row also rejected under R4)"
+  },
+  {
+   "netuid": 121,
+   "type": "enum_violation",
+   "field": "setup_complexity",
+   "value": "unknown",
+   "note": "setup_complexity enum is {low,med,high}; 'unknown' is out of enum"
+  },
+  {
+   "netuid": 16,
+   "type": "weak_citation",
+   "field": "gpu_evidence",
+   "value": "README.md:25",
+   "note": "SSH-verified line reads 'A CUDA-capable Linux host for validator inference' - it supports a VALIDATOR GPU need, not a miner one. Row's own notes concede 'Miner extra is bittensor-only'. gpu_required 'yes' rests on off-repo inference, not on the cited line."
+  },
+  {
+   "netuid": 4,
+   "type": "weak_citation",
+   "field": "gpu_evidence",
+   "value": "docs/miner/miner.md:24",
+   "note": "SSH-verified: line is inside a JSON auction block ('TDX-VM-NVIDIA-H200', target_cards 96). Implies GPU supply but is not a stated miner hardware requirement."
+  },
+  {
+   "netuid": 83,
+   "type": "internal_tension",
+   "field": "gpu_required/gpu_vram_gb",
+   "value": "no / 8",
+   "note": "SSH-verified min_compute.yml:24 says required: False with min_vram: 8. Faithful to the file, but a 'no' row carrying a numeric VRAM is a downstream trap."
+  },
+  {
+   "netuid": 123,
+   "type": "conservative_unknown",
+   "field": "gpu_vram_gb",
+   "value": "unknown",
+   "note": "min_compute.yml:2 pins 'NVIDIA GeForce RTX 4090' (24 GB) yet vram left unknown. Not a rule violation; inconsistent with netuid 106 which did map SUPPORTED_GPUS to 24."
+  }
+ ],
+ "rows_verified_by_ssh": [
+  1,
+  2,
+  3,
+  4,
+  5,
+  8,
+  11,
+  16,
+  17,
+  18,
+  21,
+  29,
+  32,
+  33,
+  34,
+  38,
+  40,
+  44,
+  45,
+  48,
+  50,
+  53,
+  54,
+  60,
+  63,
+  74,
+  78,
+  79,
+  81,
+  83,
+  85,
+  88,
+  90,
+  93,
+  96,
+  102,
+  106,
+  107,
+  117,
+  123,
+  126
+ ]
+}

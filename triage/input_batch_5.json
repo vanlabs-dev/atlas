@@ -1,0 +1,92 @@
+[
+ {
+  "netuid": 63,
+  "name": "Enigma",
+  "burn_pct": 0.0,
+  "registration_cost": 0.0005,
+  "active_miners": 10,
+  "prune_rank": 77,
+  "repo_url": "https://github.com/qbittensor-labs/enigma"
+ },
+ {
+  "netuid": 64,
+  "name": "Chutes",
+  "burn_pct": 0.0,
+  "registration_cost": 0.0005,
+  "active_miners": 16,
+  "prune_rank": 112,
+  "repo_url": "https://github.com/chutesai/chutes"
+ },
+ {
+  "netuid": 66,
+  "name": "conjectures",
+  "burn_pct": 0.0,
+  "registration_cost": 0.0005,
+  "active_miners": 1,
+  "prune_rank": 21,
+  "repo_url": "https://github.com/conjectures-io/conjectures-validator"
+ },
+ {
+  "netuid": 67,
+  "name": "Harnyx",
+  "burn_pct": 15.123216601815823,
+  "registration_cost": 0.0552077,
+  "active_miners": 128,
+  "prune_rank": 68,
+  "repo_url": "https://github.com/harnyx/harnyx"
+ },
+ {
+  "netuid": 68,
+  "name": "NOVA",
+  "burn_pct": 0.0,
+  "registration_cost": 0.124264143,
+  "active_miners": 2,
+  "prune_rank": 100,
+  "repo_url": "https://github.com/metanova-labs/nova"
+ },
+ {
+  "netuid": 70,
+  "name": "NexisGen",
+  "burn_pct": 0.0,
+  "registration_cost": 0.9,
+  "active_miners": 5,
+  "prune_rank": 1,
+  "repo_url": "https://github.com/RendixNetwork/nexisgen"
+ },
+ {
+  "netuid": 74,
+  "name": "Gittensor",
+  "burn_pct": 63.0258640421149,
+  "registration_cost": 0.15,
+  "active_miners": 13,
+  "prune_rank": 38,
+  "repo_url": "https://github.com/entrius/gittensor"
+ },
+ {
+  "netuid": 76,
+  "name": "Phylax",
+  "burn_pct": 0.0,
+  "registration_cost": 0.0,
+  "active_miners": 10,
+  "prune_rank": 9,
+  "repo_url": "https://github.com/praxi-labs/phylax-subne"
+ },
+ {
+  "netuid": 77,
+  "name": "Liquidity",
+  "burn_pct": 0.0,
+  "registration_cost": 0.0005,
+  "active_miners": 13,
+  "prune_rank": 64,
+  "repo_url": "https://github.com/creativebuilds/sn77"
+ },
+ {
+  "netuid": 78,
+  "name": "Vocence",
+  "burn_pct": 0.0,
+  "registration_cost": 0.0005,
+  "active_miners": 1,
+  "prune_rank": null,
+  "repo_url": "https://github.com/vocence-78/vocence"
+ }
+]

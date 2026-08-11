@@ -1,0 +1,92 @@
+[
+ {
+  "netuid": 79,
+  "name": "MVTRX",
+  "burn_pct": 0.0,
+  "registration_cost": 0.157764012,
+  "active_miners": 214,
+  "prune_rank": 74,
+  "repo_url": "https://github.com/taos-im/sn-79"
+ },
+ {
+  "netuid": 81,
+  "name": "deprecated",
+  "burn_pct": 2.186617837796597,
+  "registration_cost": 0.0005,
+  "active_miners": 76,
+  "prune_rank": 75,
+  "repo_url": "https://github.com/deprecated/deprecated"
+ },
+ {
+  "netuid": 82,
+  "name": "Compelle",
+  "burn_pct": 0.0,
+  "registration_cost": 0.0005,
+  "active_miners": 1,
+  "prune_rank": null,
+  "repo_url": "https://github.com/compelle/compelle-validator"
+ },
+ {
+  "netuid": 83,
+  "name": "CliqueAI",
+  "burn_pct": 0.0,
+  "registration_cost": 0.114104134,
+  "active_miners": 245,
+  "prune_rank": 89,
+  "repo_url": "https://github.com/toptensor/CliqueAI"
+ },
+ {
+  "netuid": 85,
+  "name": "Vidaio",
+  "burn_pct": 0.0,
+  "registration_cost": 0.0005,
+  "active_miners": 10,
+  "prune_rank": 60,
+  "repo_url": "https://github.com/vidaio-subnet/vidaio-subne"
+ },
+ {
+  "netuid": 88,
+  "name": "Investing",
+  "burn_pct": 0.0,
+  "registration_cost": 0.01,
+  "active_miners": 110,
+  "prune_rank": 53,
+  "repo_url": "https://github.com/mobiusfund/investin"
+ },
+ {
+  "netuid": 89,
+  "name": "InfiniteQuant",
+  "burn_pct": 20.0,
+  "registration_cost": 0.05,
+  "active_miners": 48,
+  "prune_rank": 36,
+  "repo_url": "https://github.com/DeltaCompute24/InfiniteQuant-Subne"
+ },
+ {
+  "netuid": 90,
+  "name": "KubeTEE",
+  "burn_pct": 85.89456015869382,
+  "registration_cost": 0.0005,
+  "active_miners": 1,
+  "prune_rank": null,
+  "repo_url": "https://github.com/KubeTEE-AI/kubetee-subne"
+ },
+ {
+  "netuid": 91,
+  "name": "cascade",
+  "burn_pct": 0.0,
+  "registration_cost": 0.120796747,
+  "active_miners": 5,
+  "prune_rank": 82,
+  "repo_url": "https://github.com/TensorLink-AI/cascade"
+ },
+ {
+  "netuid": 92,
+  "name": "Enclave",
+  "burn_pct": 0.0,
+  "registration_cost": 0.000103288,
+  "active_miners": 1,
+  "prune_rank": null,
+  "repo_url": "https://github.com/LumenLabs-io/enclave-subne"
+ }
+]
