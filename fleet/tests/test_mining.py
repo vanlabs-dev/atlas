@@ -241,6 +241,61 @@ class TestCutLadder(unittest.TestCase):
             None)
         self.assertEqual(rung, mine.CUT_GATE)
 
+    def test_winner_take_all_cuts_on_share_not_earner_count(self):
+        """Netuid 63 on 2026-08-12: ten UIDs earn something and the top one
+        still takes 100%. An earner_count test misses it entirely."""
+        rung, detail = mine.classify_cut(
+            self.cfg, {"gate_state": "enabled", "miner_burn_pct": 0.0,
+                       "top1_share_pct": 100.0, "earner_count": 10}, None)
+        self.assertEqual(rung, mine.CUT_CONCENTRATION)
+        self.assertIn("100.0", detail)
+        self.assertIn("10", detail)
+
+    def test_winner_take_all_catches_a_wide_but_captured_field(self):
+        """Netuid 101: 249 earners, top-1 still on 90%+ of the vector."""
+        cfg = mine.mining_cfg({"mining": {"top1_ceiling_pct": 90.0}})
+        rung, _ = mine.classify_cut(
+            cfg, {"gate_state": "enabled", "miner_burn_pct": 0.0,
+                  "top1_share_pct": 90.3, "earner_count": 249}, None)
+        self.assertEqual(rung, mine.CUT_CONCENTRATION)
+
+    def test_a_contested_field_survives(self):
+        for top1, earners in ((89.8, 20), (65.0, 3), (34.7, 7), (0.6, 242)):
+            rung, _ = mine.classify_cut(
+                self.cfg, {"gate_state": "enabled", "miner_burn_pct": 0.0,
+                           "top1_share_pct": top1, "earner_count": earners},
+                None)
+            self.assertIsNone(rung, top1)
+
+    def test_unread_incentive_vector_does_not_cut(self):
+        """Null top-1 means the vector was never read. An unread field is
+        not a concentrated one."""
+        rung, _ = mine.classify_cut(
+            self.cfg, {"gate_state": "enabled", "miner_burn_pct": 0.0,
+                       "top1_share_pct": None, "earner_count": None}, None)
+        self.assertIsNone(rung)
+
+    def test_burn_rung_precedes_concentration(self):
+        rung, _ = mine.classify_cut(
+            self.cfg, {"gate_state": "enabled", "miner_burn_pct": 100.0,
+                       "top1_share_pct": 100.0, "earner_count": 1}, None)
+        self.assertEqual(rung, mine.CUT_BURN)
+
+    def test_concentration_precedes_feasibility(self):
+        """No point ranking a code verdict for a subnet nobody can enter."""
+        rung, _ = mine.classify_cut(
+            self.cfg, {"gate_state": "enabled", "miner_burn_pct": 0.0,
+                       "top1_share_pct": 100.0, "earner_count": 1},
+            {"verdict": mine.VERDICT_STUB})
+        self.assertEqual(rung, mine.CUT_CONCENTRATION)
+
+    def test_concentration_ceiling_is_configurable(self):
+        cfg = mine.mining_cfg({"mining": {"top1_ceiling_pct": 99.5}})
+        rung, _ = mine.classify_cut(
+            cfg, {"gate_state": "enabled", "miner_burn_pct": 0.0,
+                  "top1_share_pct": 99.1, "earner_count": 3}, None)
+        self.assertIsNone(rung)
+
     def test_infeasible_verdicts_cut(self):
         for verdict in (mine.VERDICT_STUB, mine.VERDICT_CLOSED):
             rung, _ = mine.classify_cut(
@@ -399,9 +454,11 @@ class TestEcon(MiningBase):
         self.assertNotAlmostEqual(row["miner_alpha_day"], row["alpha_in_day"])
 
     def test_identity_is_recorded_and_cuts_end_to_end(self):
+        # Contested fields throughout, so the concentration rung stays out
+        # of the way and this exercises the identity rung alone.
         out = mine.run_econ(self.conn, self.config, inputs=inputs(
             [panel_subnet(1), panel_subnet(3), panel_subnet(57)],
-            incentive={1: [10], 3: [10], 57: [10]},
+            incentive={1: [10, 9, 8], 3: [10, 9, 8], 57: [10, 9, 8]},
             network_n={1: 256, 3: 256, 57: 256},
             identity={1: "Apex", 3: "deprecated"}))
         self.assertTrue(out["ok"])
@@ -426,8 +483,8 @@ class TestEcon(MiningBase):
         storage item would silently cut every subnet at once."""
         out = mine.run_econ(self.conn, self.config, inputs=inputs(
             [panel_subnet(1), panel_subnet(3)],
-            incentive={1: [10], 3: [10]}, network_n={1: 256, 3: 256},
-            identity={}))
+            incentive={1: [10, 9, 8], 3: [10, 9, 8]},
+            network_n={1: 256, 3: 256}, identity={}))
         self.assertTrue(out["ok"])
         rows = {r["netuid"]: r for r in mine.latest_econ(self.conn)}
         self.assertEqual(rows[1]["identity_state"], mine.IDENT_UNREAD)
@@ -836,7 +893,7 @@ class TestReport(MiningBase):
 
     def test_board_shows_the_on_chain_name(self):
         mine.run_econ(self.conn, self.config, inputs=inputs(
-            [panel_subnet(1)], incentive={1: [5]}, network_n={1: 256},
+            [panel_subnet(1)], incentive={1: [5, 4, 3]}, network_n={1: 256},
             identity={1: "Apex"}))
         mine.render(self.conn, self.config)
         with open(os.path.join(self.tmp, "www", "mining.html"),
@@ -848,7 +905,7 @@ class TestReport(MiningBase):
     def test_board_escapes_a_hostile_chain_name(self):
         """subnet_name is owner-written free text arriving over the wire."""
         mine.run_econ(self.conn, self.config, inputs=inputs(
-            [panel_subnet(1)], incentive={1: [5]}, network_n={1: 256},
+            [panel_subnet(1)], incentive={1: [5, 4, 3]}, network_n={1: 256},
             identity={1: "<script>alert(1)</script>"}))
         mine.render(self.conn, self.config)
         with open(os.path.join(self.tmp, "www", "mining.html"),
