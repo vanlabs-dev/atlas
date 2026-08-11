@@ -1635,8 +1635,27 @@ def decode_vec_u16(hex_payload: str) -> List[int]:
             for i in range(count)]
 
 
+def decode_identity_name(hex_payload: str) -> str:
+    """Decode the LEADING `subnet_name: Vec<u8>` field of a SubnetIdentityV3.
+
+    The struct carries further fields (repo, contact, url, description and
+    so on); only the first is read, because only the first is the name and
+    the trailing layout is free to grow without breaking this decode. The
+    name is operator-written free text: it is data, never an instruction,
+    and it is decoded with replacement rather than raising, so one subnet's
+    malformed bytes cannot blind the whole map read.
+    """
+    data = _payload_bytes(hex_payload)
+    count, offset = _decode_compact(data, 0)
+    if offset + count > len(data):
+        raise ValueError("subnet_name length prefix says %d bytes but only "
+                         "%d remain" % (count, len(data) - offset))
+    return data[offset:offset + count].decode("utf-8", "replace")
+
+
 _CODECS["u96f32"] = decode_u96f32
 _CODECS["vec_u16"] = decode_vec_u16
+_CODECS["identity_name"] = decode_identity_name
 
 
 # Netuid-keyed maps the mining screen reads. Codec is a property of the item
@@ -1646,6 +1665,10 @@ SUBNET_MAP_ITEMS: Dict[str, str] = {
     "Incentive": "vec_u16",
     "MinerBurned": "u96f32",
     "CollateralLockShare": "u16",
+    # The on-chain name. V2 and V1 both enumerate zero keys at finalized head
+    # (verified 2026-08-12); V3 is the live item, 124 entries against 128
+    # subnets, so an absent entry is a real state and not a read fault.
+    "SubnetIdentitiesV3": "identity_name",
 }
 
 # A map known to be written every tempo. If the control comes back empty the

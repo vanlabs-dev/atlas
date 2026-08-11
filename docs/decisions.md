@@ -137,6 +137,29 @@ because each one corrects a belief that looked right and was not.
   that had not moved and the old verdicts would sit there looking current.
   `SCAN_VERSION` in `atlas_fleet_mining.py` now invalidates every stored
   verdict when the scanner's logic changes. Bump it on any scanner change.
+- **Owners mark their own slots dead, on chain, in plain text**
+  (added 2026-08-12). `SubnetIdentitiesV3` enumerates 124 keys against 128
+  subnets at finalized head, and the decoded `subnet_name` is a placeholder
+  on nine of them: `deprecated` (3, 39, 81), `unknown`/`Unknown` (16, 42),
+  `pending...` (94), `Parked` (73), `wait (reproduce paper)` (47). Four more
+  (57, 84, 86, 103) have no identity entry at all. Netuid 3 was ranked third
+  on the board at the time. This is now its own cut rung
+  (`identity-placeholder`), placed after the gate and before burn, matching
+  the name's normalised **first token** so `pending...` and
+  `wait (reproduce paper)` resolve without an entry each.
+- **Curated registries disagree with the chain, and the chain wins.** The
+  metagraphed registry reports 3 as "Templar", 39 "Basilica", 81 "Grail",
+  94 "Bitsota", 73 "MetaHash" — friendly names for slots whose owners have
+  since written `deprecated`/`Parked` on chain. Any identity rule must read
+  `SubnetIdentitiesV3`, never a registry's cached title. V2 and V1 both
+  enumerate zero keys; V3 is the live item.
+- **The identity rung fails open at the map, closed at the subnet.** An
+  absent entry for one netuid is a real finding and cuts. An identity map
+  that reads empty as a whole is indistinguishable from a renamed storage
+  item, so it records `unread` and cuts nothing — otherwise a runtime
+  rename would silently empty the board and look like a clean result. Same
+  class of failure as the U96F32-at-2^64 and Identity-hasher mistakes:
+  wrong reads here return plausible emptiness, not errors.
 - **Field size is not competition.** `SubnetworkN` is 256 nearly everywhere
   while 3 to 15 UIDs earn anything and the top ten take substantially all
   of it. `active_miners` in the panel is the earner count less the owner's

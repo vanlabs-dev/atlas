@@ -361,6 +361,15 @@ What the economics turn on, all verified on-device 2026-08-07:
 - **Collateral is dormant.** `CollateralLockShare` has zero keys chain-wide,
   so registration is fully burned today. Watched for a transition, not
   modelled as a cost.
+- **Some owners have marked their own slot dead.** The on-chain
+  `SubnetIdentitiesV3.subnet_name` reads `deprecated` (3, 39, 81),
+  `unknown` (16, 42), `pending...` (94), `Parked` (73) or
+  `wait (reproduce paper)` (47), and four subnets (57, 84, 86, 103) have no
+  identity entry at all. Those are cut regardless of what they still pay.
+  Note this is the **chain's** name: curated registries can carry a
+  friendlier one for the same netuid, and where they disagree the chain
+  wins. The whole map failing leaves the rung inert rather than cutting
+  all 128 subnets at once.
 
 Chain reads live in `livedata/atlas_live.py` (`twox128`, `read_subnet_maps`),
 batched through `state_queryStorageAt` at one finalized block. These maps use

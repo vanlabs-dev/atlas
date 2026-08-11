@@ -70,7 +70,24 @@ distributes alpha to its miners, because the participant distribution runs
 regardless of the gate; what it loses is the TAO inflow backing that alpha,
 so the alpha's price decays and TAO-denominated income tends to zero. The
 recorded reason SHALL say that, and SHALL NOT claim the subnet pays nothing.
-The gate rung is followed by
+The gate rung is followed by an on-chain identity rung. A subnet whose
+owner-written on-chain `subnet_name` is a placeholder, or which has no
+on-chain identity entry at all, SHALL be excluded: the owner has declared
+the slot is not a going concern, and no income figure makes it enterable.
+The match SHALL be against the name's normalised first token, so
+punctuation and trailing prose do not defeat it, and the placeholder
+vocabulary SHALL be configuration rather than code. The recorded reason
+SHALL quote the chain name. The identity source SHALL be the chain, never a
+curated registry, which may carry a friendlier cached name for the same
+netuid.
+
+An identity map that cannot be read as a whole SHALL leave the rung inert
+and SHALL be recorded as unread, distinct from a subnet with no entry. A
+storage item that has been renamed or is unreachable returns an empty key
+set indistinguishable from every subnet being unnamed, and must not empty
+the board.
+
+The identity rung is followed by
 an operator-configured miner-burn ceiling above which the owner captures
 substantially the whole miner pool, followed by feasibility verdicts that
 make mining impossible, followed by a hardware floor above the configured
@@ -82,6 +99,26 @@ budget band.
 - **THEN** it is excluded at the gate rung with a reason naming unbacked
   alpha and a decaying price, not absent payment, and it remains
   retrievable from the store and the query surface as an excluded subnet
+
+#### Scenario: Owner-abandoned subnet is cut on its chain name
+
+- **WHEN** a subnet's on-chain `subnet_name` reduces to a configured
+  placeholder token, or the subnet has no on-chain identity entry
+- **THEN** it is excluded at the identity rung with a reason quoting the
+  chain name, ahead of any burn, feasibility or hardware consideration, and
+  it remains retrievable as an excluded subnet
+
+#### Scenario: A real name that merely contains a placeholder word survives
+
+- **WHEN** a subnet's on-chain name contains a placeholder word other than
+  as its first token
+- **THEN** it is not excluded at the identity rung
+
+#### Scenario: Unreadable identity map cuts nothing
+
+- **WHEN** the on-chain identity map enumerates empty or fails to read
+- **THEN** every subnet records an unread identity state, the identity rung
+  excludes no subnet, and the board is not emptied
 
 #### Scenario: Burn ceiling cuts owner-captured subnets
 
