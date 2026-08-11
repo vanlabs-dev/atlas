@@ -81,6 +81,7 @@ CONF_INCOMPLETE = "incomplete-inputs"
 CUT_GATE = "gate-disabled"
 CUT_IDENTITY = "identity-placeholder"
 CUT_BURN = "owner-capture"
+CUT_CONCENTRATION = "winner-take-all"
 CUT_FEASIBILITY = "not-minable"
 CUT_HARDWARE = "above-budget-band"
 
@@ -185,6 +186,15 @@ DEFAULT_MINING_CFG: Dict[str, Any] = {
     # for a remainder that rounds to nothing, and the subnet's price share is
     # multiplied by (1 - burn) on top. Operator decision, 2026-08-07.
     "burn_ceiling_pct": 99.0,
+    # Incumbent capture. At or above this top-1 share of the incentive
+    # vector the field is winner-take-all: entry means displacing the single
+    # earner, not joining a field, and the parity model that drives the
+    # headline figure is at its least honest. Measured on the top-1 SHARE
+    # rather than the earner count, because a subnet can pay ten UIDs and
+    # still round to 100 percent for the top one (netuid 63 does exactly
+    # that, and 101 keeps 90 percent on one UID across a 249-earner field).
+    # Operator decision, 2026-08-12.
+    "top1_ceiling_pct": 95.0,
     # Assumed daily sale of earned alpha, as a fraction of the day's earnings,
     # for the constant-product exit haircut.
     "daily_sale_fraction": 1.0,
@@ -448,6 +458,22 @@ def classify_cut(cfg: Dict[str, Any], row: Dict[str, Any],
         return (CUT_BURN,
                 "owner hotkeys captured %.2f%% of miner incentive "
                 "(ceiling %.0f%%)" % (burn, ceiling))
+    # Incumbent capture. Null means the incentive vector was never read, and
+    # an unread field is not a concentrated one: fail open, as at every
+    # other rung whose input can be absent.
+    top1 = row.get("top1_share_pct")
+    top1_ceiling = cfg.get("top1_ceiling_pct")
+    if top1 is not None and top1_ceiling is not None \
+            and float(top1) >= float(top1_ceiling):
+        earners = row.get("earner_count")
+        return (CUT_CONCENTRATION,
+                "top earner takes %.1f%% of the incentive vector across %s "
+                "earner(s) (ceiling %.0f%%): entry means displacing that "
+                "miner, not joining a field, and the parity model behind the "
+                "headline figure does not describe it"
+                % (float(top1),
+                   "unknown" if earners is None else earners,
+                   float(top1_ceiling)))
     if feasibility and feasibility.get("verdict") in INFEASIBLE_VERDICTS:
         return (CUT_FEASIBILITY,
                 "feasibility verdict %s" % feasibility["verdict"])

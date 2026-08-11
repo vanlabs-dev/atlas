@@ -147,6 +147,17 @@ because each one corrects a belief that looked right and was not.
   (`identity-placeholder`), placed after the gate and before burn, matching
   the name's normalised **first token** so `pending...` and
   `wait (reproduce paper)` resolve without an entry each.
+- **Winner-take-all is a share test, never an earner count**
+  (added 2026-08-12). Cut rung `winner-take-all` at a top-1 incentive share
+  of **95%** (`top1_ceiling_pct`, operator decision). Measured on share
+  because the earner count lies: netuid 63 pays ten UIDs and the top one
+  still rounds to 100%, and netuid 101 keeps 90.3% on one UID across a
+  249-earner field — an `earner_count == 1` test misses both while catching
+  only the six literal cases. The rung sits after burn (owner capture)
+  and before feasibility, so no code is scanned for a subnet nobody can
+  enter. It also closes the parity-assumption weakness recorded above: the
+  entrant model flatters precisely the one-earner subnets this removes.
+  Null top-1 does not cut — an unread field is not a concentrated one.
 - **The hasher is a property of the item, not of the pallet** (2026-08-12,
   caught in deployment). The four mining maps are Identity-hashed, so the
   key tail is a bare u16 — and `SubnetIdentitiesV3` on the *same pallet* is

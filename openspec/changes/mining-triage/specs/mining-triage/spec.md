@@ -89,9 +89,18 @@ the board.
 
 The identity rung is followed by
 an operator-configured miner-burn ceiling above which the owner captures
-substantially the whole miner pool, followed by feasibility verdicts that
+substantially the whole miner pool, followed by an operator-configured
+top-1 incentive-share ceiling above which the field is winner-take-all,
+followed by feasibility verdicts that
 make mining impossible, followed by a hardware floor above the configured
 budget band.
+
+The winner-take-all rung SHALL be evaluated on the top-1 share of the
+incentive vector, NOT on the count of UIDs earning a nonzero amount. A
+subnet may pay many UIDs while one of them takes substantially the whole
+pool, and an earner-count test does not detect that. Where the incentive
+vector was not read, the rung SHALL NOT cut: an unread field is not a
+concentrated one.
 
 #### Scenario: Gate-disabled subnet is cut with an accurate reason
 
@@ -125,6 +134,18 @@ budget band.
 - **WHEN** a subnet's miner burn is at or above the configured ceiling
 - **THEN** it is excluded at the burn rung and is not ranked, because both
   the share penalty and the withholding leave a new miner nothing
+
+#### Scenario: Winner-take-all field is cut on share, not on earner count
+
+- **WHEN** a subnet's top-1 incentive share is at or above the configured
+  ceiling, whatever its earner count
+- **THEN** it is excluded at the winner-take-all rung with a reason
+  carrying both the share and the earner count
+
+#### Scenario: Unread incentive vector is not treated as concentrated
+
+- **WHEN** a subnet's top-1 incentive share is unknown
+- **THEN** the winner-take-all rung does not exclude it
 
 ### Requirement: Competition is read from the chain incentive distribution
 

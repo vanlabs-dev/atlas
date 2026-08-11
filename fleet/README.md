@@ -356,6 +356,13 @@ What the economics turn on, all verified on-device 2026-08-07:
   of it. The headline is an **entrant** figure under a stated parity
   assumption (pool shared among earners + 1), never incumbent income —
   ranking on incumbent income puts the least enterable subnets on top.
+- **Most fields have one earner in economic terms.** Cut at a top-1 share
+  of 95% or above (`top1_ceiling_pct`), measured on the incentive **share**
+  rather than the earner count: netuid 63 pays ten UIDs and the top one
+  still rounds to 100%, and netuid 101 keeps 90% on one UID across a
+  249-earner field. An `earner_count == 1` test misses both. This is also
+  the answer to the parity assumption's known weakness — the model flatters
+  exactly the subnets this rung removes.
 - **Gate-disabled subnets still pay alpha.** They lose the TAO inflow
   backing it, so the price decays. Cut for that, not for absent payment.
 - **Collateral is dormant.** `CollateralLockShare` has zero keys chain-wide,

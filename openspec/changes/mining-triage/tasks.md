@@ -111,6 +111,16 @@
   4 leave AT this rung — 3, 39, 81, 94; the other eight were already
   gate-disabled and leave earlier, which is the ladder working as ordered
 
+## 6c. Winner-take-all rung (added 2026-08-12)
+
+- [x] 6c.1 Add the `winner-take-all` rung after burn and before
+  feasibility, on a configurable `top1_ceiling_pct` (operator: 95%)
+- [x] 6c.2 Evaluate on top-1 SHARE, not earner count, and record both in
+  the reason; a null share does not cut
+- [x] 6c.3 Tests: ten-earner 100% case, wide-but-captured field, contested
+  fields survive, null share, ladder order both sides, configurable ceiling
+- [ ] 6c.4 Deploy and confirm the board drops to the contested fields
+
 ## 7. Stage C2 MCP surface
 
 - [x] 7.1 Add `mining_board(limit?, include_cut?)` to
