@@ -105,8 +105,11 @@
 - [x] 6b.5 Show the on-chain name on the board, escaped
 - [x] 6b.6 Tests: live placeholder strings, first-token not substring,
   absent versus unread, ladder order, migration, escaping
-- [ ] 6b.7 Deploy with 8.4 and confirm 3, 39, 81, 16, 42, 94, 73, 47 and the
-  four entryless subnets leave the ranked board
+- [x] 6b.7 Deployed 2026-08-12: all twelve are flagged (3/39/81
+  `deprecated`, 16/42 `unknown`, 94 `pending...`, 73 `Parked`, 47
+  `wait (reproduce paper)`, 57/84/86/103 absent) and none is ranked. Only
+  4 leave AT this rung — 3, 39, 81, 94; the other eight were already
+  gate-disabled and leave earlier, which is the ladder working as ordered
 
 ## 7. Stage C2 MCP surface
 
@@ -130,8 +133,10 @@
 - [x] 8.2 Verify a screen failure does not fail the enclosing pass or affect
   reconcile, signals, or metrics
 - [x] 8.3 Run the full fleet suite off-device and confirm it stays green
-- [ ] 8.4 Deploy by `git pull` on the Pi, confirm the next pass renders the
-  board and the MCP tools answer
+- [x] 8.4 Deployed by `git pull` on the Pi 2026-08-12; both suites green
+  on-device (360 fleet, 146 livedata), the pass renders the board at
+  block 8823247 (128 observed / 45 ranked / 83 cut), and `mining_board`
+  and `mining_subnet` answer with both timestamps
 
 ## 9. Documentation
 
