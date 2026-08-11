@@ -220,6 +220,32 @@ entirely is a `git revert` plus dropping three tables.
 - How to estimate what reaching a displacement rank actually takes. The
   candidate is pairing concentration with incentive-vector churn over time,
   which needs history the store does not yet have.
+
+  **Partially informed 2026-08-11, and without waiting for history.**
+  `ImmunityPeriod` is a per-subnet chain hyperparameter readable on any
+  pass. Measured across 30 gate-enabled subnets it spans **100 to 65,535
+  blocks (0.01 to 9.1 days), a 655x spread**: netuid 76 gives roughly eight
+  minutes of protection, netuids 50 and 18 give 9.1 days. Two consequences.
+  It bounds the runway an entrant has before becoming prunable, which is
+  the entry-risk half of this question. And it explains the exception
+  profile recorded above: long immunity stops dead slots recycling, so
+  netuid 50 shows 235 of 248 slots earning while short-immunity subnets
+  concentrate. It does **not** answer what out-competing rank N takes, so
+  churn history is still required for that half.
+
+  Related mechanic, from `pallets/subtensor/src/subnets/registration.rs`
+  at release-444: registering into a subnet already at `max_allowed_uids`
+  is not blocked, it evicts a UID (line 27). `get_neuron_to_prune`
+  (line 285) selects lowest emission, tie-broken by oldest registration
+  block, then lowest uid, skipping owner-immortal hotkeys and respecting a
+  `MinNonImmuneUids` floor. Since most registered UIDs sit at exactly zero
+  emission, the operative rule among them is oldest-first, and an entrant
+  earning anything at all leaves the eviction pool immediately. A large
+  idle UID count is therefore an eviction queue, not a wall of competitors.
+
+  Measurements in `triage/hyperparams.json`; field-level notes in
+  `docs/emission-metrics.md` section 5.1. Whether immunity belongs on the
+  board or in the chain-parameter watch is not decided here.
 - The hardware and capital budget band, deliberately deferred to the data.
   Dated: pick within two weeks of the first board render.
 - Holding period for amortising registration burn. Needs a stated
