@@ -119,7 +119,11 @@
   the reason; a null share does not cut
 - [x] 6c.3 Tests: ten-earner 100% case, wide-but-captured field, contested
   fields survive, null share, ladder order both sides, configurable ceiling
-- [ ] 6c.4 Deploy and confirm the board drops to the contested fields
+- [x] 6c.4 Deployed 2026-08-12 at block 8823306: 128 observed, **36
+  ranked**, 92 cut, of which 17 at this rung. Ranked fell by exactly the 9
+  predicted; the other 8 were previously leaving later at `not-minable`
+  (31 -> 23) and now leave here instead, which is the ladder reporting the
+  earlier and truer reason. 107 Minos (top-1 89.8%) is the new head.
 
 ## 7. Stage C2 MCP surface
 
