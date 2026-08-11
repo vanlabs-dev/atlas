@@ -25,6 +25,7 @@ Envelope: unprivileged; writes only `var/livedata/` (gitignored, 0600).
 from __future__ import annotations
 
 import datetime
+import hashlib
 import json
 import os
 import random
@@ -1568,6 +1569,17 @@ def storage_key_identity_u16(pallet: str, item: str, netuid: int) -> str:
         2, "little").hex()
 
 
+def storage_key_blake2_concat_u16(pallet: str, item: str,
+                                  netuid: int) -> str:
+    """Storage key for a netuid-keyed map using Blake2_128Concat: a 16-byte
+    blake2b digest of the encoded key, then the raw u16. `SubnetIdentitiesV3`
+    uses this while the mining maps on the same pallet use Identity, so the
+    hasher is a property of the item and is never assumed."""
+    raw = int(netuid).to_bytes(2, "little")
+    return (storage_prefix(pallet, item)
+            + hashlib.blake2b(raw, digest_size=16).digest().hex() + raw.hex())
+
+
 def verify_key_derivation(config: Dict[str, Any]) -> Dict[str, str]:
     """Self-test the derivation against the pinned, live-verified gate keys.
     Raises FatalLiveError on any mismatch so no derived-key read is attempted.
@@ -1680,10 +1692,42 @@ _KEYS_PAGE = 400
 _QUERY_CHUNK = 256
 
 
+def _netuid_from_tail(tail: bytes) -> int:
+    """Recover the netuid from an enumerated map key tail, VERIFYING the
+    layout rather than assuming one.
+
+    Three layouts appear on this pallet, and which one an item uses is not
+    guessable: the mining maps are Identity (bare u16), while
+    `SubnetIdentitiesV3` is Blake2_128Concat (16-byte hash then the u16).
+    Each concat form is confirmed by recomputing the hash of the recovered
+    key, so a tail that merely happens to be the right length cannot pass.
+    """
+    if len(tail) == 2:
+        return int.from_bytes(tail, "little")
+
+    netuid_bytes = tail[-2:]
+    hashed = tail[:-2]
+    if len(hashed) == 8:
+        expected = xxh64(netuid_bytes, 0).to_bytes(8, "little")
+        layout = "twox64_concat"
+    elif len(hashed) == 16:
+        expected = hashlib.blake2b(netuid_bytes, digest_size=16).digest()
+        layout = "blake2_128_concat"
+    else:
+        raise FatalLiveError(
+            "unexpected map key layout: %d-byte tail is neither the 2-byte "
+            "Identity netuid nor a recognised concat form" % len(tail))
+    if hashed != expected:
+        raise FatalLiveError(
+            "map key tail looks like %s but the hash does not match the "
+            "recovered netuid; refusing to guess at the layout" % layout)
+    return int.from_bytes(netuid_bytes, "little")
+
+
 def _enumerate_map_keys(rpc: Any, prefix: str,
                         block_hash: str) -> Tuple[List[str], List[int]]:
-    """Page a map prefix to completion. Returns (keys, netuids), rejecting
-    any key whose tail is not the 2-byte Identity layout rather than guessing
+    """Page a map prefix to completion. Returns (keys, netuids), deriving the
+    key layout from the observed tail and verifying it rather than guessing
     at a hasher."""
     prefix_len = len(bytes.fromhex(prefix[2:]))
     keys: List[str] = []
@@ -1703,12 +1747,7 @@ def _enumerate_map_keys(rpc: Any, prefix: str,
 
     netuids: List[int] = []
     for key in keys:
-        tail = bytes.fromhex(key[2:])[prefix_len:]
-        if len(tail) != 2:
-            raise FatalLiveError(
-                "unexpected map key layout: %d-byte tail, expected the "
-                "2-byte Identity netuid" % len(tail))
-        netuids.append(int.from_bytes(tail, "little"))
+        netuids.append(_netuid_from_tail(bytes.fromhex(key[2:])[prefix_len:]))
     return keys, netuids
 
 
