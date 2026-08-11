@@ -3,6 +3,11 @@
 Alpha figures are structural (2952 alpha/day miner pool x incentive share) and
 stay correct as markets move. The snapshot alpha price is carried per row so a
 reader can convert at display time -- see docs/emission-metrics.md 2.1.
+
+at_uid_cap is NOT a barrier to entry. Registering into a full subnet evicts the
+lowest-emission UID and hands over its slot (subtensor registration.rs:27). The
+parameters that actually govern entry are immunity_period_blocks (grace window
+before you are prunable) and the dynamic burn. See docs/emission-metrics.md 5.
 """
 import json, io, csv, statistics as st
 
@@ -12,6 +17,7 @@ NETS = [114,107,91,126,100,8,63,48,124,56,127,15,55,76,70,26,6,43,74,18,2,54,88,
 raw = json.load(io.open('raw_subnets.json', encoding='utf-8'))
 SNAP, BLOCK = raw['fetched_at'], raw['as_of_block']
 sub = {s['id']: s for s in raw['payload']['results']}
+hyper = json.load(io.open('hyperparams.json', encoding='utf-8'))['data']
 repo = {}
 for n in range(1, 9):
     for r in json.load(io.open('batch_%d.json' % n, encoding='utf-8')):
@@ -56,6 +62,11 @@ for nid in NETS:
         'alpha_price_tao_at_snapshot': price,
         'payback_days_at_snapshot_price': payback,
         'uid_total': len(ns), 'at_uid_cap': len(ns) >= 256,
+        'immunity_period_blocks': hyper[str(nid)][0],
+        'immunity_days': round(hyper[str(nid)][0] / 7200, 2),
+        'registration_allowed': hyper[str(nid)][1],
+        'min_burn_tao': hyper[str(nid)][2],
+        'burn_increase_mult': hyper[str(nid)][3],
         'setup': rp['setup_complexity'], 'runtime': rp['runtime'],
         'min_compute': rp['min_compute_present'],
         'last_commit': str(rp['last_commit_iso'])[:10],
@@ -67,10 +78,10 @@ with io.open('miner_economics.csv', 'w', encoding='utf-8', newline='') as f:
     w = csv.DictWriter(f, fieldnames=list(rows[0].keys())); w.writeheader(); w.writerows(rows)
 
 print('%-4s %-15s %5s %5s %6s %8s %8s %11s %9s %8s %7s %9s' % (
-    'uid','name','slot','earn','earn%','accInc','gated','accPool_a/d','med_a/d','p25_a/d','top10%','payback'))
+    'uid','name','slot','earn','earn%','accInc','gated','accPool_a/d','med_a/d','p25_a/d','top10%','immun_d'))
 for r in rows:
-    print('%-4s %-15s %5s %5s %6.1f %8.4f %8.4f %11.2f %9.4f %8.4f %7.1f %9s' % (
+    print('%-4s %-15s %5s %5s %6.1f %8.4f %8.4f %11.2f %9.4f %8.4f %7.1f %9.2f' % (
         r['netuid'], str(r['name'])[:15], r['miner_slots'], r['earning'], r['earn_rate_pct'],
         r['accessible_inc_share'], r['stake_gated_share'], r['accessible_pool_alpha_day'],
         r['median_alpha_day'], r['p25_alpha_day'], r['top10_share_pct'],
-        r['payback_days_at_snapshot_price']))
+        r['immunity_days']))

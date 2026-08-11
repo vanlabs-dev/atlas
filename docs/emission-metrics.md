@@ -155,7 +155,77 @@ Using `2952 × (1 − burn)` on netuid 63 overstates the reachable pool by
 | `registration_cost` (per-neuron, metagraph) | Broadcast as a single constant on most subnets — does not reflect what incumbents paid. Subnet-level `registration_cost` is the live recycle price and is **dynamic**. |
 | `total_alpha_burned` | Reads 0 while `alpha_burned_all_time` holds the real figure (netuid 107: 0 vs 384,341,056,353,167 rao, the latter matching the TaoSwap UI). |
 | `mechanism_emission_split` | Empty array `[]` with `mechanism_count` 1 across the sample. Untested for multi-mechanism subnets. |
-| UID capacity | **Not always 256.** Netuid 107 has 94 UIDs (85 miner slots) — real headroom. Netuid 18 reports **257** against a 256 cap, unexplained. Check per subnet; do not assume full. |
+| UID capacity | **Not always 256.** Netuid 107 has 94 UIDs (85 miner slots). Netuid 18 reports **257** against a 256 cap, unexplained. Being at cap is **not** a barrier to entry — see §5.1. |
+
+## 5.1 Registration into a full subnet — being at UID cap is not a barrier
+
+A subnet sitting at `max_allowed_uids` does **not** block registration. The
+chain evicts a UID and hands the slot to the newcomer, immediately. There is no
+queue and no waiting.
+
+Source: `pallets/subtensor/src/subnets/registration.rs` in the tracked mainnet
+clone (`13d5a5e9b`, release-444).
+
+```rust
+if current_subnetwork_n < Self::get_max_allowed_uids(netuid) {
+    // No replacement required, the uid appends the subnetwork.
+} else {
+    match Self::get_neuron_to_prune(netuid) {
+        Some(uid_to_replace) => { Self::replace_neuron(...) }
+        None => Err(Error::<T>::NoNeuronIdAvailable.into()),
+    }
+}
+```
+
+### Who gets pruned (`get_neuron_to_prune`, registration.rs:285)
+
+1. Owner-immortal hotkeys are skipped entirely.
+2. Non-immune UIDs are preferred, but only while `free_count >
+   MinNonImmuneUids` — a safety floor. If the floor is reached it falls back to
+   pruning an **immune** UID.
+3. Among candidates the comparator is:
+
+```rust
+let better = if emission != *be { emission < *be }        // 1. lowest emission
+             else if reg_block != *bb { reg_block < *bb } // 2. then oldest
+             else { uid < *bu };                          // 3. then lowest uid
+```
+
+**Lowest emission first, oldest only as tie-break** — but on these subnets 200+
+miners sit at exactly zero emission, so they all tie and the *oldest zero-earner*
+is what actually gets evicted. Both halves of the common "oldest / lowest"
+description are right, in that order.
+
+Immunity is pure age (`utils/misc.rs:569`):
+
+```rust
+current_block.saturating_sub(registered_at) < u64::from(immunity_period)
+```
+
+### What this means for reading the tables
+
+A high `miner_slots` count with a low `earn_rate_pct` is **not** a wall of
+competitors. It is largely the eviction queue. Produce any emission at all and
+you leave the zero-tie pool; the next registrant prunes someone else.
+
+The parameters that actually govern entry — all in
+`triage/hyperparams.json`, none of them in the TaoSwap payload:
+
+| Parameter | Meaning |
+|---|---|
+| `immunity_period` | grace window in blocks before you are prunable. **Observed range 100 → 65,535 blocks (0.01 → 9.1 days) across 30 subnets** — a 655× spread. |
+| `registration_allowed` | can be false; true on all 30 sampled |
+| `min_burn_tao` / `burn_increase_mult` / `burn_half_life` | registration cost is **dynamic**: floor at `min_burn_tao`, ×`burn_increase_mult` per registration (1.26 typical, 1.70 on netuid 83, 3.0 on netuid 74), decaying with a 360-block half-life, capped at `max_burn_tao` |
+| `target_regs_per_interval` / `max_regs_per_block` | throttles churn; 1 and 1 on nearly all |
+
+So a `registration_cost` from `/v2/subnets/` is a **momentary** value that a
+burst of registrations spikes and time decays. Never treat it as fixed.
+
+Immunity is the figure to weigh against setup time: netuid 76 gives 100 blocks
+(~8 minutes) before you are prunable, netuid 8 gives 1200 (~4 hours), while
+netuids 50 and 18 give 65,535 (9.1 days). Long immunity also explains high
+`earn_rate_pct` — on netuid 50, 235 of 248 slots earn because dead slots cannot
+be recycled quickly.
 
 ---
 
@@ -171,7 +241,11 @@ For miner viability, these held up under adversarial re-checking:
 | `accessible_inc_share` | §4 — how much of the pool a stake-less entrant can reach |
 | `median_alpha_day` / `p25` | `2952 × incentive`, or measured from `daily_rewards_alpha` on single-stream UIDs |
 | `top10_share_pct` | concentration; >90% means the median is meaningless |
-| `payback_days` | `registration_cost ÷ (median_alpha_day × subnet.price)` |
+| `immunity_period_blocks` | §5.1 — grace window before prunable; weigh against setup time |
+| `payback_days` | `registration_cost ÷ (median_alpha_day × subnet.price)`, with `registration_cost` refetched, not cached |
+
+`earn_rate_pct` needs reading alongside `immunity_period`: a low rate on a
+short-immunity subnet means slots churn, not that the work is impossible.
 
 Report in **alpha** and convert to fiat only at the moment of display, with
 the rate's timestamp attached. Fiat columns stored in a CSV are stale the
@@ -213,8 +287,10 @@ Payback at the median, price-free in structure:
 `0.99 TAO ÷ (9.05 α/day × price)` ≈ **1.8 days** at the snapshot price —
 recompute with a live price before quoting it.
 
-Also note 107 is the one subnet in the 30-subnet sample **not at UID capacity**
-(94 of 256), so registering does not require displacing an incumbent.
+Netuid 107 is the one subnet in the 30-subnet sample **not at UID capacity**
+(94 of 256). That is a curiosity, not an advantage — per §5.1 the other 29 are
+equally registerable; the cap simply means a low-emission UID gets evicted to
+make room. Its `immunity_period` is 14,400 blocks (2 days).
 
 Emission read 9.02% in the UI vs 9.050% in the 04:30Z snapshot — normal drift,
 and the only field that moved.
