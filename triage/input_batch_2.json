@@ -1,0 +1,92 @@
+[
+ {
+  "netuid": 16,
+  "name": "TC",
+  "burn_pct": 0.0,
+  "registration_cost": 0.999999999,
+  "active_miners": 1,
+  "prune_rank": null,
+  "repo_url": "https://github.com/fast-thinker/fast-thinker"
+ },
+ {
+  "netuid": 17,
+  "name": "404—GEN",
+  "burn_pct": 0.0,
+  "registration_cost": 0.0005,
+  "active_miners": 1,
+  "prune_rank": 83,
+  "repo_url": "https://github.com/404-Repo/404-gen-subne"
+ },
+ {
+  "netuid": 18,
+  "name": "Zeus",
+  "burn_pct": 32.86945906767376,
+  "registration_cost": 0.999999999,
+  "active_miners": 32,
+  "prune_rank": 59,
+  "repo_url": "https://github.com/Orpheus-AI/Zeus"
+ },
+ {
+  "netuid": 19,
+  "name": "blockmachine",
+  "burn_pct": 37.02143892576486,
+  "registration_cost": 0.1,
+  "active_miners": 31,
+  "prune_rank": 87,
+  "repo_url": "https://github.com/taostat/blockmachine"
+ },
+ {
+  "netuid": 21,
+  "name": "AdTAO",
+  "burn_pct": 45.12245365072099,
+  "registration_cost": 0.1,
+  "active_miners": 117,
+  "prune_rank": 26,
+  "repo_url": "https://github.com/ippcteam/SN21-adtao"
+ },
+ {
+  "netuid": 22,
+  "name": "Desearch",
+  "burn_pct": 51.53734645609216,
+  "registration_cost": 0.0005,
+  "active_miners": 43,
+  "prune_rank": 32,
+  "repo_url": "https://github.com/datura-ai/desearch"
+ },
+ {
+  "netuid": 26,
+  "name": "Perturb",
+  "burn_pct": 50.167086289768825,
+  "registration_cost": 0.1,
+  "active_miners": 10,
+  "prune_rank": null,
+  "repo_url": "https://github.com/0xsigurd/Perturb"
+ },
+ {
+  "netuid": 28,
+  "name": "gm",
+  "burn_pct": 16.169985503929198,
+  "registration_cost": 0.1,
+  "active_miners": 24,
+  "prune_rank": 97,
+  "repo_url": "https://github.com/taostat/gm-miner"
+ },
+ {
+  "netuid": 29,
+  "name": "hoτfloaτ",
+  "burn_pct": 0.0,
+  "registration_cost": 0.0005,
+  "active_miners": 1,
+  "prune_rank": 25,
+  "repo_url": "https://github.com/coldint/hotfloa"
+ },
+ {
+  "netuid": 32,
+  "name": "ItsAI",
+  "burn_pct": 0.0,
+  "registration_cost": 0.011905768,
+  "active_miners": 238,
+  "prune_rank": 27,
+  "repo_url": "https://github.com/It-s-AI/llm-detection"
+ }
+]

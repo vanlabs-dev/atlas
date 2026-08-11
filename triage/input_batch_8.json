@@ -1,0 +1,74 @@
+[
+ {
+  "netuid": 117,
+  "name": "glyph",
+  "burn_pct": 0.0,
+  "registration_cost": 0.999999999,
+  "active_miners": 1,
+  "prune_rank": 7,
+  "repo_url": "https://github.com/glyph-research/glyph-subne"
+ },
+ {
+  "netuid": 120,
+  "name": "Affine",
+  "burn_pct": 0.0,
+  "registration_cost": 0.873210951,
+  "active_miners": 5,
+  "prune_rank": 109,
+  "repo_url": "https://github.com/AffineFoundation/affine"
+ },
+ {
+  "netuid": 121,
+  "name": "sundae_bar",
+  "burn_pct": 62.14389257648585,
+  "registration_cost": 0.0005,
+  "active_miners": 1,
+  "prune_rank": 51,
+  "repo_url": "https://github.com/sundae-bar/bittensor-subne"
+ },
+ {
+  "netuid": 123,
+  "name": "MANTIS",
+  "burn_pct": 41.70138094148165,
+  "registration_cost": 0.15,
+  "active_miners": 251,
+  "prune_rank": 11,
+  "repo_url": "https://github.com/Barbariandev/MANTIS"
+ },
+ {
+  "netuid": 124,
+  "name": "Swarm",
+  "burn_pct": 0.0,
+  "registration_cost": 0.5,
+  "active_miners": 23,
+  "prune_rank": 85,
+  "repo_url": "https://github.com/swarm-subnet/swarm"
+ },
+ {
+  "netuid": 126,
+  "name": "Poker44",
+  "burn_pct": 30.286106660563057,
+  "registration_cost": 0.2,
+  "active_miners": 2,
+  "prune_rank": 58,
+  "repo_url": "https://github.com/Poker44/Poker44-subne"
+ },
+ {
+  "netuid": 127,
+  "name": "Astrid",
+  "burn_pct": 70.63859006637675,
+  "registration_cost": 0.0005,
+  "active_miners": 3,
+  "prune_rank": 17,
+  "repo_url": "https://github.com/astridintelligence/sn-127"
+ },
+ {
+  "netuid": 128,
+  "name": "ByteLeap",
+  "burn_pct": 0.0,
+  "registration_cost": 0.0005,
+  "active_miners": 21,
+  "prune_rank": 18,
+  "repo_url": "https://github.com/byteleapai/byteleap-Miner"
+ }
+]

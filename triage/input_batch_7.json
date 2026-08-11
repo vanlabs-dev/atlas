@@ -1,0 +1,92 @@
+[
+ {
+  "netuid": 93,
+  "name": "Bitcast",
+  "burn_pct": 0.0009155413138017853,
+  "registration_cost": 0.005,
+  "active_miners": 4,
+  "prune_rank": 84,
+  "repo_url": "https://github.com/bitcast-network/bitcas"
+ },
+ {
+  "netuid": 96,
+  "name": "Verathos",
+  "burn_pct": 41.12306401159685,
+  "registration_cost": 0.1,
+  "active_miners": 55,
+  "prune_rank": 78,
+  "repo_url": "https://github.com/verathos-ai/verathos"
+ },
+ {
+  "netuid": 97,
+  "name": "Albedo",
+  "burn_pct": 0.0,
+  "registration_cost": 1.021185857,
+  "active_miners": 5,
+  "prune_rank": 101,
+  "repo_url": "https://github.com/unarbos/albedo"
+ },
+ {
+  "netuid": 98,
+  "name": "NeverPlayAlone",
+  "burn_pct": 0.0,
+  "registration_cost": 0.1,
+  "active_miners": 1,
+  "prune_rank": 20,
+  "repo_url": "https://github.com/neverplayalone/neverplayalone_subne"
+ },
+ {
+  "netuid": 100,
+  "name": "BASE",
+  "burn_pct": 0.0,
+  "registration_cost": 0.016186025,
+  "active_miners": 7,
+  "prune_rank": 63,
+  "repo_url": "https://github.com/BaseIntelligence/base"
+ },
+ {
+  "netuid": 102,
+  "name": "ConnitoAI",
+  "burn_pct": 25.064469367513542,
+  "registration_cost": 0.016958142,
+  "active_miners": 8,
+  "prune_rank": 80,
+  "repo_url": "https://github.com/Connito-AI/Connito"
+ },
+ {
+  "netuid": 106,
+  "name": "Nodexo",
+  "burn_pct": 0.0,
+  "registration_cost": 0.0005,
+  "active_miners": 23,
+  "prune_rank": 24,
+  "repo_url": "https://github.com/nodexo-ai/nodexo"
+ },
+ {
+  "netuid": 107,
+  "name": "Minos",
+  "burn_pct": 0.0,
+  "registration_cost": 0.99,
+  "active_miners": 20,
+  "prune_rank": 110,
+  "repo_url": "https://github.com/minos-protocol/minos_subne"
+ },
+ {
+  "netuid": 112,
+  "name": "minotaur",
+  "burn_pct": 79.99847409781033,
+  "registration_cost": 0.99,
+  "active_miners": 1,
+  "prune_rank": 5,
+  "repo_url": "https://github.com/subnet112/minotaur_subne"
+ },
+ {
+  "netuid": 114,
+  "name": "SOMA",
+  "burn_pct": 0.0,
+  "registration_cost": 0.142072338,
+  "active_miners": 3,
+  "prune_rank": 90,
+  "repo_url": "https://github.com/DendriteHQ/SOMA"
+ }
+]

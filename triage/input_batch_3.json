@@ -1,0 +1,92 @@
+[
+ {
+  "netuid": 33,
+  "name": "ReadyAI",
+  "burn_pct": 0.0,
+  "registration_cost": 0.067041136,
+  "active_miners": 242,
+  "prune_rank": 62,
+  "repo_url": "https://github.com/afterpartyai/bittensor-conversation-genome-projec"
+ },
+ {
+  "netuid": 34,
+  "name": "BitMind",
+  "burn_pct": 0.0,
+  "registration_cost": 0.5,
+  "active_miners": 108,
+  "prune_rank": 93,
+  "repo_url": "https://github.com/BitMind-AI/bitmind-subne"
+ },
+ {
+  "netuid": 35,
+  "name": "OxMarkets",
+  "burn_pct": 0.0,
+  "registration_cost": 0.1,
+  "active_miners": 3,
+  "prune_rank": 13,
+  "repo_url": "https://github.com/General-Tao-Ventures/cartha-validator"
+ },
+ {
+  "netuid": 38,
+  "name": "ChronoLLM",
+  "burn_pct": 0.0,
+  "registration_cost": 0.74,
+  "active_miners": 10,
+  "prune_rank": 91,
+  "repo_url": "https://github.com/chronollm/sn38"
+ },
+ {
+  "netuid": 40,
+  "name": "Ralph",
+  "burn_pct": 0.0,
+  "registration_cost": 0.99,
+  "active_miners": 1,
+  "prune_rank": null,
+  "repo_url": "https://github.com/RalphLabsAI/ralph"
+ },
+ {
+  "netuid": 41,
+  "name": "Almanac",
+  "burn_pct": 72.50476844434272,
+  "registration_cost": 0.1,
+  "active_miners": 65,
+  "prune_rank": 56,
+  "repo_url": "https://github.com/corvxai/almanac"
+ },
+ {
+  "netuid": 43,
+  "name": "Graphite",
+  "burn_pct": 79.64446478980697,
+  "registration_cost": 0.1,
+  "active_miners": 10,
+  "prune_rank": 61,
+  "repo_url": "https://github.com/GraphiteAI/Graphite-Subne"
+ },
+ {
+  "netuid": 44,
+  "name": "Score",
+  "burn_pct": 0.0,
+  "registration_cost": 0.000560157,
+  "active_miners": 10,
+  "prune_rank": 106,
+  "repo_url": "https://github.com/score-technologies/turbovision"
+ },
+ {
+  "netuid": 45,
+  "name": "AlphaRidge.ai",
+  "burn_pct": 69.02418554970626,
+  "registration_cost": 0.03992521,
+  "active_miners": 224,
+  "prune_rank": 8,
+  "repo_url": "https://github.com/Team-Rizzo/alpharidge-a"
+ },
+ {
+  "netuid": 48,
+  "name": "Quantum Compute",
+  "burn_pct": 0.0,
+  "registration_cost": 0.0005,
+  "active_miners": 6,
+  "prune_rank": 46,
+  "repo_url": "https://github.com/qbittensor-labs/quantum-compute"
+ }
+]

@@ -1,0 +1,92 @@
+[
+ {
+  "netuid": 49,
+  "name": "Nepher Robotics",
+  "burn_pct": 0.0,
+  "registration_cost": 0.05,
+  "active_miners": 3,
+  "prune_rank": 70,
+  "repo_url": "https://github.com/nepher-ai/nepher-subne"
+ },
+ {
+  "netuid": 50,
+  "name": "Synth",
+  "burn_pct": 0.0,
+  "registration_cost": 0.8,
+  "active_miners": 235,
+  "prune_rank": 52,
+  "repo_url": "https://github.com/mode-network/synth-subne"
+ },
+ {
+  "netuid": 51,
+  "name": "lium.io",
+  "burn_pct": 0.0,
+  "registration_cost": 0.5,
+  "active_miners": 51,
+  "prune_rank": 111,
+  "repo_url": "https://github.com/Datura-ai/lium-io"
+ },
+ {
+  "netuid": 53,
+  "name": "engy",
+  "burn_pct": 0.0,
+  "registration_cost": 0.000553719,
+  "active_miners": 103,
+  "prune_rank": 104,
+  "repo_url": "https://github.com/hanlinai/engy"
+ },
+ {
+  "netuid": 54,
+  "name": "Yanez MIID",
+  "burn_pct": 30.939192797741665,
+  "registration_cost": 0.0005,
+  "active_miners": 66,
+  "prune_rank": 50,
+  "repo_url": "https://github.com/yanez-compliance/MIID-subne"
+ },
+ {
+  "netuid": 55,
+  "name": "NIOME",
+  "burn_pct": 2.000457770656901,
+  "registration_cost": 0.0005,
+  "active_miners": 10,
+  "prune_rank": 15,
+  "repo_url": "https://github.com/genomesio/subnet-niome"
+ },
+ {
+  "netuid": 56,
+  "name": "Gradients",
+  "burn_pct": 72.2941939421683,
+  "registration_cost": 0.0005,
+  "active_miners": 12,
+  "prune_rank": 96,
+  "repo_url": "https://github.com/gradients-ai/G.O.D"
+ },
+ {
+  "netuid": 60,
+  "name": "Bitsec.ai",
+  "burn_pct": 49.999237048905165,
+  "registration_cost": 0.0005,
+  "active_miners": 1,
+  "prune_rank": 42,
+  "repo_url": "https://github.com/Bitsec-AI/sandbox"
+ },
+ {
+  "netuid": 61,
+  "name": "RedTeam",
+  "burn_pct": 0.0,
+  "registration_cost": 0.000792253,
+  "active_miners": 46,
+  "prune_rank": 79,
+  "repo_url": "https://github.com/RedTeamSubnet/RedTeam"
+ },
+ {
+  "netuid": 62,
+  "name": "Ridges",
+  "burn_pct": 13.337911039902343,
+  "registration_cost": 0.0005,
+  "active_miners": 6,
+  "prune_rank": 92,
+  "repo_url": "https://github.com/ridgesai/ridges"
+ }
+]

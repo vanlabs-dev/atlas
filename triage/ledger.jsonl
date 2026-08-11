@@ -1,0 +1,57 @@
+{"netuid": 0, "rule": "burn_not_numeric", "value": null, "stage": "stage0"}
+{"netuid": 7, "rule": "burn_ge_90pct", "value": 90.41733424887465, "stage": "stage0"}
+{"netuid": 9, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 10, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 12, "rule": "burn_ge_90pct", "value": 99.4171053635462, "stage": "stage0"}
+{"netuid": 14, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 20, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 23, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 24, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 25, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 27, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 30, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 31, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 36, "rule": "no_github_url_in_identity", "value": "", "stage": "stage0"}
+{"netuid": 37, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 39, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 42, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 46, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 47, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 52, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 57, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 58, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 59, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 65, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 69, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 71, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 72, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 73, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 75, "rule": "burn_ge_90pct", "value": 94.98893720912488, "stage": "stage0"}
+{"netuid": 80, "rule": "burn_ge_90pct", "value": 90.64011596856642, "stage": "stage0"}
+{"netuid": 84, "rule": "identity_missing_or_empty", "value": null, "stage": "stage0"}
+{"netuid": 86, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 87, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 94, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 95, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 99, "rule": "no_github_url_in_identity", "value": "https://www.thirtyspokes.ai", "stage": "stage0"}
+{"netuid": 101, "rule": "burn_ge_90pct", "value": 90.22049286640727, "stage": "stage0"}
+{"netuid": 103, "rule": "identity_missing_or_empty", "value": null, "stage": "stage0"}
+{"netuid": 104, "rule": "burn_ge_90pct", "value": 96.39276722362096, "stage": "stage0"}
+{"netuid": 105, "rule": "no_github_url_in_identity", "value": "https://github.com/orgs/Beam-Network/repositories", "stage": "stage0"}
+{"netuid": 108, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 109, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 110, "rule": "no_github_url_in_identity", "value": "https://www.green-compute.com/", "stage": "stage0"}
+{"netuid": 111, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 113, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 115, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 116, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 118, "rule": "no_github_url_in_identity", "value": "https://github.com/orgs/ditto-assistant/repositories", "stage": "stage0"}
+{"netuid": 119, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 122, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 125, "rule": "burn_ge_90pct", "value": 100.0, "stage": "stage0"}
+{"netuid": 3, "rule": "repo_url_vs_clone_state", "value": "repo_url 'https://github.com/username/repo' (placeholder) but clone_state 'missing'; ~/atlas/var/fleet/clones/3 confirmed absent via SSH", "stage": "critic_pass_1"}
+{"netuid": 16, "rule": "null_value", "value": "prune_rank: null (must be \"unknown\")", "stage": "critic_pass_1"}
+{"netuid": 26, "rule": "null_value", "value": "prune_rank: null (must be \"unknown\")", "stage": "critic_pass_1"}
+{"netuid": 40, "rule": "null_value", "value": "prune_rank: null (must be \"unknown\")", "stage": "critic_pass_1"}
+{"netuid": 78, "rule": "null_value", "value": "prune_rank: null (must be \"unknown\")", "stage": "critic_pass_1"}
+{"netuid": 81, "rule": "repo_url_vs_clone_state", "value": "repo_url 'https://github.com/deprecated/deprecated' (placeholder) but clone_state 'missing'; ~/atlas/var/fleet/clones/81 confirmed absent via SSH", "stage": "critic_pass_1"}

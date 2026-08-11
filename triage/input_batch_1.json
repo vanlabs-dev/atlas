@@ -1,0 +1,92 @@
+[
+ {
+  "netuid": 1,
+  "name": "Apex",
+  "burn_pct": 52.71992065308614,
+  "registration_cost": 0.0005,
+  "active_miners": 2,
+  "prune_rank": 76,
+  "repo_url": "https://github.com/macrocosm-os/apex"
+ },
+ {
+  "netuid": 2,
+  "name": "DSperse",
+  "burn_pct": 82.64591439688715,
+  "registration_cost": 0.0005,
+  "active_miners": 12,
+  "prune_rank": 43,
+  "repo_url": "https://github.com/inference-labs-inc/subnet-2"
+ },
+ {
+  "netuid": 3,
+  "name": "deprecated",
+  "burn_pct": 0.0,
+  "registration_cost": 0.022940962,
+  "active_miners": 5,
+  "prune_rank": 102,
+  "repo_url": "https://github.com/username/repo"
+ },
+ {
+  "netuid": 4,
+  "name": "Targon",
+  "burn_pct": 6.73685816739147,
+  "registration_cost": 0.0005,
+  "active_miners": 5,
+  "prune_rank": 107,
+  "repo_url": "https://github.com/manifold-inc/targon"
+ },
+ {
+  "netuid": 5,
+  "name": "Hone",
+  "burn_pct": 42.36820019836728,
+  "registration_cost": 0.076992543,
+  "active_miners": 239,
+  "prune_rank": 94,
+  "repo_url": "https://github.com/manifold-inc/hone"
+ },
+ {
+  "netuid": 6,
+  "name": "Numinous",
+  "burn_pct": 0.0,
+  "registration_cost": 0.2,
+  "active_miners": 19,
+  "prune_rank": 22,
+  "repo_url": "https://github.com/numinouslabs/numinous"
+ },
+ {
+  "netuid": 8,
+  "name": "Vanta",
+  "burn_pct": 0.0,
+  "registration_cost": 0.0005,
+  "active_miners": 36,
+  "prune_rank": 103,
+  "repo_url": "https://github.com/taoshidev/vanta-network"
+ },
+ {
+  "netuid": 11,
+  "name": "TrajectoryRL",
+  "burn_pct": 0.0,
+  "registration_cost": 0.02,
+  "active_miners": 1,
+  "prune_rank": 73,
+  "repo_url": "https://github.com/trajectoryRL/trajectoryRL"
+ },
+ {
+  "netuid": 13,
+  "name": "Data Universe",
+  "burn_pct": 70.68436713206684,
+  "registration_cost": 0.04816597,
+  "active_miners": 239,
+  "prune_rank": 65,
+  "repo_url": "https://github.com/macrocosm-os/data-universe"
+ },
+ {
+  "netuid": 15,
+  "name": "ORO",
+  "burn_pct": 0.0,
+  "registration_cost": 0.255751564,
+  "active_miners": 81,
+  "prune_rank": 99,
+  "repo_url": "https://github.com/ORO-AI/oro"
+ }
+]

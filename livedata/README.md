@@ -7,6 +7,11 @@ Phase 4 discovery gates, all 2026-07-12). Providers: **TaoSwap first**
 **CoinGecko** as the TAO/USD spot reference. Production price checking
 spends **no TaoStats quota** (Q30).
 
+Interpreting emission, burn, and miner-economics fields from these
+providers: [`docs/emission-metrics.md`](../docs/emission-metrics.md) —
+verified constants, derivation formulas, and the fields that are empty or
+misleading (`active_miners`, `block_at_registration`, `daily_rewards_alpha`).
+
 ## Module map
 
 ```
