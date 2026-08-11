@@ -42,11 +42,13 @@ def panel(subnets):
 
 
 def chain(incentive=None, network_n=None, collateral=None, failures=None,
-          block=8789861, ok=True):
+          identity=None, block=8789861, ok=True):
     return {"ok": ok, "block_number": block, "block_hash": "0xabc",
             "values": {"Incentive": incentive or {},
                        "SubnetworkN": network_n or {},
                        "CollateralLockShare": collateral or {},
+                       "SubnetIdentitiesV3": {} if identity is None
+                       else identity,
                        "MinerBurned": {}},
             "failures": failures or {}}
 
@@ -95,6 +97,26 @@ class TestSchema(MiningBase):
             "PRAGMA table_info(mine_feasibility)").fetchall()
         self.assertEqual({r[1] for r in feas if r[5]},
                          {"netuid", "epoch", "sha"})
+
+    def test_columns_added_after_ship_are_migrated_in(self):
+        """A deployed Pi already has mine_econ; CREATE TABLE IF NOT EXISTS is
+        a no-op there, so the added columns must arrive by ALTER TABLE or
+        every insert against the live store fails."""
+        self.conn.execute("DROP TABLE mine_econ")
+        self.conn.execute(
+            "CREATE TABLE mine_econ (ts TEXT NOT NULL, netuid INTEGER "
+            "NOT NULL, confidence TEXT NOT NULL, PRIMARY KEY (ts, netuid))")
+        self.conn.execute(
+            "INSERT INTO mine_econ (ts, netuid, confidence) "
+            "VALUES ('2026-08-01T00:00:00+00:00', 7, 'ok')")
+        mine.ensure_schema(self.conn)
+        names = {r[1] for r in self.conn.execute(
+            "PRAGMA table_info(mine_econ)")}
+        self.assertIn("subnet_name", names)
+        self.assertIn("identity_state", names)
+        # Migration is additive: the pre-existing row is still there.
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM mine_econ").fetchone()[0], 1)
 
     def test_percentage_columns_carry_the_unit(self):
         names = {r[1] for r in self.conn.execute(
@@ -249,6 +271,102 @@ class TestCutLadder(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# On-chain identity rung
+# ---------------------------------------------------------------------------
+
+class TestIdentity(unittest.TestCase):
+
+    def setUp(self):
+        self.cfg = mine.mining_cfg({})
+
+    def _state(self, name, seen=True):
+        return mine.classify_identity(self.cfg, name, seen)[0]
+
+    def test_real_names_are_named(self):
+        for name in ("Apex", "Green Compute", "lium.io", "8 Ball",
+                     "hoτfloaτ", "404—GEN", "sundae_bar"):
+            self.assertEqual(self._state(name), mine.IDENT_NAMED, name)
+
+    def test_live_placeholders_observed_on_chain(self):
+        """The exact strings live Finney carried on 2026-08-12. Written out
+        rather than paraphrased: this rung exists to cut these specific
+        owner-abandoned slots."""
+        for name in ("deprecated", "unknown", "Unknown", "pending...",
+                     "Parked", "wait (reproduce paper)"):
+            self.assertEqual(self._state(name), mine.IDENT_PLACEHOLDER, name)
+
+    def test_placeholder_match_is_case_and_punctuation_insensitive(self):
+        for name in ("DEPRECATED", "  deprecated  ", "Pending…",
+                     "deprecated (do not use)"):
+            self.assertEqual(self._state(name), mine.IDENT_PLACEHOLDER, name)
+
+    def test_a_name_merely_containing_a_placeholder_word_survives(self):
+        # First-token matching, not substring: a real name is not cut for
+        # mentioning one of these words later on.
+        for name in ("Oracle Pending Markets", "Waitless", "Unknowable"):
+            self.assertEqual(self._state(name), mine.IDENT_NAMED, name)
+
+    def test_empty_name_is_a_placeholder_not_a_name(self):
+        self.assertEqual(self._state(""), mine.IDENT_PLACEHOLDER)
+        self.assertEqual(self._state("   "), mine.IDENT_PLACEHOLDER)
+
+    def test_absent_entry_is_distinct_from_unread_map(self):
+        self.assertEqual(self._state(None, seen=True), mine.IDENT_ABSENT)
+        self.assertEqual(self._state(None, seen=False), mine.IDENT_UNREAD)
+
+    def test_unread_map_never_reclassifies_a_real_name(self):
+        state, name = mine.classify_identity(self.cfg, "Apex", False)
+        self.assertEqual(state, mine.IDENT_UNREAD)
+        self.assertEqual(name, "Apex")
+
+    def test_placeholder_cuts_and_quotes_the_chain_name(self):
+        rung, detail = mine.classify_cut(
+            self.cfg, {"gate_state": "enabled", "miner_burn_pct": 0.0,
+                       "identity_state": mine.IDENT_PLACEHOLDER,
+                       "subnet_name": "deprecated"}, None)
+        self.assertEqual(rung, mine.CUT_IDENTITY)
+        self.assertIn("deprecated", detail)
+
+    def test_absent_identity_cuts_with_its_own_reason(self):
+        rung, detail = mine.classify_cut(
+            self.cfg, {"gate_state": "enabled", "miner_burn_pct": 0.0,
+                       "identity_state": mine.IDENT_ABSENT,
+                       "subnet_name": None}, None)
+        self.assertEqual(rung, mine.CUT_IDENTITY)
+        self.assertIn("SubnetIdentitiesV3", detail)
+
+    def test_unread_identity_does_not_cut(self):
+        """The whole-map fail-open. A renamed or unreachable storage item
+        must never empty the board."""
+        rung, _ = mine.classify_cut(
+            self.cfg, {"gate_state": "enabled", "miner_burn_pct": 0.0,
+                       "identity_state": mine.IDENT_UNREAD,
+                       "subnet_name": None}, None)
+        self.assertIsNone(rung)
+
+    def test_gate_rung_still_precedes_identity(self):
+        rung, _ = mine.classify_cut(
+            self.cfg, {"gate_state": "disabled", "miner_burn_pct": 0.0,
+                       "identity_state": mine.IDENT_PLACEHOLDER,
+                       "subnet_name": "deprecated"}, None)
+        self.assertEqual(rung, mine.CUT_GATE)
+
+    def test_identity_rung_precedes_burn(self):
+        rung, _ = mine.classify_cut(
+            self.cfg, {"gate_state": "enabled", "miner_burn_pct": 100.0,
+                       "identity_state": mine.IDENT_PLACEHOLDER,
+                       "subnet_name": "Parked"}, None)
+        self.assertEqual(rung, mine.CUT_IDENTITY)
+
+    def test_placeholder_list_is_configurable(self):
+        cfg = mine.mining_cfg({"mining": {"identity_placeholders": ["retired"]}})
+        self.assertEqual(mine.classify_identity(cfg, "retired", True)[0],
+                         mine.IDENT_PLACEHOLDER)
+        self.assertEqual(mine.classify_identity(cfg, "deprecated", True)[0],
+                         mine.IDENT_NAMED)
+
+
+# ---------------------------------------------------------------------------
 # Stage A
 # ---------------------------------------------------------------------------
 
@@ -279,6 +397,43 @@ class TestEcon(MiningBase):
         self.assertAlmostEqual(row["alpha_in_day"],
                                0.12 * mine.BLOCKS_PER_DAY, places=6)
         self.assertNotAlmostEqual(row["miner_alpha_day"], row["alpha_in_day"])
+
+    def test_identity_is_recorded_and_cuts_end_to_end(self):
+        out = mine.run_econ(self.conn, self.config, inputs=inputs(
+            [panel_subnet(1), panel_subnet(3), panel_subnet(57)],
+            incentive={1: [10], 3: [10], 57: [10]},
+            network_n={1: 256, 3: 256, 57: 256},
+            identity={1: "Apex", 3: "deprecated"}))
+        self.assertTrue(out["ok"])
+        rows = {r["netuid"]: r for r in mine.latest_econ(self.conn)}
+        self.assertEqual(rows[1]["identity_state"], mine.IDENT_NAMED)
+        self.assertEqual(rows[1]["subnet_name"], "Apex")
+        self.assertEqual(rows[3]["identity_state"], mine.IDENT_PLACEHOLDER)
+        self.assertEqual(rows[3]["subnet_name"], "deprecated")
+        # 57 was in the panel but has no chain identity entry at all.
+        self.assertEqual(rows[57]["identity_state"], mine.IDENT_ABSENT)
+        self.assertIsNone(rows[57]["subnet_name"])
+
+        view = mine.report(self.conn, self.config, include_cut=True)
+        self.assertEqual([e["netuid"] for e in view["ranked"]], [1])
+        cut = {e["netuid"]: e for e in view["cut"]}
+        self.assertEqual(cut[3]["cut_reason"], mine.CUT_IDENTITY)
+        self.assertEqual(cut[57]["cut_reason"], mine.CUT_IDENTITY)
+        self.assertEqual(view["cut_summary"][mine.CUT_IDENTITY], 2)
+
+    def test_an_unread_identity_map_does_not_empty_the_board(self):
+        """Whole-map failure is fail-open at this rung: without it, a renamed
+        storage item would silently cut every subnet at once."""
+        out = mine.run_econ(self.conn, self.config, inputs=inputs(
+            [panel_subnet(1), panel_subnet(3)],
+            incentive={1: [10], 3: [10]}, network_n={1: 256, 3: 256},
+            identity={}))
+        self.assertTrue(out["ok"])
+        rows = {r["netuid"]: r for r in mine.latest_econ(self.conn)}
+        self.assertEqual(rows[1]["identity_state"], mine.IDENT_UNREAD)
+        view = mine.report(self.conn, self.config, include_cut=True)
+        self.assertEqual(sorted(e["netuid"] for e in view["ranked"]), [1, 3])
+        self.assertNotIn(mine.CUT_IDENTITY, view["cut_summary"])
 
     def test_root_subnet_is_excluded(self):
         out = mine.run_econ(self.conn, self.config, inputs=inputs(
@@ -678,6 +833,29 @@ class TestReport(MiningBase):
         self.assertIn("ASSUMPTION", page)
         self.assertIn("earners + 1", page)
         self.assertIn("incumbent", page)
+
+    def test_board_shows_the_on_chain_name(self):
+        mine.run_econ(self.conn, self.config, inputs=inputs(
+            [panel_subnet(1)], incentive={1: [5]}, network_n={1: 256},
+            identity={1: "Apex"}))
+        mine.render(self.conn, self.config)
+        with open(os.path.join(self.tmp, "www", "mining.html"),
+                  encoding="utf-8") as handle:
+            page = handle.read()
+        self.assertIn("on-chain name", page)
+        self.assertIn("Apex", page)
+
+    def test_board_escapes_a_hostile_chain_name(self):
+        """subnet_name is owner-written free text arriving over the wire."""
+        mine.run_econ(self.conn, self.config, inputs=inputs(
+            [panel_subnet(1)], incentive={1: [5]}, network_n={1: 256},
+            identity={1: "<script>alert(1)</script>"}))
+        mine.render(self.conn, self.config)
+        with open(os.path.join(self.tmp, "www", "mining.html"),
+                  encoding="utf-8") as handle:
+            page = handle.read()
+        self.assertNotIn("<script>alert", page)
+        self.assertIn("&lt;script&gt;", page)
 
     def test_ranking_is_by_value_not_quantity(self):
         """Both survivors have identical alpha quantity; price separates."""

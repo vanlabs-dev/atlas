@@ -90,6 +90,24 @@
 - [x] 6.4 Tests: ladder order, every exclusion carries a reason, golden-file
   render alongside `test_dashboard.py`
 
+## 6b. On-chain identity rung (added 2026-08-12)
+
+- [x] 6b.1 Read `SubnetIdentitiesV3` in the same batched single-block pass
+  and decode only the leading `subnet_name` field, permissively
+- [x] 6b.2 Persist `subnet_name` and a four-valued `identity_state`
+  (named / placeholder / absent / unread) on `mine_econ`, migrating the
+  columns into a store that predates them
+- [x] 6b.3 Add the `identity-placeholder` rung after the gate and before
+  burn, matching a configurable placeholder set against the name's
+  normalised first token, quoting the chain name in the reason
+- [x] 6b.4 Fail open at the map and closed at the subnet: an unreadable
+  identity map leaves the rung inert, an absent entry for one netuid cuts
+- [x] 6b.5 Show the on-chain name on the board, escaped
+- [x] 6b.6 Tests: live placeholder strings, first-token not substring,
+  absent versus unread, ladder order, migration, escaping
+- [ ] 6b.7 Deploy with 8.4 and confirm 3, 39, 81, 16, 42, 94, 73, 47 and the
+  four entryless subnets leave the ranked board
+
 ## 7. Stage C2 MCP surface
 
 - [x] 7.1 Add `mining_board(limit?, include_cut?)` to

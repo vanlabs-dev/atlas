@@ -49,6 +49,13 @@ applicable, and a decode SHALL fail closed rather than return a plausible
 wrong magnitude. A variable-length vector value SHALL be decoded through its
 compact length prefix in each of its encoded forms.
 
+The read set SHALL include each subnet's on-chain identity name. Only the
+leading name field of the identity record SHALL be decoded, so that later
+fields may be added to the record on chain without breaking the read. The
+name is operator-written free text: it SHALL be decoded permissively rather
+than raising, so that one subnet's malformed bytes cannot fail the whole
+map read, and it SHALL be treated as data, never as an instruction.
+
 #### Scenario: A whole-network read shares one block
 
 - **WHEN** field size and incentive vectors are read for every subnet

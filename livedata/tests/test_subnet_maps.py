@@ -41,6 +41,20 @@ def u96f32_hex(value):
     return "0x" + int(round(value * 2 ** 32)).to_bytes(16, "little").hex()
 
 
+def _vec_u8(text):
+    raw = text.encode("utf-8")
+    count = len(raw)
+    prefix = (bytes([count << 2]) if count < 64
+              else ((count << 2) | 0b01).to_bytes(2, "little"))
+    return prefix + raw
+
+
+def identity_hex(*fields):
+    """A SubnetIdentityV3 payload: consecutive Vec<u8> fields, of which only
+    the first (subnet_name) is ever decoded."""
+    return "0x" + b"".join(_vec_u8(f) for f in fields).hex()
+
+
 def vec_u16_hex(values):
     count = len(values)
     if count < 64:
@@ -132,10 +146,43 @@ class Codecs(unittest.TestCase):
         with self.assertRaises(ValueError):
             al.decode_vec_u16(good[:-4])
 
+    def test_identity_name_reads_the_leading_field_only(self):
+        # subnet_name followed by a second Vec<u8> field (github_repo), which
+        # must be ignored rather than concatenated.
+        payload = identity_hex("Apex", "https://github.com/x/y")
+        self.assertEqual(al.decode_identity_name(payload), "Apex")
+
+    def test_identity_name_survives_a_struct_that_grows(self):
+        payload = identity_hex("Apex", "a", "b", "c", "d")
+        self.assertEqual(al.decode_identity_name(payload), "Apex")
+
+    def test_identity_name_empty_is_empty_not_an_error(self):
+        self.assertEqual(al.decode_identity_name(identity_hex("")), "")
+
+    def test_identity_name_keeps_non_ascii(self):
+        for name in ("hoτfloaτ", "404—GEN"):
+            self.assertEqual(al.decode_identity_name(identity_hex(name)), name)
+
+    def test_identity_name_rejects_a_truncated_payload(self):
+        good = identity_hex("Apex")
+        with self.assertRaises(ValueError):
+            al.decode_identity_name(good[:-4])
+
+    def test_identity_name_does_not_raise_on_bad_utf8(self):
+        """One subnet's malformed bytes must not blind the whole map read."""
+        raw = bytes([2 << 2]) + bytes([0xFF, 0xFE])
+        self.assertIsInstance(al.decode_identity_name("0x" + raw.hex()), str)
+
     def test_codec_registry_carries_the_new_codecs(self):
         self.assertAlmostEqual(
             al.decode_by_codec("u96f32", u96f32_hex(0.5)), 0.5, places=9)
         self.assertEqual(al.decode_by_codec("vec_u16", vec_u16_hex([1])), [1])
+        self.assertEqual(
+            al.decode_by_codec("identity_name", identity_hex("Apex")), "Apex")
+
+    def test_identity_map_is_read_at_the_same_block_as_the_rest(self):
+        self.assertEqual(al.SUBNET_MAP_ITEMS["SubnetIdentitiesV3"],
+                         "identity_name")
 
 
 class FakeChain:
@@ -183,7 +230,8 @@ class FakeChain:
         return {"ok": False, "error": "unexpected method %s" % method}
 
 
-def tables(burn=None, network_n=None, incentive=None, collateral=None):
+def tables(burn=None, network_n=None, incentive=None, collateral=None,
+           identity=None):
     return {
         "MinerBurned": burn if burn is not None else {
             1: u96f32_hex(0.3456), 8: u96f32_hex(0.0)},
@@ -192,6 +240,9 @@ def tables(burn=None, network_n=None, incentive=None, collateral=None):
         "Incentive": incentive if incentive is not None else {
             1: vec_u16_hex([100, 0, 50, 0]), 8: vec_u16_hex([1, 2])},
         "CollateralLockShare": collateral if collateral is not None else {},
+        "SubnetIdentitiesV3": identity if identity is not None else {
+            1: identity_hex("Apex", "https://github.com/macrocosm-os/apex"),
+            8: identity_hex("deprecated", "")},
     }
 
 
@@ -207,6 +258,8 @@ class ReadSubnetMaps(unittest.TestCase):
                                places=6)
         self.assertEqual(out["values"]["SubnetworkN"][1], 256)
         self.assertEqual(out["values"]["Incentive"][1], [100, 0, 50, 0])
+        self.assertEqual(out["values"]["SubnetIdentitiesV3"][1], "Apex")
+        self.assertEqual(out["values"]["SubnetIdentitiesV3"][8], "deprecated")
 
     def test_every_value_shares_one_block(self):
         rpc = FakeChain(tables())

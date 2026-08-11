@@ -79,9 +79,19 @@ CONF_INCOMPLETE = "incomplete-inputs"
 
 # Cut ladder rungs, in application order.
 CUT_GATE = "gate-disabled"
+CUT_IDENTITY = "identity-placeholder"
 CUT_BURN = "owner-capture"
 CUT_FEASIBILITY = "not-minable"
 CUT_HARDWARE = "above-budget-band"
+
+# On-chain identity states. `unread` is the fail-open value: it means the
+# whole SubnetIdentitiesV3 map was unavailable, which must NOT be read as
+# every subnet being unnamed. `absent` means the map read fine and this
+# netuid has no entry, which is a real finding about that subnet.
+IDENT_NAMED = "named"
+IDENT_PLACEHOLDER = "placeholder"
+IDENT_ABSENT = "absent"
+IDENT_UNREAD = "unread"
 
 # Feasibility verdicts. A closed set, not free strings: `unknown` is a real
 # value and is never rendered as feasible.
@@ -116,6 +126,8 @@ CREATE TABLE IF NOT EXISTS mine_econ (
     haircut_pct REAL,
     reg_cost_tao REAL,
     collateral_lock_pct REAL,
+    subnet_name TEXT,
+    identity_state TEXT,
     rent_band TEXT,
     rent_tao_month REAL,
     gross_tao_month REAL,
@@ -187,6 +199,15 @@ DEFAULT_MINING_CFG: Dict[str, Any] = {
     # None means no band chosen yet (D2 deferred): the hardware rung does not
     # cut, and rent is reported as unknown rather than assumed zero.
     "budget_band": None,
+    # On-chain SubnetIdentitiesV3 names that mean the slot is not a going
+    # concern. Matched against the name's normalised FIRST TOKEN, so
+    # `pending...`, `Parked` and `wait (reproduce paper)` all resolve without
+    # needing an entry each. Observed on live Finney 2026-08-12: deprecated
+    # (3, 39, 81), unknown (16, 42), pending (94), parked (73), wait (47).
+    # Owner-written free text, so this list is expected to grow; it is data
+    # to match against, never anything that is executed or followed.
+    "identity_placeholders": ["deprecated", "unknown", "pending", "parked",
+                              "wait", "tbd", "none", "test", "placeholder"],
     "retention_days": 90,
     "board_limit": 10,
     # Feasibility scan surface.
@@ -217,9 +238,25 @@ def _utc_now() -> str:
     return datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
 
 
+# Columns added to mine_econ after the table first shipped. CREATE TABLE IF
+# NOT EXISTS is a no-op against a store that already has the old shape, so
+# a deployed Pi would keep the old columns and every insert would fail.
+_MINE_ECON_ADDED: Tuple[Tuple[str, str], ...] = (
+    ("subnet_name", "TEXT"),
+    ("identity_state", "TEXT"),
+)
+
+
 def ensure_schema(connection: sqlite3.Connection) -> None:
-    """Create the mining tables if absent. Owns only its own tables."""
+    """Create the mining tables if absent, and add columns a deployed store
+    predates. Owns only its own tables; additive only, never destructive."""
     connection.executescript(SCHEMA_SQL)
+    have = {row[1] for row in connection.execute(
+        "PRAGMA table_info(mine_econ)")}
+    for column, decl in _MINE_ECON_ADDED:
+        if column not in have:
+            connection.execute(
+                "ALTER TABLE mine_econ ADD COLUMN %s %s" % (column, decl))
 
 
 def state_get(connection: sqlite3.Connection, key: str) -> Optional[str]:
@@ -353,6 +390,34 @@ def _rent_for_band(cfg: Dict[str, Any]) -> Tuple[Optional[str],
     return band, float(spec.get("rent_tao_month") or 0.0)
 
 
+def _first_token(name: str) -> str:
+    """Normalise a free-text subnet name to its first word, lowercased and
+    stripped of surrounding punctuation, so `pending...` and
+    `wait (reproduce paper)` reduce to `pending` and `wait`."""
+    cleaned = re.split(r"[^0-9A-Za-z]+", name.strip().lower())
+    return next((part for part in cleaned if part), "")
+
+
+def classify_identity(cfg: Dict[str, Any], name: Optional[str],
+                      seen: bool) -> Tuple[str, Optional[str]]:
+    """Classify one subnet's on-chain identity. Returns (state, name).
+
+    `seen` is whether the SubnetIdentitiesV3 map itself was readable. When it
+    was not, every subnet is `unread` and the rung stays inert: a renamed or
+    unreachable storage item must never cut the whole board.
+    """
+    if not seen:
+        return IDENT_UNREAD, name
+    if name is None:
+        return IDENT_ABSENT, None
+    token = _first_token(name)
+    placeholders = {str(p).strip().lower()
+                    for p in (cfg.get("identity_placeholders") or [])}
+    if not token or token in placeholders:
+        return IDENT_PLACEHOLDER, name
+    return IDENT_NAMED, name
+
+
 def classify_cut(cfg: Dict[str, Any], row: Dict[str, Any],
                  feasibility: Optional[Dict[str, Any]]
                  ) -> Tuple[Optional[str], Optional[str]]:
@@ -366,6 +431,17 @@ def classify_cut(cfg: Dict[str, Any], row: Dict[str, Any],
                 "emission gate disabled: alpha is still distributed to "
                 "miners but no TAO inflow backs it, so the alpha price "
                 "decays and TAO income tends to zero")
+    identity = row.get("identity_state")
+    if identity == IDENT_PLACEHOLDER:
+        return (CUT_IDENTITY,
+                "on-chain subnet_name is %r: the owner has marked the slot "
+                "as not a going concern, so there is nothing to mine into "
+                "regardless of what it still pays"
+                % (row.get("subnet_name") or ""))
+    if identity == IDENT_ABSENT:
+        return (CUT_IDENTITY,
+                "no SubnetIdentitiesV3 entry on chain: the slot has never "
+                "been named by its owner")
     burn = row.get("miner_burn_pct")
     ceiling = float(cfg.get("burn_ceiling_pct", 99.0))
     if burn is not None and burn >= ceiling:
@@ -487,6 +563,11 @@ def run_econ(connection: sqlite3.Connection, config: Dict[str, Any],
 
     subnets = [s for s in panel["values"]["subnets"]
                if s.get("netuid") is not None and s.get("netuid") != 0]
+    # An identity map that enumerated empty is indistinguishable from a
+    # renamed storage item, so it is treated as unread and the rung stays
+    # inert rather than cutting all 128 subnets at once.
+    identities = chain_values.get("SubnetIdentitiesV3") or {}
+    identity_seen = bool(chain_ok and identities)
     band, rent = _rent_for_band(cfg)
     share = float(cfg.get("miner_share", 0.41))
     written = 0
@@ -513,6 +594,7 @@ def run_econ(connection: sqlite3.Connection, config: Dict[str, Any],
             "haircut_pct": None,
             "reg_cost_tao": item.get("registration_cost"),
             "collateral_lock_pct": None,
+            "subnet_name": None, "identity_state": IDENT_UNREAD,
             "rent_band": band, "rent_tao_month": rent,
             "gross_tao_month": None, "net_tao_month": None,
             "baseline_tao_month": None,
@@ -533,6 +615,9 @@ def run_econ(connection: sqlite3.Connection, config: Dict[str, Any],
         if alpha_out is not None and burn is not None:
             row["miner_alpha_day"] = miner_alpha_per_day(
                 float(alpha_out), share, float(burn))
+
+        row["identity_state"], row["subnet_name"] = classify_identity(
+            cfg, identities.get(netuid), identity_seen)
 
         if not chain_ok:
             row["confidence"] = CONF_CHAIN_UNAVAILABLE
@@ -1030,14 +1115,19 @@ def render_html(view: Dict[str, Any]) -> str:
         headline = entry.get("net_tao_month")
         if headline is None:
             headline = entry.get("gross_tao_month")
+        name = entry.get("subnet_name")
+        name_cell = (_esc(name) if name else
+                     '<span class="note">%s</span>'
+                     % _esc(entry.get("identity_state") or "unread"))
         rows.append(
-            "<tr><td>%s</td><td class=\"num\">%s</td>"
+            "<tr><td>%s</td><td>%s</td><td class=\"num\">%s</td>"
             "<td class=\"num warn\">%s</td>"
             "<td class=\"num\">%s</td><td class=\"num\">%s</td>"
             "<td class=\"num\">%s</td><td class=\"num\">%s</td>"
             "<td class=\"num\">%s</td>"
             "<td>%s</td><td><code>%s</code></td><td>%s</td></tr>"
             % (entry.get("netuid"),
+               name_cell,
                _fmt(headline, 4),
                _fmt(entry.get("incumbent_alpha_day"), 1),
                _fmt(entry.get("displacement_rank"), 0),
@@ -1074,7 +1164,8 @@ def render_html(view: Dict[str, Any]) -> str:
         "column is what a current earner actually receives; where that is "
         "far larger, the field is concentrated and entry means displacing "
         "someone, not joining them.</div>"
-        "<table><tr><th>netuid</th><th>entrant TAO/mo</th>"
+        "<table><tr><th>netuid</th><th>on-chain name</th>"
+        "<th>entrant TAO/mo</th>"
         "<th>incumbent &alpha;/day</th><th>enter at rank</th>"
         "<th>alpha price</th>"
         "<th>burn %%</th><th>earners</th><th>top10 %%</th>"
@@ -1087,7 +1178,7 @@ def render_html(view: Dict[str, Any]) -> str:
         % (_CSS,
            _esc(view.get("econ_ts")), _esc(view.get("feasibility_ts")),
            band_note, _esc(view.get("miner_share_source") or ""),
-           "".join(rows) or "<tr><td colspan=\"11\" class=\"note\">"
+           "".join(rows) or "<tr><td colspan=\"12\" class=\"note\">"
                             "no observations yet</td></tr>",
            view.get("counts", {}).get("observed", 0),
            view.get("counts", {}).get("ranked", 0),
