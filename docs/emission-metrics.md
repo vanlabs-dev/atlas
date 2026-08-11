@@ -8,8 +8,28 @@ so it can be re-run. Where a claim was tested on only some subnets, the sample
 is stated.
 
 **Evidence base:** TaoSwap snapshot `2026-08-11T04:30:02Z`, `as_of_block`
-8818814, 129 subnets, plus 30 full `/metagraph/{netuid}/` pulls. Derived during
-the mining-triage exercise; working files under `triage/` (untracked).
+8818814, 129 subnets, plus 30 full `/metagraph/{netuid}/` pulls. Working files
+under `triage/`.
+
+### Scope — read this first
+
+This is a **provider-field reference for TaoSwap consumers**: what the fields
+mean, what they are denominated in, and which of them mislead. It is not the
+mining screen and does not define its metrics.
+
+The screen is specified in
+[`docs/design/2026-08-07-mining-triage-design.md`](design/2026-08-07-mining-triage-design.md)
+and `openspec/changes/mining-triage/`, and it is the authority on ranking,
+entrant income, concentration, and cut rules. It reads **chain storage
+directly** (`SubnetworkN`, `Incentive`, `MinerBurned`, `CollateralLockShare`
+via `livedata/atlas_live.py`), so several traps below — the empty
+`block_at_registration`, the dual-stream `daily_rewards_alpha` — do not apply
+to it. They apply to anything consuming the TaoSwap metagraph endpoint.
+
+Where the two documents overlap, the design doc wins. It verified the emission
+split against `atlas-kb` with a citation and `MinerBurned` against chain
+storage on 127 of 128 subnets; this document verified the same constants
+independently from the API side, and they agree.
 
 ---
 
@@ -108,39 +128,46 @@ happened to sit near a small burn value).
 
 ---
 
-## 4. Deriving what a *new* miner can earn
-
-This is the metric that matters, and it is not `2952 × (1 − burn)`.
-
-`type` is a **validator-permit flag**, not a payment role. Permit-holding UIDs
-mine too, and on many subnets they capture most of the incentive. A new entrant
-without stake joins as `type: "miner"`, so that subset is the correct reference
-class.
+## 4. The miner-accessible pool — and a retracted claim
 
 ```
-accessible_incentive_share = sum(incentive where type == "miner")
-accessible_pool_alpha_day  = 2952 × accessible_incentive_share
-stake_gated_share          = sum(all incentive) − accessible − burn/100
+miner_accessible_alpha_day = 2952 × (1 − emission_miner_burn/100)
 ```
 
-**On 14 of 30 subnets sampled, the accessible share was far below `1 − burn`.**
-Worst observed:
+This is correct, and it matches
+[`docs/design/2026-08-07-mining-triage-design.md`](design/2026-08-07-mining-triage-design.md)
+Stage A. Use it.
 
-| netuid | accessible | stake-gated | accessible pool (α/day) |
-|---|---|---|---|
-| 63 Enigma | 0.0001 | 0.9998 | **0.4** across 244 slots |
-| 48 Quantum Compute | 0.0000 | 0.9999 | 0.0 — zero earning miners |
-| 126 Poker44 | 0.0000 | 0.6971 | 0.0 — zero earning miners |
-| 15 ORO | 0.0600 | 0.9394 | 177.1 |
-| 70 NexisGen | 0.0969 | 0.9031 | 285.9 |
-| 114 SOMA | 0.1000 | 0.9000 | 295.2 |
-| 8 Vanta | 0.2973 | 0.7025 | 877.6 |
+### Retracted: "stake-gating" (was §4, 2026-08-11)
 
-(Against a 2952 α/day ceiling. Alpha figures are structural and hold
-regardless of price; the incentive shares are the underlying measurement.)
+An earlier revision of this document claimed the reachable pool was far
+smaller than `2952 × (1 − burn)` because validator-permit UIDs "capture" most
+incentive, and defined an `accessible_incentive_share` over `type == "miner"`
+rows only. **That claim was wrong and is withdrawn.**
 
-Using `2952 × (1 − burn)` on netuid 63 overstates the reachable pool by
-**four orders of magnitude**.
+Incentive is awarded by validator weights on miner performance. It is **not
+gated by stake or by holding a validator permit.** Evidence from the same
+snapshot:
+
+- The dominant incentive holders on netuids 63, 15, and 8 are `type:
+  "validator"` but carry `vtrust: 0` and `dividends: 0` — they are *mining*,
+  not validating. The permit is incidental to how they earn.
+- On netuid 8, uid 96 holds `stake: 0.00` and still earns 2.69% of incentive,
+  and uid 210 holds 15 TAO and earns 18.7%. Zero stake is no bar.
+
+So `type` separates *who currently wins* from *who could*. What the retracted
+metric actually measured is *concentration among well-capitalised miners* —
+a real observation, but one already carried by `top1_share_pct` and
+`top10_share_pct`, and it does not lower the pool a new entrant competes for.
+
+The correct entrant model is the spec's, not a share-of-pool filter: report an
+**entrant figure under a stated parity assumption** (pool shared among
+`earner_count + 1`), alongside what a current earner receives, plus the
+displacement rank. See
+`openspec/changes/mining-triage/specs/mining-triage/spec.md`.
+
+The lesson worth keeping: **a provider's role label is not a payment rule.**
+Verify what a field gates before filtering on it.
 
 ---
 
@@ -237,8 +264,7 @@ For miner viability, these held up under adversarial re-checking:
 |---|---|
 | `miner_slots` | count of `type == "miner"` |
 | `earning` | miner slots with `daily_rewards_usd > 0` |
-| `earn_rate_pct` | `earning ÷ miner_slots` — the single best viability signal |
-| `accessible_inc_share` | §4 — how much of the pool a stake-less entrant can reach |
+| `earn_rate_pct` | `earning ÷ miner_slots` — but see §4; the entrant figure belongs to the screen, not here |
 | `median_alpha_day` / `p25` | `2952 × incentive`, or measured from `daily_rewards_alpha` on single-stream UIDs |
 | `top10_share_pct` | concentration; >90% means the median is meaningless |
 | `immunity_period_blocks` | §5.1 — grace window before prunable; weigh against setup time |
@@ -278,10 +304,10 @@ Metagraph: 94 UIDs — 85 miner / 8 validator / 1 owner. So 20 of 85 miner slots
 earn (23.5%); 65 registered miners earn nothing. The UI shows neither the slot
 count nor the zero-earners.
 
-`accessible_inc_share` 0.9998 → accessible pool **2951.5 α/day** (nothing
-stake-gated). But `top10_share` is 92%: the top UID holds incentive 0.899 =
-**2654 α/day**, against a median of **9.05 α/day**. One UID takes 90% of the
-subnet's entire miner emission.
+Burn is 0, so the miner-accessible pool is the full **2952 α/day**. But
+`top10_share` is 92%: the top UID holds incentive 0.899 = **2654 α/day**,
+against a median of **9.05 α/day**. One UID takes 90% of the subnet's entire
+miner emission — which is a displacement problem, not a pool-size one (§4).
 
 Payback at the median, price-free in structure:
 `0.99 TAO ÷ (9.05 α/day × price)` ≈ **1.8 days** at the snapshot price —

@@ -50,9 +50,9 @@ for nid in NETS:
         'burn_pct': round(burn * 100, 2),
         'miner_slots': len(mslots), 'earning': len(alpha),
         'earn_rate_pct': round(len(alpha) / len(mslots) * 100, 1) if mslots else 0,
-        'accessible_inc_share': round(inc_m, 4),
-        'stake_gated_share': round(gated, 4),
-        'accessible_pool_alpha_day': round(MINER_POOL_ALPHA_DAY * inc_m, 2),
+        'miner_accessible_alpha_day': round(MINER_POOL_ALPHA_DAY * (1 - burn), 2),
+        'inc_share_non_permit': round(inc_m, 4),
+        'inc_share_permit_holders': round(gated, 4),
         'top_alpha_day': round(alpha[-1], 4) if alpha else 0.0,
         'p75_alpha_day': q(0.75),
         'median_alpha_day': round(med, 4),
@@ -78,10 +78,10 @@ with io.open('miner_economics.csv', 'w', encoding='utf-8', newline='') as f:
     w = csv.DictWriter(f, fieldnames=list(rows[0].keys())); w.writeheader(); w.writerows(rows)
 
 print('%-4s %-15s %5s %5s %6s %8s %8s %11s %9s %8s %7s %9s' % (
-    'uid','name','slot','earn','earn%','accInc','gated','accPool_a/d','med_a/d','p25_a/d','top10%','immun_d'))
+    'uid','name','slot','earn','earn%','nonPermit','permit','minerPool_a/d','med_a/d','p25_a/d','top10%','immun_d'))
 for r in rows:
     print('%-4s %-15s %5s %5s %6.1f %8.4f %8.4f %11.2f %9.4f %8.4f %7.1f %9.2f' % (
         r['netuid'], str(r['name'])[:15], r['miner_slots'], r['earning'], r['earn_rate_pct'],
-        r['accessible_inc_share'], r['stake_gated_share'], r['accessible_pool_alpha_day'],
+        r['inc_share_non_permit'], r['inc_share_permit_holders'], r['miner_accessible_alpha_day'],
         r['median_alpha_day'], r['p25_alpha_day'], r['top10_share_pct'],
         r['immunity_days']))
