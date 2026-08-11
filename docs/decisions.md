@@ -147,6 +147,16 @@ because each one corrects a belief that looked right and was not.
   (`identity-placeholder`), placed after the gate and before burn, matching
   the name's normalised **first token** so `pending...` and
   `wait (reproduce paper)` resolve without an entry each.
+- **The hasher is a property of the item, not of the pallet** (2026-08-12,
+  caught in deployment). The four mining maps are Identity-hashed, so the
+  key tail is a bare u16 — and `SubnetIdentitiesV3` on the *same pallet* is
+  Blake2_128Concat, an 18-byte tail. Enumerating it through the Identity
+  assumption fail-closed the whole chain read, and one live pass recorded
+  128 rows at `chain-unavailable` before the fix. The enumerator now derives
+  the layout from the observed tail and **verifies** it by recomputing the
+  hash of the recovered netuid (twox64 via the existing xxh64, blake2_128
+  via hashlib), so a tail that merely happens to be the right length cannot
+  pass. Third instance of the same lesson: read the layout, never assume it.
 - **Curated registries disagree with the chain, and the chain wins.** The
   metagraphed registry reports 3 as "Templar", 39 "Basilica", 81 "Grail",
   94 "Bitsota", 73 "MetaHash" — friendly names for slots whose owners have

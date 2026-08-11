@@ -185,6 +185,58 @@ class Codecs(unittest.TestCase):
                          "identity_name")
 
 
+class KeyLayout(unittest.TestCase):
+    """REGRESSION 2026-08-12: SubnetIdentitiesV3 is Blake2_128Concat while
+    every other map read on the same pallet is Identity. Assuming one hasher
+    per pallet fail-closed the entire chain read, which cost the board a
+    pass."""
+
+    def test_identity_tail_is_the_bare_netuid(self):
+        self.assertEqual(al._netuid_from_tail((19).to_bytes(2, "little")), 19)
+
+    def test_blake2_concat_tail_is_recovered(self):
+        key = al.storage_key_blake2_concat_u16(
+            al.SUBTENSOR_PALLET, "SubnetIdentitiesV3", 44)
+        prefix = al.storage_prefix(al.SUBTENSOR_PALLET, "SubnetIdentitiesV3")
+        tail = bytes.fromhex(key[len(prefix):])
+        self.assertEqual(len(tail), 18)
+        self.assertEqual(al._netuid_from_tail(tail), 44)
+
+    def test_twox64_concat_tail_is_recovered(self):
+        raw = (7).to_bytes(2, "little")
+        tail = al.xxh64(raw, 0).to_bytes(8, "little") + raw
+        self.assertEqual(al._netuid_from_tail(tail), 7)
+
+    def test_a_tail_of_the_right_length_but_wrong_hash_is_rejected(self):
+        raw = (7).to_bytes(2, "little")
+        with self.assertRaises(al.FatalLiveError):
+            al._netuid_from_tail(b"\x00" * 16 + raw)
+
+    def test_an_unrecognised_tail_length_is_rejected(self):
+        with self.assertRaises(al.FatalLiveError):
+            al._netuid_from_tail(b"\x01" * 7)
+
+    def test_concat_map_enumerates_and_decodes_end_to_end(self):
+        rpc = FakeChain(tables())
+        out = al.read_subnet_maps(CONFIG, rpc=rpc)
+        self.assertTrue(out["ok"], out.get("error"))
+        self.assertEqual(out["values"]["SubnetIdentitiesV3"][1], "Apex")
+
+
+# The hasher is a property of the item, not of the pallet: the mining maps
+# are Identity while SubnetIdentitiesV3 is Blake2_128Concat. The fake serves
+# each in its real layout, because serving them all as Identity is exactly
+# the assumption that broke the live read on 2026-08-12.
+_CONCAT_ITEMS = {"SubnetIdentitiesV3"}
+
+
+def _key_for(item, netuid):
+    if item in _CONCAT_ITEMS:
+        return al.storage_key_blake2_concat_u16(
+            al.SUBTENSOR_PALLET, item, netuid)
+    return al.storage_key_identity_u16(al.SUBTENSOR_PALLET, item, netuid)
+
+
 class FakeChain:
     """Stub RPC serving derived keys, so the tests exercise the real
     derivation rather than a hand-written key table."""
@@ -213,16 +265,14 @@ class FakeChain:
                 if item_prefix != prefix:
                     continue
                 for netuid in sorted(rows):
-                    keys.append(al.storage_key_identity_u16(
-                        al.SUBTENSOR_PALLET, item, netuid))
+                    keys.append(_key_for(item, netuid))
             return {"ok": True, "result": keys}
         if method == "state_queryStorageAt":
             wanted = set(params[0])
             changes = []
             for item, rows in self.tables.items():
                 for netuid, payload in rows.items():
-                    key = al.storage_key_identity_u16(
-                        al.SUBTENSOR_PALLET, item, netuid)
+                    key = _key_for(item, netuid)
                     if key in wanted:
                         changes.append([key, payload])
             return {"ok": True,
@@ -299,7 +349,10 @@ class ReadSubnetMaps(unittest.TestCase):
 
         out = al.read_subnet_maps(CONFIG, rpc=bad)
         self.assertFalse(out["ok"])
-        self.assertIn("key layout", out["error"])
+        # Padding an Identity key to concat width makes it a concat candidate
+        # whose hash cannot match, so it is refused on the hash rather than
+        # on the length. Either way the read fails closed.
+        self.assertIn("layout", out["error"])
 
     def test_one_bad_payload_does_not_lose_the_others(self):
         broken = {1: u96f32_hex(0.5), 8: "0xdeadbeef", 19: u96f32_hex(0.1)}

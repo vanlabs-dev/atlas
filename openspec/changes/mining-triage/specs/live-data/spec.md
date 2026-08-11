@@ -14,7 +14,12 @@ results that are indistinguishable from an empty map.
 
 Where a map's key layout is not known in advance, the component SHALL
 enumerate the map prefix and derive the key layout from the observed key
-tail rather than assuming a hasher.
+tail rather than assuming a hasher. The hasher SHALL be treated as a
+property of the individual storage item, not of the pallet: items on one
+pallet may use different hashers. Where the observed layout carries a hash
+alongside the key, the component SHALL confirm it by recomputing that hash
+from the recovered key, so that a tail of merely the right length is not
+accepted as a recovered key.
 
 #### Scenario: Derivation reproduces the pinned keys
 
