@@ -7,8 +7,8 @@
 
 ## 2. Alert rendering (atlas_telegram.py + config)
 
-- [ ] 2.1 Add the lexicon and jargon-gloss maps to `telegram/config.json` following the `area_map` / `pallet_map` / `governs` precedent; maps are REQUIRED — a missing or incomplete map fails closed (render refuses), no code defaults
-- [ ] 2.2 Extend the existing render frame (`render_html` / `render_plain`): add the gloss-once helper and the shrink-order protection (expandable shrinks first, body lines drop next, next-action drops last, headline never dropped)
+- [x] 2.1 Add the lexicon and jargon-gloss maps to `telegram/config.json` following the `area_map` / `pallet_map` / `governs` precedent; maps are REQUIRED — a missing or incomplete map fails closed (render refuses), no code defaults
+- [x] 2.2 Extend the existing render frame (`render_html` / `render_plain`): add the gloss-once helper and the shrink-order protection (expandable shrinks first, body lines drop next, next-action drops last, headline never dropped)
 - [ ] 2.3 Re-voice chain-runtime-upgrade: verdict headline, glossed jargon, fact lines unchanged, conditional next-action
 - [ ] 2.4 Re-voice chain-parameter-change (same shape as 2.3)
 - [ ] 2.5 Re-voice gate-crossing (same shape; suppressed events stay recorded-not-delivered)
