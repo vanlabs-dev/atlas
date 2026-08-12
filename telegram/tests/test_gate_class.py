@@ -98,14 +98,16 @@ class GateAdapterTests(unittest.TestCase):
                          "gate-crossing:42:%d" % row_id)
         self.assertEqual(event["event_class"], "gate-crossing")
         text = event["text"]
-        self.assertIn("subnet 42 fell BELOW the bar", text)
-        self.assertIn("share 0.520%", text)
+        self.assertIn("subnet 42 fell below the bar", text)
+        self.assertIn("gated emission collapses toward zero", text)
+        self.assertIn("demand share 0.520%", text)
         self.assertIn("bar 0.930%", text)
-        self.assertIn("shares: TaoSwap panel", text)
+        self.assertIn("demand share: TaoSwap panel", text)
         self.assertIn("bar: chain RPC", text)
+        self.assertIn("next: review your subnet 42 position", text)
         self.assertNotIn("—", text)  # em dash
         self.assertNotIn("–", text)  # en dash
-        self.assertNotIn("DISABLED", text)  # enabled subnet: no note
+        self.assertNotIn("emission is disabled", text)  # enabled: no note
         self.assertIn("<b>", event["html"])
 
     def test_rose_above_and_disabled_note(self):
@@ -114,9 +116,10 @@ class GateAdapterTests(unittest.TestCase):
         events, _wm = tg.gate_crossing_events(self.live_db, None,
                                               self.ctx())
         text = events[0]["text"]
-        self.assertIn("rose ABOVE the bar", text)
+        self.assertIn("rose above the bar", text)
         self.assertIn("amplified emission share", text)
-        self.assertIn("emission is DISABLED", text)
+        self.assertIn("emission is disabled", text)
+        self.assertNotIn("next:", text)  # informational: no action
 
     def test_watermark_excludes_seen_rows(self):
         first = add_crossing(self.live_db, 1)

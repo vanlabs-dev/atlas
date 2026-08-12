@@ -1266,6 +1266,7 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
     spec = ctx.get("spec") or {}
     store: Optional[sqlite3.Connection] = ctx.get("connection")
     max_chars = int(config.get("message_max_chars", 3500))
+    _lexicon, glosses = voice_maps(config)
     cooldown_hours = float(spec.get("cooldown_hours",
                                     DEFAULT_GATE_COOLDOWN_HOURS))
 
@@ -1283,25 +1284,23 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
                           "per-netuid cooldown (%gh)" % cooldown_hours)
             continue
         fell = direction == "fell-below"
-        headline = ("Atlas · EMISSION GATE · subnet %d %s the bar"
-                    % (netuid, "fell BELOW" if fell else "rose ABOVE"))
+        headline = ("Atlas · subnet %d %s the bar · %s"
+                    % (netuid, "fell below" if fell else "rose above",
+                       "gated emission collapses toward zero" if fell else
+                       "earns an amplified emission share"))
         margin_pct = ((share - theta) / theta * 100.0) if theta else 0.0
         lines = [
-            "netuid %d · share %.3f%% · bar %.3f%% · margin %+.1f%%"
+            "subnet %d · demand share %.3f%% · bar %.3f%% · margin %+.1f%%"
             % (netuid, share * 100.0, theta * 100.0, margin_pct),
-            ("below-bar demand · gated emission collapses toward zero"
-             if fell else
-             "above-bar demand · earns an amplified emission share"),
-            "shares: TaoSwap panel · bar: chain RPC · block %s"
-            % (block_number if block_number is not None else "unknown"),
+            "demand share: TaoSwap panel · bar: chain RPC · block %s"
+            % (block_number if block_number is not None else "n/a"),
             "observed: %s" % observed_at,
         ]
         # The bar's selection rule (change: network-drift-443). Never infer
-        # it: a q recorded while rank mode is active is inert.
+        # it: a q recorded while rank mode is active is inert. The gloss
+        # map carries each mode's one-line explanation at first use.
         if bar_mode == "rank":
-            lines.append("bar mode: rank-pinned at N %s · the bar is the "
-                         "Nth largest demand share and moves with the "
-                         "distribution" % bar_rank)
+            lines.append("bar mode: rank-pinned at N %s" % bar_rank)
         elif bar_mode == "q-mass":
             lines.append("bar mode: q-mass at q %s" % bar_q)
         # A rank-pinned bar is itself a demand share, so it moves on its own.
@@ -1315,16 +1314,22 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
             lines.append("bar moved %+.1f%% since the previous poll "
                          "(%.3f%% to %.3f%%)"
                          % (bar_move, prev_theta * 100.0, theta * 100.0))
-            lines.append("attribution: THE BAR MOVED onto this subnet · "
+            lines.append("attribution: the bar moved onto this subnet · "
                          "its demand share did not cross on its own"
                          if crossed_by_bar else
                          "attribution: the subnet's own demand share moved "
                          "across the bar")
+        next_action = None
         if emission_enabled == 0:
-            lines.append("subnet emission is DISABLED · informational · "
+            lines.append("subnet emission is disabled · informational · "
                          "earns zero either way")
-        plain = render_plain(headline, lines, "", None, max_chars)
-        html = render_html(headline, lines, "", None, max_chars)
+        elif fell:
+            next_action = ("next: review your subnet %d position"
+                           % netuid)
+        plain = render_plain(headline, lines, "", None, max_chars,
+                             next_action=next_action, glosses=glosses)
+        html = render_html(headline, lines, "", None, max_chars,
+                           next_action=next_action, glosses=glosses)
         events.append({"event_id": event_id,
                        "event_class": "gate-crossing",
                        "created_at": _utc_now(), "text": plain,
