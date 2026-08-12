@@ -17,6 +17,31 @@
   "message_max_chars": 3500,
   "parse_mode": "HTML",
   "governance_threshold": 425,
+  "voice": {
+    "_comment": "Alert voice maps (change: telegram-voice-overhaul). Canon is telegram/docs/voice.md section 2; a conformance test asserts every entry here exists in canon. Both maps are REQUIRED and fail closed: a missing or malformed map refuses the render, no code defaults. lexicon maps a concept to its one approved word (banned synonyms live in voice.md); gloss maps a jargon term to the one parenthetical gloss attached at first use in a message.",
+    "lexicon": {
+      "subnet identity": "subnet N",
+      "emission-gate bar": "bar",
+      "demand share": "demand share",
+      "crossing": "crossing",
+      "live chain": "live chain",
+      "repository": "repo",
+      "runtime spec": "runtime spec",
+      "emission gate": "emission gate",
+      "conviction-enforcement spec number": "governance spec",
+      "absent value": "n/a",
+      "validated fact": "confirmed",
+      "point-in-time fact": "dated",
+      "unvalidated claim": "not verified"
+    },
+    "gloss": {
+      "rank-pinned": "the bar is the Nth largest demand share and moves with the distribution",
+      "q-mass": "a quantile of the demand-share distribution",
+      "runtime spec": "the chain's runtime code version",
+      "conviction-based": "weighted by how long a position is held",
+      "dTAO": "dynamic TAO, the subnet-token mechanism"
+    }
+  },
   "repository_update": {
     "_comment": "Significance policy. Churn is DENY-BY-DEFAULT: only ranges whose changed paths are provably a subset of churn_dirs (and with no recorded spec_version change) are digested instead of paged; any unknown top-level directory escalates to significant. Digested churn is held durably and rides the next significant alert; the backstop flushes it as a standalone digest after digest_backstop_hours. The DISPLAY of a significant alert is governed separately by three OPTIONAL keys (code defaults apply when absent): area_map ({top-level-dir: \"core\"|\"node\"|\"noise\"} for the signal-vs-noise breakdown; any dir absent from the map is surfaced as a new/unclassified area, never hidden), pallet_map ({pallet-name: domain-label} so a pallets/<name> touch is named and interpreted), and light_touch_ratio (0..1, default 0.15; when core-protocol line churn is below this share of total the verdict reads 'large sync, light protocol touch'). These affect wording only, never paging.",
     "protocol_dirs": ["pallets", "runtime", "precompiles", "common"],
@@ -35,8 +60,8 @@
       "source_db": "var/livedata/livedata.db",
       "governs": {
         "EmissionBarRank": "emission gate bar selection: N > 0 pins the bar to the Nth largest demand share, N = 0 falls back to the q-mass quantile",
-        "EmissionBarQuantile": "q-mass bar threshold, applied only when the bar rank is 0",
-        "EmissionGateExponent": "Hill gate sharpness: how hard emission collapses below the bar",
+        "EmissionBarQuantile": "q-mass bar value, applied only when the bar rank is 0",
+        "EmissionGateExponent": "gate sharpness: how hard emission collapses below the bar",
         "RootWeightSettingEnabled": "Root Reborn basket curation master switch: while false every fund runs the null strategy and root dividends accumulate in place"
       }
     },

@@ -33,6 +33,31 @@ def make_config(tmp, **over):
         "message_max_chars": 3500,
         "parse_mode": "HTML",
         "governance_threshold": 425,
+        "voice": {
+            "lexicon": {
+                "subnet identity": "subnet N",
+                "emission-gate bar": "bar",
+                "demand share": "demand share",
+                "crossing": "crossing",
+                "live chain": "live chain",
+                "repository": "repo",
+                "runtime spec": "runtime spec",
+                "emission gate": "emission gate",
+                "conviction-enforcement spec number": "governance spec",
+                "absent value": "n/a",
+                "validated fact": "confirmed",
+                "point-in-time fact": "dated",
+                "unvalidated claim": "not verified",
+            },
+            "gloss": {
+                "rank-pinned": "the bar is the Nth largest demand share "
+                               "and moves with the distribution",
+                "q-mass": "a quantile of the demand-share distribution",
+                "runtime spec": "the chain's runtime code version",
+                "conviction-based": "weighted by how long a position is held",
+                "dTAO": "dynamic TAO, the subnet-token mechanism",
+            },
+        },
         "repository_update": {
             "protocol_dirs": ["pallets", "runtime", "precompiles", "common"],
             "churn_dirs": [".github", "docs", "website", "vendor", "sdk"],

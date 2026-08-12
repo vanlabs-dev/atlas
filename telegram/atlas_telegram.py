@@ -227,10 +227,34 @@ def load_config(path: str = CONFIG_FILE) -> Dict[str, Any]:
     except (OSError, ValueError) as exc:
         raise FatalTelegramError("cannot load config %s: %s" % (path, exc))
     for key in ("credential_env_files", "bot_token_env", "alert_chat_id_env",
-                "api_base", "db", "retry", "classes"):
+                "api_base", "db", "retry", "classes", "voice"):
         if key not in config:
             raise FatalTelegramError("config missing %r" % key)
+    voice_maps(config)
     return config
+
+
+def voice_maps(config: Dict[str, Any]) -> Tuple[Dict[str, str],
+                                                Dict[str, str]]:
+    """The REQUIRED voice maps (change: telegram-voice-overhaul): lexicon
+    (concept -> the one approved word) and gloss (jargon term -> its one
+    first-use parenthetical gloss), canon telegram/docs/voice.md section 2.
+    Fail closed: a missing or malformed map refuses the render rather than
+    falling back to untested code defaults."""
+    voice = config.get("voice")
+    if not isinstance(voice, dict):
+        raise FatalTelegramError(
+            "config missing 'voice' (lexicon + gloss maps are required; "
+            "canon: telegram/docs/voice.md)")
+    lexicon, gloss = voice.get("lexicon"), voice.get("gloss")
+    for name, mapping in (("voice.lexicon", lexicon),
+                          ("voice.gloss", gloss)):
+        if (not isinstance(mapping, dict) or not mapping
+                or not all(isinstance(k, str) and isinstance(v, str)
+                           and k and v for k, v in mapping.items())):
+            raise FatalTelegramError(
+                "config %s must be a non-empty string map" % name)
+    return lexicon, gloss
 
 
 def _read_env_file(path: str) -> Dict[str, str]:
