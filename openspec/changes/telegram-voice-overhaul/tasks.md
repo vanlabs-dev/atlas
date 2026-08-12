@@ -27,10 +27,10 @@
 
 ## 4. Device application (operator steps)
 
-- [ ] 4.1 `git pull` on the Pi; run the telegram suite on-device
-- [ ] 4.2 Back up `~/.hermes/SOUL.md` and `~/.hermes/config.yaml` (repo backup naming convention), apply the canonical SOUL.md and the `platform_hints.telegram` append, restart `hermes-gateway` (user unit), then reset the Telegram session (the cached system prompt in the long-lived session would otherwise keep the old voice until a compression rebuild)
-- [ ] 4.3 Read-only verify the applied SOUL.md and platform hint match `voice.md` canon
-- [ ] 4.4 Deliver one `test --class` alert per class; confirm the new layout arrives and each delivery is ledger-recorded
+- [x] 4.1 `git pull` on the Pi; run the telegram suite on-device
+- [x] 4.2 Back up `~/.hermes/SOUL.md` and `~/.hermes/config.yaml` (repo backup naming convention), apply the canonical SOUL.md and the `platform_hints.telegram` append, restart `hermes-gateway` (user unit), then reset the Telegram session (the cached system prompt in the long-lived session would otherwise keep the old voice until a compression rebuild)
+- [x] 4.3 Read-only verify the applied SOUL.md and platform hint match `voice.md` canon
+- [x] 4.4 Deliver one `test --class` alert per class; confirm the new layout arrives and each delivery is ledger-recorded
 
 ## 5. Acceptance
 
