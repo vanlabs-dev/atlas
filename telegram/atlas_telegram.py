@@ -1669,9 +1669,9 @@ def fleet_signal_events(source_db: str, watermark: Optional[str],
 
 _PARAM_MODE_WORDS = {
     ("EmissionBarRank", "to-rank"):
-        "the bar is now RANK-PINNED (q is inert)",
+        "the bar is now rank-pinned · q is inert",
     ("EmissionBarRank", "to-qmass"):
-        "the bar has fallen back to Q-MASS selection",
+        "the bar has fallen back to q-mass selection",
 }
 
 
@@ -1704,6 +1704,7 @@ def chain_parameter_change_events(source_db: str, watermark: Optional[str],
     config = ctx.get("config") or {}
     spec = ctx.get("spec") or {}
     max_chars = int(config.get("message_max_chars", 3500))
+    _lexicon, glosses = voice_maps(config)
     # Operator-supplied text: rendered through the same escaping path as
     # every other interpolated value.
     governs = dict(spec.get("governs") or {})
@@ -1713,12 +1714,12 @@ def chain_parameter_change_events(source_db: str, watermark: Optional[str],
     for (row_id, item, prev_value, new_value, prev_prov, new_prov,
          observed_at, block_number) in rows:
         high = max(high, int(row_id))
-        headline = "Atlas · CHAIN PARAMETER CHANGED · %s" % item
+        headline = "Atlas · chain parameter changed · %s" % item
         lines = [
             "%s: %s to %s" % (item, prev_value, new_value),
-            "provenance: %s to %s" % (prev_prov, new_prov),
+            "source: %s to %s" % (prev_prov, new_prov),
             "reference block: %s · observed: %s"
-            % (block_number if block_number is not None else "unknown",
+            % (block_number if block_number is not None else "n/a",
                observed_at),
         ]
         if item == "EmissionBarRank":
@@ -1728,15 +1729,23 @@ def chain_parameter_change_events(source_db: str, watermark: Optional[str],
                 lines.append(_PARAM_MODE_WORDS[(item, moved)])
         if governs.get(item):
             lines.append("governs: %s" % governs[item])
+        next_action = None
         if item in ("EmissionBarRank", "EmissionBarQuantile",
                     "EmissionGateExponent"):
             # Explains the deliberate silence: the pass that recorded this
             # re-seeded every side rather than paging |M - N| crossings.
-            lines.append("the bar was re-priced for EVERY subnet · "
+            lines.append("the bar was re-priced for every subnet · "
                          "per-subnet crossing alerts were withheld for "
                          "that pass by design")
-        plain = render_plain(headline, lines, "", None, max_chars)
-        html = render_html(headline, lines, "", None, max_chars)
+            next_action = ("next: review your subnet positions against "
+                           "the new gate terms")
+        elif item == "RootWeightSettingEnabled":
+            next_action = ("next: review root basket positions · the "
+                           "curation switch changed")
+        plain = render_plain(headline, lines, "", None, max_chars,
+                             next_action=next_action, glosses=glosses)
+        html = render_html(headline, lines, "", None, max_chars,
+                           next_action=next_action, glosses=glosses)
         events.append({"event_id": "chain-parameter-change:%s" % row_id,
                        "event_class": "chain-parameter-change",
                        "created_at": _utc_now(), "text": plain,
