@@ -794,11 +794,17 @@ class ChainUpgradeTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(wm, "1")
         text = events[0]["text"]
-        self.assertIn("LIVE CHAIN UPGRADED", text)
-        self.assertIn("424 → 425", text)
+        self.assertIn("live chain upgraded", text)
+        self.assertIn("runtime spec (the chain's runtime code version) "
+                      "424 → 425 enacted", text)
         self.assertIn("8612004", text)
-        self.assertIn("ENACTED", text)
-        self.assertIn("LIVE network changed (enacted)", text)
+        self.assertIn("governance spec 425 crossed", text)
+        self.assertIn("conviction-based (weighted by how long a position "
+                      "is held) subnet ownership enforcement is now "
+                      "enacted", text)
+        self.assertIn("the live chain changed (enacted), not the repo",
+                      text)
+        self.assertIn("next: review your subnet positions", text)
         self.assertNotIn("—", text)
         self.assertNotIn("—", events[0]["html"])
         # Watermark advanced -> no re-emit.
@@ -808,9 +814,13 @@ class ChainUpgradeTests(unittest.TestCase):
     def test_non_threshold_upgrade_has_no_enactment_note(self):
         seed_livedata(self.db, live_spec=429,
                       upgrades=[(428, 429, 8700000)])
-        events, _ = tg.chain_runtime_upgrade_events(self.db, None, None)
+        ctx = {"config": self.config,
+               "spec": self.config["classes"]["chain-runtime-upgrade"],
+               "connection": None}
+        events, _ = tg.chain_runtime_upgrade_events(self.db, None, ctx)
         self.assertEqual(len(events), 1)
-        self.assertNotIn("ENACTED", events[0]["text"])
+        self.assertNotIn("governance spec", events[0]["text"])
+        self.assertNotIn("next:", events[0]["text"])
 
     def test_missing_table_is_no_events_not_error(self):
         conn = sqlite3.connect(self.db)
@@ -936,7 +946,7 @@ class EndToEndTests(unittest.TestCase):
             self.assertEqual(
                 summary["classes"]["repository-update"]["delivered"], 2)
             # Priority: the chain upgrade is the FIRST message out.
-            self.assertIn("LIVE+CHAIN+UPGRADED",
+            self.assertIn("live+chain+upgraded",
                           posts[0].replace("%20", "+"))
             # Exactly three messages: no churn ever paged.
             self.assertEqual(len(posts), 3)

@@ -248,7 +248,7 @@ class TestFleetSignalAlerts(FleetSignalBase):
                   netuid=64)
         _summary, sent = self.scan()
         self.assertEqual(len(sent), 2)
-        self.assertIn("LIVE+CHAIN+UPGRADED", sent[0])
+        self.assertIn("live+chain+upgraded", sent[0])
         self.assertIn("incentive-code", sent[1])
 
     def test_fleet_store_is_never_written(self):
