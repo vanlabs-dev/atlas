@@ -1346,7 +1346,7 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
 # ---------------------------------------------------------------------------
 
 DEFAULT_SIGNAL_BACKSTOP_HOURS = 24
-_FLEET_SOURCE_LINE = "source: fleet repositories (code), not the live chain"
+_FLEET_SOURCE_LINE = "source: fleet repos (code), not the live chain"
 
 
 def _pending_signal_rows(store: sqlite3.Connection
@@ -1362,11 +1362,12 @@ def _signal_digest_line(pending: List[Tuple[int, str, str]]) -> str:
 
 
 def _subnet_label(conn: sqlite3.Connection, netuid: Optional[int]) -> str:
-    """`SN<netuid> (owner/repo)` when the fleet registry knows the repo,
-    else just `SN<netuid>`. Repo text is recorded data — display only."""
+    """`subnet <netuid> (owner/repo)` when the fleet registry knows the
+    repo, else just `subnet <netuid>`. Repo text is recorded data —
+    display only."""
     if netuid is None:
         return "fleet"
-    label = "SN%d" % netuid
+    label = "subnet %d" % netuid
     try:
         row = conn.execute("SELECT github_repo FROM slots WHERE netuid = ?",
                            (netuid,)).fetchone()
@@ -1393,26 +1394,28 @@ def _entry_price_line(conn: sqlite3.Connection,
     parts = []
     for netuid, price, status in rows:
         if status in ("recorded", "late") and price is not None:
-            parts.append("SN%d %.6g τ" % (netuid, price))
+            parts.append("subnet %d %.6g τ" % (netuid, price))
     return ("entry price · " + " · ".join(parts[:8])) if parts else None
 
 
 def _build_cluster_event(conn: sqlite3.Connection, row_id: int,
                          payload: Dict[str, Any], created_at: str,
                          dedup_key: str, pending: List[Tuple[int, str, str]],
-                         max_chars: int) -> Dict[str, Any]:
+                         max_chars: int,
+                         glosses: Dict[str, str]) -> Dict[str, Any]:
     term = str(payload.get("term") or "?")[:120]
     members = payload.get("members") or []
     first = payload.get("first_mover") or {}
     prevalence = payload.get("prevalence") or {}
-    headline = "Atlas · subnet fleet · narrative cluster · %s" % term
+    headline = "Atlas · narrative cluster · %s · %d subnets" % (
+        term, len(members))
     lines = [
-        "members · %s · adopted within %sd"
-        % (" · ".join("SN%s" % m.get("netuid") for m in members[:8]),
+        "subnets · %s · adopted within %sd"
+        % (" · ".join(str(m.get("netuid")) for m in members[:8]),
            payload.get("window_days", "?")),
     ]
     if first:
-        lines.append("first mover · SN%s · %s · %s%s%s"
+        lines.append("first mover · subnet %s · %s · %s%s%s"
                      % (first.get("netuid"),
                         str(first.get("adopted_at") or "")[:10],
                         _MONO_OPEN,
@@ -1427,8 +1430,10 @@ def _build_cluster_event(conn: sqlite3.Connection, row_id: int,
         lines.append(price)
     lines.append(_FLEET_SOURCE_LINE)
     trailer = _signal_digest_line(pending) if pending else None
-    plain = render_plain(headline, lines, "", trailer, max_chars)
-    html = render_html(headline, lines, "", trailer, max_chars)
+    plain = render_plain(headline, lines, "", trailer, max_chars,
+                         glosses=glosses)
+    html = render_html(headline, lines, "", trailer, max_chars,
+                       glosses=glosses)
     return {"event_id": "fleet-signal:%s" % dedup_key,
             "event_class": "narrative-cluster", "created_at": created_at,
             "text": plain, "html": html,
@@ -1439,25 +1444,31 @@ def _build_watchlist_event(conn: sqlite3.Connection, row_id: int,
                            payload: Dict[str, Any], created_at: str,
                            dedup_key: str,
                            pending: List[Tuple[int, str, str]],
-                           max_chars: int) -> Dict[str, Any]:
+                           max_chars: int,
+                           glosses: Dict[str, str]) -> Dict[str, Any]:
     term = str(payload.get("term") or "?")[:120]
     netuid = payload.get("netuid")
-    headline = "Atlas · %s · watchlist term · %s" % (
-        _subnet_label(conn, netuid), term)
+    headline = "Atlas · watchlist hit · %s · %s" % (
+        term, _subnet_label(conn, netuid))
     lines = []
     if payload.get("source_file"):
         lines.append("file · %s%s%s" % (
             _MONO_OPEN, str(payload["source_file"])[:120], _MONO_CLOSE))
+    next_action = None
     if payload.get("commit_sha"):
-        lines.append("commit · %s%s%s" % (
-            _MONO_OPEN, str(payload["commit_sha"])[:12], _MONO_CLOSE))
+        commit = str(payload["commit_sha"])[:12]
+        lines.append("commit · %s%s%s" % (_MONO_OPEN, commit, _MONO_CLOSE))
+        next_action = ("next: review commit %s%s%s"
+                       % (_MONO_OPEN, commit, _MONO_CLOSE))
     price = _entry_price_line(conn, row_id)
     if price:
         lines.append(price)
     lines.append(_FLEET_SOURCE_LINE)
     trailer = _signal_digest_line(pending) if pending else None
-    plain = render_plain(headline, lines, "", trailer, max_chars)
-    html = render_html(headline, lines, "", trailer, max_chars)
+    plain = render_plain(headline, lines, "", trailer, max_chars,
+                         next_action=next_action, glosses=glosses)
+    html = render_html(headline, lines, "", trailer, max_chars,
+                       next_action=next_action, glosses=glosses)
     return {"event_id": "fleet-signal:%s" % dedup_key,
             "event_class": "watchlist", "created_at": created_at,
             "text": plain, "html": html,
@@ -1517,7 +1528,8 @@ def _econ_provenance(payload: Dict[str, Any],
 def _build_econ_event(conn: sqlite3.Connection, row_id: int,
                       payload: Dict[str, Any], created_at: str,
                       dedup_key: str, pending: List[Tuple[int, str, str]],
-                      max_chars: int) -> Dict[str, Any]:
+                      max_chars: int,
+                      glosses: Dict[str, str]) -> Dict[str, Any]:
     netuid = payload.get("netuid")
     label = _subnet_label(conn, netuid)
     significance = payload.get("significance")
@@ -1565,8 +1577,10 @@ def _build_econ_event(conn: sqlite3.Connection, row_id: int,
     # style, matching the subtensor repo breakdown).
     expandable = "\n\n".join("\n".join(g) for g in groups if g)
     trailer = _signal_digest_line(pending) if pending else None
-    plain = render_plain(headline, lines, expandable, trailer, max_chars)
-    html = render_html(headline, lines, expandable, trailer, max_chars)
+    plain = render_plain(headline, lines, expandable, trailer, max_chars,
+                         glosses=glosses)
+    html = render_html(headline, lines, expandable, trailer, max_chars,
+                       glosses=glosses)
     return {"event_id": "fleet-signal:%s" % dedup_key,
             "event_class": "econ-code", "created_at": created_at,
             "text": plain, "html": html,
@@ -1574,13 +1588,16 @@ def _build_econ_event(conn: sqlite3.Connection, row_id: int,
 
 
 def _build_signal_digest_event(pending: List[Tuple[int, str, str]],
-                               max_chars: int) -> Dict[str, Any]:
-    headline = "Atlas · subnet fleet · signal digest"
+                               max_chars: int,
+                               glosses: Dict[str, str]) -> Dict[str, Any]:
+    headline = "Atlas · fleet signal digest · %d item(s)" % len(pending)
     lines = ["adoption and dampened-signal notes · no instant alert due",
              _FLEET_SOURCE_LINE]
     body = _signal_digest_line(pending)
-    plain = render_plain(headline, lines, body, None, max_chars)
-    html = render_html(headline, lines, body, None, max_chars)
+    plain = render_plain(headline, lines, body, None, max_chars,
+                         glosses=glosses)
+    html = render_html(headline, lines, body, None, max_chars,
+                       glosses=glosses)
     return {"event_id": "fleet-signal-digest:%d" % pending[-1][0],
             "event_class": "signal-digest", "created_at": _utc_now(),
             "text": plain, "html": html,
@@ -1615,6 +1632,7 @@ def fleet_signal_events(source_db: str, watermark: Optional[str],
         spec = ctx.get("spec") or {}
         store: Optional[sqlite3.Connection] = ctx.get("connection")
         max_chars = int(config.get("message_max_chars", 3500))
+        _lexicon, glosses = voice_maps(config)
 
         events: List[Dict[str, Any]] = []
         high = last_id
@@ -1634,15 +1652,15 @@ def fleet_signal_events(source_db: str, watermark: Optional[str],
             if event_class == "narrative-cluster":
                 events.append(_build_cluster_event(
                     conn, row_id, payload, created_at, dedup_key, pending,
-                    max_chars))
+                    max_chars, glosses))
             elif event_class == "watchlist":
                 events.append(_build_watchlist_event(
                     conn, row_id, payload, created_at, dedup_key, pending,
-                    max_chars))
+                    max_chars, glosses))
             else:  # econ-code (and any future instant class: fail visible)
                 events.append(_build_econ_event(
                     conn, row_id, payload, created_at, dedup_key, pending,
-                    max_chars))
+                    max_chars, glosses))
 
         if not events and store is not None:
             pending = _pending_signal_rows(store)
@@ -1658,8 +1676,8 @@ def fleet_signal_events(source_db: str, watermark: Optional[str],
                 except ValueError:
                     age = backstop + 1
                 if age > backstop:
-                    events.append(_build_signal_digest_event(pending,
-                                                             max_chars))
+                    events.append(_build_signal_digest_event(
+                        pending, max_chars, glosses))
         return events, (str(high) if high else watermark)
     finally:
         conn.close()

@@ -127,7 +127,7 @@ class TestFleetSignalAlerts(FleetSignalBase):
         body = sent[0]
         self.assertIn("narrative+cluster", body)  # urlencoded space
         self.assertIn("vllm-flash", body)
-        self.assertIn("SN64", body)
+        self.assertIn("subnet+64", body)
         self.assertIn("first+mover", body)
         self.assertIn("a1b2c3d", body)
         self.assertIn("3%2F104", body)            # prevalence 3/104
@@ -150,7 +150,7 @@ class TestFleetSignalAlerts(FleetSignalBase):
         summary, sent = self.scan()
         self.assertEqual(summary["classes"]["fleet-signal"]["delivered"], 1)
         self.assertNotIn("entry+price", sent[0])
-        self.assertIn("watchlist+term", sent[0])
+        self.assertIn("watchlist+hit", sent[0])
         self.assertIn("chutes", sent[0])  # repo label from slots, read-only
 
     def test_econ_alert_and_ledger_dedup_by_range(self):
