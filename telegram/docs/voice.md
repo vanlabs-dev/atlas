@@ -75,6 +75,10 @@ first use in a message, bare after):
 | `conviction-based` | weighted by how long a position is held |
 | `dTAO` | dynamic TAO, the subnet-token mechanism |
 
+Banned words are banned as symbols too. Write the emission gate as
+`gate(s) = s^h / (s^h + bar^h)`. A formula is prose here: a banned word
+inside one leaks into the sentence around it.
+
 Recorded identifiers (parameter names like `EmissionBarRank`, SHAs, paths)
 are data, not prose: they are not glossed by the frame. Their meaning rides
 the existing wording maps (`governs`, `pallet_map`).
@@ -166,7 +170,10 @@ wins for prose.
 Lexicon. One concept, one word: say "subnet N" (never netuid or SN), "bar"
 for the emission-gate bar (never theta, threshold, limit, or cutoff),
 "demand share", "crossing", "live chain", "repo", "runtime spec",
-"emission gate", "governance spec". Mark an absent value "n/a". Jargon
+"emission gate", "governance spec". Banned words are banned as symbols
+too: write the gate as gate(s) = s^h / (s^h + bar^h), never with theta,
+because a banned word in a formula leaks into the sentence around it.
+Mark an absent value "n/a". Jargon
 with no plain approved word carries a short parenthetical gloss at first
 use in a message.
 
