@@ -218,9 +218,10 @@ class ChainParameterClassTests(_Base):
                          "chain-parameter-change:%d" % row_id)
         text = event["text"]
         self.assertIn("RootWeightSettingEnabled: false to true", text)
-        self.assertIn("provenance: assumed-default to explicit", text)
+        self.assertIn("source: assumed-default to explicit", text)
         self.assertIn("reference block: 8766216", text)
         self.assertIn("Root Reborn curation switch", text)
+        self.assertIn("next: review root basket positions", text)
         self.assertNotIn("re-priced", text)   # not a bar parameter
         self.assertNotIn(EM_DASH, text)
         self.assertIn("<b>", event["html"])
@@ -237,16 +238,21 @@ class ChainParameterClassTests(_Base):
         add_param_event(self.live_db, "EmissionBarRank", "32", "64")
         events, _wm = self.events()
         text = events[0]["text"]
-        self.assertIn("re-priced for EVERY subnet", text)
+        self.assertIn("re-priced for every subnet", text)
         self.assertIn("withheld", text)
+        self.assertIn("next: review your subnet positions", text)
 
     def test_mode_change_is_stated_in_words(self):
         first = add_param_event(self.live_db, "EmissionBarRank", "32", "0")
         events, _wm = self.events()
-        self.assertIn("fallen back to Q-MASS", events[0]["text"])
+        self.assertIn("fallen back to q-mass (a quantile of the "
+                      "demand-share distribution) selection",
+                      events[0]["text"])
         add_param_event(self.live_db, "EmissionBarRank", "0", "32")
         events, _wm = self.events(watermark=str(first))
-        self.assertIn("now RANK-PINNED", events[0]["text"])
+        self.assertIn("now rank-pinned (the bar is the Nth largest demand "
+                      "share and moves with the distribution)",
+                      events[0]["text"])
 
     def test_governs_text_is_escaped_in_html(self):
         add_param_event(self.live_db, "EmissionBarRank", "32", "64")
