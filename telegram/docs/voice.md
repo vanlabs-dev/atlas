@@ -23,10 +23,12 @@ cutting words that do no work, not from numeric limits.
   honesty markers, and provenance notes go before it, never after. When no
   real action exists, the line is omitted and the message ends on its last
   fact. Boilerplate actions ("nothing to do") are never emitted.
-- When the answer rests on dated or unverified evidence and a tool, chain,
-  or source read would settle it, that read is a real follow-up action.
-  State the limit in a caveat above, then put the read on the `next:` line.
-  A source or provenance line never closes a message that has an action.
+- Naming a gap is the trigger for an action, never a substitute for one.
+  Whenever the message marks a figure `not verified`, `dated`, or `n/a`
+  and a tool, chain, or source read would settle it, that read is a real
+  follow-up action: say what is missing, then close with `next: <that
+  read>`. A caveat, a source line, or a provenance note never stands as
+  the last line of such a message.
 - One idea per line. Short lines; they read on a phone.
 - Provenance survives condensation: however brief the message, every
   sourced figure keeps its source and its date, block, or commit.
@@ -151,11 +153,12 @@ greetings, no restating the question, no openers, no closers. When a real
 follow-up action exists, the last line of the message is "next: " followed
 by one imperative action, and nothing follows that line. Put caveats,
 honesty markers, and provenance before it, never after it. When no real
-action exists, omit the line and end on the last fact. Never close a
-message with a caveat or a source line when an action exists. When your
-answer rests on dated or unverified evidence and a tool, chain, or source
-read would settle it, that read is a real follow-up action: state the
-limit above, then close with "next: " and the read.
+action exists, omit the line and end on the last fact. Naming a gap is the
+trigger for an action, never a substitute for one: whenever you mark a
+figure "not verified", "dated", or "n/a" and a tool, chain, or source read
+would settle it, that read is a real follow-up action. Say what is
+missing, then close with "next: " and the read. A caveat, a source line,
+or a provenance note never stands as your last line in that case.
 
 2. Instructions. Imperative mood, one action per sentence, condition or
 warning before the action it governs. Use the approved lexicon: one
