@@ -726,10 +726,9 @@ def _both_clocks_line(new_spec: Optional[int],
                       live: Optional[Dict[str, Any]]) -> str:
     """The repo-vs-live-chain distinction, stated on every repo alert."""
     if live is None:
-        return ("live chain spec unavailable · cannot compare · "
-                "repository event only")
+        return ("live spec n/a · cannot compare · repo event only")
     if new_spec is None:
-        return ("repo spec unknown · live Finney spec %d · not enacted "
+        return ("repo spec n/a · live Finney spec %d · not enacted "
                 "on chain" % live["spec_version"])
     delta = new_spec - live["spec_version"]
     return ("repo spec %d · live Finney spec %d · Δ%+d · not enacted "
@@ -745,8 +744,8 @@ def _pending_churn_rows(store: sqlite3.Connection
 
 def _digest_line(pending: List[Tuple[int, str, str, str]]) -> str:
     items = " · ".join("%s (%s)" % (row[2], row[1][:12]) for row in pending)
-    return ("digested %d low-signal update(s): %s · no protocol or spec "
-            "change" % (len(pending), items))
+    return ("digested %d low-signal update(s): %s · no protocol or "
+            "runtime spec change" % (len(pending), items))
 
 
 def _area_class(top: str, area_map: Dict[str, str]) -> str:
@@ -858,16 +857,16 @@ def _repo_verdict(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
     # (1) Incomplete record: a truncated file list makes any ratio a lie,
     #     and a rewritten history means the commit set is unknown.
     if rng["non_fast_forward"] or (rng["files_truncated"] and not spec_changed):
-        return "large / incomplete range · review"
+        return "large or incomplete range · review"
     # (2) Runtime spec bump: the strongest signal, outranks file-count mix.
     if spec_changed:
-        return "RUNTIME SPEC BUMP %d→%d" % (prev_spec, new_spec)
+        return "runtime spec bump %d → %d" % (prev_spec, new_spec)
     core = [a for a in areas if a["cls"] == CORE]
     unknown = [a for a in areas if a["cls"] == UNKNOWN]
     node = [a for a in areas if a["cls"] == NODE]
     # (3) Unknown area: exactly what the classifier escalated for — surface.
     if unknown:
-        return "NEW / unmapped area: %s" % " · ".join(
+        return "new unmapped area: %s" % " · ".join(
             a["area"] for a in unknown[:4])
     core_churn = sum(a["adds"] + a["dels"] for a in core)
     # (4) Light touch: core exists but is a small share of LINE churn (not
@@ -877,14 +876,14 @@ def _repo_verdict(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
         total_churn = sum(a["adds"] + a["dels"] for a in areas)
         share = core_churn / total_churn if total_churn else 1.0
         if share < policy["light_touch_ratio"]:
-            return "large sync · LIGHT protocol touch"
+            return "large sync · light protocol touch"
     elif core:
         # Core files changed but no line churn recorded: fall back to file
         # share so a light touch is still recognised.
         core_files = sum(a["files"] for a in core)
         total_files = sum(a["files"] for a in areas) or 1
         if core_files / total_files < policy["light_touch_ratio"]:
-            return "large sync · LIGHT protocol touch"
+            return "large sync · light protocol touch"
     # (5) Core change. The headline stays the short category only; the
     #     pallets touched and their domains are already enumerated in the
     #     body's "pallets ·" line, so repeating them here just makes the
@@ -896,7 +895,7 @@ def _repo_verdict(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
     if node:
         return "node / network change"
     # (7) Neutral fallback.
-    return "repository change"
+    return "repo change"
 
 
 def _breakdown_lines(rng: Dict[str, Any], areas: List[Dict[str, Any]],
@@ -955,7 +954,8 @@ def _breakdown_lines(rng: Dict[str, Any], areas: List[Dict[str, Any]],
 def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
                       pending: List[Tuple[int, str, str, str]],
                       max_chars: int,
-                      policy: Dict[str, Any]) -> Dict[str, Any]:
+                      policy: Dict[str, Any],
+                      glosses: Dict[str, str]) -> Dict[str, Any]:
     new_spec = rng["new_spec"]
     areas = _aggregate_areas(rng["file_entries"], rng["files_truncated"],
                              policy["area_map"])
@@ -967,12 +967,14 @@ def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
            len(rng["commits"]), "+" if rng["commits_truncated"] else "",
            len(rng["files"]), "+" if rng["files_truncated"] else ""),
         _both_clocks_line(new_spec, live),
-        "source: repository (source code), not the live chain",
+        "source: repo (source code), not the live chain",
     ]
     breakdown = redact(_breakdown_lines(rng, areas, policy))
     trailer = _digest_line(pending) if pending else None
-    plain = render_plain(headline, lines, breakdown, trailer, max_chars)
-    html = render_html(headline, lines, breakdown, trailer, max_chars)
+    plain = render_plain(headline, lines, breakdown, trailer, max_chars,
+                         glosses=glosses)
+    html = render_html(headline, lines, breakdown, trailer, max_chars,
+                       glosses=glosses)
     return {"event_id": "repository-update:range:%d" % rng["id"],
             "event_class": "repository-update",
             "created_at": _utc_now(), "text": plain, "html": html,
@@ -980,13 +982,16 @@ def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
 
 
 def _build_digest_event(pending: List[Tuple[int, str, str, str]],
-                        max_chars: int) -> Dict[str, Any]:
+                        max_chars: int,
+                        glosses: Dict[str, str]) -> Dict[str, Any]:
     headline = "Atlas · subtensor repo · low-signal digest"
-    lines = ["no protocol or spec_version change in these ranges",
-             "source: repository (source code), not the live chain"]
+    lines = ["no protocol or runtime spec change in these ranges",
+             "source: repo (source code), not the live chain"]
     body = _digest_line(pending)
-    plain = render_plain(headline, lines, body, None, max_chars)
-    html = render_html(headline, lines, body, None, max_chars)
+    plain = render_plain(headline, lines, body, None, max_chars,
+                         glosses=glosses)
+    html = render_html(headline, lines, body, None, max_chars,
+                       glosses=glosses)
     return {"event_id": "repository-churn-digest:%d" % pending[-1][0],
             "event_class": "repository-update",
             "created_at": _utc_now(), "text": plain, "html": html,
@@ -1019,6 +1024,7 @@ def repository_update_events(source_db: str, watermark: Optional[str],
     store: Optional[sqlite3.Connection] = ctx.get("connection")
     policy = _repo_policy(ctx)
     max_chars = int(config.get("message_max_chars", 3500))
+    _lexicon, glosses = voice_maps(config)
     live = read_live_spec((ctx.get("spec") or {}).get("live_db"))
 
     events: List[Dict[str, Any]] = []
@@ -1052,7 +1058,7 @@ def repository_update_events(source_db: str, watermark: Optional[str],
             tier = SIGNIFICANT  # no durable store → never silently drop
         pending = _pending_churn_rows(store) if store is not None else []
         events.append(_build_repo_event(rng, live, pending, max_chars,
-                                        policy))
+                                        policy, glosses))
 
     if not events and store is not None:
         # Backstop: pending churn must not linger forever waiting for a
@@ -1068,7 +1074,8 @@ def repository_update_events(source_db: str, watermark: Optional[str],
             except ValueError:
                 age = backstop + 1
             if age > backstop:
-                events.append(_build_digest_event(pending, max_chars))
+                events.append(_build_digest_event(pending, max_chars,
+                                                  glosses))
 
     new_wm = str(high) if high is not None else watermark
     return events, new_wm
