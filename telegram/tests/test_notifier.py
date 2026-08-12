@@ -430,14 +430,16 @@ class FourHeadsTests(unittest.TestCase):
         self.assertEqual(wm, "4")
         self.assertEqual(len(events), 2)
         first, second = events
-        self.assertIn("RUNTIME SPEC BUMP 425→428", first["text"])
+        self.assertIn("runtime spec (the chain's runtime code version) "
+                      "bump 425 → 428", first["text"])
         self.assertEqual(first["digest_range_ids"], [])
-        self.assertIn("RUNTIME SPEC BUMP 428→429", second["text"])
+        self.assertIn("runtime spec (the chain's runtime code version) "
+                      "bump 428 → 429", second["text"])
         # The sdk/-only churn (range 2) rides the second significant alert.
         self.assertEqual(second["digest_range_ids"], [2])
         self.assertIn("sdk", second["text"])
         self.assertIn(SHA_2[:12], second["text"])
-        self.assertIn("no protocol or spec change", second["text"])
+        self.assertIn("no protocol or runtime spec change", second["text"])
         # Interpreted breakdown: signal split from noise, pallet named.
         self.assertIn("protocol changed · common 1 files · pallets 1 files "
                       "· runtime 1 files", second["text"])
@@ -470,8 +472,8 @@ class FourHeadsTests(unittest.TestCase):
                       "not enacted on chain", events[0]["text"])
         self.assertIn("repo spec 429 · live Finney spec 424 · Δ+5",
                       events[1]["text"])
-        self.assertIn("source: repository (source code), not the live "
-                      "chain", events[1]["text"])
+        self.assertIn("source: repo (source code), not the live chain",
+                      events[1]["text"])
 
     def test_live_unavailable_degrades_honestly(self):
         os.remove(self.config["classes"]["repository-update"]["live_db"])
@@ -479,8 +481,8 @@ class FourHeadsTests(unittest.TestCase):
             self.config["classes"]["repository-update"]["source_db"], None,
             repo_ctx(self.config, self.store))
         self.assertEqual(len(events), 2)
-        self.assertIn("live chain spec unavailable", events[0]["text"])
-        self.assertIn("repository event only", events[0]["text"])
+        self.assertIn("live spec n/a", events[0]["text"])
+        self.assertIn("repo event only", events[0]["text"])
 
     def test_read_live_spec_resolves_relative_path_from_any_cwd(self):
         """systemd oneshot has no WorkingDirectory; config uses repo-relative
@@ -578,7 +580,7 @@ class InterpretiveBreakdownTests(unittest.TestCase):
         ], ["feat(subtensor): guard weights", "ci: cache"])
         seed_livedata(self.live)
         event = self.only_event()
-        self.assertIn("LIGHT protocol touch", event["text"])
+        self.assertIn("light protocol touch", event["text"])
         self.assertIn("protocol changed · pallets 1 files +50/-10",
                       event["text"])
         self.assertIn("housekeeping ·", event["text"])
@@ -592,7 +594,8 @@ class InterpretiveBreakdownTests(unittest.TestCase):
         ], ["chore: bump spec_version to 430"], prev_spec=429, new_spec=430)
         seed_livedata(self.live, live_spec=424)
         event = self.only_event()
-        self.assertIn("subtensor repo · RUNTIME SPEC BUMP 429→430",
+        self.assertIn("subtensor repo · runtime spec (the chain's "
+                      "runtime code version) bump 429 → 430",
                       event["text"])
         self.assertIn("repo spec 430 · live Finney spec 424 · Δ+6",
                       event["text"])
@@ -644,7 +647,7 @@ class InterpretiveBreakdownTests(unittest.TestCase):
             ["feat: new consensus tree"])
         seed_livedata(self.live)
         text = self.only_event()["text"]
-        self.assertIn("subtensor repo · NEW / unmapped area: consensus-v2",
+        self.assertIn("subtensor repo · new unmapped area: consensus-v2",
                       text)
         self.assertIn("NEW / unclassified area · consensus-v2 1 files +10/-2",
                       text)
@@ -660,7 +663,7 @@ class InterpretiveBreakdownTests(unittest.TestCase):
              "deletions": 1}], ["feat(subtensor): x"], truncated=True)
         seed_livedata(self.live)
         text = self.only_event()["text"]
-        self.assertIn("large / incomplete range · review", text)
+        self.assertIn("large or incomplete range · review", text)
         self.assertIn("pallets 1 files +5/-1 (partial)", text)
         self.assertIn("counts are a lower bound · change record incomplete",
                       text)
@@ -694,7 +697,7 @@ class InterpretiveBreakdownTests(unittest.TestCase):
         text = self.only_event()["text"]
         self.assertIn("subtensor repo · core protocol change", text)
         self.assertIn("pallets · subtensor (staking/emissions/weights)", text)
-        self.assertNotIn("LIGHT protocol touch", text)
+        self.assertNotIn("light protocol touch", text)
         # compact k-suffix on core line churn (5000 -> 5k, 1000 -> 1k)
         self.assertIn("protocol changed · pallets 1 files +5k/-1k", text)
 
@@ -759,7 +762,7 @@ class WatermarkMigrationTests(unittest.TestCase):
             self.db, SHA_2, repo_ctx(self.config, self.store))
         self.assertEqual(wm, "4")
         self.assertEqual(len(events), 1)  # range 3 significant, range 4 churn
-        self.assertIn("428→429", events[0]["text"])
+        self.assertIn("428 → 429", events[0]["text"])
 
     def test_unknown_sha_reseeds_to_max_without_replay(self):
         events, wm = tg.repository_update_events(
