@@ -442,26 +442,81 @@ def _strip_mono(text: str) -> str:
             .replace(_BOLD_OPEN, "").replace(_BOLD_CLOSE, ""))
 
 
+def _gloss_message(headline: str, lines: List[str], expandable: str,
+                   trailer: Optional[str], next_action: Optional[str],
+                   glosses: Dict[str, str]
+                   ) -> Tuple[str, List[str], str, Optional[str],
+                              Optional[str]]:
+    """Attach ' (gloss)' to the FIRST use of each glossed term across the
+    message, in render order (headline -> lines -> expandable -> trailer ->
+    next-action); later uses in the same message stay bare (voice canon
+    section 2). A term abutting a mono sentinel keeps the gloss OUTSIDE the
+    code span. Matches on word boundaries, case-insensitive, and never
+    inside a hyphenated compound."""
+    remaining = dict(glosses)
+    parts: List[Any] = [headline, list(lines), expandable, trailer,
+                        next_action]
+    for index, part in enumerate(parts):
+        is_scalar = not isinstance(part, list)
+        texts = [part] if is_scalar else part
+        for term in list(remaining):
+            pattern = re.compile(r"(?<![\w-])" + re.escape(term)
+                                 + r"(?![\w-])", re.IGNORECASE)
+            for pos, text in enumerate(texts):
+                if not text:
+                    continue
+                match = pattern.search(text)
+                if match is None:
+                    continue
+                insert_at = match.end()
+                if text[insert_at:insert_at + 1] == _MONO_CLOSE:
+                    insert_at += 1
+                gloss = " (" + _typography(remaining.pop(term)) + ")"
+                texts[pos] = text[:insert_at] + gloss + text[insert_at:]
+                break
+        if is_scalar:
+            parts[index] = texts[0]
+    return (parts[0], parts[1], parts[2], parts[3], parts[4])
+
+
 def render_html(headline: str, lines: List[str], expandable: str,
-                trailer: Optional[str], max_chars: int) -> str:
+                trailer: Optional[str], max_chars: int,
+                next_action: Optional[str] = None,
+                glosses: Optional[Dict[str, str]] = None) -> str:
     """Compose the supported-tag HTML body, shrinking the expandable
-    content (never the markup) until the result fits max_chars."""
+    content (never the markup) until the result fits max_chars.
+
+    Shrink order protects the verdict-led layout (voice canon): the
+    expandable absorbs shrinkage first, the trailer drops next, body fact
+    lines drop before the next-action line, and the headline is never
+    dropped. Glosses re-apply from the unglossed base each pass so a
+    dropped line never strands a later use unglossed."""
     headline = _strip_mono(_typography(headline))
     lines = [_typography(line) for line in lines]
     expandable = _strip_mono(_typography(expandable))
-    trailer = _strip_mono(_typography(trailer)) if trailer else trailer
-    for _ in range(4):
-        parts = ["<b>%s</b>" % html_escape(headline)]
+    trailer = _strip_mono(_typography(trailer)) if trailer else None
+    next_action = (_strip_mono(_typography(next_action))
+                   if next_action else None)
+    while True:
+        rendered = _gloss_message(headline, lines, expandable, trailer,
+                                  next_action, glosses) if glosses else (
+            headline, lines, expandable, trailer, next_action)
+        r_head, r_lines, r_exp, r_trailer, r_next = rendered
+        parts = ["<b>%s</b>" % html_escape(r_head)]
         parts.extend(html_escape(line)
                      .replace(_MONO_OPEN, "<code>")
                      .replace(_MONO_CLOSE, "</code>")
                      .replace(_BOLD_OPEN, "<b>")
-                     .replace(_BOLD_CLOSE, "</b>") for line in lines)
-        if expandable:
+                     .replace(_BOLD_CLOSE, "</b>") for line in r_lines)
+        if r_exp:
             parts.append("<blockquote expandable>%s</blockquote>"
-                         % html_escape(expandable))
-        if trailer:
-            parts.append("<i>%s</i>" % html_escape(trailer))
+                         % html_escape(r_exp))
+        if r_trailer:
+            parts.append("<i>%s</i>" % html_escape(r_trailer))
+        if r_next:
+            parts.append(html_escape(r_next)
+                         .replace(_MONO_OPEN, "<code>")
+                         .replace(_MONO_CLOSE, "</code>"))
         body = "\n".join(parts)
         if len(body) <= max_chars:
             return body
@@ -471,18 +526,30 @@ def render_html(headline: str, lines: List[str], expandable: str,
                                          - overshoot - 20)] + "…"
         elif trailer:
             trailer = None
+        elif lines:
+            lines = lines[:-1]
+        elif next_action:
+            next_action = None
         else:
-            lines = lines[:-1] if lines else []
-    return body[:0] + "<b>%s</b>" % html_escape(headline[:max_chars - 7])
+            break  # headline alone remains: never dropped
+    return "<b>%s</b>" % html_escape(headline[:max_chars - 7])
 
 
 def render_plain(headline: str, lines: List[str], expandable: str,
-                 trailer: Optional[str], max_chars: int) -> str:
+                 trailer: Optional[str], max_chars: int,
+                 next_action: Optional[str] = None,
+                 glosses: Optional[Dict[str, str]] = None) -> str:
+    if glosses:
+        headline, lines, expandable, trailer, next_action = _gloss_message(
+            headline, list(lines), expandable, trailer, next_action,
+            glosses)
     parts = [headline] + list(lines)
     if expandable:
         parts.append(expandable)
     if trailer:
         parts.append(trailer)
+    if next_action:
+        parts.append(next_action)
     return _strip_mono(_typography("\n".join(parts)))[:max_chars]
 
 
