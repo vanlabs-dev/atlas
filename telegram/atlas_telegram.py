@@ -1203,22 +1203,45 @@ def knowledge_ingestion_events(source_db: str, watermark: Optional[str],
             "SELECT run_id, intake_date, coverage_date FROM intake_runs "
             "WHERE run_id > ? ORDER BY run_id ASC LIMIT 50",
             (watermark or "",)).fetchall()
-        events: List[Dict[str, str]] = []
-        high = watermark
-        for rid, intake_date, coverage in rows:
-            high = rid
-            staged = conn.execute(
+        staged_counts = {}
+        for rid, _intake_date, _coverage_date in rows:
+            staged_counts[rid] = conn.execute(
                 "SELECT COUNT(*) FROM units WHERE run_id = ? AND active = 0",
                 (rid,)).fetchone()[0]
-            text = ("Atlas • knowledge ingestion complete — review needed\n"
-                    "run: %s\ningested: %s\ncoverage: %s\nunits staged: %s"
-                    % (rid, intake_date, coverage, staged))
-            events.append({"event_id": "knowledge-ingestion:%s" % rid,
-                           "event_class": "knowledge-ingestion",
-                           "created_at": _utc_now(), "text": text})
-        return events, high
     finally:
         conn.close()
+
+    config = (ctx or {}).get("config") or {}
+    max_chars = int(config.get("message_max_chars", 3500))
+    _lexicon, glosses = voice_maps(config)
+    events: List[Dict[str, Any]] = []
+    high = watermark
+    for rid, intake_date, coverage in rows:
+        high = rid
+        staged = staged_counts[rid]
+        headline = ("Atlas · knowledge ingestion complete · %d units staged"
+                    % staged)
+        lines = [
+            "run: %s" % rid,
+            "ingested: %s · coverage: %s" % (intake_date, coverage),
+            "source: knowledge intake store",
+        ]
+        next_action = None
+        if staged > 0:
+            lines.append("staged units are not active until reviewed and "
+                         "activated")
+            next_action = ("next: review the staged units, then run "
+                           "%sactivate --run %s%s"
+                           % (_MONO_OPEN, rid, _MONO_CLOSE))
+        plain = render_plain(headline, lines, "", None, max_chars,
+                             next_action=next_action, glosses=glosses)
+        html = render_html(headline, lines, "", None, max_chars,
+                           next_action=next_action, glosses=glosses)
+        events.append({"event_id": "knowledge-ingestion:%s" % rid,
+                       "event_class": "knowledge-ingestion",
+                       "created_at": _utc_now(), "text": plain,
+                       "html": html})
+    return events, high
 
 
 DEFAULT_GATE_COOLDOWN_HOURS = 24

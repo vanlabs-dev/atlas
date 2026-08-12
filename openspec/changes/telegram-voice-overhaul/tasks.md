@@ -9,21 +9,21 @@
 
 - [x] 2.1 Add the lexicon and jargon-gloss maps to `telegram/config.json` following the `area_map` / `pallet_map` / `governs` precedent; maps are REQUIRED — a missing or incomplete map fails closed (render refuses), no code defaults
 - [x] 2.2 Extend the existing render frame (`render_html` / `render_plain`): add the gloss-once helper and the shrink-order protection (expandable shrinks first, body lines drop next, next-action drops last, headline never dropped)
-- [ ] 2.3 Re-voice chain-runtime-upgrade: verdict headline, glossed jargon, fact lines unchanged, conditional next-action
-- [ ] 2.4 Re-voice chain-parameter-change (same shape as 2.3)
-- [ ] 2.5 Re-voice gate-crossing (same shape; suppressed events stay recorded-not-delivered)
-- [ ] 2.6 Re-voice fleet-signal (same shape)
-- [ ] 2.7 Re-voice repository-update (same shape; breakdown content rules untouched)
-- [ ] 2.8 Re-voice schema-drift (same shape)
-- [ ] 2.9 Re-voice knowledge-ingestion (same shape)
-- [ ] 2.10 Verify ledger, watermarks, dedup keys, cooldowns, and digest behavior byte-identical; no schema changes
+- [x] 2.3 Re-voice chain-runtime-upgrade: verdict headline, glossed jargon, fact lines unchanged, conditional next-action
+- [x] 2.4 Re-voice chain-parameter-change (same shape as 2.3)
+- [x] 2.5 Re-voice gate-crossing (same shape; suppressed events stay recorded-not-delivered)
+- [x] 2.6 Re-voice fleet-signal (same shape)
+- [x] 2.7 Re-voice repository-update (same shape; breakdown content rules untouched)
+- [x] 2.8 Re-voice schema-drift (same shape)
+- [x] 2.9 Re-voice knowledge-ingestion (same shape)
+- [x] 2.10 Verify ledger, watermarks, dedup keys, cooldowns, and digest behavior byte-identical; no schema changes
 
 ## 3. Tests
 
-- [ ] 3.1 Lexicon conformance: stdlib test parses the `voice.md` lexicon table and asserts every `config.json` lexicon/gloss entry exists in canon; plus rendered-output assertions per class (approved words present, banned synonyms absent, gloss on first use only)
-- [ ] 3.2 Structure assertions per class: headline first, facts sourced, next-action present only when a real action exists (boilerplate `nothing` absent), worst-case fixtures within the size budget with balanced tags
-- [ ] 3.3 Shrink-order tests: oversized bodies shrink expandable first, drop body lines before the next-action line, never drop the headline
-- [ ] 3.4 Full telegram suite green off-device
+- [x] 3.1 Lexicon conformance: stdlib test parses the `voice.md` lexicon table and asserts every `config.json` lexicon/gloss entry exists in canon; plus rendered-output assertions per class (approved words present, banned synonyms absent, gloss on first use only)
+- [x] 3.2 Structure assertions per class: headline first, facts sourced, next-action present only when a real action exists (boilerplate `nothing` absent), worst-case fixtures within the size budget with balanced tags
+- [x] 3.3 Shrink-order tests: oversized bodies shrink expandable first, drop body lines before the next-action line, never drop the headline
+- [x] 3.4 Full telegram suite green off-device
 
 ## 4. Device application (operator steps)
 
