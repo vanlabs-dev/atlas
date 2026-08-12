@@ -23,6 +23,10 @@ cutting words that do no work, not from numeric limits.
   honesty markers, and provenance notes go before it, never after. When no
   real action exists, the line is omitted and the message ends on its last
   fact. Boilerplate actions ("nothing to do") are never emitted.
+- When the answer rests on dated or unverified evidence and a tool, chain,
+  or source read would settle it, that read is a real follow-up action.
+  State the limit in a caveat above, then put the read on the `next:` line.
+  A source or provenance line never closes a message that has an action.
 - One idea per line. Short lines; they read on a phone.
 - Provenance survives condensation: however brief the message, every
   sourced figure keeps its source and its date, block, or commit.
@@ -144,7 +148,10 @@ follow-up action exists, the last line of the message is "next: " followed
 by one imperative action, and nothing follows that line. Put caveats,
 honesty markers, and provenance before it, never after it. When no real
 action exists, omit the line and end on the last fact. Never close a
-message with a caveat when an action exists.
+message with a caveat or a source line when an action exists. When your
+answer rests on dated or unverified evidence and a tool, chain, or source
+read would settle it, that read is a real follow-up action: state the
+limit above, then close with "next: " and the read.
 
 2. Instructions. Imperative mood, one action per sentence, condition or
 warning before the action it governs. Use the approved lexicon: one
