@@ -1101,23 +1101,28 @@ def chain_runtime_upgrade_events(source_db: str, watermark: Optional[str],
     max_chars = int(config.get("message_max_chars", 3500))
     threshold = int(config.get("governance_threshold",
                                DEFAULT_GOVERNANCE_THRESHOLD))
+    _lexicon, glosses = voice_maps(config)
     events: List[Dict[str, Any]] = []
     high = last_id
     for row_id, observed_at, prev_spec, new_spec, block in rows:
         high = max(high, int(row_id))
-        headline = ("Atlas · LIVE CHAIN UPGRADED · Finney runtime "
-                    "spec %s → %s" % (prev_spec, new_spec))
-        lines = ["the LIVE network changed (enacted), not the source "
-                 "repository",
+        headline = ("Atlas · live chain upgraded · runtime spec %s → %s "
+                    "enacted" % (prev_spec, new_spec))
+        lines = ["the live chain changed (enacted), not the repo",
                  "reference block: %s · observed: %s"
-                 % (block if block is not None else "unknown",
+                 % (block if block is not None else "n/a",
                     observed_at)]
+        next_action = None
         if prev_spec < threshold <= new_spec:
-            lines.append("governance threshold %d crossed · "
-                         "conviction-based subnet ownership enforcement "
-                         "is now ENACTED" % threshold)
-        plain = render_plain(headline, lines, "", None, max_chars)
-        html = render_html(headline, lines, "", None, max_chars)
+            lines.append("governance spec %d crossed · conviction-based "
+                         "subnet ownership enforcement is now enacted"
+                         % threshold)
+            next_action = ("next: review your subnet positions · "
+                           "conviction enforcement is live")
+        plain = render_plain(headline, lines, "", None, max_chars,
+                             next_action=next_action, glosses=glosses)
+        html = render_html(headline, lines, "", None, max_chars,
+                           next_action=next_action, glosses=glosses)
         events.append({"event_id": "chain-runtime-upgrade:%s" % row_id,
                        "event_class": "chain-runtime-upgrade",
                        "created_at": _utc_now(), "text": plain,
