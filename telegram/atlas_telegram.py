@@ -495,8 +495,10 @@ def render_html(headline: str, lines: List[str], expandable: str,
     lines = [_typography(line) for line in lines]
     expandable = _strip_mono(_typography(expandable))
     trailer = _strip_mono(_typography(trailer)) if trailer else None
-    next_action = (_strip_mono(_typography(next_action))
-                   if next_action else None)
+    # next_action keeps its mono sentinels: composed classes wrap command
+    # spans in them (watchlist commit, knowledge activate) and the escape
+    # pass below converts them, exactly like body lines.
+    next_action = _typography(next_action) if next_action else None
     while True:
         rendered = _gloss_message(headline, lines, expandable, trailer,
                                   next_action, glosses) if glosses else (
