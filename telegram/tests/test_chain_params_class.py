@@ -139,13 +139,16 @@ class GateBarModeTests(_Base):
         add_state(self.live_db, bar_mode="rank", rank=32)
         add_crossing(self.live_db, 49, "rose-above", 0.0090, 0.0073, 0.0088)
         text = self.body()
-        self.assertIn("bar mode: rank-pinned at N 32", text)
+        self.assertIn("bar mode: rank-pinned (the bar is the Nth largest "
+                      "demand share and moves with the distribution) "
+                      "at N 32", text)
         self.assertNotIn("q-mass at q", text)
 
     def test_q_mass_mode_is_named(self):
         add_state(self.live_db, bar_mode="q-mass", rank=0, q=0.75)
         add_crossing(self.live_db, 49, "rose-above", 0.0090, 0.0073, 0.0088)
-        self.assertIn("bar mode: q-mass at q 0.75", self.body())
+        self.assertIn("bar mode: q-mass (a quantile of the demand-share "
+                      "distribution) at q 0.75", self.body())
 
     def test_bar_driven_crossing_is_attributed_to_the_bar(self):
         # SN49's real 2026-08-03 numbers: share 0.0086 sat BELOW the old bar
@@ -154,7 +157,7 @@ class GateBarModeTests(_Base):
         add_state(self.live_db, bar_mode="rank", rank=32)
         add_crossing(self.live_db, 49, "rose-above", 0.0086, 0.0073, 0.0088)
         text = self.body()
-        self.assertIn("THE BAR MOVED onto this subnet", text)
+        self.assertIn("the bar moved onto this subnet", text)
         self.assertIn("bar moved -17.0%", text)
 
     def test_share_driven_crossing_is_attributed_to_the_subnet(self):
@@ -163,7 +166,7 @@ class GateBarModeTests(_Base):
         add_crossing(self.live_db, 9, "rose-above", 0.0192, 0.0079, 0.0078)
         text = self.body()
         self.assertIn("the subnet's own demand share moved across", text)
-        self.assertNotIn("THE BAR MOVED", text)
+        self.assertNotIn("the bar moved onto", text)
 
     def test_legacy_crossing_asserts_neither_mode_nor_movement(self):
         # Recorded before the migration: no gate_state row, no prev_theta.
@@ -172,7 +175,7 @@ class GateBarModeTests(_Base):
         self.assertNotIn("bar mode:", text)
         self.assertNotIn("bar moved", text)
         self.assertNotIn("attribution:", text)
-        self.assertIn("subnet 42 fell BELOW the bar", text)
+        self.assertIn("subnet 42 fell below the bar", text)
 
     def test_house_style_holds(self):
         add_state(self.live_db, bar_mode="rank", rank=32)
