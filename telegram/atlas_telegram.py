@@ -1139,7 +1139,11 @@ def chain_runtime_upgrade_events(source_db: str, watermark: Optional[str],
 
 def schema_drift_events(source_db: str, watermark: Optional[str],
                         ctx: Optional[Dict[str, Any]] = None
-                        ) -> Tuple[List[Dict[str, str]], Optional[str]]:
+                        ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """A provider reply stopped matching its pinned schema. livedata fails
+    closed on drift (the operation reports live-unavailable until the
+    pinned schema is updated), so every drift event carries its one
+    follow-up. Reads integration_health read-only past a row-id watermark."""
     conn = open_source_ro(source_db)
     if conn is None:
         return [], watermark
@@ -1149,24 +1153,45 @@ def schema_drift_events(source_db: str, watermark: Optional[str],
             "SELECT id, timestamp, provider, operation, detail FROM "
             "integration_health WHERE category = 'schema-drift' AND id > ? "
             "ORDER BY id ASC LIMIT 50", (last_id,)).fetchall()
-        events: List[Dict[str, str]] = []
-        high = last_id
-        for row_id, ts, provider, operation, detail in rows:
-            high = max(high, int(row_id))
-            text = ("Atlas • live-data schema drift\n"
-                    "%s / %s\nwhen: %s\n%s"
-                    % (provider, operation, ts, (detail or "")[:400]))
-            events.append({"event_id": "schema-drift:%s" % row_id,
-                           "event_class": "schema-drift",
-                           "created_at": _utc_now(), "text": text})
-        return events, (str(high) if high else watermark)
     finally:
         conn.close()
+
+    config = (ctx or {}).get("config") or {}
+    max_chars = int(config.get("message_max_chars", 3500))
+    _lexicon, glosses = voice_maps(config)
+    events: List[Dict[str, Any]] = []
+    high = last_id
+    for row_id, ts, provider, operation, detail in rows:
+        high = max(high, int(row_id))
+        headline = ("Atlas · schema drift · %s %s replies no longer match "
+                    "the pinned schema" % (provider, operation))
+        lines = [
+            "provider: %s · operation: %s" % (provider, operation),
+            "detail: %s" % ((detail or "n/a")[:400]),
+            "the %s operation fails closed (live-unavailable) until the "
+            "pinned schema is updated" % operation,
+            "source: livedata integration health · observed: %s" % ts,
+        ]
+        next_action = ("next: review the pinned schema for %s %s"
+                       % (provider, operation))
+        plain = render_plain(headline, lines, "", None, max_chars,
+                             next_action=next_action, glosses=glosses)
+        html = render_html(headline, lines, "", None, max_chars,
+                           next_action=next_action, glosses=glosses)
+        events.append({"event_id": "schema-drift:%s" % row_id,
+                       "event_class": "schema-drift",
+                       "created_at": _utc_now(), "text": plain,
+                       "html": html})
+    return events, (str(high) if high else watermark)
 
 
 def knowledge_ingestion_events(source_db: str, watermark: Optional[str],
                                ctx: Optional[Dict[str, Any]] = None
-                               ) -> Tuple[List[Dict[str, str]], Optional[str]]:
+                               ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """A knowledge intake run staged new units. Staged units are not
+    active until the operator reviews the run and activates it, so the
+    next-action rides the recorded staged count (zero staged: nothing to
+    review, no action line)."""
     conn = open_source_ro(source_db)
     if conn is None:
         return [], watermark
