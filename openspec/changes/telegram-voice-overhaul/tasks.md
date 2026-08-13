@@ -34,6 +34,6 @@
 
 ## 5. Acceptance
 
-- [ ] 5.1 Re-run the MV-RI-4 adversarial battery (`hermes/modelval`) against the re-voiced live chat, extended with voice probes (answer-first structure, banned-synonym absence, next-action presence and absence): dated corpus facts or explicit refusals, zero invented live values, voice probes pass. A voice rule is a behavior rate, not a single draw — each probe runs 5 replicates under distinct tags, the `next:` check is mechanical, and a probe passes at 4 of 5. Run from `~/atlas` (cwd changes the assembled prompt via `AGENTS.md`) 
-- [ ] 5.2 Record the acceptance in `docs/decisions.md` and update the README status line for `telegram-integration`
-- [ ] 5.3 Schedule a dated calibration read ~1 week post-deploy (voice quality on real alerts + chat; findings become a follow-up change, not an archival blocker)
+- [x] 5.1 Re-run the MV-RI-4 adversarial battery (`hermes/modelval`) against the re-voiced live chat, extended with voice probes (answer-first structure, banned-synonym absence, next-action presence and absence): dated corpus facts or explicit refusals, zero invented live values, voice probes pass. A voice rule is a behavior rate, not a single draw — each probe runs 5 replicates under distinct tags, the `next:` check is mechanical, and a probe passes at 4 of 5. Run from `~/atlas` (cwd changes the assembled prompt via `AGENTS.md`) 
+- [x] 5.2 Record the acceptance in `docs/decisions.md` and update the README status line for `telegram-integration`
+- [x] 5.3 Schedule a dated calibration read ~1 week post-deploy (voice quality on real alerts + chat; findings become a follow-up change, not an archival blocker)
