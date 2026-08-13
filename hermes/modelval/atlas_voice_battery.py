@@ -33,9 +33,12 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
 from typing import Any, Dict, List
 
-BATTERY_VERSION = "0.1.0"
+BATTERY_VERSION = "0.2.0"
+
+_NEXT_RE = re.compile(r"^next:\s+\S", re.IGNORECASE)
 
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _KB_BATTERY = os.path.join(_MODULE_DIR, os.pardir, os.pardir,
@@ -71,7 +74,23 @@ _VP = (
      "that mean for its emission?",
      "next-action presence: verdict first, then a single imperative "
      "next-action line closes the answer"),
+    # The negative arm. Without it, a model that appends a next-action
+    # line to every message scores 100% while breaking the canon's
+    # no-boilerplate rule on every message it sends.
+    ("MV-VP-4",
+     "What is the fixed protocol split of a subnet's tempo emission "
+     "between the owner, miners, and validators?",
+     "next-action absence: the split is protocol-fixed and answered in "
+     "full from the corpus, so no gap is named and the answer carries no "
+     "next-action line anywhere"),
 )
+
+# A voice rule is a behavior rate, not a single draw: one generation from
+# an unpinned model cannot decide one. Each probe runs REPLICATES times
+# under DISTINCT tags — extract_exchanges() keeps only the latest session
+# per tag, so replicates sharing a tag would collapse to one sample.
+REPLICATES = 5
+PASS_K = 4
 
 
 def battery() -> List[Dict[str, object]]:
@@ -81,12 +100,45 @@ def battery() -> List[Dict[str, object]]:
         if exchange["set"] == "adversarial"  # KB-AD: the MV-RI-4 re-test
     ]
     for tag, prompt, expected in _VP:
-        exchanges.append({
-            "tag": tag, "set": "voice-probe",
-            "prompt": "[%s] %s" % (tag, prompt),
-            "expected": expected,
-        })
+        for run in range(1, REPLICATES + 1):
+            replicate = "%s-%d" % (tag, run)
+            exchanges.append({
+                "tag": replicate, "set": "voice-probe",
+                "prompt": "[%s] %s" % (replicate, prompt),
+                "expected": expected,
+            })
     return exchanges
+
+
+def base_tag(tag: str) -> str:
+    """'MV-VP-3-2' -> 'MV-VP-3'. Replicates share a pass condition."""
+    return tag.rsplit("-", 1)[0] if tag.startswith("MV-VP-") else tag
+
+
+def closes_with_next_action(answer: str) -> bool:
+    """The next-action rule is a literal string at a literal position, so
+    it is asserted rather than read. The alert side already does this in
+    telegram/tests/test_voice.py; the chat side used an operator's eye."""
+    lines = _clean_lines(answer)
+    hits = [line for line in lines if _NEXT_RE.match(line)]
+    return bool(lines) and len(hits) == 1 and lines[-1] == hits[0]
+
+
+def omits_next_action(answer: str) -> bool:
+    """MV-VP-4 arm: no next-action line anywhere in the message."""
+    return not [line for line in _clean_lines(answer) if _NEXT_RE.match(line)]
+
+
+def _clean_lines(answer: str) -> List[str]:
+    lines = []
+    for raw in answer.replace("\r\n", "\n").split("\n"):
+        line = raw.replace("*", "").replace("`", "").strip()
+        for bullet in ("- ", "* ", "• "):
+            if line.startswith(bullet):
+                line = line[len(bullet):].strip()
+        if line:
+            lines.append(line)
+    return lines
 
 
 def tags_by_set() -> Dict[str, List[str]]:
