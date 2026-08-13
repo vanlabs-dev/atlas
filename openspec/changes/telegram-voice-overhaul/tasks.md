@@ -28,12 +28,12 @@
 ## 4. Device application (operator steps)
 
 - [x] 4.1 `git pull` on the Pi; run the telegram suite on-device
-- [x] 4.2 Back up `~/.hermes/SOUL.md` and `~/.hermes/config.yaml` (repo backup naming convention), apply the canonical SOUL.md and the `platform_hints.telegram` append, restart `hermes-gateway` (user unit), then reset the Telegram session (the cached system prompt in the long-lived session would otherwise keep the old voice until a compression rebuild)
-- [x] 4.3 Read-only verify the applied SOUL.md and platform hint match `voice.md` canon
+- [x] 4.2 Back up `~/.hermes/SOUL.md` and `~/.hermes/config.yaml` (repo backup naming convention), apply the canonical SOUL.md and the `platform_hints.telegram` append at the config root, restart `hermes-gateway` (user unit), then reset the Telegram session by sending `/reset` in the chat (the gateway rotates the session only on an inbound user command; the cached system prompt otherwise keeps the old voice until a compression rebuild)
+- [x] 4.3 Verify the applied SOUL.md matches `voice.md` canon byte-for-byte, and verify hermes RESOLVES the platform hint (top-level `platform_hints` non-empty for `telegram`) — asserting the text is present in the file is not a verification
 - [x] 4.4 Deliver one `test --class` alert per class; confirm the new layout arrives and each delivery is ledger-recorded
 
 ## 5. Acceptance
 
-- [ ] 5.1 Re-run the MV-RI-4 adversarial battery (`hermes/modelval`) against the re-voiced live chat, extended with 2–3 voice probes (answer-first structure, banned-synonym absence, next-action presence): dated corpus facts or explicit refusals, zero invented live values, voice probes pass
+- [ ] 5.1 Re-run the MV-RI-4 adversarial battery (`hermes/modelval`) against the re-voiced live chat, extended with voice probes (answer-first structure, banned-synonym absence, next-action presence and absence): dated corpus facts or explicit refusals, zero invented live values, voice probes pass. A voice rule is a behavior rate, not a single draw — each probe runs 5 replicates under distinct tags, the `next:` check is mechanical, and a probe passes at 4 of 5. Run from `~/atlas` (cwd changes the assembled prompt via `AGENTS.md`) 
 - [ ] 5.2 Record the acceptance in `docs/decisions.md` and update the README status line for `telegram-integration`
 - [ ] 5.3 Schedule a dated calibration read ~1 week post-deploy (voice quality on real alerts + chat; findings become a follow-up change, not an archival blocker)
