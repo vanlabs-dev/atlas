@@ -1,7 +1,12 @@
-# Delta spec: agent-voice (new capability)
+# agent-voice Specification
 
-## ADDED Requirements
+## Purpose
+One voice for every operator-facing surface: inbound chat through the
+Hermes gateway and outbound alerts from the notifier. The canonical text
+is `telegram/docs/voice.md`; chat draws from it through `SOUL.md`, alerts
+through the lexicon and gloss maps in `telegram/config.json`.
 
+## Requirements
 ### Requirement: Approved lexicon with one word per concept
 
 Atlas SHALL maintain an approved lexicon (canonical text in
@@ -49,6 +54,33 @@ line.
 - **WHEN** the operator asks a yes/no question in chat
 - **THEN** the response opens with the answer in the first line, not with
   context or restatement of the question
+
+### Requirement: The last line is the next action, or the last fact
+
+When a real follow-up action exists, the final line of a message SHALL be a
+single next-action line and nothing SHALL follow it; when none exists, the
+line SHALL be omitted and the message SHALL end on its last fact.
+Boilerplate actions SHALL NOT be emitted. A caveat, a source line, or a
+provenance note SHALL NOT stand as the last line of a message that has an
+action. Because this rule competes with the honesty contract's requirement
+to name a source and its freshness, the canon SHALL state it after that
+contract rather than before it: measured on device, restating the rule
+earlier or more emphatically makes compliance worse (20% against 100%,
+n=15 per arm). Both arms SHALL be verified by named voice probes.
+
+#### Scenario: A named gap closes with the read that settles it
+
+- **WHEN** a chat answer marks a value `not verified`, `dated`, or `n/a`
+  and a tool, chain, or source read would settle it
+- **THEN** the message names what is missing, and its last line is a single
+  next-action line naming that read
+
+#### Scenario: A complete answer ends on its last fact
+
+- **WHEN** a chat answer states a protocol-fixed fact with nothing in doubt
+  and no action the operator could take
+- **THEN** no next-action line is emitted anywhere in the message, and it
+  ends on its last fact or that fact's provenance
 
 ### Requirement: Instructions follow STE structure
 
