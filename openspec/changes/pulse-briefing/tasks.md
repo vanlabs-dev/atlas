@@ -79,8 +79,8 @@
 
 ## 6. Deployment and acceptance
 
-- [ ] 6.1 Push; `git pull` on the Pi; suites green under system Python
-- [ ] 6.2 Confirm the first snapshot and vitals rows, the registry seed, and
+- [x] 6.1 Push; `git pull` on the Pi; suites green under system Python
+- [x] 6.2 Confirm the first snapshot and vitals rows, the registry seed, and
   snapshot size after 24 hours
 - [ ] 6.3 Read the first two daily editions (first without deltas); confirm
   no provider or judge calls were made during composition from the audit
