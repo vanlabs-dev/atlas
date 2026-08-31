@@ -4,6 +4,7 @@ fail-closed RPC handling, share-universe normalization (emission-disabled
 INCLUDED), hysteresis + confirmation, and lifecycle guards (first-seed
 silent, absence clears, reactivation re-seeds, restart no-replay)."""
 
+import datetime
 import os
 import sqlite3
 import sys
@@ -822,6 +823,200 @@ class RankInvariantToleranceTests(RankInvariantTests):
     def test_two_off_still_raises(self):
         self.run_pass(5)
         self.assertIn("invariant-divergence", self.categories())
+
+
+# ---------------------------------------------------------------------------
+# pulse-briefing: panel snapshot, daily vitals, zero-price gap, hovering
+# ---------------------------------------------------------------------------
+
+def rich_subnet(netuid, price, **over):
+    row = subnet(netuid, price)
+    row.update({
+        "alpha_price_tao": price, "emission_percent": 1.5,
+        "emission_evolution_d_1": 0.1, "emission_evolution_d_30": -0.4,
+        "inflow": 10.0, "outflow": 4.0, "volume_24h": 99.0,
+        "holders_count": 1200, "market_cap": 5000.0, "active_miners": 7,
+        "name": "sub%d" % netuid,
+        "dereg": {"is_immune": False, "risk_level": "high",
+                  "prune_rank": 3, "immunity_end_block": None},
+        "conviction": {"is_contested": True, "takeover_eligible": False,
+                       "king_is_owner": True},
+    })
+    row.update(over)
+    return row
+
+
+class PanelSnapshotTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.conn = al.open_store(os.path.join(self.tmp.name, "live.db"))
+        self.addCleanup(self.conn.close)
+        self.config = make_config()
+
+    def run_pass(self, rows):
+        def run_op(_conn, _config, _ledger, _op, **_kw):
+            return {"status": "ok", "values": {"subnets": rows}}
+        theta = "0x" + int(0.15 * 2 ** 64).to_bytes(16, "little").hex()
+        return al.run_gate_pass(
+            self.conn, self.config, ledger=None,
+            rpc=fake_rpc({"0xbar": theta, "0xrank": rank_hex(2)}),
+            run_op=run_op)
+
+    def test_snapshot_row_per_subnet_with_share(self):
+        summary = self.run_pass([rich_subnet(0, 1.0), rich_subnet(1, 0.30),
+                                 rich_subnet(2, 0.10)])
+        self.assertEqual(summary["panel_snapshot_rows"], 2)
+        rows = self.conn.execute(
+            "SELECT netuid, share, holders_count, dereg_risk_level, "
+            "conviction_is_contested, king_is_owner, name "
+            "FROM panel_snapshot ORDER BY netuid").fetchall()
+        self.assertEqual([r[0] for r in rows], [1, 2])
+        self.assertAlmostEqual(rows[0][1], 0.75)
+        self.assertEqual(rows[0][2:], (1200, "high", 1, 1, "sub1"))
+
+    def test_missing_fields_persist_null_not_zero(self):
+        self.run_pass([subnet(1, 0.30)])  # bare row: no panel extras
+        row = self.conn.execute(
+            "SELECT holders_count, inflow, dereg_risk_level, "
+            "conviction_is_contested, emission_is_enabled "
+            "FROM panel_snapshot WHERE netuid = 1").fetchone()
+        self.assertEqual(row, (None, None, None, None, 1))
+
+    def test_retention_prunes_in_the_same_pass(self):
+        old = (datetime.datetime.now(datetime.timezone.utc)
+               - datetime.timedelta(days=200)).isoformat()
+        self.conn.execute(
+            "INSERT INTO panel_snapshot (observed_at, netuid) VALUES (?, 1)",
+            (old,))
+        self.conn.commit()
+        self.run_pass([rich_subnet(1, 0.30)])
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM panel_snapshot").fetchone()[0], 1)
+
+
+class VitalsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.conn = al.open_store(os.path.join(self.tmp.name, "live.db"))
+        self.addCleanup(self.conn.close)
+        self.config = make_config()
+
+    def vitals(self, stats_status="ok", price_status="ok"):
+        def run_op(_conn, _config, _ledger, op, **_kw):
+            if op == "network_stats_taoswap":
+                return {"status": stats_status, "values": {
+                    "date": "2026-08-30", "total_staked_tao": 7417081.7,
+                    "root_stake_tao": 5385758.8,
+                    "subnets_stake_tao": 2028542.6,
+                    "subnets_share_pct": 27.35, "available_tao": 3830803.3,
+                    "subnet_reg_cost_tao": 583.49,
+                    "total_accounts": 2296264, "new_accounts_today": 862}}
+            return {"status": price_status, "values": {
+                "tao_usd": 198.59, "close_date": "2026-08-30"}}
+        return al.run_vitals_daily(self.conn, self.config, ledger=None,
+                                   run_op=run_op)
+
+    def rows(self):
+        return self.conn.execute(
+            "SELECT date, total_staked_tao, subnets_share_pct, tao_usd "
+            "FROM network_vitals").fetchall()
+
+    def test_one_row_per_day(self):
+        self.assertEqual(self.vitals()["status"], "ok")
+        self.assertEqual(self.vitals()["status"], "current")
+        self.assertEqual(self.rows(),
+                         [("2026-08-30", 7417081.7, 27.35, 198.59)])
+
+    def test_failed_fetch_persists_nothing(self):
+        result = self.vitals(price_status="live-unavailable")
+        self.assertEqual(result["status"], "live-unavailable")
+        self.assertEqual(self.rows(), [])
+        self.assertIn("provider-failure",
+                      [r[0] for r in health_rows(self.conn)])
+        # The day is not marked current, so recovery can still write.
+        self.assertEqual(self.vitals()["status"], "ok")
+
+
+class ZeroShareGapTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.conn = al.open_store(os.path.join(self.tmp.name, "live.db"))
+        self.addCleanup(self.conn.close)
+        self.gcfg = make_config()["gate_signal"]
+
+    def side_row(self, netuid):
+        return self.conn.execute(
+            "SELECT side, miss_count FROM gate_sides WHERE netuid = ?",
+            (netuid,)).fetchone()
+
+    def test_zero_share_is_a_gap_not_a_crossing(self):
+        al.update_gate_sides(self.conn, self.gcfg, 0.15, {1: 0.30},
+                             {1: True}, 100)             # seeds above
+        events = al.update_gate_sides(self.conn, self.gcfg, 0.15,
+                                      {1: 0.0}, {1: True}, 101)
+        self.assertEqual(events, [])
+        self.assertEqual(self.side_row(1), ("above", 1))
+
+    def test_zero_share_counts_toward_absence(self):
+        al.update_gate_sides(self.conn, self.gcfg, 0.15, {1: 0.30},
+                             {1: True}, 100)
+        for block in (101, 102, 103):
+            al.update_gate_sides(self.conn, self.gcfg, 0.15, {1: 0.0},
+                                 {1: True}, block)
+        self.assertIsNone(self.side_row(1))  # cleared at the threshold
+
+    def test_zero_share_never_seeds(self):
+        al.update_gate_sides(self.conn, self.gcfg, 0.15, {1: 0.0},
+                             {1: True}, 100)
+        self.assertIsNone(self.side_row(1))
+
+
+class HoveringTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.conn = al.open_store(os.path.join(self.tmp.name, "live.db"))
+        self.addCleanup(self.conn.close)
+        cfg = make_config(confirm_polls=1, hover_crossings=1,
+                          hover_window_days=7)
+        self.gcfg = cfg["gate_signal"]
+
+    def cross(self, share):
+        return al.update_gate_sides(self.conn, self.gcfg, 0.15, {1: share},
+                                    {1: True}, 100)
+
+    def flag(self):
+        return self.conn.execute(
+            "SELECT COALESCE(hovering, 0) FROM gate_sides WHERE netuid = 1"
+        ).fetchone()[0]
+
+    def annotations(self):
+        return [r[0] for r in self.conn.execute(
+            "SELECT hovering FROM gate_events ORDER BY id")]
+
+    def test_flag_sets_after_threshold_and_annotates_later_crossings(self):
+        self.cross(0.30)                 # seed above
+        self.cross(0.05)                 # crossing 1: within threshold
+        self.assertEqual(self.flag(), 0)
+        self.cross(0.30)                 # crossing 2: > 1 in window, flags
+        self.assertEqual(self.flag(), 1)
+        events = self.cross(0.05)        # crossing 3: annotated
+        self.assertTrue(events[0]["hovering"])
+        self.assertEqual(self.annotations(), [0, 0, 1])
+
+    def test_flag_clears_after_a_quiet_window(self):
+        self.test_flag_sets_after_threshold_and_annotates_later_crossings()
+        old = (datetime.datetime.now(datetime.timezone.utc)
+               - datetime.timedelta(days=10)).isoformat()
+        self.conn.execute("UPDATE gate_events SET observed_at = ?", (old,))
+        self.conn.commit()
+        self.cross(0.05)                 # steady side, no crossing
+        self.assertEqual(self.flag(), 0)
+        events = self.cross(0.30)        # next crossing: unannotated
+        self.assertFalse(events[0]["hovering"])
 
 
 if __name__ == "__main__":

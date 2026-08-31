@@ -150,6 +150,9 @@ STATUS_DELIVERED = "delivered"
 STATUS_FAILED = "failed"
 STATUS_SUPPRESSED = "suppressed"
 STATUS_SCRUB_REFUSED = "scrub-refused"
+STATUS_BRIEFED = "briefed"
+TIER_INSTANT = "instant"
+TIER_BRIEFING = "briefing"
 _TERMINAL = (STATUS_DELIVERED, STATUS_FAILED, STATUS_SUPPRESSED,
              STATUS_SCRUB_REFUSED)
 
@@ -1083,6 +1086,54 @@ def repository_update_events(source_db: str, watermark: Optional[str],
     return events, new_wm
 
 
+def _release_for_upgrade(repo_db: Optional[str], new_spec: int
+                         ) -> Optional[Dict[str, str]]:
+    """The tracked repository range whose recorded spec delta covers this
+    upgrade: release commit subject plus top touched areas. None when the
+    store, table, or a matching range is absent; the caller states that
+    rather than inventing repository facts."""
+    if not repo_db:
+        return None
+    conn = open_source_ro(resolve(repo_db))
+    if conn is None:
+        return None
+    try:
+        present = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND "
+            "name = 'change_ranges'").fetchone()
+        if present is None:
+            return None
+        row = conn.execute(
+            "SELECT commits_json, files_json FROM change_ranges "
+            "WHERE prev_spec IS NOT NULL AND new_spec IS NOT NULL "
+            "AND prev_spec < ? AND new_spec >= ? "
+            "ORDER BY id DESC LIMIT 1", (new_spec, new_spec)).fetchone()
+    except sqlite3.Error:
+        return None
+    finally:
+        conn.close()
+    if row is None:
+        return None
+    try:
+        commits = (json.loads(row[0]) or {}).get("commits") or []
+        subject = str(commits[0]["subject"]) if commits else None
+        files = (json.loads(row[1]) or {}).get("files") or []
+    except (ValueError, TypeError, KeyError, IndexError):
+        return None
+    if not subject:
+        return None
+    counts: Dict[str, int] = {}
+    for entry in files:
+        path = entry.get("path") if isinstance(entry, dict) else None
+        if not path:
+            continue
+        top = str(path).split("/", 1)[0]
+        counts[top] = counts.get(top, 0) + 1
+    areas = " · ".join("%s (%d)" % (name, count) for name, count in
+                       sorted(counts.items(), key=lambda kv: -kv[1])[:3])
+    return {"subject": subject, "areas": areas}
+
+
 def chain_runtime_upgrade_events(source_db: str, watermark: Optional[str],
                                  ctx: Optional[Dict[str, Any]] = None
                                  ) -> Tuple[List[Dict[str, Any]],
@@ -1107,6 +1158,7 @@ def chain_runtime_upgrade_events(source_db: str, watermark: Optional[str],
         conn.close()
 
     config = (ctx or {}).get("config") or {}
+    spec = (ctx or {}).get("spec") or {}
     max_chars = int(config.get("message_max_chars", 3500))
     threshold = int(config.get("governance_threshold",
                                DEFAULT_GOVERNANCE_THRESHOLD))
@@ -1121,6 +1173,16 @@ def chain_runtime_upgrade_events(source_db: str, watermark: Optional[str],
                  "reference block: %s · observed: %s"
                  % (block if block is not None else "n/a",
                     observed_at)]
+        # One message explains the upgrade (change: pulse-briefing): the
+        # matching repository range supplies the release subject and the
+        # touched areas; its absence is stated, never guessed around.
+        release = _release_for_upgrade(spec.get("repo_db"), new_spec)
+        if release is None:
+            lines.append("repo evidence: not yet tracked for this upgrade")
+        else:
+            lines.append("release: %s" % release["subject"])
+            if release["areas"]:
+                lines.append("touched: %s" % release["areas"])
         next_action = None
         if prev_spec < threshold <= new_spec:
             lines.append("governance spec %d crossed · conviction-based "
@@ -1289,8 +1351,10 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
         # prev_theta and the bar-mode columns arrived with network-drift-443;
         # a store written before that migration simply reports them NULL and
         # the body then asserts neither a mode nor a movement.
-        has_prev = "prev_theta" in {
-            r[1] for r in conn.execute("PRAGMA table_info(gate_events)")}
+        event_cols = {r[1] for r in
+                      conn.execute("PRAGMA table_info(gate_events)")}
+        has_prev = "prev_theta" in event_cols
+        has_hover = "hovering" in event_cols
         state_cols = {r[1] for r in
                       conn.execute("PRAGMA table_info(gate_state)")}
         has_mode = {"bar_mode", "rank", "q"} <= state_cols
@@ -1309,6 +1373,7 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
             "SELECT e.id, e.observed_at, e.netuid, e.direction, e.share, "
             "e.theta, e.prev_side, e.emission_enabled, e.block_number, "
             + ("e.prev_theta, " if has_prev else "NULL, ")
+            + ("e.hovering, " if has_hover else "NULL, ")
             + _at_event("bar_mode") + ", "
             + _at_event("rank") + ", "
             + _at_event("q") +
@@ -1330,10 +1395,18 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
     events: List[Dict[str, Any]] = []
     high = last_id
     for (row_id, observed_at, netuid, direction, share, theta,
-         _prev_side, emission_enabled, block_number, prev_theta,
+         _prev_side, emission_enabled, block_number, prev_theta, hovering,
          bar_mode, bar_rank, bar_q) in rows:
         high = max(high, int(row_id))
         event_id = "gate-crossing:%d:%d" % (netuid, row_id)
+        if hovering and store is not None:
+            # A flagged hoverer's crossings are recorded, never paged
+            # (change: pulse-briefing): the briefing reports them as a
+            # count instead of an alert per wobble.
+            ledger_record(store, event_id, "gate-crossing", observed_at,
+                          _utc_now(), STATUS_SUPPRESSED, 0,
+                          "hovering subnet")
+            continue
         if store is not None and _gate_cooldown_active(
                 store, netuid, cooldown_hours):
             ledger_record(store, event_id, "gate-crossing", observed_at,
@@ -1833,10 +1906,161 @@ def chain_parameter_change_events(source_db: str, watermark: Optional[str],
     return events, (str(high) if high else watermark)
 
 
+def subnet_registry_events(source_db: str, watermark: Optional[str],
+                           ctx: Optional[Dict[str, Any]] = None
+                           ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Netuid set and chain-name changes between consecutive panel
+    snapshots (change: pulse-briefing). The first snapshot seeds the set
+    silently; each later snapshot pass diffs against the one before it."""
+    conn = open_source_ro(source_db)
+    if conn is None:
+        return [], watermark
+    try:
+        present = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND "
+            "name = 'panel_snapshot'").fetchone()
+        if present is None:
+            return [], watermark  # snapshot not deployed yet
+        blocks = [r[0] for r in conn.execute(
+            "SELECT DISTINCT block_number FROM panel_snapshot "
+            "WHERE block_number IS NOT NULL ORDER BY block_number")]
+        if not blocks:
+            return [], watermark
+        if watermark is None:
+            return [], str(blocks[-1])  # first snapshot seeds silently
+        last_seen = int(watermark)
+
+        def snap(block):
+            return {r[0]: r[1] for r in conn.execute(
+                "SELECT netuid, name FROM panel_snapshot "
+                "WHERE block_number = ?", (block,))}
+
+        pending = [b for b in blocks if b > last_seen]
+        events: List[Dict[str, Any]] = []
+        config = (ctx or {}).get("config") or {}
+        max_chars = int(config.get("message_max_chars", 3500))
+        _lexicon, glosses = voice_maps(config)
+        prev_block = max((b for b in blocks if b <= last_seen),
+                         default=None)
+        for block in pending[:10]:
+            if prev_block is None:
+                prev_block = block
+                continue
+            prev, cur = snap(prev_block), snap(block)
+            changes = []
+            for netuid in sorted(set(cur) - set(prev)):
+                changes.append((netuid, "registered", None,
+                                cur.get(netuid)))
+            for netuid in sorted(set(prev) - set(cur)):
+                changes.append((netuid, "deregistered", prev.get(netuid),
+                                None))
+            for netuid in sorted(set(prev) & set(cur)):
+                if (prev.get(netuid) or "") != (cur.get(netuid) or ""):
+                    changes.append((netuid, "renamed", prev.get(netuid),
+                                    cur.get(netuid)))
+            for netuid, kind, old_name, new_name in changes:
+                headline = ("Atlas · subnet %d %s" % (netuid, kind))
+                lines = ["subnet %d · %s" % (netuid, kind)]
+                if kind == "renamed":
+                    lines.append("name: %s to %s"
+                                 % (old_name or "n/a", new_name or "n/a"))
+                elif new_name:
+                    lines.append("name: %s" % new_name)
+                elif old_name:
+                    lines.append("name was: %s" % old_name)
+                lines.append("blocks: %s to %s" % (prev_block, block))
+                plain = render_plain(headline, lines, "", None, max_chars,
+                                     glosses=glosses)
+                html = render_html(headline, lines, "", None, max_chars,
+                                   glosses=glosses)
+                events.append({
+                    "event_id": "subnet-registry:%s:%s:%s"
+                                % (block, netuid, kind),
+                    "event_class": "subnet-registry",
+                    "created_at": _utc_now(), "text": plain, "html": html})
+            prev_block = block
+        new_wm = str(pending[:10][-1]) if pending else watermark
+        return events, new_wm
+    finally:
+        conn.close()
+
+
+_FAIL_CLOSED_COMPONENTS = (
+    # (component label, table with good observations, provider filter)
+    ("gate poll", "gate_state", "finney-rpc"),
+    ("chain-parameter watch", "chain_params", "finney-rpc"),
+)
+
+
+def fail_closed_events(source_db: str, watermark: Optional[str],
+                       ctx: Optional[Dict[str, Any]] = None
+                       ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """One page per outage when a component has recorded only failures
+    for longer than the configured window (change: pulse-briefing). The
+    outage is keyed by its first failure, so a persisting outage never
+    pages twice; recovery re-arms the key."""
+    conn = open_source_ro(source_db)
+    if conn is None:
+        return [], watermark
+    ctx = ctx or {}
+    config = ctx.get("config") or {}
+    spec = ctx.get("spec") or {}
+    store: Optional[sqlite3.Connection] = ctx.get("connection")
+    window_hours = float(spec.get("window_hours", 6))
+    cutoff = (datetime.datetime.now(datetime.timezone.utc)
+              - datetime.timedelta(hours=window_hours)).isoformat()
+    max_chars = int(config.get("message_max_chars", 3500))
+    _lexicon, glosses = voice_maps(config)
+    events: List[Dict[str, Any]] = []
+    try:
+        tables = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'")}
+        if "integration_health" not in tables:
+            return [], watermark
+        for component, table, provider in _FAIL_CLOSED_COMPONENTS:
+            if table not in tables:
+                continue
+            last_good = conn.execute(
+                "SELECT MAX(observed_at) FROM %s" % table).fetchone()[0]
+            if last_good is not None and last_good > cutoff:
+                continue  # observed inside the window: healthy
+            first_fail = conn.execute(
+                "SELECT MIN(timestamp) FROM integration_health "
+                "WHERE provider = ? AND timestamp > COALESCE(?, '')",
+                (provider, last_good)).fetchone()[0]
+            if first_fail is None or first_fail > cutoff:
+                continue  # no failure record, or not yet a whole window
+            event_id = "fail-closed:%s:%s" % (table, first_fail)
+            if store is not None and store.execute(
+                    "SELECT 1 FROM events WHERE event_id = ?",
+                    (event_id,)).fetchone():
+                continue  # this outage already paged once
+            headline = "Atlas · %s failing closed" % component
+            lines = [
+                "%s has recorded only failures for over %g hours"
+                % (component, window_hours),
+                "first failure: %s" % first_fail,
+                "last good observation: %s" % (last_good or "none recorded"),
+            ]
+            plain = render_plain(headline, lines, "", None, max_chars,
+                                 glosses=glosses)
+            html = render_html(headline, lines, "", None, max_chars,
+                               glosses=glosses)
+            events.append({"event_id": event_id,
+                           "event_class": "fail-closed",
+                           "created_at": _utc_now(),
+                           "text": plain, "html": html})
+    finally:
+        conn.close()
+    return events, watermark
+
+
 _ADAPTERS: Dict[str, Callable[..., Tuple[List[Dict[str, Any]],
                                          Optional[str]]]] = {
     "chain-runtime-upgrade": chain_runtime_upgrade_events,
     "chain-parameter-change": chain_parameter_change_events,
+    "subnet-registry": subnet_registry_events,
+    "fail-closed": fail_closed_events,
     "gate-crossing": gate_crossing_events,
     "fleet-signal": fleet_signal_events,
     "repository-update": repository_update_events,
@@ -1962,6 +2186,22 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
             summary["classes"][event_class] = {
                 "error": redact(str(exc))[:200]}
             continue
+        # Delivery tier (change: pulse-briefing). Only instant classes page;
+        # a briefing-tier class records its events as briefed, advances its
+        # watermark, and surfaces through the pulse briefing. Flipping the
+        # tier back is the whole rollback for one class.
+        if spec.get("tier", TIER_INSTANT) == TIER_BRIEFING:
+            for event in events:
+                ledger_record(connection, event["event_id"],
+                              event["event_class"], event["created_at"],
+                              None, STATUS_BRIEFED, 0, None)
+                counts[STATUS_BRIEFED] = counts.get(STATUS_BRIEFED, 0) + 1
+            if new_wm and new_wm != wm:
+                watermark_set(connection, event_class, new_wm)
+            else:
+                connection.commit()
+            summary["classes"][event_class] = counts
+            continue
         for event in events:
             try:
                 status = deliver_event(connection, config, token, chat_id,
@@ -2003,6 +2243,16 @@ def _cmd_scan(config: Dict[str, Any]) -> int:
     connection = open_store(resolve(config["db"]))
     try:
         summary = notify_scan(config, token, chat_id, connection)
+        # The pulse briefing rides the same scan (change: pulse-briefing):
+        # once per day at the configured hour, weekly on its weekday, gated
+        # by durable edition watermarks. Isolated like everything else.
+        try:
+            import atlas_briefing
+            summary["briefing"] = atlas_briefing.run_briefing(
+                config, token, chat_id, connection)
+        except Exception as exc:  # never let the briefing break the scan
+            summary["briefing"] = {"status": "error",
+                                   "error": redact(str(exc))[:200]}
     finally:
         connection.close()
     print(json.dumps(summary, indent=2, sort_keys=True))

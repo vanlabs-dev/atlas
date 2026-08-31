@@ -1,5 +1,5 @@
 {
-  "_comment": "subnet-repo-fleet policy. `clone_root`/`db` are relative to the repo root (gitignored var/). `caps` bound each untrusted clone (bytes via git object size; files via tree entry count) \u2014 a breach quarantines the slot. `min_free_bytes` is the disk ceiling: below it, new clones are held as `disk-limited` and retried when space frees. `max_new_clones_per_pass` spreads cold-start across passes. `unreachable_backoff_hours` throttles repos that will not clone (placeholder URLs, private repos the public-read-only token cannot see, deleted/moved) with an escalating retry delay per consecutive failure \u2014 a fix (new repo URL) changes the fingerprint and re-points immediately, bypassing the backoff. `update_interval_hours` \u00d7 `stale_multiplier` drives per-slot staleness. GITHUB_TOKEN (optional) is read from the 0600 .env at runtime, never from here. `index` (change: fleet-search) drives the shared FTS index over the clones: `extensions` is a polyglot allowlist of source/config/doc file types, `max_file_bytes` caps per-file index size (binaries are skipped by content sniff); the size cap naturally drops lockfiles/minified bundles.",
+  "_comment": "subnet-repo-fleet policy. `clone_root`/`db` are relative to the repo root (gitignored var/). `caps` bound each untrusted clone (bytes via git object size; files via tree entry count) — a breach quarantines the slot. `min_free_bytes` is the disk ceiling: below it, new clones are held as `disk-limited` and retried when space frees. `max_new_clones_per_pass` spreads cold-start across passes. `unreachable_backoff_hours` throttles repos that will not clone (placeholder URLs, private repos the public-read-only token cannot see, deleted/moved) with an escalating retry delay per consecutive failure — a fix (new repo URL) changes the fingerprint and re-points immediately, bypassing the backoff. `update_interval_hours` × `stale_multiplier` drives per-slot staleness. GITHUB_TOKEN (optional) is read from the 0600 .env at runtime, never from here. `index` (change: fleet-search) drives the shared FTS index over the clones: `extensions` is a polyglot allowlist of source/config/doc file types, `max_file_bytes` caps per-file index size (binaries are skipped by content sniff); the size cap naturally drops lockfiles/minified bundles.",
   "db": "var/fleet/fleet.db",
   "clone_root": "var/fleet/clones",
   "max_new_clones_per_pass": 8,
@@ -48,7 +48,7 @@
     "max_file_bytes": 524288
   },
   "signals": {
-    "_comment": "fleet-signals policy (change: fleet-signals). Omitted keys fall back to code defaults in atlas_fleet_signals.DEFAULT_SIGNALS_CFG. `watchlist` is the operator-curated instant-alert term list: plain entries match as substrings of normalized terms, `re:` entries as case-insensitive regex (an invalid pattern is skipped and surfaced in `signals status`, never a crash) \u2014 EDIT THIS LIST to taste. `cluster` (k adopters within window_days) and `novelty_max_adopters` are strawmen: run `backfill` then `calibrate` on-device and set them from the evidence. `econ_cooldown_hours` dampens paging (never recording) for busy subnets. `outcome_horizons_days` drive the effectiveness ledger; price retention never drops below the longest horizon + 7d.",
+    "_comment": "fleet-signals policy (change: fleet-signals). Omitted keys fall back to code defaults in atlas_fleet_signals.DEFAULT_SIGNALS_CFG. `watchlist` is the operator-curated instant-alert term list: plain entries match as substrings of normalized terms, `re:` entries as case-insensitive regex (an invalid pattern is skipped and surfaced in `signals status`, never a crash) — EDIT THIS LIST to taste. `cluster` (k adopters within window_days) and `novelty_max_adopters` are strawmen: run `backfill` then `calibrate` on-device and set them from the evidence. `econ_cooldown_hours` dampens paging (never recording) for busy subnets. `outcome_horizons_days` drive the effectiveness ledger; price retention never drops below the longest horizon + 7d.",
     "model_ids": true,
     "range_caps": {
       "max_files": 200,
@@ -87,7 +87,7 @@
     ],
     "price_retention_days": 120,
     "judge": {
-      "_comment": "econ-alert intelligence gate (change: econ-alert-intelligence-gate). DEFAULTS OFF: with `enabled` false (or an empty `toolset`) econ detection keeps the legacy path-match-and-page behaviour \u2014 flipping `enabled` is the whole rollback. When on, each econ candidate's diff is read from the local clone and judged by Grok via the local Hermes one-shot CLI (reuses the ratified X OAuth subscription \u2014 NO api key, provider, or model id here; the model is whatever Hermes is configured to use). `toolset` is the no-tools identifier from `hermes tools list` on the box (one-shot mode bypasses approvals, so a restriction is mandatory) \u2014 the gate stays off until it is set. `high/med` verdicts page (high breaks the per-netuid cooldown), `low` digests, `none` drops (a `high_stakes_paths` match floors it to a digest so consensus/weight/emission changes are never silently dropped). `max_calls_per_run`/`max_calls_per_day` cap model calls (over-budget or timeout ships `unjudged`, never blocks the pass); `max_diff_bytes` bounds the diff fed to the judge. The extract systemd unit must resolve `hermes_path` with a healthy OAuth session. Deploy is forward-only (no historical re-judging).",
+      "_comment": "econ-alert intelligence gate (change: econ-alert-intelligence-gate). DEFAULTS OFF: with `enabled` false (or an empty `toolset`) econ detection keeps the legacy path-match-and-page behaviour — flipping `enabled` is the whole rollback. When on, each econ candidate's diff is read from the local clone and judged by Grok via the local Hermes one-shot CLI (reuses the ratified X OAuth subscription — NO api key, provider, or model id here; the model is whatever Hermes is configured to use). `toolset` is the no-tools identifier from `hermes tools list` on the box (one-shot mode bypasses approvals, so a restriction is mandatory) — the gate stays off until it is set. `high/med` verdicts page (high breaks the per-netuid cooldown), `low` digests, `none` drops (a `high_stakes_paths` match floors it to a digest so consensus/weight/emission changes are never silently dropped). `max_calls_per_run`/`max_calls_per_day` cap model calls (over-budget or timeout ships `unjudged`, never blocks the pass); `max_diff_bytes` bounds the diff fed to the judge. The extract systemd unit must resolve `hermes_path` with a healthy OAuth session. Deploy is forward-only (no historical re-judging).",
       "enabled": true,
       "hermes_path": "/home/pi/.local/bin/hermes",
       "toolset": "todo",
@@ -99,11 +99,18 @@
         "mechanism",
         "set_weights",
         "emission"
+      ],
+      "significance_anchors": [
+        "high: the change alters who is paid or how much through the weight-setting or emission path, visibly within an epoch.",
+        "med: the change alters scoring inputs, parameters, or thresholds without changing the payout path.",
+        "low: the change is a refactor, test, or tooling edit inside scoring files.",
+        "none: cosmetic only.",
+        "A verdict that cannot name the payout-path line it rests on is at most med."
       ]
     }
   },
   "metrics": {
-    "_comment": "fleet-rotation-metrics policy (change: fleet-rotation-metrics). Omitted keys fall back to code defaults in atlas_fleet_metrics.DEFAULT_METRICS_CFG. Read-only over the clones; the metrics step runs inline after signals on the hourly pass (kill-switch: set `enabled` false). Emission map: a file is scanned when its path carries an `econ_path_tokens` word and a `scan_extensions` suffix (tests/vendor/docs excluded); `route_families` classify an assigned symbol into a routing kind (first keyword match wins \u2014 order families specific\u2192general); `opacity_tokens` co-occurring with econ vocab flag a subnet whose economics load remotely (no numbers invented). `ls_remote_ref_cap` bounds the branch-pulse tip snapshot. `momentum_windows` reuse the signals price panel (no new API call); missing history renders n/a. `placeholder_orgs` are dropped from the team-concentration view.",
+    "_comment": "fleet-rotation-metrics policy (change: fleet-rotation-metrics). Omitted keys fall back to code defaults in atlas_fleet_metrics.DEFAULT_METRICS_CFG. Read-only over the clones; the metrics step runs inline after signals on the hourly pass (kill-switch: set `enabled` false). Emission map: a file is scanned when its path carries an `econ_path_tokens` word and a `scan_extensions` suffix (tests/vendor/docs excluded); `route_families` classify an assigned symbol into a routing kind (first keyword match wins — order families specific→general); `opacity_tokens` co-occurring with econ vocab flag a subnet whose economics load remotely (no numbers invented). `ls_remote_ref_cap` bounds the branch-pulse tip snapshot. `momentum_windows` reuse the signals price panel (no new API call); missing history renders n/a. `placeholder_orgs` are dropped from the team-concentration view.",
     "enabled": true,
     "econ_path_tokens": [
       "reward",
@@ -189,7 +196,7 @@
     ]
   },
   "dashboard": {
-    "_comment": "fleet-rotation-metrics ranked 'attention board' (change: fleet-rotation-metrics). Rendered inline after the metrics pass into `www_dir` (served LAN-only by atlas-dashboard.service \u2014 a dedicated dir holding ONLY the rendered page, never the store/clones). Ranking rules v2: one explicit attention score per subnet, shown per row; `head_min_score`/`mid_min_score` set the LOOK-HERE vs SKIM floors; `head_count`/`mid_count` cap each tier; fresh events (econ-code change within `fresh_hours`, or \u2265`pulse_spike` changed branch tips) get a boost large enough to reach the head; pure-opaque-no-other-signal subnets collapse into one grouped line. Set `enabled` false to skip rendering.",
+    "_comment": "fleet-rotation-metrics ranked 'attention board' (change: fleet-rotation-metrics). Rendered inline after the metrics pass into `www_dir` (served LAN-only by atlas-dashboard.service — a dedicated dir holding ONLY the rendered page, never the store/clones). Ranking rules v2: one explicit attention score per subnet, shown per row; `head_min_score`/`mid_min_score` set the LOOK-HERE vs SKIM floors; `head_count`/`mid_count` cap each tier; fresh events (econ-code change within `fresh_hours`, or ≥`pulse_spike` changed branch tips) get a boost large enough to reach the head; pure-opaque-no-other-signal subnets collapse into one grouped line. Set `enabled` false to skip rendering.",
     "enabled": true,
     "www_dir": "var/fleet/www",
     "head_count": 10,
@@ -200,13 +207,23 @@
     "fresh_hours": 2
   },
   "mining": {
-    "_comment": "Mining triage (change: mining-triage). Ranks subnets by what a NEW INDEPENDENT MINER could earn. DEFAULTS OFF in code; this block is the opt-in and flipping `enabled` back to false is the whole rollback. It is the only part of the fleet pass that reaches a provider, and it does so ONLY through livedata (one keyless TaoSwap panel call plus batched keyless finney storage reads at one finalized block; zero TaoStats quota). alpha_out_emission is a protocol constant of 1 alpha per block on every subnet, so miner-accessible QUANTITY is identical everywhere and cannot rank: price, owner capture (MinerBurned) and incentive concentration do. `miner_share_source` is required \u2014 the screen refuses to compute any miner figure without a recorded citation. `budget_band` is null until the operator picks one (D2), which leaves rent unknown and the hardware rung inert rather than assuming a free box. `top1_ceiling_pct` drives the winner-take-all rung: at or above this top-1 share of the incentive vector the field has one earner in economic terms and entry means displacing them. Measured on SHARE, not earner count — a subnet can pay ten UIDs and still round to 100% for the top one. `identity_placeholders` drives the identity rung: a subnet whose on-chain SubnetIdentitiesV3 subnet_name reduces to one of these first tokens, or which has no identity entry at all, is cut as not a going concern. Matched against the name's normalised first token, so `pending...`, `Parked` and `wait (reproduce paper)` all resolve. Owner-written free text, so expect to extend the list; an unreadable identity map leaves the rung inert rather than cutting every subnet.",
+    "_comment": "Mining triage (change: mining-triage). Ranks subnets by what a NEW INDEPENDENT MINER could earn. DEFAULTS OFF in code; this block is the opt-in and flipping `enabled` back to false is the whole rollback. It is the only part of the fleet pass that reaches a provider, and it does so ONLY through livedata (one keyless TaoSwap panel call plus batched keyless finney storage reads at one finalized block; zero TaoStats quota). alpha_out_emission is a protocol constant of 1 alpha per block on every subnet, so miner-accessible QUANTITY is identical everywhere and cannot rank: price, owner capture (MinerBurned) and incentive concentration do. `miner_share_source` is required — the screen refuses to compute any miner figure without a recorded citation. `budget_band` is null until the operator picks one (D2), which leaves rent unknown and the hardware rung inert rather than assuming a free box. `top1_ceiling_pct` drives the winner-take-all rung: at or above this top-1 share of the incentive vector the field has one earner in economic terms and entry means displacing them. Measured on SHARE, not earner count — a subnet can pay ten UIDs and still round to 100% for the top one. `identity_placeholders` drives the identity rung: a subnet whose on-chain SubnetIdentitiesV3 subnet_name reduces to one of these first tokens, or which has no identity entry at all, is cut as not a going concern. Matched against the name's normalised first token, so `pending...`, `Parked` and `wait (reproduce paper)` all resolve. Owner-written free text, so expect to extend the list; an unreadable identity map leaves the rung inert rather than cutting every subnet.",
     "enabled": true,
     "miner_share": 0.41,
     "miner_share_source": "atlas-kb ground-truth.md::Emissions and Halving lines 58-65 (confirmed, coverage 2026-08-06): 18% owner / 41% miners / 41% validators, fixed at protocol level; corroborated on 2026-08-07 by the live panel's conviction.owner_emission_share of 0.18 on all 84 reporting subnets",
     "burn_ceiling_pct": 99.0,
     "top1_ceiling_pct": 95.0,
-    "identity_placeholders": ["deprecated", "unknown", "pending", "parked", "wait", "tbd", "none", "test", "placeholder"],
+    "identity_placeholders": [
+      "deprecated",
+      "unknown",
+      "pending",
+      "parked",
+      "wait",
+      "tbd",
+      "none",
+      "test",
+      "placeholder"
+    ],
     "budget_band": null,
     "retention_days": 90,
     "board_limit": 10

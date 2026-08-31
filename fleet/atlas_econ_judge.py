@@ -137,7 +137,8 @@ _PROMPT_HEADER = (
     "most ~18 words, no trailing detail lists.\n"
     "  why_it_matters : ONE short sentence, at most ~22 words, on the effect "
     "on emissions / rewards / who gets paid.\n"
-    "  significance   : one of high | med | low | none.\n"
+    "  significance   : one of high | med | low | none, judged on the "
+    "scale below.\n"
     "  direction      : one of emissions_up | emissions_down | reshuffle | "
     "neutral | unknown.\n"
     "  evidence       : quote the specific changed lines or symbols your "
@@ -152,9 +153,29 @@ _PROMPT_HEADER = (
 )
 
 
+# The significance scale (change: pulse-briefing). Without anchors the
+# model grades on its own curve: 64% of judged diffs came back high or med
+# in the first six weeks, two pages a day. The scale is configuration
+# (`significance_anchors`) rendered verbatim, so re-anchoring is a config
+# change with a recorded diff; these defaults apply when config omits it.
+DEFAULT_SIGNIFICANCE_ANCHORS = (
+    "high: the change alters who is paid or how much through the "
+    "weight-setting or emission path, visibly within an epoch.",
+    "med: the change alters scoring inputs, parameters, or thresholds "
+    "without changing the payout path.",
+    "low: the change is a refactor, test, or tooling edit inside scoring "
+    "files.",
+    "none: cosmetic only.",
+    "A verdict that cannot name the payout-path line it rests on is at "
+    "most med.",
+)
+
+
 def build_prompt(diff_text: str, files: Sequence[str],
-                 netuid: Optional[int], partial_view: bool) -> str:
-    header = _PROMPT_HEADER
+                 netuid: Optional[int], partial_view: bool,
+                 anchors: Optional[Sequence[str]] = None) -> str:
+    scale = "\n".join(anchors or DEFAULT_SIGNIFICANCE_ANCHORS)
+    header = "%sSignificance scale:\n%s\n" % (_PROMPT_HEADER, scale)
     meta = "netuid=%s files=%s%s" % (
         netuid, ", ".join(list(files)[:12]),
         " (partial view — diff truncated)" if partial_view else "")
@@ -242,11 +263,13 @@ def make_default_judge(jcfg: Dict[str, Any], runner: Optional[Runner] = None
     hermes_path = jcfg["hermes_path"]
     toolset = jcfg["toolset"]
     timeout = jcfg["timeout_seconds"]
+    anchors = jcfg.get("significance_anchors")
 
     def judge(diff_text: str, files: Sequence[str],
               context: Dict[str, Any]) -> Dict[str, Any]:
         prompt = build_prompt(diff_text, files, context.get("netuid"),
-                              bool(context.get("partial_view")))
+                              bool(context.get("partial_view")),
+                              anchors=anchors)
         last_reason = "unparseable verdict"
         for attempt in range(2):  # one call + one retry
             try:
