@@ -108,6 +108,37 @@ lines, no em dashes); an HTTP 400 falls back once to plain text, recorded.
 `service-failure` later (once Hermes has a service unit) is a new adapter
 entry only.
 
+## Delivery tiers and the pulse briefing (change: pulse-briefing)
+
+Every class carries a `tier`: `instant` pages on the scan that finds the
+event; `briefing` records the event in the ledger with status `briefed`,
+advances the watermark, and surfaces it only through the pulse briefing.
+Ships with every class instant; the planned quiet state demotes
+econ-code, gate-crossing, repository-update, fleet-signal, schema-drift
+and knowledge-ingestion to briefing tier in one config commit. Flipping a
+tier back is the per-class rollback.
+
+Two new instant classes: `subnet-registry` (a netuid appears, disappears,
+or changes its on-chain name between consecutive panel snapshots; the
+first snapshot seeds silently) and `fail-closed` (one page per outage when
+the gate poll or the chain-parameter watch has recorded only failures for
+longer than `window_hours`, keyed by the outage's first failure). The
+`chain-runtime-upgrade` message now joins the matching repository range
+for the release subject and top touched areas, and states when none is
+tracked yet. Crossings from a subnet flagged as hovering are recorded as
+suppressed, never paged.
+
+The briefing itself (`atlas_briefing.py`) is a daily edition at
+`briefing.daily_hour_utc`, replaced weekly on `briefing.weekly_weekday`,
+composed ONLY from stores already on disk (no provider call, no model
+call): network, subnets, code, narrative, mining, atlas, each line a
+recorded fact with its delta against the previous edition's persisted
+figures. Edition watermarks in the ledger stop double-sends; a missed
+hour catches up on the next scan that day. Oversized editions drop whole
+lines from the lowest-priority section upward (network is never cut) and
+state the omission count. The last line is the next action when one
+exists, otherwise the LAN board link.
+
 ## Commands
 
 ```bash

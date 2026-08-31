@@ -160,12 +160,58 @@ CREATE TABLE IF NOT EXISTS chain_param_events (
     observed_at TEXT NOT NULL,
     block_number INTEGER
 );
+CREATE TABLE IF NOT EXISTS panel_snapshot (
+    id INTEGER PRIMARY KEY,
+    observed_at TEXT NOT NULL,
+    block_number INTEGER,
+    netuid INTEGER NOT NULL,
+    share REAL,
+    moving_price_tao REAL,
+    alpha_price_tao REAL,
+    emission_percent REAL,
+    emission_evolution_d_1 REAL,
+    emission_evolution_d_30 REAL,
+    inflow REAL,
+    outflow REAL,
+    volume_24h REAL,
+    holders_count INTEGER,
+    market_cap REAL,
+    active_miners INTEGER,
+    emission_miner_burn REAL,
+    emission_is_enabled INTEGER,
+    dereg_risk_level TEXT,
+    dereg_prune_rank INTEGER,
+    dereg_is_immune INTEGER,
+    conviction_is_contested INTEGER,
+    takeover_eligible INTEGER,
+    king_is_owner INTEGER,
+    name TEXT
+);
+CREATE INDEX IF NOT EXISTS panel_snapshot_netuid
+    ON panel_snapshot (netuid, id DESC);
+CREATE INDEX IF NOT EXISTS panel_snapshot_observed
+    ON panel_snapshot (observed_at);
+CREATE TABLE IF NOT EXISTS network_vitals (
+    date TEXT PRIMARY KEY,
+    observed_at TEXT NOT NULL,
+    total_staked_tao REAL,
+    available_tao REAL,
+    root_stake_tao REAL,
+    subnets_stake_tao REAL,
+    subnets_share_pct REAL,
+    subnet_reg_cost_tao REAL,
+    total_accounts INTEGER,
+    new_accounts_today INTEGER,
+    tao_usd REAL,
+    tao_usd_close_date TEXT
+);
 """
 
 META_LAST_LIVE_SPEC = "last_live_spec"
 META_LAST_LIVE_SPEC_BLOCK = "last_live_spec_block"
 META_LAST_LIVE_SPEC_OBSERVED = "last_live_spec_observed_at"
 META_GATE_ACTIVE = "gate_active"
+META_VITALS_DATE = "network_vitals_date"
 
 
 class FatalLiveError(Exception):
@@ -304,7 +350,9 @@ def open_store(db_path: str) -> sqlite3.Connection:
                             ("rank_provenance", "TEXT"),
                             ("bar_mode", "TEXT"),
                             ("above_count", "INTEGER"))),
-            ("gate_events", (("prev_theta", "REAL"),))):
+            ("gate_events", (("prev_theta", "REAL"),
+                             ("hovering", "INTEGER"))),
+            ("gate_sides", (("hovering", "INTEGER"),))):
         columns = {row[1] for row in connection.execute(
             "PRAGMA table_info(%s)" % table)}
         for column, coltype in additions:
@@ -2289,16 +2337,40 @@ def update_gate_sides(connection: sqlite3.Connection,
     band = float(gcfg.get("hysteresis_pct", 10)) / 100.0
     confirm = max(1, int(gcfg.get("confirm_polls", 2)))
     absence = max(1, int(gcfg.get("absence_clear_polls", 3)))
+    hover_crossings = max(1, int(gcfg.get("hover_crossings", 2)))
+    hover_days = max(1, int(gcfg.get("hover_window_days", 7)))
     upper = theta * (1.0 + band)
     lower = theta * (1.0 - band)
     now = _utc_now()
+    hover_cutoff = (datetime.datetime.now(datetime.timezone.utc)
+                    - datetime.timedelta(days=hover_days)).isoformat()
+
+    # A zero share is a panel gap, not a demand reading: a live subnet with
+    # a pool cannot have a zero moving price (change: pulse-briefing). Zero
+    # stays in the normalization universe upstream, but for side tracking it
+    # is a missing observation: no crossing to or from zero, and the pass
+    # counts toward the absence threshold.
+    shares = {netuid: share for netuid, share in shares.items()
+              if share > 0.0}
 
     existing = {
         row[0]: {"side": row[1], "pending_side": row[2],
-                 "pending_count": row[3], "miss_count": row[4]}
+                 "pending_count": row[3], "miss_count": row[4],
+                 "hovering": bool(row[5])}
         for row in connection.execute(
-            "SELECT netuid, side, pending_side, pending_count, miss_count "
-            "FROM gate_sides")}
+            "SELECT netuid, side, pending_side, pending_count, miss_count, "
+            "COALESCE(hovering, 0) FROM gate_sides")}
+
+    # Hovering clears only after a full quiet window on one side.
+    for netuid, row in existing.items():
+        if row["hovering"] and connection.execute(
+                "SELECT COUNT(*) FROM gate_events WHERE netuid = ? "
+                "AND observed_at > ?", (netuid, hover_cutoff)
+                ).fetchone()[0] == 0:
+            row["hovering"] = False
+            connection.execute(
+                "UPDATE gate_sides SET hovering = 0 WHERE netuid = ?",
+                (netuid,))
 
     events: List[Dict[str, Any]] = []
     for netuid in sorted(shares):
@@ -2324,20 +2396,33 @@ def update_gate_sides(connection: sqlite3.Connection,
             if pending_count >= confirm:
                 direction = (GATE_FELL_BELOW if zone == GATE_BELOW
                              else GATE_ROSE_ABOVE)
+                # The crossing that trips the hover threshold is delivered
+                # normally; only crossings AFTER the flag carry the
+                # annotation (change: pulse-briefing).
+                hovering = row["hovering"]
                 cursor = connection.execute(
                     "INSERT INTO gate_events (observed_at, netuid, "
                     "direction, share, theta, prev_side, emission_enabled, "
-                    "block_number, prev_theta) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "block_number, prev_theta, hovering) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (now, netuid, direction, share, theta, side,
                      (None if enabled.get(netuid) is None
                       else int(bool(enabled.get(netuid)))), block_number,
-                     prev_theta))
+                     prev_theta, int(hovering)))
                 events.append({"id": cursor.lastrowid, "netuid": netuid,
                                "direction": direction, "share": share,
-                               "theta": theta, "prev_theta": prev_theta})
+                               "theta": theta, "prev_theta": prev_theta,
+                               "hovering": hovering})
                 side = zone
                 pending_side, pending_count = None, 0
+                if not hovering and connection.execute(
+                        "SELECT COUNT(*) FROM gate_events WHERE netuid = ? "
+                        "AND observed_at > ?", (netuid, hover_cutoff)
+                        ).fetchone()[0] > hover_crossings:
+                    row["hovering"] = True
+                    connection.execute(
+                        "UPDATE gate_sides SET hovering = 1 "
+                        "WHERE netuid = ?", (netuid,))
         connection.execute(
             "UPDATE gate_sides SET side = ?, pending_side = ?, "
             "pending_count = ?, miss_count = 0, updated_at = ? "
@@ -2357,6 +2442,101 @@ def update_gate_sides(connection: sqlite3.Connection,
                 "WHERE netuid = ?", (misses, now, netuid))
     connection.commit()
     return events
+
+
+_SNAPSHOT_PANEL_FIELDS = (
+    "moving_price_tao", "alpha_price_tao", "emission_percent",
+    "emission_evolution_d_1", "emission_evolution_d_30", "inflow",
+    "outflow", "volume_24h", "holders_count", "market_cap",
+    "active_miners", "emission_miner_burn", "name")
+
+
+def record_panel_snapshot(connection: sqlite3.Connection,
+                          gcfg: Dict[str, Any],
+                          subnets: List[Dict[str, Any]],
+                          shares: Dict[int, float],
+                          block_number: Optional[int]) -> int:
+    """Persist one snapshot row per non-root subnet from the validated
+    panel of this pass, carrying the computed demand share (change:
+    pulse-briefing). Absent fields persist as NULL, never zero. Retention
+    is bounded and pruned in the same pass."""
+    now = _utc_now()
+    retention = max(1, int(gcfg.get("panel_snapshot_retention_days", 90)))
+    written = 0
+    for row in subnets:
+        netuid = row.get("netuid")
+        if not isinstance(netuid, int) or netuid == 0:
+            continue
+        dereg = row.get("dereg") or {}
+        conviction = row.get("conviction") or {}
+        enabled = row.get("emission_is_enabled")
+
+        def flag(value):
+            return None if value is None else int(bool(value))
+
+        values = [now, block_number, netuid, shares.get(netuid)]
+        values += [row.get(field) for field in _SNAPSHOT_PANEL_FIELDS[:-1]]
+        values += [flag(enabled), dereg.get("risk_level"),
+                   dereg.get("prune_rank"), flag(dereg.get("is_immune")),
+                   flag(conviction.get("is_contested")),
+                   flag(conviction.get("takeover_eligible")),
+                   flag(conviction.get("king_is_owner")), row.get("name")]
+        connection.execute(
+            "INSERT INTO panel_snapshot (observed_at, block_number, netuid, "
+            "share, moving_price_tao, alpha_price_tao, emission_percent, "
+            "emission_evolution_d_1, emission_evolution_d_30, inflow, "
+            "outflow, volume_24h, holders_count, market_cap, active_miners, "
+            "emission_miner_burn, emission_is_enabled, dereg_risk_level, "
+            "dereg_prune_rank, dereg_is_immune, conviction_is_contested, "
+            "takeover_eligible, king_is_owner, name) "
+            "VALUES (%s)" % ", ".join("?" * 24), values)
+        written += 1
+    cutoff = (datetime.datetime.now(datetime.timezone.utc)
+              - datetime.timedelta(days=retention)).isoformat()
+    connection.execute("DELETE FROM panel_snapshot WHERE observed_at < ?",
+                       (cutoff,))
+    connection.commit()
+    return written
+
+
+def run_vitals_daily(connection: sqlite3.Connection, config: Dict[str, Any],
+                     ledger: QuotaLedger, run_op: Optional[Any] = None,
+                     env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """Persist one network-vitals row per UTC day from two keyless calls
+    (change: pulse-briefing): TaoSwap network stats and the daily TAO/USD
+    close, through the existing contract-validated adapters. Zero TaoStats
+    quota. Fails closed: an invalid or failed fetch records a health event
+    and persists nothing for the day."""
+    run_op = run_op or run_operation
+    today = _utc_now()[:10]
+    if meta_get(connection, META_VITALS_DATE) == today:
+        return {"status": "current", "date": today}
+    stats = run_op(connection, config, ledger, "network_stats_taoswap",
+                   interactive=False, env=env)
+    price = run_op(connection, config, ledger, "price_daily_taoswap",
+                   interactive=False, env=env)
+    if stats.get("status") != "ok" or price.get("status") != "ok":
+        health_event(connection, "taoswap", "network_vitals",
+                     "provider-failure",
+                     "vitals unavailable: stats=%s price=%s"
+                     % (stats.get("status"), price.get("status")))
+        return {"status": "live-unavailable"}
+    sv, pv = stats["values"], price["values"]
+    connection.execute(
+        "INSERT OR REPLACE INTO network_vitals (date, observed_at, "
+        "total_staked_tao, available_tao, root_stake_tao, "
+        "subnets_stake_tao, subnets_share_pct, subnet_reg_cost_tao, "
+        "total_accounts, new_accounts_today, tao_usd, tao_usd_close_date) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (sv.get("date"), _utc_now(), sv.get("total_staked_tao"),
+         sv.get("available_tao"), sv.get("root_stake_tao"),
+         sv.get("subnets_stake_tao"), sv.get("subnets_share_pct"),
+         sv.get("subnet_reg_cost_tao"), sv.get("total_accounts"),
+         sv.get("new_accounts_today"), pv.get("tao_usd"),
+         pv.get("close_date")))
+    meta_set(connection, META_VITALS_DATE, today)
+    connection.commit()
+    return {"status": "ok", "date": sv.get("date")}
 
 
 def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
@@ -2423,6 +2603,9 @@ def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
         summary["events_recorded"] = 0
         return summary
     shares, enabled = compute_demand_shares(panel["values"]["subnets"])
+    summary["panel_snapshot_rows"] = record_panel_snapshot(
+        connection, gcfg, panel["values"]["subnets"], shares,
+        state["block_number"])
     if not shares:
         summary["panel"] = "no-normalizable-shares"
         summary["events_recorded"] = 0
@@ -2517,6 +2700,8 @@ def _cmd_poll_gate() -> int:
             if watch["status"] != "disabled":
                 summary = {"status": "ok", "gate": "disabled",
                            "chain_params": watch}
+        summary["vitals"] = run_vitals_daily(connection, config, ledger,
+                                             env=env)
     finally:
         connection.close()
     print(json.dumps(summary, indent=2, sort_keys=True))

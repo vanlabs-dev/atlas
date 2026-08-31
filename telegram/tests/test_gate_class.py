@@ -61,6 +61,21 @@ def add_crossing(path, netuid, direction="fell-below", share=0.005,
     return row_id
 
 
+def add_hover_column(path):
+    conn = sqlite3.connect(path)
+    conn.execute("ALTER TABLE gate_events ADD COLUMN hovering INTEGER")
+    conn.commit()
+    conn.close()
+
+
+def set_hovering(path, row_id, value=1):
+    conn = sqlite3.connect(path)
+    conn.execute("UPDATE gate_events SET hovering = ? WHERE id = ?",
+                 (value, row_id))
+    conn.commit()
+    conn.close()
+
+
 class GateAdapterTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -197,3 +212,50 @@ class GateAdapterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HoveringSuppressionTests(unittest.TestCase):
+    """pulse-briefing: a flagged hoverer's crossings are recorded as
+    suppressed, never paged; unflagged crossings page as before."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.live_db = os.path.join(self.tmp.name, "livedata.db")
+        seed_live(self.live_db)
+        add_hover_column(self.live_db)
+        self.config = make_config(self.tmp.name)
+        self.spec = {"enabled": True, "source_db": self.live_db,
+                     "cooldown_hours": 0}
+        self.store = tg.open_store(os.path.join(self.tmp.name,
+                                                "telegram.db"))
+        self.addCleanup(self.store.close)
+        self.ctx = {"config": self.config, "spec": self.spec,
+                    "connection": self.store}
+
+    def statuses(self):
+        return self.store.execute(
+            "SELECT event_id, status FROM events ORDER BY id").fetchall()
+
+    def test_hovering_crossing_is_suppressed_not_paged(self):
+        row = add_crossing(self.live_db, 9)
+        set_hovering(self.live_db, row, 1)
+        events, wm = tg.gate_crossing_events(self.live_db, None, self.ctx)
+        self.assertEqual(events, [])
+        self.assertEqual(wm, str(row))
+        self.assertEqual(self.statuses(),
+                         [("gate-crossing:9:%d" % row, "suppressed")])
+
+    def test_unflagged_crossing_still_pages(self):
+        row = add_crossing(self.live_db, 9)
+        events, _ = tg.gate_crossing_events(self.live_db, None, self.ctx)
+        self.assertEqual(len(events), 1)
+        self.assertIn("subnet 9", events[0]["text"])
+
+    def test_store_without_hover_column_still_works(self):
+        db2 = os.path.join(self.tmp.name, "old.db")
+        seed_live(db2)
+        add_crossing(db2, 5)
+        self.spec["source_db"] = db2
+        events, _ = tg.gate_crossing_events(db2, None, self.ctx)
+        self.assertEqual(len(events), 1)

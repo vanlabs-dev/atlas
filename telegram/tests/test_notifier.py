@@ -5,6 +5,7 @@ marking, chain-runtime-upgrade class, HTML rendering + 400 fallback, and
 scan-loop isolation on delivery failure."""
 
 import datetime
+import json
 import os
 import sqlite3
 import sys
@@ -833,6 +834,215 @@ class ChainUpgradeTests(unittest.TestCase):
         events, wm = tg.chain_runtime_upgrade_events(self.db, None, None)
         self.assertEqual(events, [])
         self.assertIsNone(wm)
+
+
+class TierRoutingTests(unittest.TestCase):
+    def setUp(self):
+        tg._SECRET_VALUES.clear()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.config = make_config(self.tmp.name)
+        self.db = self.config["classes"]["chain-runtime-upgrade"]["source_db"]
+        seed_livedata(self.db, live_spec=452, upgrades=[(450, 452, 8951570)])
+        self.store = tg.open_store(self.config["db"])
+
+    def tearDown(self):
+        self.store.close()
+        self.tmp.cleanup()
+
+    def scan(self, posts):
+        return tg.notify_scan(self.config, "tok", "chat", self.store,
+                              poster=ok_poster_factory(posts))
+
+    def ledger(self):
+        return self.store.execute(
+            "SELECT event_class, status FROM events ORDER BY id").fetchall()
+
+    def test_briefing_tier_records_without_paging(self):
+        self.config["classes"]["chain-runtime-upgrade"]["tier"] = "briefing"
+        posts = []
+        summary = self.scan(posts)
+        self.assertEqual(posts, [])
+        self.assertEqual(
+            summary["classes"]["chain-runtime-upgrade"]["briefed"], 1)
+        self.assertIn(("chain-runtime-upgrade", "briefed"), self.ledger())
+        # Watermark advanced: a tier flip later does not replay the event.
+        self.config["classes"]["chain-runtime-upgrade"]["tier"] = "instant"
+        posts = []
+        self.scan(posts)
+        self.assertEqual(posts, [])
+
+    def test_instant_tier_pages_as_before(self):
+        posts = []
+        self.scan(posts)
+        import urllib.parse
+        decoded = [urllib.parse.unquote_plus(p) for p in posts]
+        self.assertTrue(any("live chain upgraded" in p for p in decoded))
+        self.assertIn(("chain-runtime-upgrade", "delivered"), self.ledger())
+
+
+class RuntimeMergeTests(unittest.TestCase):
+    def setUp(self):
+        tg._SECRET_VALUES.clear()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.config = make_config(self.tmp.name)
+        self.db = self.config["classes"]["chain-runtime-upgrade"]["source_db"]
+        seed_livedata(self.db, live_spec=452, upgrades=[(450, 452, 8951570)])
+        self.repo_db = os.path.join(self.tmp.name, "repotrack.db")
+        spec = self.config["classes"]["chain-runtime-upgrade"]
+        spec["repo_db"] = self.repo_db
+        self.ctx = {"config": self.config, "spec": spec, "connection": None}
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def seed_range(self, prev_spec, new_spec, subject):
+        conn = sqlite3.connect(self.repo_db)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS change_ranges (id INTEGER PRIMARY "
+            "KEY, commits_json TEXT, files_json TEXT, prev_spec INTEGER, "
+            "new_spec INTEGER)")
+        conn.execute(
+            "INSERT INTO change_ranges (commits_json, files_json, "
+            "prev_spec, new_spec) VALUES (?, ?, ?, ?)",
+            (json.dumps({"commits": [{"sha": "a" * 40,
+                                      "subject": subject}]}),
+             json.dumps({"files": [{"path": "pallets/subtensor/src/a.rs"},
+                                   {"path": "pallets/subtensor/src/b.rs"},
+                                   {"path": "runtime/src/lib.rs"}]}),
+             prev_spec, new_spec))
+        conn.commit()
+        conn.close()
+
+    def test_matching_range_supplies_subject_and_areas(self):
+        self.seed_range(450, 452, "Bump spec_version to 452. (#3131)")
+        events, _ = tg.chain_runtime_upgrade_events(self.db, None, self.ctx)
+        text = events[0]["text"]
+        self.assertIn("release: Bump spec_version to 452. (#3131)", text)
+        self.assertIn("touched: pallets (2)", text)
+        self.assertNotIn("not yet tracked", text)
+
+    def test_missing_range_is_stated(self):
+        events, _ = tg.chain_runtime_upgrade_events(self.db, None, self.ctx)
+        self.assertIn("repo evidence: not yet tracked",
+                      events[0]["text"])
+
+
+def seed_snapshot(path, rows):
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS panel_snapshot (id INTEGER PRIMARY "
+        "KEY, observed_at TEXT, block_number INTEGER, netuid INTEGER, "
+        "name TEXT)")
+    conn.executemany(
+        "INSERT INTO panel_snapshot (observed_at, block_number, netuid, "
+        "name) VALUES ('2026-08-31T00:00:00+00:00', ?, ?, ?)", rows)
+    conn.commit()
+    conn.close()
+
+
+class SubnetRegistryTests(unittest.TestCase):
+    def setUp(self):
+        tg._SECRET_VALUES.clear()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.config = make_config(self.tmp.name)
+        self.db = os.path.join(self.tmp.name, "livedata.db")
+        self.ctx = {"config": self.config, "spec": {}, "connection": None}
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_first_snapshot_seeds_silently(self):
+        seed_snapshot(self.db, [(100, 1, "alpha"), (100, 2, "beta-sub")])
+        events, wm = tg.subnet_registry_events(self.db, None, self.ctx)
+        self.assertEqual(events, [])
+        self.assertEqual(wm, "100")
+
+    def test_set_and_name_changes_page(self):
+        seed_snapshot(self.db, [(100, 1, "alpha"), (100, 2, "beta-sub"),
+                                (200, 1, "alpha-renamed"), (200, 3, "new")])
+        events, wm = tg.subnet_registry_events(self.db, "100", self.ctx)
+        self.assertEqual(wm, "200")
+        kinds = [(e["event_id"]) for e in events]
+        self.assertEqual(kinds, ["subnet-registry:200:3:registered",
+                                 "subnet-registry:200:2:deregistered",
+                                 "subnet-registry:200:1:renamed"])
+        texts = " || ".join(e["text"] for e in events)
+        self.assertIn("subnet 3 registered", texts)
+        self.assertIn("name: new", texts)
+        self.assertIn("subnet 2 deregistered", texts)
+        self.assertIn("name: alpha to alpha-renamed", texts)
+        self.assertIn("blocks: 100 to 200", texts)
+        # Watermark advanced: nothing replays.
+        again, _ = tg.subnet_registry_events(self.db, wm, self.ctx)
+        self.assertEqual(again, [])
+
+
+class FailClosedTests(unittest.TestCase):
+    def setUp(self):
+        tg._SECRET_VALUES.clear()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.config = make_config(self.tmp.name)
+        self.db = os.path.join(self.tmp.name, "livedata.db")
+        self.store = tg.open_store(self.config["db"])
+        self.spec = {"window_hours": 6}
+        self.ctx = {"config": self.config, "spec": self.spec,
+                    "connection": self.store}
+
+    def tearDown(self):
+        self.store.close()
+        self.tmp.cleanup()
+
+    def seed(self, good_hours_ago, fail_hours_ago):
+        conn = sqlite3.connect(self.db)
+        conn.executescript(
+            "CREATE TABLE IF NOT EXISTS gate_state (id INTEGER PRIMARY "
+            "KEY, observed_at TEXT);"
+            "CREATE TABLE IF NOT EXISTS chain_params (id INTEGER PRIMARY "
+            "KEY, observed_at TEXT);"
+            "CREATE TABLE IF NOT EXISTS integration_health (id INTEGER "
+            "PRIMARY KEY, timestamp TEXT, provider TEXT, operation TEXT, "
+            "category TEXT, detail TEXT);")
+
+        def iso(hours):
+            return (datetime.datetime.now(datetime.timezone.utc)
+                    - datetime.timedelta(hours=hours)).isoformat()
+
+        if good_hours_ago is not None:
+            conn.execute("INSERT INTO gate_state (observed_at) VALUES (?)",
+                         (iso(good_hours_ago),))
+        conn.execute("INSERT INTO chain_params (observed_at) VALUES (?)",
+                     (iso(0.5),))
+        if fail_hours_ago is not None:
+            conn.execute(
+                "INSERT INTO integration_health (timestamp, provider, "
+                "operation, category, detail) VALUES (?, 'finney-rpc', "
+                "'poll_gate_state', 'provider-failure', 'boom')",
+                (iso(fail_hours_ago),))
+        conn.commit()
+        conn.close()
+
+    def test_prolonged_outage_pages_once(self):
+        self.seed(good_hours_ago=10, fail_hours_ago=9)
+        events, _ = tg.fail_closed_events(self.db, None, self.ctx)
+        self.assertEqual(len(events), 1)
+        self.assertIn("gate poll failing closed", events[0]["text"])
+        self.assertIn("last good observation", events[0]["text"])
+        # Delivered once: the same outage never pages again.
+        tg.ledger_record(self.store, events[0]["event_id"], "fail-closed",
+                         events[0]["created_at"], None, "delivered", 1,
+                         None)
+        again, _ = tg.fail_closed_events(self.db, None, self.ctx)
+        self.assertEqual(again, [])
+
+    def test_healthy_component_is_silent(self):
+        self.seed(good_hours_ago=1, fail_hours_ago=0.5)
+        events, _ = tg.fail_closed_events(self.db, None, self.ctx)
+        self.assertEqual(events, [])
+
+    def test_fresh_failure_waits_for_the_window(self):
+        self.seed(good_hours_ago=10, fail_hours_ago=1)
+        events, _ = tg.fail_closed_events(self.db, None, self.ctx)
+        self.assertEqual(events, [])
 
 
 class HtmlRenderTests(unittest.TestCase):

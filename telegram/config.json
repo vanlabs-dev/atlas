@@ -83,7 +83,8 @@
     "chain-runtime-upgrade": {
       "_comment": "Class order is delivery priority: a live chain upgrade surfaces before repo alerts in the same scan.",
       "enabled": true,
-      "source_db": "var/livedata/livedata.db"
+      "source_db": "var/livedata/livedata.db",
+      "tier": "instant"
     },
     "chain-parameter-change": {
       "_comment": "Root-settable chain-parameter transitions (change: network-drift-443). DISABLED at ship time — enable together with livedata chain_params.enabled at deploy, and seed this class's watermark first so the seeded observations cannot backfill-flood. Reads livedata's chain_param_events read-only past a row-id watermark. Instant tier, priority just below chain upgrades. NO cooldown and no digest by design: a knob like the Root Reborn curation switch cannot burst, and suppressing a second flip would be the wrong failure. `governs` maps an item to the one-line description rendered in the body (escaped like every other value).",
@@ -95,32 +96,69 @@
         "EmissionGateExponent": "gate sharpness: how hard emission collapses below the bar",
         "RootWeightSettingEnabled": "Root Reborn basket curation master switch: while false every fund runs the null strategy and root dividends accumulate in place",
         "RootWeightsCap": "root basket concentration cap: the largest share of a root weight vector one destination may take (4096 of 65535 is 1/16, so a curated basket spreads across at least 16 destinations)"
-      }
+      },
+      "tier": "instant"
+    },
+    "subnet-registry": {
+      "_comment": "Netuid set and chain-name changes between consecutive panel snapshots (change: pulse-briefing). The first snapshot seeds silently; a registration, deregistration, or on-chain rename pages at instant tier.",
+      "enabled": true,
+      "tier": "instant",
+      "source_db": "var/livedata/livedata.db"
+    },
+    "fail-closed": {
+      "_comment": "One page per outage when the gate poll or the chain-parameter watch has recorded only failures for longer than window_hours (change: pulse-briefing). Keyed by the outage's first failure so a persisting outage never pages twice; recovery re-arms the key.",
+      "enabled": true,
+      "tier": "instant",
+      "source_db": "var/livedata/livedata.db",
+      "window_hours": 6
     },
     "gate-crossing": {
       "_comment": "Emission-gate crossing alerts (change: gate-crossing-signal). DISABLED at ship time — enable together with livedata gate_signal.enabled at deploy (the whole rollback is flipping both back). Reads livedata's gate_events read-only past a row-id watermark. Instant tier, priority just below chain upgrades; cooldown_hours dampens per-netuid paging (suppressed events are recorded in the ledger, never dropped).",
       "enabled": true,
       "source_db": "var/livedata/livedata.db",
-      "cooldown_hours": 24
+      "cooldown_hours": 24,
+      "tier": "instant"
     },
     "fleet-signal": {
       "_comment": "Fleet-signals queue (change: fleet-signals): narrative-cluster / watchlist / econ-code instant alerts + durable signal digest lines from the fleet store, read STRICTLY read-only. Priority below chain upgrades, above subtensor repo alerts. digest_backstop_hours flushes pending digest lines as a standalone summary when no instant alert rides them.",
       "enabled": true,
       "source_db": "var/fleet/fleet.db",
-      "digest_backstop_hours": 24
+      "digest_backstop_hours": 24,
+      "tier": "instant"
     },
     "repository-update": {
       "enabled": true,
       "source_db": "var/repotrack/repotrack.db",
-      "live_db": "var/livedata/livedata.db"
+      "live_db": "var/livedata/livedata.db",
+      "tier": "instant"
     },
     "schema-drift": {
       "enabled": true,
-      "source_db": "var/livedata/livedata.db"
+      "source_db": "var/livedata/livedata.db",
+      "tier": "instant"
     },
     "knowledge-ingestion": {
       "enabled": true,
-      "source_db": "var/knowledge/knowledge.db"
+      "source_db": "var/knowledge/knowledge.db",
+      "tier": "instant"
     }
+  },
+  "_tier_comment": "Every class carries a delivery tier (change: pulse-briefing): instant pages on the scan that finds the event; briefing records the event as `briefed`, advances the watermark, and surfaces it only through the pulse briefing. Ships with every class instant (today's behaviour); the planned demotion to briefing tier for econ-code/gate-crossing/repository-update/fleet-signal/schema-drift/knowledge-ingestion is one config commit, and flipping a tier back is the rollback.",
+  "briefing": {
+    "_comment": "Pulse briefing (change: pulse-briefing): a daily edition at daily_hour_utc, replaced by a weekly edition on weekly_weekday (Python weekday: Monday 0 .. Sunday 6). Composed ONLY from stores already on disk, read-only: no provider call, no model call. Edition watermarks live in the notifier ledger, so a restart cannot double-send and a missed hour catches up on the next scan that day. Figures persist per edition for deltas. Truncation drops whole lines from the lowest-priority section upward; the network section is never cut. Rollback: enabled false stops editions and touches nothing else.",
+    "enabled": true,
+    "daily_hour_utc": 7,
+    "weekly_weekday": 6,
+    "max_messages_daily": 2,
+    "max_messages_weekly": 3,
+    "stale_hours": 26,
+    "price_move_threshold_pct": 15,
+    "share_move_threshold_pct": 25,
+    "taostats_monthly_cap": 10000,
+    "board_url": "http://192.168.0.150:8480/",
+    "live_db": "var/livedata/livedata.db",
+    "fleet_db": "var/fleet/fleet.db",
+    "repo_db": "var/repotrack/repotrack.db",
+    "knowledge_db": "var/knowledge/knowledge.db"
   }
 }

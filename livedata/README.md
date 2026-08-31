@@ -165,6 +165,24 @@ atlas-live:
   args: ["/home/pi/atlas/livedata/atlas_live_server.py"]
 ```
 
+## Panel snapshot, vitals, and gate smoothing (change: pulse-briefing)
+
+Each gate pass that validates the TaoSwap panel persists one
+`panel_snapshot` row per non-root subnet (computed demand share plus the
+panel fields the briefing reads; absent fields stay NULL, never zero),
+pruned to `gate_signal.panel_snapshot_retention_days`. Once per UTC day
+the poll also persists one `network_vitals` row from two keyless calls
+(`network_stats_taoswap`, `price_daily_taoswap`); a failed or invalid
+fetch records a health event and persists nothing for the day.
+
+Side tracking treats a zero moving price as a panel gap, not a demand
+reading: no crossing to or from zero, and the pass counts toward the
+absence threshold. A subnet recording more than
+`gate_signal.hover_crossings` crossings inside
+`gate_signal.hover_window_days` is flagged hovering; its crossings still
+record, carry a `hovering` annotation, and the flag clears only after a
+full quiet window.
+
 ## Secrets
 
 `TAOSTATS_API_KEY` from the repo-root `.env` (0600; template
