@@ -82,10 +82,10 @@ Pattern: "subnet X's demand rose above the bar" when what actually happened is t
 
 Fix: a rank-pinned bar IS a demand share, so it moves on its own as the distribution shifts, and a subnet can change side with a completely stationary share. Compare the bar to its previous value before attributing a crossing to the subnet. Worked example: the spec-441 bar reset on 2026-08-03 dropped theta about 14.5% in one poll and pushed subnets 49, 67, 79 and 81 above the bar without their shares moving.
 
-### 7f. Root dividends described as curated or reinvested
-Pattern: "root dividends are allocated across subnets by validator weights", "validators are deploying basket capital", or any claim that Root Reborn is actively reallocating.
+### 7f. Root Reborn curation described as dormant, or a specific validator described as curating without evidence
+Pattern: "curation is disabled", "root dividends just accumulate in place", "validators cannot set root weights yet", or "validator X is deploying basket capital" with no weight vector cited.
 
-Fix: Root Reborn is live (spec 441) but its curation setter ships DISABLED. `RootWeightSettingEnabled` is false on chain, so every fund runs the null strategy and dividends accumulate in place on the origin subnet. What IS in force: only root-registered hotkeys earn root dividends (the remainder is recycled), root unstakes sit behind a hold interval, and calls 122/123 are retired. Do not describe curation as happening until governance flips the switch.
+Fix: Curation is LIVE since spec 449 (2026-08-27): `RootWeightSettingEnabled` is true and `set_root_weights` works under a 1/16 `RootWeightsCap` (at least 16 destinations). It is per validator: a fund whose validator has set no vector still runs the null strategy. State the mechanism as live; attribute curation to a specific validator only from its public weight vector. In force since spec 441 and unchanged: only root-registered hotkeys earn root dividends (the remainder is recycled), root unstakes sit behind a hold interval, calls 122/123 are retired.
 
 ## WARNINGS (verify but don't block)
 

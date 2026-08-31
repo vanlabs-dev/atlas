@@ -686,5 +686,143 @@ class RankInvariantTests(unittest.TestCase):
         self.assertNotIn("invariant-divergence", self.categories())
 
 
+# ---------------------------------------------------------------------------
+# network-drift-452: a netuid-keyed watched item (RootWeightsCap at the root
+# entry) and the boundary-tolerant rank cross-check
+# ---------------------------------------------------------------------------
+
+# The four gate keys as pinned in the shipped config (verified against live
+# Finney 2026-07-28 / 2026-08-06). The derivation self-test needs real keys.
+REAL_GATE_KEYS = {
+    "EmissionGateBar":
+        "0x658faa385070e074c85bf6b568cf05557c9b0d2964cc73e7519676c3cc4d5df9",
+    "EmissionBarQuantile":
+        "0x658faa385070e074c85bf6b568cf0555a772007dde2ed63e0f21b5f9d7f16650",
+    "EmissionGateExponent":
+        "0x658faa385070e074c85bf6b568cf055588c70e8dd0cf4af3aeb977ba2eee1df4",
+    "EmissionBarRank":
+        "0x658faa385070e074c85bf6b568cf0555d33bd686290d014475513443305882be",
+}
+CAP_KEY = al.storage_key_blake2_concat_u16("SubtensorModule",
+                                           "RootWeightsCap", 0)
+
+
+def cap_item(key=CAP_KEY):
+    return {"item": "RootWeightsCap", "source": "independent", "key": key,
+            "hasher": "blake2_128concat", "netuid": 0, "codec": "u16",
+            "default": 4096, "governs": "root basket concentration cap"}
+
+
+class RootWeightsCapWatchTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.conn = al.open_store(os.path.join(self.tmp.name, "live.db"))
+        self.addCleanup(lambda: self.conn.close())
+        self.config = make_config(watch_enabled=True,
+                                  storage_keys=dict(REAL_GATE_KEYS))
+        self.config["chain_params"]["items"].append(cap_item())
+
+    def watch(self, storage):
+        return al.run_chain_param_watch(self.conn, self.config,
+                                        rpc=fake_rpc(storage))
+
+    def rows(self, item):
+        return self.conn.execute(
+            "SELECT value, provenance FROM chain_params WHERE item = ? "
+            "ORDER BY id", (item,)).fetchall()
+
+    def transitions(self):
+        return self.conn.execute(
+            "SELECT item, prev_value, new_value FROM chain_param_events "
+            "ORDER BY id").fetchall()
+
+    def categories(self):
+        return [r[0] for r in health_rows(self.conn)]
+
+    def test_derived_key_matches_the_declared_hasher(self):
+        # blake2_128concat: 16-byte digest of the LE u16, then the raw u16.
+        prefix = al.storage_prefix("SubtensorModule", "RootWeightsCap")
+        self.assertTrue(CAP_KEY.startswith(prefix))
+        self.assertEqual(len(CAP_KEY), len(prefix) + 32 + 4)
+        self.assertTrue(CAP_KEY.endswith("0000"))
+
+    def test_null_read_seeds_the_runtime_default(self):
+        result = self.watch({ROOT_SWITCH_KEY: None, CAP_KEY: None})
+        self.assertIn("RootWeightsCap", result["observed"])
+        self.assertEqual(self.rows("RootWeightsCap"),
+                         [("4096", "assumed-default")])
+        self.assertEqual(result["transitions"], [])
+        self.assertNotIn("validation-failure", self.categories())
+
+    def test_explicit_read_and_value_transition(self):
+        self.watch({ROOT_SWITCH_KEY: None, CAP_KEY: "0x0010"})   # 4096
+        self.assertEqual(self.rows("RootWeightsCap"), [("4096", "explicit")])
+        result = self.watch({ROOT_SWITCH_KEY: None, CAP_KEY: "0x0008"})
+        self.assertEqual(
+            [(t["item"], t["prev_value"], t["new_value"])
+             for t in result["transitions"]],
+            [("RootWeightsCap", "4096", "2048")])
+        self.assertEqual(self.transitions(),
+                         [("RootWeightsCap", "4096", "2048")])
+
+    def test_pinned_key_that_does_not_derive_blocks_the_read(self):
+        wrong = al.storage_key_identity_u16("SubtensorModule",
+                                            "RootWeightsCap", 0)
+        self.config["chain_params"]["items"][-1] = cap_item(key=wrong)
+        reads = []
+
+        def rpc(method, params):
+            reads.append((method, params[0] if params else None))
+            return fake_rpc({ROOT_SWITCH_KEY: None, wrong: "0x0010"})(
+                method, params)
+
+        result = al.run_chain_param_watch(self.conn, self.config, rpc=rpc)
+        self.assertIn("RootWeightsCap", result["skipped"])
+        self.assertIn("RootWeightSettingEnabled", result["observed"])
+        self.assertIn("validation-failure", self.categories())
+        self.assertNotIn(("state_getStorage", wrong), reads)
+        self.assertEqual(self.rows("RootWeightsCap"), [])
+
+    def test_failed_prefix_self_test_blinds_only_derived_items(self):
+        self.config["gate_signal"]["storage_keys"] = dict(KEYS)  # fakes
+        result = self.watch({ROOT_SWITCH_KEY: None, CAP_KEY: "0x0010"})
+        self.assertIn("RootWeightsCap", result["skipped"])
+        self.assertIn("RootWeightSettingEnabled", result["observed"])
+        self.assertIn("validation-failure", self.categories())
+
+    def test_unknown_hasher_is_fatal(self):
+        item = cap_item()
+        item["hasher"] = "twox64concat"
+        with self.assertRaises(al.FatalLiveError):
+            al.derived_watch_key(item)
+
+
+class RankInvariantToleranceTests(RankInvariantTests):
+    """Tolerance one: the Nth subnet sits on a bar the chain fixed at an
+    earlier block, so a count of N plus or minus one is the boundary
+    condition, not disagreement."""
+
+    def setUp(self):
+        super().setUp()
+        self.config = make_config(above_count_tolerance=1)
+
+    def test_diverging_count_raises_a_health_event(self):
+        summary = self.run_pass(32)
+        self.assertEqual(summary["above_count"], 3)
+        self.assertIn("invariant-divergence", self.categories())
+
+    def test_boundary_subnet_does_not_raise(self):
+        for rank in (2, 4):
+            self.run_pass(rank)
+        self.assertNotIn("invariant-divergence", self.categories())
+        self.assertEqual([r[0] for r in self.conn.execute(
+            "SELECT above_count FROM gate_state ORDER BY id")], [3, 3])
+
+    def test_two_off_still_raises(self):
+        self.run_pass(5)
+        self.assertIn("invariant-divergence", self.categories())
+
+
 if __name__ == "__main__":
     unittest.main()

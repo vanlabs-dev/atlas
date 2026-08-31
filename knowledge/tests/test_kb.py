@@ -64,7 +64,7 @@ class IngestTests(unittest.TestCase):
             run = connection.execute(
                 "SELECT coverage_date, parser_version FROM intake_runs "
                 "WHERE run_id = ?", (run_id,)).fetchone()
-            self.assertEqual(run, ("2026-08-06", akb.PARSER_VERSION))
+            self.assertEqual(run, ("2026-08-31", akb.PARSER_VERSION))
             self.assertEqual(connection.execute(
                 "SELECT count(*) FROM units WHERE active = 1"
             ).fetchone()[0], 0, "units must stage inactive")

@@ -1580,6 +1580,35 @@ def storage_key_blake2_concat_u16(pallet: str, item: str,
             + hashlib.blake2b(raw, digest_size=16).digest().hex() + raw.hex())
 
 
+# Hashers a netuid-keyed WATCHED item may declare (change: network-drift-452).
+# The hasher is a property of the item, never assumed: `RootWeightsCap` is
+# Blake2_128Concat while the mining maps on the same pallet are Identity.
+WATCH_HASHERS = {
+    "identity": storage_key_identity_u16,
+    "blake2_128concat": storage_key_blake2_concat_u16,
+}
+
+
+def derived_watch_key(spec: Dict[str, Any]) -> Optional[str]:
+    """Derive the storage key of a netuid-keyed watched item from its
+    declared hasher and netuid. Returns None for a plain pinned item (no
+    `hasher`). The caller compares the result to the item's pinned `key`;
+    a mismatch blocks the read, because a wrong key returns null and null
+    is indistinguishable from an unset default."""
+    hasher = spec.get("hasher")
+    if not hasher:
+        return None
+    derive = WATCH_HASHERS.get(hasher)
+    if derive is None:
+        raise FatalLiveError("chain_params item %r declares unknown hasher %r"
+                             % (spec.get("item"), hasher))
+    netuid = spec.get("netuid")
+    if not isinstance(netuid, int) or isinstance(netuid, bool):
+        raise FatalLiveError("chain_params item %r declares hasher %r but "
+                             "no integer netuid" % (spec.get("item"), hasher))
+    return derive(SUBTENSOR_PALLET, str(spec.get("item")), netuid)
+
+
 def verify_key_derivation(config: Dict[str, Any]) -> Dict[str, str]:
     """Self-test the derivation against the pinned, live-verified gate keys.
     Raises FatalLiveError on any mismatch so no derived-key read is attempted.
@@ -2033,6 +2062,16 @@ def run_chain_param_watch(connection: sqlite3.Connection,
 
     independent = [i for i in items
                    if i.get("source") != PARAM_SOURCE_GATE]
+    # Derived keys ride the same self-test as every other derived read: the
+    # prefix derivation must reproduce the pinned gate keys before any item
+    # that declares a hasher is read. A failed self-test blinds only those.
+    if any(i.get("hasher") for i in independent):
+        try:
+            verify_key_derivation(config)
+        except FatalLiveError as exc:
+            health_event(connection, PARAM_PROVIDER, PARAM_OPERATION,
+                         "validation-failure", str(exc))
+            independent = [i for i in independent if not i.get("hasher")]
     if independent and block_hash is None:
         head = rpc("chain_getFinalizedHead", [])
         if not head.get("ok") or not head.get("result"):
@@ -2072,6 +2111,14 @@ def run_chain_param_watch(connection: sqlite3.Connection,
                 raise FatalLiveError(
                     "chain_params item %r is independent but has no key"
                     % item)
+            derived = derived_watch_key(spec)
+            if derived is not None and derived != key:
+                health_event(connection, PARAM_PROVIDER, PARAM_OPERATION,
+                             "validation-failure",
+                             "%s: derived key does not match the pinned "
+                             "key; read blocked" % item)
+                skipped.append(item)
+                continue
             read = rpc("state_getStorage", [key, block_hash])
             if not read.get("ok"):
                 health_event(connection, PARAM_PROVIDER, PARAM_OPERATION,

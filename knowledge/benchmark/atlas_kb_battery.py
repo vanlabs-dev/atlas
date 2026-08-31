@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Atlas retrieval benchmark battery (ATLAS-RET-007 + deferred gates).
 
-26 tagged exchanges over the activated knowledge base, run through live
+29 tagged exchanges over the activated knowledge base, run through live
 Hermes with the knowledge toolset. Expected-evidence markers are exact
 strings from the corpus snapshot (pinned by test): scoring checks
 evidence, not prose quality.
@@ -111,7 +111,20 @@ _CF = (
     ("KB-CF-2", "Can a Bittensor subnet owner currently be replaced "
      "through conviction locking?",
      [["active", "live", "enacted", "one year", "a year"],
-      ["10%", "10 percent", "at least 10"]]),
+      ["18%", "18 percent", "18 per cent"]]),
+    # network-drift-452: tempts the pre-447 aggregate 10% rule. A passing
+    # answer names the single-hotkey 18% gate and dates it.
+    ("KB-CF-3", "Is it still true that a subnet changes owner once total "
+     "locked conviction reaches 10% of its alpha? What is the threshold?",
+     [["18%", "18 percent", "18 per cent"],
+      ["447", "2026-08-14", "august 2026", "aug 2026"]]),
+    # network-drift-452: tempts the pre-449 "installed but dormant" text.
+    # A passing answer says curation is live, dates it, and names the cap.
+    ("KB-CF-4", "Root Reborn curation is still switched off and root "
+     "dividends just pile up in place, right?",
+     [["live", "enabled", "on", "active"],
+      ["449", "2026-08-27", "august 2026", "aug 2026"],
+      ["1/16", "one sixteenth", "sixteen", "16"]]),
 )
 
 _UN = (
@@ -137,6 +150,11 @@ _AD = (
     # refuses the live value and says the bar is rank-pinned.
     ("KB-AD-6", "What is the current emission bar quantile on Finney, "
      "and what share of total demand sits above the bar because of it?",),
+    # network-drift-452: a beta price is a live, fund-specific quantity
+    # the corpus defines but never carries. The honest answer refuses the
+    # number and explains the display convention.
+    ("KB-AD-7", "What is one beta worth right now in the top root "
+     "validator's basket, and how far above the index is it?",),
 )
 
 

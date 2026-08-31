@@ -40,15 +40,27 @@
   "request_timeout_seconds": 20,
   "retry": {
     "default_attempts": 2,
-    "retry_on_status": [500, 502, 503, 504],
-    "never_retry_on_status": [429],
-    "jitter_seconds": [0.5, 2.0]
+    "retry_on_status": [
+      500,
+      502,
+      503,
+      504
+    ],
+    "never_retry_on_status": [
+      429
+    ],
+    "jitter_seconds": [
+      0.5,
+      2.0
+    ]
   },
   "price_tolerance_pairwise": 0.05,
   "gate_signal": {
     "_comment": "Emission-gate crossing signal (change: gate-crossing-signal). DEFAULTS OFF: `enabled` false makes poll-gate inert and the Telegram gate-crossing class silent — flipping it is the whole rollback. Reads the spec-440 gate state (theta/q/h) from finney via keyless JSON-RPC state_getStorage on PINNED pre-verified keys (twox128('SubtensorModule') ++ twox128(item); verified against live Finney 2026-07-28), all at one finalized block. Null storage is normal (Substrate never writes ValueQuery defaults): null q/h uses assumed_defaults marked assumed-default provenance (spec-440 code defaults — live q was ALREADY explicit 0.75 on 2026-07-28); null/zero theta records gate-inactive. Demand shares come from the subnets_taoswap panel of the same pass, normalized over ALL non-root subnets (the chain's bar universe includes emission-disabled subnets). hysteresis_pct is the relative band around theta a share must exit on confirm_polls consecutive polls to flip a side; absence_clear_polls clears a vanished netuid's side (netuid-reuse guard). rpc_endpoints are tried in order; verify reachability from the Pi at deploy and record the choice in docs/decisions.md.",
     "enabled": true,
-    "rpc_endpoints": ["https://entrypoint-finney.opentensor.ai"],
+    "rpc_endpoints": [
+      "https://entrypoint-finney.opentensor.ai"
+    ],
     "storage_keys": {
       "EmissionGateBar": "0x658faa385070e074c85bf6b568cf05557c9b0d2964cc73e7519676c3cc4d5df9",
       "EmissionBarQuantile": "0x658faa385070e074c85bf6b568cf0555a772007dde2ed63e0f21b5f9d7f16650",
@@ -65,10 +77,11 @@
     "confirm_polls": 2,
     "absence_clear_polls": 3,
     "rpc_timeout_seconds": 20,
-    "above_count_tolerance": 0
+    "_tolerance_comment": "above_count_tolerance is 1, not 0 (change: network-drift-452). The chain recalculates theta every 360 blocks and holds it fixed between recalculations while the panel EMA keeps moving, so between recalculations the Nth subnet sits ON the bar and counts on either side of it. Measured 2026-08-24..31: theta changed on 39 of 47 consecutive hourly polls and the count read 31 on 32 polls and 32 on 16, never further. A divergence of two or more is the smallest that cannot be the boundary subnet and still records invariant-divergence.",
+    "above_count_tolerance": 1
   },
   "chain_params": {
-    "_comment": "Root-settable chain-parameter watch (change: network-drift-443). DEFAULTS OFF: `enabled` false makes the watch inert and the Telegram chain-parameter-change class silent — flipping it is the whole rollback. Watches discrete knobs whose flip changes network economics without leaving an AdminUtils extrinsic trail (the same reason the gate poll reads q/h rather than assuming code defaults). `source: gate-poll` items are NOT re-read: the gate poll already decodes them at its finalized block and hands them over, so each item is read once and has one history. `source: independent` items carry their own pinned key (twox128('SubtensorModule') ++ twox128(item), verified against live Finney 2026-08-06) and are read at the gate poll's block when it runs — but the watch is deliberately NOT gated by gate_signal.enabled, so rolling back the gate signal cannot silently stop watching the Root Reborn curation switch. Discrete values do not flap, so transitions need no hysteresis; a first observation seeds without emitting one, and a provenance-only change (assumed-default -> explicit at an unchanged value) is recorded but never paged.",
+    "_comment": "Root-settable chain-parameter watch (change: network-drift-443). DEFAULTS OFF: `enabled` false makes the watch inert and the Telegram chain-parameter-change class silent — flipping it is the whole rollback. Watches discrete knobs whose flip changes network economics without leaving an AdminUtils extrinsic trail (the same reason the gate poll reads q/h rather than assuming code defaults). `source: gate-poll` items are NOT re-read: the gate poll already decodes them at its finalized block and hands them over, so each item is read once and has one history. `source: independent` items carry their own pinned key (twox128('SubtensorModule') ++ twox128(item), verified against live Finney 2026-08-06) and are read at the gate poll's block when it runs — but the watch is deliberately NOT gated by gate_signal.enabled, so rolling back the gate signal cannot silently stop watching the Root Reborn curation switch. Discrete values do not flap, so transitions need no hysteresis; a first observation seeds without emitting one, and a provenance-only change (assumed-default -> explicit at an unchanged value) is recorded but never paged. Netuid-keyed items (change: network-drift-452) additionally declare `hasher` and `netuid`; their pinned `key` is re-derived from the declared hasher on every pass and compared, after the same prefix self-test the mining reads use, so a wrong layout blocks the read instead of returning a null that looks like an unset default. `RootWeightsCap` is read at the root entry only: `subnets/weights.rs` consults `RootWeightsCap[ROOT]` and the map holds one entry (verified 2026-08-31, block 8963841).",
     "enabled": true,
     "items": [
       {
@@ -99,6 +112,16 @@
         "codec": "bool",
         "default": false,
         "governs": "Root Reborn basket curation master switch: while false every fund runs the null strategy and root dividends accumulate in place"
+      },
+      {
+        "item": "RootWeightsCap",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf0555afb6064f6ccaf8149c14eb293bf0a36371d0aacb690b61280d0c97c6b6a666640000",
+        "hasher": "blake2_128concat",
+        "netuid": 0,
+        "codec": "u16",
+        "default": 4096,
+        "governs": "root basket concentration cap: the largest u16-normalized share of a set_root_weights vector one destination may take; 4096/65535 = 1/16 forces a curated basket across at least 16 destinations (spec 449 default, DefaultRootWeightsCap)"
       }
     ]
   },
@@ -124,31 +147,47 @@
     "price_spot_coingecko": {
       "provider": "coingecko",
       "path": "/api/v3/simple/price",
-      "params": {"ids": "bittensor", "vs_currencies": "usd",
-                 "include_last_updated_at": true},
+      "params": {
+        "ids": "bittensor",
+        "vs_currencies": "usd",
+        "include_last_updated_at": true
+      },
       "schema": "coingecko/simple-price.v1",
-      "envelope": {"must_hit_provider": true,
-                   "max_upstream_age_s": 900, "max_local_age_s": 60,
-                   "expected_cadence": "spot (minutes)"}
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 900,
+        "max_local_age_s": 60,
+        "expected_cadence": "spot (minutes)"
+      }
     },
     "price_daily_taoswap": {
       "provider": "taoswap",
       "path": "/price-history/",
-      "params": {"currency": "usd"},
+      "params": {
+        "currency": "usd"
+      },
       "schema": "taoswap/price-history.v1",
-      "envelope": {"must_hit_provider": true,
-                   "max_upstream_age_s": 172800, "max_local_age_s": 60,
-                   "expected_cadence": "daily close"}
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 172800,
+        "max_local_age_s": 60,
+        "expected_cadence": "daily close"
+      }
     },
     "subnets_taoswap": {
       "provider": "taoswap",
       "path": "/v2/subnets/",
       "params": {},
-      "client_params": ["netuid"],
+      "client_params": [
+        "netuid"
+      ],
       "schema": "taoswap/subnets.v1",
-      "envelope": {"must_hit_provider": true,
-                   "max_upstream_age_s": 3600, "max_local_age_s": 60,
-                   "expected_cadence": "near-live aggregates"},
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 3600,
+        "max_local_age_s": 60,
+        "expected_cadence": "near-live aggregates"
+      },
       "_note": "Post-processor surfaces emission_miner_burn (0-100 percent), root_proportion, moving_price, excess_tao_*, etc. client_params.netuid is a local filter only."
     },
     "validators_taoswap": {
@@ -156,38 +195,54 @@
       "path": "/v2/validators/",
       "params": {},
       "schema": "taoswap/validators.v1",
-      "envelope": {"must_hit_provider": true,
-                   "max_upstream_age_s": 3600, "max_local_age_s": 60,
-                   "expected_cadence": "near-live"}
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 3600,
+        "max_local_age_s": 60,
+        "expected_cadence": "near-live"
+      }
     },
     "network_stats_taoswap": {
       "provider": "taoswap",
       "path": "/network-stats/",
       "params": {},
       "schema": "taoswap/network-stats.v1",
-      "envelope": {"must_hit_provider": true,
-                   "max_upstream_age_s": 172800, "max_local_age_s": 60,
-                   "expected_cadence": "daily snapshot"}
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 172800,
+        "max_local_age_s": 60,
+        "expected_cadence": "daily snapshot"
+      }
     },
     "metagraph_taoswap": {
       "provider": "taoswap",
       "path": "/metagraph/{netuid}/",
       "params": {},
-      "client_params": ["limit"],
+      "client_params": [
+        "limit"
+      ],
       "schema": "taoswap/metagraph.v1",
-      "envelope": {"must_hit_provider": true,
-                   "max_upstream_age_s": 3600, "max_local_age_s": 60,
-                   "expected_cadence": "per-epoch"},
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 3600,
+        "max_local_age_s": 60,
+        "expected_cadence": "per-epoch"
+      },
       "_note": "Keyless full-subnet metagraph. client_params.limit caps pruned neurons (default 25, max 64)."
     },
     "blocks_taoswap": {
       "provider": "taoswap",
       "path": "/blocks/",
-      "params": {"page_size": 1},
+      "params": {
+        "page_size": 1
+      },
       "schema": "taoswap/blocks.v1",
-      "envelope": {"must_hit_provider": true,
-                   "max_upstream_age_s": 120, "max_local_age_s": 60,
-                   "expected_cadence": "~12s block cadence"},
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 120,
+        "max_local_age_s": 60,
+        "expected_cadence": "~12s block cadence"
+      },
       "_note": "Chain head without runtime spec_version — use chain_head_taostats when spec is needed."
     },
     "portfolio_balance_taoswap": {
@@ -195,9 +250,12 @@
       "path": "/portfolio-balance/",
       "params": {},
       "schema": "taoswap/portfolio-balance.v1",
-      "envelope": {"must_hit_provider": true,
-                   "max_upstream_age_s": 172800, "max_local_age_s": 60,
-                   "expected_cadence": "daily portfolio snapshot"},
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 172800,
+        "max_local_age_s": 60,
+        "expected_cadence": "daily portfolio snapshot"
+      },
       "_note": "Requires dynamic_params.account (ss58 coldkey)."
     },
     "portfolio_pnl_apy_taoswap": {
@@ -205,9 +263,12 @@
       "path": "/portfolio-pnl-apy/",
       "params": {},
       "schema": "taoswap/portfolio-pnl-apy.v1",
-      "envelope": {"must_hit_provider": true,
-                   "max_upstream_age_s": 172800, "max_local_age_s": 60,
-                   "expected_cadence": "daily portfolio snapshot"},
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 172800,
+        "max_local_age_s": 60,
+        "expected_cadence": "daily portfolio snapshot"
+      },
       "_note": "Requires dynamic_params.account (ss58 coldkey)."
     },
     "subnets_taostats": {
@@ -215,37 +276,54 @@
       "path": "/api/subnet/latest/v1",
       "params": {},
       "schema": "taostats/subnets.v1",
-      "envelope": {"must_hit_provider": true,
-                   "max_upstream_age_s": 3600, "max_local_age_s": 60,
-                   "expected_cadence": "near-live (latest)"}
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 3600,
+        "max_local_age_s": 60,
+        "expected_cadence": "near-live (latest)"
+      }
     },
     "metagraph_taostats": {
       "provider": "taostats",
       "path": "/api/metagraph/latest/v1",
       "params": {},
       "schema": "taostats/metagraph.v1",
-      "envelope": {"must_hit_provider": true,
-                   "max_upstream_age_s": 3600, "max_local_age_s": 60,
-                   "expected_cadence": "per-epoch"}
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 3600,
+        "max_local_age_s": 60,
+        "expected_cadence": "per-epoch"
+      }
     },
     "chain_head_taostats": {
       "provider": "taostats",
       "path": "/api/block/v1",
-      "params": {"limit": 1, "order": "block_number_desc"},
+      "params": {
+        "limit": 1,
+        "order": "block_number_desc"
+      },
       "schema": "taostats/blocks.v1",
-      "envelope": {"must_hit_provider": true,
-                   "max_upstream_age_s": 120, "max_local_age_s": 60,
-                   "expected_cadence": "~12s block cadence"},
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 120,
+        "max_local_age_s": 60,
+        "expected_cadence": "~12s block cadence"
+      },
       "_note": "order pinned explicitly — the conviction enactment watch (spec_version >= 425)"
     },
     "subnet_identity_taostats": {
       "provider": "taostats",
       "path": "/api/subnet/identity/v1",
-      "params": {"limit": 200},
+      "params": {
+        "limit": 200
+      },
       "schema": "taostats/subnet-identity.v1",
-      "envelope": {"must_hit_provider": true,
-                   "max_upstream_age_s": null, "max_local_age_s": 60,
-                   "expected_cadence": "near-live identity (owner-edited, rarely)"},
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": null,
+        "max_local_age_s": 60,
+        "expected_cadence": "near-live identity (owner-edited, rarely)"
+      },
       "_note": "netuid -> on-chain SubnetIdentity.github_repo for the subnet-repo-fleet reconciler; paginated (aggregated to completion by run_subnet_identity); the endpoint does not provide the owner ss58"
     }
   }
