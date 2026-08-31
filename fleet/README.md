@@ -305,7 +305,7 @@ sudo systemctl enable --now atlas-fleet.timer
 Verify with `systemctl list-timers atlas-fleet.timer` and
 `python3 fleet/atlas_fleet.py status`.
 
-## Status (2026-07-19)
+## Status (2026-08-31)
 
 Deployed and seeded on the Pi: **104 active blobless clones** (~2.7 GB),
 10 unreachable (backed off), 1 invalid-url, 14 no-repo = 129 subnets. The
@@ -326,6 +326,10 @@ token-safe, per-slot fail-closed all verified against real data).
   default-deny inbound) initially dropped port 8480; amended 2026-07-26 with
   a LAN-scoped accept (`ip saddr 192.168.0.0/24 tcp dport 8480 accept`) and
   reachability + traversal-containment verified from another LAN device.
+- **mining-triage**: deployed by `git pull` 2026-08-12 (on-device suites
+  green: 360 fleet, 146 livedata); the pass renders `mining.html` each
+  6h. At block 8823306: 128 observed / 36 ranked / 92 cut. `budget_band`
+  is still null; the hardware rung is inert until the operator picks one.
 
 ## Mining triage — ranking subnets by what an entrant could earn (change: mining-triage)
 
@@ -404,17 +408,11 @@ feasibility only when a clone moves).
 Ranks evidence, recommends nothing. Holds no keys, submits no transaction,
 registers on nothing, runs no miner.
 
-## Before it is self-maintaining — operator steps
+## Operator steps
 
-1. Install the timer (sudo) so passes run every 6h — see Scheduling above.
-2. Ratify the **PROPOSED** `subnet/identity` discovery-gate entry in
-   `docs/decisions.md` (run `discover_taostats.py` on the Pi, confirm the
-   contract, flip it to approved). The automatic source already works; this
-   is the recorded operator approval, not a functional unblock.
-3. Record the once-off fleet **tracking-policy** confirmation in
-   `docs/decisions.md` (the policy-level analogue of ATLAS-REPO-001:
-   "track chain-reported subnet `github_repo`s under the fleet policy,"
-   not a per-repo confirmation).
+All three once-off steps are done: timer installed, `subnet/identity`
+discovery gate approved, tracking policy confirmed (both recorded in
+`docs/decisions.md`, 2026-07-19). The fleet is self-maintaining.
 
 ## Tests (off-device)
 

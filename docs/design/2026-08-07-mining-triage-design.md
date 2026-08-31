@@ -1,7 +1,9 @@
 # Mining triage design
 
 Date: 2026-08-07
-Status: draft, assignment check completed 2026-08-07
+Status: pre-proposal record, kept on purpose. The change design is
+`openspec/changes/archive/2026-08-11-mining-triage/design.md`, which
+supersedes this file and links back to it for the assignment check.
 Supersedes: none
 
 ## Assignment check result (2026-08-07, on the Pi)

@@ -8,10 +8,10 @@ running on a Raspberry Pi. Built methodically in gated phases via OpenSpec.
 (resolved/open decisions), `openspec/specs/` (accepted capability specs), and
 `openspec/changes/archive/` (completed changes with their proposal/design/tasks).
 
-## Current status (2026-08-06)
+## Current status (2026-08-31)
 
 **Phases 0–5 are complete and accepted on the device.** Hermes Agent
-v0.18.2 runs on the Pi (Grok via X OAuth, validated), answering Bittensor
+v0.20.0 runs on the Pi (Grok via X OAuth, validated), answering Bittensor
 questions from the validated local knowledge base (`atlas-kb`), the
 tracked subtensor repository clone (`atlas-repo`), and live provider
 data (`atlas-live`: TaoSwap/TaoStats/CoinGecko) — source-bound, dated,
@@ -43,8 +43,13 @@ OFF. livedata now reads the rank, records each observation's bar mode,
 watches all four root-settable knobs for transitions, re-seeds sides
 silently on a bar re-pricing instead of paging |M - N| crossings, and
 cross-checks its own share pipeline against the rank invariant; a sixth
-Telegram class pages knob transitions. Investment/rotation tooling is
-Phase 7 territory.
+Telegram class pages knob transitions. **mining-triage** (2026-08-12,
+deployed + archived): a read-only screen ranking subnets by what a new
+independent miner could earn, with a cut ladder, `file:line` feasibility
+evidence, a second LAN board at `http://192.168.0.150:8480/mining.html`,
+and three `atlas-fleet` tools; every input is keyless. **agent-voice**
+(2026-08-13, accepted + archived): one measured voice for chat and alerts.
+Investment/rotation tooling is Phase 7 territory.
 
 | Capability (accepted spec) | State |
 |---|---|
@@ -57,11 +62,13 @@ Phase 7 territory.
 | `knowledge-base` | Done — 23 units active (all `confirmed`; the **2026-08-06 re-sync** brought the corpus from spec 440 to 443: the gate bar is rank-pinned and the quantile is inert, plus a Root Reborn section covering the live mechanism and its dormant curation gate), `atlas-kb` tools live in Hermes; benchmark re-run `20260806T083003Z-58ae33ea` accepted over the new corpus (correct-with-evidence 0.95, refusals 10/10, 0 fabrications — MV-RI-4 held), including the adversarial case that must refuse a live-sounding quantile; the single grounded miss is a marker string artifact ("Jun" vs "june 2026"), not a knowledge gap |
 | `subtensor-repo-tracking` | Done — identity-validated full clone of `RaoFoundation/subtensor` on the Pi (non-shallow, push disabled, @ `14bc6f9f964b`), safe journaled updates (hourly timer), 581-file FTS index, `atlas-repo` tools live in Hermes (commit-and-file-cited answers; honest stale/no-evidence) |
 | `live-data` | Done — contract-validated TaoSwap (keyless, first) + TaoStats (2/min self-cap, 10k/month ledger) + CoinGecko adapters; pinned schemas, freshness envelopes, `atlas-live` tools live in Hermes; outage battery proved honest unavailability (MV-RI-4 class closed); chain head watch: live spec **443** (conviction ownership ENACTED at spec 432, 2026-07-16). **gate-crossing-signal (2026-07-28):** hourly `poll-gate` reads the emission-gate state via keyless finney RPC on pinned keys at one finalized block (null-storage semantics, `assumed-default` provenance), computes demand shares from the TaoSwap panel over the chain's full bar universe, and records hysteresis-guarded crossing events. **network-drift-443 (2026-08-06):** the poll additionally reads `EmissionBarRank` (SCALE `u16`, its own codec) and records each observation's derived bar mode — rank-pinned since spec 441, which makes the explicit q of 0.75 inert; crossings carry the previous theta so a bar that moved onto a subnet is never reported as demand that rose; a bar-parameter change re-seeds all sides silently instead of emitting \|M - N\| crossings; and rank mode is cross-checked by persisting `above_count` against the effective N. A **chain-parameter watch** tracks all four root-settable knobs (bar values handed over by the gate poll, `RootWeightSettingEnabled` read independently and currently `false`), recording durable transitions; it survives the gate kill-switch |
-| `telegram-integration` | Done — inbound conversation via the native Hermes gateway (operator wizard, numeric-id allowlist); outbound notifier (`telegram/`) for six classes (chain-runtime-upgrade / chain-parameter-change / gate-crossing / repository-update / schema-drift / knowledge-ingestion), scrub-or-refuse + six-field delivery ledger + event-id de-dup, isolated on failure. **gate-crossing (2026-07-28):** confirmed emission-gate bar crossings page instantly (per-netuid 24h cooldown, suppressed-recorded-never-dropped, both figures sourced: panel share vs chain-read bar). **Signal-tiering (2026-07-13):** repo alerts tiered significant-vs-churn (deny-by-default; churn digested, never dropped), both-clocks repo-vs-live-chain marking, a high-priority live `chain-runtime-upgrade` class, and structured Telegram HTML (no em dashes, 400→plain-text fallback). Schedule: an hourly chain-head poll, then the emission-gate poll, then `scan`, all best-effort `ExecStartPost=-…` on the repo-update service; 78-test suite; live alerts delivered on the Pi. **Voice overhaul (2026-08-13):** one voice for both paths — chat (`SOUL.md` canon) and alerts (lexicon + gloss maps in `telegram/config.json`), specified in `telegram/docs/voice.md`. Accepted on 26 exchanges: honesty 6/6 (dated corpus facts or explicit refusals, zero invented live values) and four voice probes at 5 replicates each, 5/5 apiece including the next-action omission arm. The next-action rule is enforced by position, not emphasis — three rounds of tightening measured strictly worse (20%) than the original one-liner plus a read-back check placed after the honesty contract (100%, n=15). Same pass also fixed a live defect: `platform_hints` was nested under `agent:` where hermes never read it, so the Telegram hint had been inert since it was applied. Service-failure alerts deferred (needs a Hermes service unit); investment alerts are Phase 7 |
+| `telegram-integration` | Done — inbound conversation via the native Hermes gateway (operator wizard, numeric-id allowlist); outbound notifier (`telegram/`) for seven classes (chain-runtime-upgrade / chain-parameter-change / gate-crossing / fleet-signal / repository-update / schema-drift / knowledge-ingestion), scrub-or-refuse + six-field delivery ledger + event-id de-dup, isolated on failure. **gate-crossing (2026-07-28):** confirmed emission-gate bar crossings page instantly (per-netuid 24h cooldown, suppressed-recorded-never-dropped, both figures sourced: panel share vs chain-read bar). **Signal-tiering (2026-07-13):** repo alerts tiered significant-vs-churn (deny-by-default; churn digested, never dropped), both-clocks repo-vs-live-chain marking, a high-priority live `chain-runtime-upgrade` class, and structured Telegram HTML (no em dashes, 400→plain-text fallback). Schedule: an hourly chain-head poll, then the emission-gate poll, then `scan`, all best-effort `ExecStartPost=-…` on the repo-update service; 112-test suite; live alerts delivered on the Pi. Voice is governed by `agent-voice` below. Service-failure alerts deferred (needs a Hermes service unit); investment alerts are Phase 7 |
+| `agent-voice` | Done: accepted + archived (2026-08-13, change `telegram-voice-overhaul`). One voice for both paths: chat (`SOUL.md` canon, 2684 B) and alerts (lexicon + gloss maps in `telegram/config.json`), specified in `telegram/docs/voice.md`. Accepted on 26 exchanges on the Pi: honesty 6/6 (dated corpus facts or explicit refusals, zero invented live values) and four voice probes at 5 replicates each, 5/5 apiece including the next-action omission arm. The next-action rule is enforced by position, not emphasis: three rounds of tightening measured 20%, the original one-liner plus a read-back check placed after the honesty contract measured 100% (n=15). Same pass fixed a live defect (`platform_hints` nested under `agent:` where hermes never read it; the Telegram hint is live since 2026-08-13) and updated Hermes 0.18.2 → 0.20.0 (model left on `grok-4.5`; a swap invalidates the knowledge-base benchmark). Not yet measured: the Telegram gateway path itself (acceptance ran through the CLI path), and a lexicon leak (`threshold`/`flip`) in one paragraph no probe covers |
 | `subnet-repo-fleet` | Done — deployed + archived (2026-07-19) — a chain-driven reconciliation layer over the singleton tracker (`fleet/`): clones every subnet's on-chain `github_repo` (TaoStats `subnet/identity`, whole 129-subnet map in one call at `limit=200`) into a **blobless, never-executed** fleet under `var/fleet/`, keyed by netuid. On-device: **104 active clones** (~2.7 GB), 10 unreachable (escalating backoff — placeholder/private/dead repos), 1 invalid-url, 14 no-repo. Mass-discard guard (a degraded identity fetch is non-destructive), fingerprint re-point with epoch-segmented change history, per-repo size/file caps→quarantine, disk ceiling, optional `GITHUB_TOKEN` (public-read-only, never persisted to a clone). Reuses repotrack's `collect_range`; `status` + `reconcile [--identity-file]` CLI + a 6h timer. Timer installed, discovery gate ratified, tracking-policy confirmed. Downstream builds below: `fleet-search`, `fleet-signals`, `fleet-rotation-metrics` |
 | `fleet-search` | Done — deployed + archived (2026-07-19) — a shared `(netuid,epoch)`-scoped FTS index over the fleet clones, kept in step by reconcile (incremental on clean fast-forward, full walk otherwise; discard/re-point purge in the slot transaction), plus the read-only `atlas-fleet` MCP server in Hermes (`fleet_search` / `fleet_file` / `fleet_status`). Never builds or executes subnet code; store opens `mode=ro`, fails closed as `fleet-search-unavailable` |
 | `fleet-signals` | Done — deployed + archived (2026-07-19) — narrative radar + econ-code alerts over the fleet's change ranges: a `(netuid,epoch)`-scoped term ledger (manifest deps + model-id strings), novelty-gated cluster / watchlist / econ-code detection queued for tiered Telegram delivery, and an effectiveness ledger (alpha-price entry snapshots via keyless TaoSwap + horizon outcomes vs a fleet-median baseline). Read-only, per-range fail-closed, never executes subnet code; ranks/recommends nothing |
 | `fleet-rotation-metrics` | Done — deployed + archived (2026-07-26) — turns the fleet into a rotation cockpit (`fleet/atlas_fleet_metrics.py` + `atlas_fleet_dashboard.py`): per-`(netuid,epoch)` **emission-redirect map** with `file:line` evidence + opacity flag (proportion/fraction/hotkey-gated so incidental family-word vars aren't mistaken for splits), epoch-scoped activity + **branch pulse** (`ls-remote` tip diff, no fetch), momentum reused from `signal_prices` (→ `n/a` until history accrues), percentile quadrant, and a ranked **LAN-only "attention board"** static dashboard (explicit score; fresh events top, opacity deduped). Read-only, additive tables, per-slot fail-closed, never executes subnet code; runs inline after signals + `atlas-dashboard.service`. Full fleet suite **214 green** off-device; delta specs synced. On the Pi: metrics inline each pass over the active clones (43 emission routes; SN54 = 35% partner); board live at `http://192.168.0.150:8480/` after a LAN-scoped nftables accept for 8480 (2026-07-26); traversal containment verified from another LAN device |
+| `mining-triage` | Done: deployed + archived (2026-08-12). `fleet/atlas_fleet_mining.py`, inline and fail-isolated after metrics in the 6h fleet pass. Ranks subnets by what a **new independent miner** could earn: emission-gate cut, `identity-placeholder` cut (owner-written `SubnetIdentitiesV3` names such as `deprecated`/`Parked`, or no entry), owner-capture cut (`MinerBurned` ≥ 99%), `winner-take-all` cut (top-1 incentive share ≥ 95%), then sha-gated `file:line` feasibility over the fleet FTS index (`min_compute.yml` VRAM floor, miner entrypoint, GPU and closed-API tells). Headline is an entrant figure under a stated parity model (pool shared among earners + 1). Chain reads are keyless batched `state_queryStorageAt` at one finalized block via livedata (`twox128`, `read_subnet_maps`; hasher derived from the observed key tail and verified, never assumed); zero TaoStats quota. Output: `var/fleet/www/mining.html` at `http://192.168.0.150:8480/mining.html` and read-only `mining_board` / `mining_subnet` / `mining_history` on `atlas-fleet`. `CollateralLockShare` (dormant chain-wide) joined the chain-parameter watch. On the Pi at block 8823306: 128 observed / 36 ranked / 92 cut. `mining.budget_band` is still null (rent unknown, hardware rung inert); see Next step |
 
 Latest closed-loop assessment `20260711T073125Z-d52a70e9`: **ok=7, finding=0**.
 Hermes baseline carries 2 documented exceptions (runs as `pi`; no service
@@ -94,10 +101,14 @@ unit) — both to close before production acceptance.
   (`repotrack/atlas_repo_server.py`) for repository evidence and
   **`atlas-live`** (`livedata/atlas_live_server.py`) for current
   provider data (all registered 2026-07-12; `TAOSTATS_API_KEY` in the
-  Pi's 0600 `.env`). Stores live in gitignored `var/knowledge/`,
-  `var/repotrack/` (clone + index), `var/livedata/` (quota ledger,
-  audit, health), and `var/telegram/` (delivery ledger + watermarks) on
-  the Pi. **Telegram (Phase 5):** inbound conversation is the native Hermes
+  Pi's 0600 `.env`), and **`atlas-fleet`** (`fleet/atlas_fleet_server.py`)
+  for fleet search, rotation metrics and the mining screen. Stores live in
+  gitignored `var/knowledge/`, `var/repotrack/` (clone + index),
+  `var/livedata/` (quota ledger, audit, health), `var/telegram/` (delivery
+  ledger + watermarks) and `var/fleet/` (clones, `fleet.db`, `www/`) on
+  the Pi. Voice canon: `~/.hermes/SOUL.md` plus a root-level
+  `platform_hints` entry in `~/.hermes/config.yaml`, both from
+  `telegram/docs/voice.md`. **Telegram (Phase 5):** inbound conversation is the native Hermes
   gateway (operator-configured via `hermes gateway setup`; numeric-ID
   allowlist); the outbound notifier (`telegram/atlas_telegram.py`) runs as
   a best-effort `ExecStartPost` on the hourly repotrack service (preceded by
@@ -111,6 +122,9 @@ unit) — both to close before production acceptance.
 ```
 prd.md                     # governing product requirements (source of truth)
 docs/decisions.md          # resolved + open decisions (check before re-asking)
+docs/emission-metrics.md   # how to read TaoSwap emission fields, verified against live data
+docs/design/               # pre-proposal design records; the archived change's design.md supersedes and links to them
+triage/                    # evidence for emission-metrics.md: 2026-08-11 panel snapshot, metagraph pulls, critic passes
 inventory/                 # device-inventory tool (read-only), tests, schema, docs
 hardening/                 # hardening-assessment tool (read-only)
 hardening/apply/           # hardening-apply scripts (the ONLY device-mutating code)
@@ -121,7 +135,8 @@ knowledge/                 # Phase 2 knowledge base: corpus snapshot, store, MCP
 repotrack/                 # Phase 3 subtensor repo tracking: clone/update/index CLI + MCP tools
 livedata/                  # Phase 4 live data: discovery, adapters, quota, MCP tools
 telegram/                  # Phase 5 outbound notifier (scrub, ledger, dedup); inbound is native Hermes gateway
-fleet/                     # subnet-repo-fleet: chain-driven blobless clone fleet of subnet repos (reconciler, registry, CLI, timer)
+telegram/docs/voice.md     # agent-voice spec: SOUL.md canon, lexicon, platform hint
+fleet/                     # subnet fleet: reconciler, search index + atlas-fleet MCP, signals, rotation metrics, mining triage, dashboard
 openspec/specs/            # accepted capability specs
 openspec/changes/          # active changes + archive/
 var/                        # gitignored: device-sensitive inventory/assessment outputs
@@ -157,26 +172,28 @@ gate-crossing, repository-update, schema-drift, knowledge-ingestion; repo
 alerts tiered by significance) that scrubs secrets, records every delivery,
 de-duplicates, and stays isolated on failure.
 
-**Next is `mining-triage`** (2026-08-07), sequenced ahead of Phase 6 by
-operator decision and recorded as a §22 amendment. A read-only screen
-ranking subnets by what a new independent miner could earn: emission-gate
-and owner-capture cuts, an entrant income figure under a stated parity
-assumption, concentration from the chain incentive vector, `file:line`
-feasibility evidence from the fleet clones, a second LAN-only board at
-`http://192.168.0.150:8480/mining.html`, and three read-only tools on the
-`atlas-fleet` MCP server. Every input is keyless, so it consumes zero
-TaoStats quota. It runs no miner, holds no key, and submits no transaction,
-so PRD §7 holds unchanged.
+**No change is active** (2026-08-31). `mining-triage` shipped 2026-08-12 and
+`telegram-voice-overhaul` 2026-08-13; both are archived. Three dated
+follow-ups recorded in [docs/decisions.md](docs/decisions.md) "Still open"
+are past due and come before any new proposal:
 
-**Phase 6** (monitoring frontend) follows rather than precedes. Its §21
-blocking questions stay open — Q36 access location, Q37 auth, Q38 LAN
-HTTPS/certs, Q39 first-screen health fields, Q40 retention.
-Watchpoints: the **gate-crossing calibration read (~2026-08-11)** — review
-recorded-vs-paged crossings, tune `hysteresis_pct`/`cooldown_hours` from
-evidence (the conviction-enactment watch closed 2026-07-28: spec 424→432
-carried the enforcement, the corpus is re-synced, and the emission model is
-now gated price-based at spec 440), and
-the standing pre-production debts from [docs/decisions.md](docs/decisions.md):
+1. **`mining.budget_band`, due 2026-08-21.** Still `null` in
+   `fleet/config.json`. The recorded rule: pick a hardware and capital band,
+   or conclude mining is not being pursued and set the `mining` block's
+   `enabled` to `false` rather than maintain the screen.
+2. **Voice calibration read, due 2026-08-20.** One week of real Telegram
+   traffic judged against `telegram/docs/voice.md`. The Telegram gateway
+   path has never been measured directly.
+3. **Gate calibration read, due ~2026-08-11.** Recorded-vs-paged crossings,
+   tune `hysteresis_pct` / `cooldown_hours` from evidence (exclude the four
+   spec-441 migration artefacts; only events from 2026-08-06 carry bar
+   mode). Also re-check the rank invariant `above_count == 32`.
+
+**Phase 6** (monitoring frontend) follows. Its §21 blocking questions stay
+open: Q36 access location, Q37 auth, Q38 LAN HTTPS/certs, Q39 first-screen
+health fields, Q40 retention.
+
+Standing pre-production debts from [docs/decisions.md](docs/decisions.md):
 backup restore test, dedicated service account, service unit for boot
 persistence (also gates **service-failure** Telegram alerts, deferred), and
 the PRD §21 Q19 gating decision (evidence recorded; default stays
