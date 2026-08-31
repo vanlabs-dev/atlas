@@ -1,6 +1,9 @@
 {
   "_comment": "Atlas Phase 5 outbound Telegram notifier policy. The inbound conversation gateway is native Hermes (operator-configured via `hermes gateway setup`); this file governs ONLY the outbound operational notifier. Credentials are resolved from the env files below in order (first hit wins) so the wizard-written ~/.hermes/.env is reused without duplicating secrets; the alert target chat id is the one value the operator supplies (their numeric Telegram id). Nothing here is committed with real values.",
-  "credential_env_files": ["~/.hermes/.env", ".env"],
+  "credential_env_files": [
+    "~/.hermes/.env",
+    ".env"
+  ],
   "bot_token_env": "TELEGRAM_BOT_TOKEN",
   "alert_chat_id_env": "TELEGRAM_ALERT_CHAT_ID",
   "api_base": "https://api.telegram.org",
@@ -9,9 +12,22 @@
   "request_timeout_seconds": 20,
   "retry": {
     "max_attempts": 3,
-    "retry_on_status": [500, 502, 503, 504],
-    "never_retry_on_status": [400, 401, 403, 404],
-    "backoff_seconds": [1.0, 3.0]
+    "retry_on_status": [
+      500,
+      502,
+      503,
+      504
+    ],
+    "never_retry_on_status": [
+      400,
+      401,
+      403,
+      404
+    ],
+    "backoff_seconds": [
+      1.0,
+      3.0
+    ]
   },
   "coalesce_window_seconds": 3600,
   "message_max_chars": 3500,
@@ -39,13 +55,28 @@
       "q-mass": "a quantile of the demand-share distribution",
       "runtime spec": "the chain's runtime code version",
       "conviction-based": "weighted by how long a position is held",
-      "dTAO": "dynamic TAO, the subnet-token mechanism"
+      "dTAO": "dynamic TAO, the subnet-token mechanism",
+      "beta": "a share count in one root validator's basket; its TAO value is beta x fund value / all beta",
+      "basket": "one root validator's escrowed fund of subnet alpha, fed by root dividends",
+      "basket index": "the NAV-weighted average of all live baskets; a new fund starts on this line",
+      "display price": "a basket's raw price divided by its baseline, so funds of any age compare"
     }
   },
   "repository_update": {
     "_comment": "Significance policy. Churn is DENY-BY-DEFAULT: only ranges whose changed paths are provably a subset of churn_dirs (and with no recorded spec_version change) are digested instead of paged; any unknown top-level directory escalates to significant. Digested churn is held durably and rides the next significant alert; the backstop flushes it as a standalone digest after digest_backstop_hours. The DISPLAY of a significant alert is governed separately by three OPTIONAL keys (code defaults apply when absent): area_map ({top-level-dir: \"core\"|\"node\"|\"noise\"} for the signal-vs-noise breakdown; any dir absent from the map is surfaced as a new/unclassified area, never hidden), pallet_map ({pallet-name: domain-label} so a pallets/<name> touch is named and interpreted), and light_touch_ratio (0..1, default 0.15; when core-protocol line churn is below this share of total the verdict reads 'large sync, light protocol touch'). These affect wording only, never paging.",
-    "protocol_dirs": ["pallets", "runtime", "precompiles", "common"],
-    "churn_dirs": [".github", "docs", "website", "vendor", "sdk"],
+    "protocol_dirs": [
+      "pallets",
+      "runtime",
+      "precompiles",
+      "common"
+    ],
+    "churn_dirs": [
+      ".github",
+      "docs",
+      "website",
+      "vendor",
+      "sdk"
+    ],
     "digest_backstop_hours": 24
   },
   "classes": {
@@ -62,7 +93,8 @@
         "EmissionBarRank": "emission gate bar selection: N > 0 pins the bar to the Nth largest demand share, N = 0 falls back to the q-mass quantile",
         "EmissionBarQuantile": "q-mass bar value, applied only when the bar rank is 0",
         "EmissionGateExponent": "gate sharpness: how hard emission collapses below the bar",
-        "RootWeightSettingEnabled": "Root Reborn basket curation master switch: while false every fund runs the null strategy and root dividends accumulate in place"
+        "RootWeightSettingEnabled": "Root Reborn basket curation master switch: while false every fund runs the null strategy and root dividends accumulate in place",
+        "RootWeightsCap": "root basket concentration cap: the largest share of a root weight vector one destination may take (4096 of 65535 is 1/16, so a curated basket spreads across at least 16 destinations)"
       }
     },
     "gate-crossing": {

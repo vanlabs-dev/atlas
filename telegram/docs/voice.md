@@ -72,6 +72,10 @@ first use in a message, bare after):
 | `runtime spec` | the chain's runtime code version |
 | `conviction-based` | weighted by how long a position is held |
 | `dTAO` | dynamic TAO, the subnet-token mechanism |
+| `beta` | a share count in one root validator's basket; its TAO value is beta x fund value / all beta |
+| `basket` | one root validator's escrowed fund of subnet alpha, fed by root dividends |
+| `basket index` | the NAV-weighted average of all live baskets; a new fund starts on this line |
+| `display price` | a basket's raw price divided by its baseline, so funds of any age compare |
 
 Banned words are banned as symbols too. Write the emission gate as
 `gate(s) = s^h / (s^h + bar^h)`. A formula is prose here: a banned word

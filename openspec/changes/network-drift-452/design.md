@@ -64,9 +64,11 @@ path.** The storage is `StorageMap<Blake2_128Concat, NetUid, u16>` with a
 `ValueQuery` default. The key is derived as pallet-prefix plus item-prefix
 plus `blake2_128(netuid) ++ netuid`, using the derivation the mining-triage
 change already verifies against observed key tails. Which entry the runtime
-consults is confirmed from the `set_root_weights` path at v452 before the
-entry is pinned (task 1.4); the proposal assumes the root entry by analogy
-with `RootClaimableThreshold`. Alternative: enumerate the whole map as the
+consults was confirmed at v452 (task 1.4, 2026-08-31):
+`pallets/subtensor/src/subnets/weights.rs:962` reads
+`RootWeightsCap::<T>::get(NetUid::ROOT)`, the v449 migration inserts only the
+ROOT entry, and the live map holds exactly one entry at block 8963841. The
+root entry is pinned. Alternative: enumerate the whole map as the
 collateral watch does. Rejected: one entry is consulted, and 128 inert rows
 per hour would be noise in `chain_params`.
 
