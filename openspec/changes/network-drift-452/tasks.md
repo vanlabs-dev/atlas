@@ -74,10 +74,10 @@
 
 ## 7. Deployment and acceptance
 
-- [ ] 7.1 Push; `git pull` on the Pi; both suites green under system Python
-- [ ] 7.2 Ingest and activate the corpus; run the battery; record run id,
+- [x] 7.1 Push; `git pull` on the Pi; both suites green under system Python
+- [x] 7.2 Ingest and activate the corpus; run the battery; record run id,
   metrics, and verdict; roll back to the previous run if the gate fails
-- [ ] 7.3 Confirm the next hourly pass persists `RootWeightsCap` with the
+- [x] 7.3 Confirm the next hourly pass persists `RootWeightsCap` with the
   expected value and provenance, and records no divergence event at a count
   of 31 or 32
-- [ ] 7.4 `test --class chain-parameter-change` renders the new gloss
+- [x] 7.4 `test --class chain-parameter-change` renders the new gloss
