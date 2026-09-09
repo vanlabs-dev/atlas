@@ -101,12 +101,12 @@
 
 ## 6. Demotions, deploy, acceptance
 
-- [ ] 6.1 Push and `git pull` on the Pi; confirm no new unit, timer, port, or
+- [x] 6.1 Push and `git pull` on the Pi; confirm no new unit, timer, port, or
       credential
-- [ ] 6.2 Confirm the first root read on the next hourly pass: enumerated key
+- [x] 6.2 Confirm the first root read on the next hourly pass: enumerated key
       count, decoded destination count, and weighting basis checked against a
       manual read at the same block; first map seeds silently
-- [ ] 6.3 Flip `econ-code` and `subnet-registry` to `briefing` in one commit;
+- [x] 6.3 Flip `econ-code` and `subnet-registry` to `briefing` in one commit;
       confirm the next scan records them as briefed and pages nothing
 - [x] 6.4 Set the date of the `root-rotation` promotion decision (earliest at
       which 30 filled 7-day outcomes are possible) and record it in

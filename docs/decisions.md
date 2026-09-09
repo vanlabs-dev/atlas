@@ -95,6 +95,61 @@ present.
   report (it fails closed rather than guessing). Routine, non-firewall checks
   remain fine unprivileged.
 
+## rotation-signal-gate deployment (2026-09-09)
+
+Deployed to the Pi at commits `2c4892e` and `d36804a`. Stores backed up first
+to `/home/pi/tmp/atlas-backup-2026-09-09/` (fleet, livedata, telegram).
+
+**Ledger migration clean.** 235 entries and 705 outcomes preserved and
+rebuilt onto the source triple, backfilled as store `fleet` with class
+(econ-code 220, narrative-cluster 12, watchlist 3) and creation time; no null
+`created_at`.
+
+**Root read verified against an independent recompute at the same block.**
+At finalized block 9,028,206 (`0x8aade85f…`) the stored map read 20
+validators, 96 destinations, stake-weighted. A from-scratch re-read and
+re-aggregation at the same block hash produced zero share mismatches and both
+sums are exactly 1.000000000. Top destinations 51 (5.92%), 53 (5.69%), 120
+(5.63%). The first map seeded silently, as designed.
+
+**Crossing eligibility backfilled.** All 89 pre-existing crossings read
+`eligible`, so the durability guard swallowed no backlog. New crossings record
+`pending`.
+
+**Defect found and fixed during deploy: the ingest backfilled history.** The
+first on-device ingest entered all 89 historical crossings into the ledger,
+creating 267 outcome rows of which 203 were already past due. Left alone, the
+next measurement pass would have filled every one of them with that day's
+price as BOTH entry and exit, fabricating ~203 near-zero returns for
+`gate-crossing` — the exact class whose promotion decision the ledger is
+supposed to settle. Nothing had filled yet (all rows still `pending`), so the
+89 entries and 267 outcomes were deleted and the ingest now seeds silently to
+the store's high-water mark like every other watermark here. A `pending`
+crossing holds the mark without holding back eligible crossings behind it,
+which are entered at once so their entry price stays close to their event.
+Marks seeded at gate-crossing 89, root-rotation 0.
+
+**Caveat on the econ-code demotion, recorded now rather than discovered
+later.** At deploy the 30-day horizon became readable for the first time (113
+filled vs 107 pending) and it favours the class: -4.275% against a -7.625%
+baseline, +3.35pp. The 1-day and 7-day horizons, on much larger samples, still
+show no edge and a negative edge respectively (-0.292 vs -0.309 at n=217;
+-2.107 vs -1.903 at n=192). The demotion stands on the short horizons, and
+measurement continues precisely so the 30-day picture can overturn it. Revisit
+at the 2026-11-04 review.
+
+**Still to confirm.** No econ-code, subnet-registry or root-rotation event has
+occurred since the flip, so the first live `briefed` and `shadowed` ledger rows
+are still pending. Tier resolution was verified directly against the deployed
+config instead: econ-code and subnet-registry resolve to `briefing`,
+root-rotation to `shadow`, and narrative-cluster, watchlist and gate-crossing
+to `instant`.
+
+**Dated open item — volume read, due 2026-09-16.** Read delivered counts per
+class for the week against the pre-change baseline of 199 in 30 days (about
+6.6 a day) and confirm 1 to 2 pages a day. If it is not, the tier values are
+wrong and are adjusted before this change is archived.
+
 ## Alert tiers — the reads that justified them (2026-09-09, change: rotation-signal-gate)
 
 The operator reported the alert stream was not useful. Atlas had already
