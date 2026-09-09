@@ -861,9 +861,29 @@ def scan(document: str) -> List[str]:
 # than the published document is read, and never as an input to an edition.
 # ---------------------------------------------------------------------------
 
+# The pass runs from a timer with no terminal. Git must never sit waiting
+# for a credential prompt: the Pi reaches GitHub over HTTPS anonymously and
+# holds no key, so a push has nothing to authenticate with. Without these,
+# an interactive run would block on "Username for https://github.com" and a
+# oneshot unit would hang instead of failing.
+_GIT_ENV = {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "/bin/true",
+            "SSH_ASKPASS": "/bin/true", "GIT_SSH_COMMAND":
+            "ssh -o BatchMode=yes"}
+
+_GIT_TIMEOUT = 120
+
+
 def _git(cwd: str, *args: str) -> Tuple[int, str, str]:
-    proc = subprocess.run(("git",) + args, cwd=cwd, capture_output=True,
-                          text=True)
+    env = dict(os.environ)
+    env.update(_GIT_ENV)
+    env.pop("GIT_DIR", None)
+    try:
+        proc = subprocess.run(("git",) + args, cwd=cwd, capture_output=True,
+                              text=True, env=env, stdin=subprocess.DEVNULL,
+                              timeout=_GIT_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise ShinogiError("git %s did not finish in %ds"
+                           % (args[0] if args else "", _GIT_TIMEOUT))
     return proc.returncode, proc.stdout, proc.stderr
 
 
@@ -939,8 +959,9 @@ def publish(config: Dict[str, Any], document: str) -> Dict[str, Any]:
                           config.get("branch", "main"))
     if code != 0:
         raise ShinogiError(
-            "cannot push to origin/%s (no usable write credential on this "
-            "host?): %s. The commit is local and recoverable."
+            "cannot push to origin/%s: %s. The device holds no write "
+            "credential for this remote, so the commit is local and "
+            "recoverable; nothing was reset."
             % (config.get("branch", "main"), err.strip() or out.strip()))
     return {"changed": True, "sha256": digest, "path": target, "pushed": True}
 

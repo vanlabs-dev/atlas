@@ -783,6 +783,39 @@ class PublishTests(unittest.TestCase):
                  "--format=%s"], capture_output=True, text=True).stdout
             self.assertIn("Publish edition", log)
 
+    def test_push_to_an_unauthenticated_https_remote_fails_not_hangs(self):
+        """The device reaches GitHub over HTTPS with no credential. Git must
+        fail closed rather than block a timer-driven unit on a prompt."""
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._ready(tmp)
+            subprocess.run(
+                ["git", "-C", config["checkout_dir"], "remote", "set-url",
+                 "origin", "https://127.0.0.1:9/vanlabs-dev/shinogi.git"],
+                check=True)
+            with self.assertRaises(sh.ShinogiError) as caught:
+                sh.run(config)
+            self.assertIn("cannot push", str(caught.exception))
+            self.assertIn("local and recoverable", str(caught.exception))
+
+    def test_git_runs_with_prompts_disabled(self):
+        self.assertEqual(sh._GIT_ENV["GIT_TERMINAL_PROMPT"], "0")
+        self.assertIn("BatchMode=yes", sh._GIT_ENV["GIT_SSH_COMMAND"])
+
+    def test_commit_does_not_depend_on_device_git_config(self):
+        """There is no /home/pi/.gitconfig, so identity must be passed per
+        invocation or the commit fails with 'tell me who you are'."""
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._ready(tmp)
+            for key in ("user.name", "user.email"):
+                subprocess.run(["git", "-C", config["checkout_dir"],
+                                "config", "--unset", key], check=False)
+            self.assertEqual(sh.run(config)["status"], "published")
+            author = subprocess.run(
+                ["git", "-C", config["checkout_dir"], "log", "-1",
+                 "--format=%an <%ae>"], capture_output=True,
+                text=True).stdout.strip()
+            self.assertEqual(author, "vanlabs-dev <vanlabs@pm.me>")
+
     def test_publication_disabled_composes_and_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._ready(tmp)

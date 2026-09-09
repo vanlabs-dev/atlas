@@ -124,7 +124,7 @@ would have written, but writes nothing.
 | `publish` | write, commit and push; `false` composes only |
 | `checkout_dir` | the shinogi checkout the page is written into |
 | `state_db` | this module's own store, for deltas and the publish hash |
-| `commit_name` / `commit_email` | passed per invocation with `git -c` |
+| `commit_name` / `commit_email` | passed per invocation with `git -c`; the device has no `~/.gitconfig` |
 | `window_hours` | the mover window on a first edition |
 | `stale_hours` | the emission-gate bar bound |
 | `attention_rows` | the attention cap |
@@ -138,7 +138,35 @@ a scan hit, and a push with no usable write credential. A failed push
 leaves the local commit in place and the last Cloudflare deploy live;
 recovering it is the operator's call, and this module does not reset.
 
+Git can never prompt. Every call runs with `GIT_TERMINAL_PROMPT=0`,
+`GIT_ASKPASS`, `ssh -o BatchMode=yes`, stdin closed and a 120s timeout, so
+a missing credential fails the pass instead of hanging a timer-driven unit.
+
+Identity is passed per invocation with `git -c user.name` and
+`git -c user.email`. The device has no `~/.gitconfig`, so this is required:
+without it the commit fails outright.
+
 **It creates and moves no credential.** That is an operator decision.
+
+## Device reality (checked 2026-09-09)
+
+`AGENTS.md` describes the Atlas remote as SSH. On the Pi it is not:
+
+| | |
+|---|---|
+| Atlas checkout | `/home/pi/atlas`, remote `https://github.com/vanlabs-dev/atlas.git`, pulls anonymously |
+| Pi SSH keys | none; `~/.ssh/` holds only `authorized_keys` and `known_hosts` |
+| `ssh -T git@github.com` from the Pi | `Permission denied (publickey)` |
+| `~/.gitconfig` | does not exist |
+| `gh` | not installed |
+
+So the shinogi checkout is cloned over HTTPS (the repo is public, no
+credential needed) and **the push cannot authenticate at all** until the
+operator provides a credential. `publish` stays `false` until then.
+
+There is also a stale `/home/pi/github/atlas` clone at `first commit`
+(2026-07-11) from an earlier layout. It is not the live checkout and
+nothing reads it.
 
 ## Deploy
 
