@@ -68,7 +68,8 @@ CREATE TABLE IF NOT EXISTS events (
     attempted_at TEXT,
     status TEXT NOT NULL,
     retry_count INTEGER NOT NULL DEFAULT 0,
-    final_failure TEXT
+    final_failure TEXT,
+    tier TEXT
 );
 CREATE INDEX IF NOT EXISTS events_class_created ON events (event_class, created_at);
 CREATE TABLE IF NOT EXISTS watermarks (
@@ -153,6 +154,39 @@ STATUS_SCRUB_REFUSED = "scrub-refused"
 STATUS_BRIEFED = "briefed"
 TIER_INSTANT = "instant"
 TIER_BRIEFING = "briefing"
+# A class that records and is measured but is carried nowhere (change:
+# rotation-signal-gate). The default for a newly introduced netuid-scoped
+# class, so nothing new can page by accident.
+TIER_SHADOW = "shadow"
+STATUS_SHADOWED = "shadowed"
+STATUS_UNREGISTERED = "unregistered"
+DELIVERY_TIERS = (TIER_INSTANT, TIER_BRIEFING, TIER_SHADOW)
+# Tier -> the ledger status for an event that is NOT paged. `instant` maps
+# to None, meaning "deliver". Any value that is not a known tier (a class
+# absent from the registry, or a typo) maps to `unregistered` and delivers
+# nothing: drift between the class list and the registry fails closed.
+NON_PAGING_STATUS: Dict[Optional[str], Optional[str]] = {
+    TIER_INSTANT: None,
+    TIER_BRIEFING: STATUS_BRIEFED,
+    TIER_SHADOW: STATUS_SHADOWED,
+}
+
+
+def event_tier(config: Dict[str, Any], spec: Dict[str, Any],
+               event_class: str) -> Optional[str]:
+    """The registered delivery tier governing one event.
+
+    An adapter may emit a class other than the one it is registered under
+    (the fleet-signal queue emits econ-code, narrative-cluster and
+    watchlist), so the event's own class wins when the registry names it.
+    Otherwise the adapter's own entry governs. A class the registry does
+    not name at all returns None, which delivers nothing.
+    """
+    own = (config.get("classes") or {}).get(event_class)
+    if isinstance(own, dict) and own.get("tier") in DELIVERY_TIERS:
+        return str(own["tier"])
+    tier = spec.get("tier")
+    return str(tier) if tier in DELIVERY_TIERS else None
 _TERMINAL = (STATUS_DELIVERED, STATUS_FAILED, STATUS_SUPPRESSED,
              STATUS_SCRUB_REFUSED)
 
@@ -320,6 +354,14 @@ def open_store(db_path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     connection = sqlite3.connect(db_path, timeout=10)
     connection.executescript(SCHEMA_SQL)
+    # Additive (change: rotation-signal-gate): rows written before the tier
+    # registry stay NULL, which readers MUST treat as "unrecorded" rather
+    # than back-filling as instant — those events predate the registry.
+    columns = {row[1] for row in connection.execute(
+        "PRAGMA table_info(events)")}
+    if "tier" not in columns:
+        connection.execute("ALTER TABLE events ADD COLUMN tier TEXT")
+    connection.commit()
     return connection
 
 
@@ -373,15 +415,21 @@ def ledger_seen_recent(connection: sqlite3.Connection, event_id: str,
 def ledger_record(connection: sqlite3.Connection, event_id: str,
                   event_class: str, created_at: str, attempted_at: Optional[str],
                   status: str, retry_count: int,
-                  final_failure: Optional[str]) -> None:
+                  final_failure: Optional[str],
+                  tier: Optional[str] = None) -> None:
+    """Record one event's outcome. `tier` names the delivery tier that
+    governed it (change: rotation-signal-gate), so the ledger stays a
+    complete account of what was detected and why it was or was not sent."""
     connection.execute(
         "INSERT INTO events (event_id, event_class, created_at, attempted_at, "
-        "status, retry_count, final_failure) VALUES (?, ?, ?, ?, ?, ?, ?) "
+        "status, retry_count, final_failure, tier) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(event_id) DO UPDATE SET attempted_at = excluded.attempted_at, "
         "status = excluded.status, retry_count = excluded.retry_count, "
-        "final_failure = excluded.final_failure",
+        "final_failure = excluded.final_failure, tier = excluded.tier",
         (event_id, event_class, created_at, attempted_at, status,
-         retry_count, redact(final_failure)[:400] if final_failure else None))
+         retry_count, redact(final_failure)[:400] if final_failure else None,
+         tier))
     connection.commit()
 
 
@@ -1355,6 +1403,11 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
                       conn.execute("PRAGMA table_info(gate_events)")}
         has_prev = "prev_theta" in event_cols
         has_hover = "hovering" in event_cols
+        # Eligibility arrived with rotation-signal-gate. A store written
+        # before it reports NULL, which reads as eligible: those crossings
+        # were already pageable under the previous contract and must not be
+        # swallowed by the upgrade.
+        has_eligibility = "eligibility" in event_cols
         state_cols = {r[1] for r in
                       conn.execute("PRAGMA table_info(gate_state)")}
         has_mode = {"bar_mode", "rank", "q"} <= state_cols
@@ -1376,7 +1429,9 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
             + ("e.hovering, " if has_hover else "NULL, ")
             + _at_event("bar_mode") + ", "
             + _at_event("rank") + ", "
-            + _at_event("q") +
+            + _at_event("q") + ", "
+            + ("COALESCE(e.eligibility, 'eligible')" if has_eligibility
+               else "'eligible'") +
             " FROM gate_events e "
             "WHERE e.id > ? ORDER BY e.id ASC LIMIT 50",
             (last_id,)).fetchall()
@@ -1396,9 +1451,24 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
     high = last_id
     for (row_id, observed_at, netuid, direction, share, theta,
          _prev_side, emission_enabled, block_number, prev_theta, hovering,
-         bar_mode, bar_rank, bar_q) in rows:
-        high = max(high, int(row_id))
+         bar_mode, bar_rank, bar_q, eligibility) in rows:
         event_id = "gate-crossing:%d:%d" % (netuid, row_id)
+        # Durability guard (change: rotation-signal-gate). A crossing that
+        # has not settled yet is left for a later scan and the watermark
+        # STOPS here, so it is reconsidered rather than lost. A crossing
+        # settled as reversed is recorded and skipped: at a rank-pinned bar
+        # the marginal subnet oscillates by construction, and an
+        # oscillation is a state for the briefing, not a pair of pages.
+        if eligibility == "pending":
+            break
+        high = max(high, int(row_id))
+        if eligibility == "reversed":
+            if store is not None:
+                ledger_record(store, event_id, "gate-crossing", observed_at,
+                              _utc_now(), STATUS_SUPPRESSED, 0,
+                              "reversed inside the durability window",
+                              tier=ctx.get("tier"))
+            continue
         if hovering and store is not None:
             # A flagged hoverer's crossings are recorded, never paged
             # (change: pulse-briefing): the briefing reports them as a
@@ -1985,6 +2055,80 @@ def subnet_registry_events(source_db: str, watermark: Optional[str],
         conn.close()
 
 
+def root_rotation_events(source_db: str, watermark: Optional[str],
+                         ctx: Optional[Dict[str, Any]] = None
+                         ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Shifts in where curated root dividends point (change:
+    rotation-signal-gate). Root stake is the largest pool on the network
+    and since spec 449 its dividends follow per-validator
+    `set_root_weights` vectors, so a move in the aggregate destination map
+    is capital actually being redirected.
+
+    Every figure is rendered from the recorded event. Nothing is computed
+    here: an aggregate share is only a share of dividend flow when the map
+    was stake-weighted, and an unweighted map counts validators instead, so
+    the body states which it is rather than letting the reader assume."""
+    conn = open_source_ro(source_db)
+    if conn is None:
+        return [], watermark
+    try:
+        present = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND "
+            "name = 'rotation_events'").fetchone()
+        if present is None:
+            return [], watermark  # root watch not deployed yet
+        last_id = int(watermark) if watermark else 0
+        rows = conn.execute(
+            "SELECT id, observed_at, netuid, direction, prev_share, "
+            "new_share, validator_count, weighting_basis, block_number "
+            "FROM rotation_events WHERE id > ? ORDER BY id ASC LIMIT 50",
+            (last_id,)).fetchall()
+    finally:
+        conn.close()
+
+    config = (ctx or {}).get("config") or {}
+    max_chars = int(config.get("message_max_chars", 3500))
+    _lexicon, glosses = voice_maps(config)
+    events: List[Dict[str, Any]] = []
+    high = last_id
+    for (row_id, observed_at, netuid, direction, prev_share, new_share,
+         validator_count, basis, block_number) in rows:
+        high = max(high, int(row_id))
+        weighted = basis == "stake-weighted"
+        verdict = {"entered": "a new destination for curated root dividends",
+                   "left": "no longer a destination for curated root "
+                           "dividends",
+                   "share-rose": "taking more of the curated root flow",
+                   "share-fell": "taking less of the curated root flow"}.get(
+                       direction, "changed its share of the curated root flow")
+        headline = "Atlas · subnet %d %s · %s" % (
+            netuid, direction.replace("-", " "), verdict)
+        lines = [
+            "subnet %d · destination share %s to %s"
+            % (netuid,
+               "n/a" if prev_share is None else "%.2f%%" % (prev_share * 100),
+               "n/a" if new_share is None else "%.2f%%" % (new_share * 100)),
+            "root weight vectors read: %d validators · block %s"
+            % (validator_count,
+               block_number if block_number is not None else "n/a"),
+            "weighting: %s" % (
+                "by validator root stake, so the share is a share of "
+                "dividend flow" if weighted else
+                "unweighted · this counts validators, not TAO, and is not a "
+                "share of dividend flow"),
+            "observed: %s" % observed_at,
+        ]
+        plain = render_plain(headline, lines, "", None, max_chars,
+                             glosses=glosses)
+        html = render_html(headline, lines, "", None, max_chars,
+                           glosses=glosses)
+        events.append({
+            "event_id": "root-rotation:%d:%d" % (netuid, row_id),
+            "event_class": "root-rotation",
+            "created_at": observed_at, "text": plain, "html": html})
+    return events, (str(high) if high != last_id else watermark)
+
+
 _FAIL_CLOSED_COMPONENTS = (
     # (component label, table with good observations, provider filter)
     ("gate poll", "gate_state", "finney-rpc"),
@@ -2060,6 +2204,7 @@ _ADAPTERS: Dict[str, Callable[..., Tuple[List[Dict[str, Any]],
     "chain-runtime-upgrade": chain_runtime_upgrade_events,
     "chain-parameter-change": chain_parameter_change_events,
     "subnet-registry": subnet_registry_events,
+    "root-rotation": root_rotation_events,
     "fail-closed": fail_closed_events,
     "gate-crossing": gate_crossing_events,
     "fleet-signal": fleet_signal_events,
@@ -2075,8 +2220,8 @@ _ADAPTERS: Dict[str, Callable[..., Tuple[List[Dict[str, Any]],
 
 def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
                   token: str, chat_id: str, event: Dict[str, str],
-                  poster: Optional[Callable[..., Tuple[int, str]]] = None
-                  ) -> str:
+                  poster: Optional[Callable[..., Tuple[int, str]]] = None,
+                  tier: Optional[str] = None) -> str:
     """Scrub → send → record. Returns the terminal status. Any transport
     failure is turned into a recorded 'failed' outcome, not an exception."""
     event_id = event["event_id"]
@@ -2124,10 +2269,11 @@ def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
     if result["delivered"]:
         ledger_record(connection, event_id, event_class, created_at,
                       _utc_now(), STATUS_DELIVERED, result["attempts"],
-                      fallback_note)
+                      fallback_note, tier=tier)
         return STATUS_DELIVERED
     ledger_record(connection, event_id, event_class, created_at, _utc_now(),
-                  STATUS_FAILED, result["attempts"], result["detail"])
+                  STATUS_FAILED, result["attempts"], result["detail"],
+                  tier=tier)
     return STATUS_FAILED
 
 
@@ -2171,6 +2317,11 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
     for event_class, spec in config["classes"].items():
         if not spec.get("enabled"):
             continue
+        if spec.get("delivery_only"):
+            # A tier-registry entry for a class another adapter emits (the
+            # fleet-signal queue emits econ-code, narrative-cluster and
+            # watchlist). It carries a tier and nothing else.
+            continue
         adapter = _ADAPTERS.get(event_class)
         if adapter is None:
             summary["classes"][event_class] = {"error": "no adapter"}
@@ -2186,26 +2337,33 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
             summary["classes"][event_class] = {
                 "error": redact(str(exc))[:200]}
             continue
-        # Delivery tier (change: pulse-briefing). Only instant classes page;
-        # a briefing-tier class records its events as briefed, advances its
-        # watermark, and surfaces through the pulse briefing. Flipping the
-        # tier back is the whole rollback for one class.
-        if spec.get("tier", TIER_INSTANT) == TIER_BRIEFING:
-            for event in events:
+        # Delivery tier (changes: pulse-briefing, rotation-signal-gate).
+        # Only instant classes page. A briefing-tier class records its
+        # events as briefed and surfaces through the pulse briefing; a
+        # shadow-tier class records and is carried nowhere, so a new class
+        # accrues measurement before it can ever page. A class with no
+        # registered tier delivers nothing at all: drift between the class
+        # list and the registry fails closed rather than paging by default.
+        # Flipping the tier value is the whole rollback for one class.
+        for event in events:
+            # Tier is resolved PER EVENT, not per adapter: one adapter can
+            # emit several registered classes (the fleet-signal queue emits
+            # econ-code, narrative-cluster and watchlist), and each has to
+            # be demotable on its own evidence.
+            tier = event_tier(config, spec, event["event_class"])
+            non_paging_status = NON_PAGING_STATUS.get(
+                tier, STATUS_UNREGISTERED)
+            if non_paging_status is not None:
                 ledger_record(connection, event["event_id"],
                               event["event_class"], event["created_at"],
-                              None, STATUS_BRIEFED, 0, None)
-                counts[STATUS_BRIEFED] = counts.get(STATUS_BRIEFED, 0) + 1
-            if new_wm and new_wm != wm:
-                watermark_set(connection, event_class, new_wm)
-            else:
-                connection.commit()
-            summary["classes"][event_class] = counts
-            continue
-        for event in events:
+                              None, non_paging_status, 0, None,
+                              tier=tier or STATUS_UNREGISTERED)
+                counts[non_paging_status] = counts.get(
+                    non_paging_status, 0) + 1
+                continue
             try:
                 status = deliver_event(connection, config, token, chat_id,
-                                       event, poster=poster)
+                                       event, poster=poster, tier=tier)
                 counts[status] = counts.get(status, 0) + 1
                 if (status == STATUS_DELIVERED
                         and event.get("digest_range_ids")):

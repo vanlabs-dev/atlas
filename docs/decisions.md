@@ -95,6 +95,111 @@ present.
   report (it fails closed rather than guessing). Routine, non-firewall checks
   remain fine unprivileged.
 
+## Alert tiers — the reads that justified them (2026-09-09, change: rotation-signal-gate)
+
+The operator reported the alert stream was not useful. Atlas had already
+measured it and nothing had read the measurement back. Volume at the time:
+199 alerts delivered in 30 days, about 6.6 a day, of which `econ-code` was
+106 and `gate-crossing` 42 (plus 14 suppressed).
+
+**`econ-code` demoted to `briefing`.** Its own effectiveness ledger, over
+every signal since 2026-07-19, medians against the fleet baseline over
+identical windows:
+
+| horizon | filled | class median | baseline median | edge |
+|---|---:|---:|---:|---:|
+| 1 day | 212 | -0.278% | -0.305% | +0.03pp |
+| 7 day | 185 | -2.175% | -1.873% | **-0.30pp** |
+| 30 day | 109 (108 pending) | -4.275% | -7.625% | +3.35pp, not readable |
+
+No edge at one day and worse than baseline at seven, at n=185 and n=212. The
+30-day row is majority-pending and only the older, selected half has matured,
+so it cannot justify anything either way. Detection, the econ judge, the
+cooldown and the ledger all continue (design D5): the 30-day horizon is the
+only thing that could reverse this call, and turning off measurement at the
+moment of demotion would make the demotion permanent by construction.
+
+Supporting evidence that the routing was decoupled from the judge's own
+reasoning: of 189 verdicts in 30 days, 121 routed instant and 108 of those
+were `reshuffle`, with only 2 claiming an emission direction. Their
+`why_it_matters` text contradicted the tier they were given, e.g. "the diff
+shows no caller activating this allocation" (netuid 67, med, paged) and
+"without showing changes to reward amounts or the payout path" (netuid 71,
+med, paged). `reshuffle` is intra-subnet miner ranking, and the operator is
+not mining those subnets.
+
+**`subnet-registry` demoted to `briefing`.** All 6 alerts in the preceding 30
+days were `renamed`. A subnet changing its display name has no action behind
+it. Registration and deregistration still ride the daily briefing.
+
+**`narrative-cluster` (n=9) and `watchlist` (n=3) left at `instant`.** Both
+samples are far too small to read. `watchlist` is operator-curated by hand,
+so it carries intent the ledger cannot see.
+
+**`root-rotation` introduced at `shadow`.** New netuid-scoped classes default
+to shadow: they record and are measured but send nothing, so a class accrues
+evidence before it can ever page. This inverts the previous default, where a
+class shipped on plausibility and was measured never.
+
+**Promotion rule.** A class reaches a paging tier only by an operator decision
+recorded here, against an effectiveness read with at least
+`min_filled_for_promotion` (default 30) FILLED outcomes at the 7-day horizon
+and a median beating the fleet baseline. A majority-pending horizon cannot
+justify a promotion whatever its median shows.
+
+**Dated open item — `root-rotation` promotion decision, due 2026-11-04.**
+The earliest date a 7-day horizon could hold 30 filled outcomes, given
+rotation events only begin at deploy. Read `effectiveness` then and either
+promote with the numbers recorded here, or leave it in shadow with the reason.
+If the class has produced too few events to ever reach 30, that is itself the
+answer: a signal that fires a handful of times a quarter does not need a
+paging tier.
+
+## Root curation reads — chain findings (2026-09-09, change: rotation-signal-gate)
+
+Verified against live Finney from the workstation over the keyless public
+endpoint, at finalized heads around block 9,027,689 to 9,028,008.
+
+- **`state_getPairs` is refused.** The public endpoint answers code 4003,
+  "RPC call is unsafe to be called externally". The one-call prefix read is
+  therefore unavailable and the root read is deliberately two calls:
+  `state_getKeys` on the root `Weights` prefix, then one
+  `state_queryStorageAt` over exactly those keys.
+- **`Weights` at the root netuid is small and Identity-hashed both halves.**
+  20 validator entries, 1833 payload bytes total, decoding as
+  compact-length-prefixed `Vec<(u16 netuid, u16 weight)>` with 68, 23 and 26
+  destinations in the first three. The validator uid is the two bytes after
+  the netuid in the key tail, which is what makes stake weighting reachable.
+- **96 distinct destination netuids**, largest unweighted aggregate share
+  5.24% against the 1/16 = 6.25% `RootWeightsCap`. Consistent with a cap that
+  forces at least 16 destinations per vector.
+
+**Task 2.4 resolved: the aggregate map IS stake-weighted.** The open question
+in design D2 was whether stake weighting fits the hourly pass's budget. It
+does, and it matters:
+
+- Feasible: `Keys[ROOT][uid]` (Identity ++ Identity, 64 entries) resolves the
+  hotkeys, then `TotalHotkeyAlpha[hotkey][ROOT]`
+  (Blake2_128Concat(AccountId) ++ Identity(NetUid), 8-byte u64 RAO) gives root
+  alpha. Both are DERIVED batched reads at the same block, no enumeration.
+  Four RPC calls for the whole pass, about 5 seconds.
+- Enumeration is not an option and was not needed: `TotalHotkeyAlpha` holds
+  ~48,260 keys, and unbounded scans of neighbouring items were refused with
+  `RPC work limit exceeded` (code -32004, budget `storage_scan_unbounded`).
+- It matters: the 20 curating validators held 3,353,474 TAO of root stake and
+  the largest single one held 999,297 of it. Unweighted, that validator's
+  voice would read as 1 of 20 (5%) instead of about 30%. Stake-weighted, the
+  top destination is 5.92% rather than the 5.24% an unweighted map reports.
+- If the stake read fails, the map falls back to unweighted and is LABELLED
+  unweighted in the store and in every rendering. A share presented as
+  dividend flow when it counts validators is the failure this labelling
+  exists to prevent.
+
+**Crossing durability window set to 48 hours** from the measured reversal
+distribution: 55 crossings across 25 netuids between 2026-08-10 and
+2026-09-09, 18 of them reversing inside 48 hours, and 9 netuids producing 33
+of the 55.
+
 ## Mining triage — chain findings (2026-08-07, change: mining-triage)
 
 Verified on the Pi against live Finney and the TaoSwap panel. Recorded here

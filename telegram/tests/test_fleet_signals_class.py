@@ -86,6 +86,7 @@ class FleetSignalBase(unittest.TestCase):
         classes = {"chain-runtime-upgrade":
                    self.config["classes"]["chain-runtime-upgrade"],
                    "fleet-signal": {"enabled": True,
+                                    "tier": "instant",
                                     "source_db": self.fleet_db,
                                     "digest_backstop_hours": 24}}
         classes.update({key: value for key, value

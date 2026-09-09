@@ -1019,5 +1019,336 @@ class HoveringTests(unittest.TestCase):
         self.assertFalse(events[0]["hovering"])
 
 
+# ---------------------------------------------------------------------------
+# Root weight vectors, the destination map, rotation events, and the
+# gate-crossing durability guard (change: rotation-signal-gate)
+# ---------------------------------------------------------------------------
+
+def weight_vector_hex(pairs):
+    """SCALE Vec<(u16, u16)>: compact length then four-byte pairs."""
+    count = len(pairs)
+    prefix = (bytes([count << 2]) if count < 64
+              else ((count << 2) | 0b01).to_bytes(2, "little"))
+    body = b"".join(int(n).to_bytes(2, "little") + int(w).to_bytes(2, "little")
+                    for n, w in pairs)
+    return "0x" + (prefix + body).hex()
+
+
+def root_key(uid):
+    return al.root_weights_prefix() + int(uid).to_bytes(2, "little").hex()
+
+
+def root_rpc(vectors, head="0x" + "cd" * 32, number="0x89c069",
+             fail=None, keys_override=None, drop_from_batch=0):
+    """vectors: {uid: [(netuid, weight)] or a raw hex payload or None}."""
+    def rpc(method, params):
+        if method == fail:
+            return {"ok": False, "error": "boom"}
+        if method == "chain_getFinalizedHead":
+            return {"ok": True, "result": head, "endpoint": "fake"}
+        if method == "chain_getHeader":
+            return {"ok": True, "result": {"number": number},
+                    "endpoint": "fake"}
+        if method == "state_getKeys":
+            if keys_override is not None:
+                return {"ok": True, "result": list(keys_override)}
+            return {"ok": True,
+                    "result": [root_key(uid) for uid in sorted(vectors)]}
+        if method == "state_queryStorageAt":
+            changes = []
+            for key in params[0]:
+                try:
+                    uid = al.uid_from_weights_key(key)
+                except ValueError:
+                    changes.append([key, None])  # let the caller judge it
+                    continue
+                value = vectors.get(uid)
+                if isinstance(value, list):
+                    value = weight_vector_hex(value)
+                changes.append([key, value])
+            if drop_from_batch:
+                changes = changes[:-drop_from_batch]
+            return {"ok": True, "result": [{"changes": changes}]}
+        raise AssertionError("unexpected method %s" % method)
+    return rpc
+
+
+def root_config(**over):
+    """The root read runs the derived-key self-test before it touches the
+    chain, so this fixture pins REAL derived prefixes rather than the
+    placeholder keys the gate fixtures use."""
+    cfg = make_config()
+    cfg["gate_signal"]["storage_keys"] = {
+        item: al.storage_prefix("SubtensorModule", item) for item in KEYS}
+    root = {"enabled": True, "max_enumerated_keys": 512,
+            "share_change_threshold": 0.005, "stake_weighted": False}
+    root.update(over)
+    cfg["root_rotation"] = root
+    return cfg
+
+
+class RootVectorReadTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = al.open_store(os.path.join(self.tmp, "live.db"))
+        self.addCleanup(self.conn.close)
+
+    def test_prefix_and_uid_round_trip(self):
+        for uid in (0, 1, 3, 255, 4096):
+            self.assertEqual(al.uid_from_weights_key(root_key(uid)), uid)
+
+    def test_uid_rejects_a_foreign_netuid(self):
+        wrong = (al.storage_prefix("SubtensorModule", "Weights")
+                 + (7).to_bytes(2, "little").hex()
+                 + (1).to_bytes(2, "little").hex())
+        with self.assertRaises(ValueError):
+            al.uid_from_weights_key(wrong)
+
+    def test_uid_rejects_an_unexpected_tail_length(self):
+        with self.assertRaises(ValueError):
+            al.uid_from_weights_key(al.root_weights_prefix() + "00")
+
+    def test_decode_known_vector(self):
+        self.assertEqual(
+            al.decode_weight_vector(weight_vector_hex([(1, 10), (2, 20)])),
+            [(1, 10), (2, 20)])
+
+    def test_decode_two_byte_compact_length(self):
+        pairs = [(n, n + 1) for n in range(100)]
+        self.assertEqual(al.decode_weight_vector(weight_vector_hex(pairs)),
+                         pairs)
+
+    def test_decode_rejects_a_truncated_vector(self):
+        good = weight_vector_hex([(1, 10), (2, 20)])
+        with self.assertRaises(ValueError):
+            al.decode_weight_vector(good[:-8])
+
+    def test_read_returns_vectors_at_one_block(self):
+        result = al.read_root_vectors(
+            root_config(), rpc=root_rpc({0: [(1, 10)], 3: [(2, 20)]}))
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["enumerated"], 2)
+        self.assertEqual(result["vectors"], {0: [(1, 10)], 3: [(2, 20)]})
+        self.assertEqual(result["block_number"], 0x89c069)
+
+    def test_short_batch_fails_closed(self):
+        result = al.read_root_vectors(
+            root_config(),
+            rpc=root_rpc({0: [(1, 10)], 3: [(2, 20)]}, drop_from_batch=1))
+        self.assertFalse(result["ok"])
+        self.assertIn("short map", result["error"])
+
+    def test_undecodable_vector_fails_closed(self):
+        result = al.read_root_vectors(
+            root_config(), rpc=root_rpc({0: "0x08" + "0100ffff"}))
+        self.assertFalse(result["ok"])
+        self.assertIn("did not decode", result["error"])
+
+    def test_cap_exceeded_fails_closed(self):
+        result = al.read_root_vectors(
+            root_config(max_enumerated_keys=1),
+            rpc=root_rpc({0: [(1, 10)], 3: [(2, 20)]}))
+        self.assertFalse(result["ok"])
+        self.assertIn("max_enumerated_keys", result["error"])
+
+    def test_unexpected_key_layout_fails_closed(self):
+        stray = al.storage_prefix("SubtensorModule", "Weights") + "00"
+        result = al.read_root_vectors(
+            root_config(), rpc=root_rpc({0: [(1, 10)]},
+                                        keys_override=[stray]))
+        self.assertFalse(result["ok"])
+        self.assertIn("key layout", result["error"])
+
+    def test_enumeration_failure_fails_closed(self):
+        result = al.read_root_vectors(
+            root_config(), rpc=root_rpc({0: [(1, 10)]}, fail="state_getKeys"))
+        self.assertFalse(result["ok"])
+
+    def test_aggregate_normalises_each_validator_first(self):
+        shares, basis = al.aggregate_destinations(
+            {1: [(1, 100), (2, 100)], 2: [(1, 300), (3, 100)]})
+        self.assertEqual(basis, "unweighted")
+        self.assertAlmostEqual(shares[1], 0.625)
+        self.assertAlmostEqual(sum(shares.values()), 1.0)
+
+    def test_aggregate_stake_weighting_changes_the_picture(self):
+        shares, basis = al.aggregate_destinations(
+            {1: [(1, 100), (2, 100)], 2: [(1, 300), (3, 100)]},
+            stake_by_uid={1: 1.0, 2: 9.0})
+        self.assertEqual(basis, "stake-weighted")
+        self.assertAlmostEqual(shares[1], 0.725)
+        self.assertAlmostEqual(sum(shares.values()), 1.0)
+
+    def test_failed_read_records_health_and_persists_nothing(self):
+        result = al.poll_root_weights(
+            self.conn, root_config(),
+            rpc=root_rpc({0: [(1, 10)]}, drop_from_batch=1))
+        self.assertFalse(result["ok"])
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM root_destination_map").fetchone()[0], 0)
+        self.assertTrue(any(cat == "provider-failure"
+                            for cat, _ in health_rows(self.conn)))
+
+    def test_disabled_read_is_inert(self):
+        result = al.poll_root_weights(self.conn, root_config(enabled=False),
+                                      rpc=root_rpc({0: [(1, 10)]}))
+        self.assertIn("skipped", result)
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM root_vectors").fetchone()[0], 0)
+
+    def test_basis_is_persisted_with_the_map(self):
+        al.poll_root_weights(self.conn, root_config(),
+                             rpc=root_rpc({0: [(1, 10)]}))
+        self.assertEqual(self.conn.execute(
+            "SELECT weighting_basis FROM root_destination_map"
+        ).fetchone()[0], "unweighted")
+
+
+class RotationEventTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = al.open_store(os.path.join(self.tmp, "live.db"))
+        self.addCleanup(self.conn.close)
+        self.cfg = root_config()
+
+    def poll(self, vectors, reseed=False):
+        return al.poll_root_weights(self.conn, self.cfg,
+                                    rpc=root_rpc(vectors), reseed=reseed)
+
+    def events(self):
+        return self.conn.execute(
+            "SELECT netuid, direction, prev_share, new_share "
+            "FROM rotation_events ORDER BY id").fetchall()
+
+    def test_first_map_seeds_silently(self):
+        result = self.poll({0: [(1, 50), (2, 50)]})
+        self.assertIn("seeded", result)
+        self.assertEqual(self.events(), [])
+
+    def test_share_move_past_threshold_records_once(self):
+        self.poll({0: [(1, 50), (2, 50)]})
+        self.poll({0: [(1, 90), (2, 10)]})
+        rows = self.events()
+        self.assertEqual(len(rows), 2)
+        directions = {netuid: direction for netuid, direction, _, _ in rows}
+        self.assertEqual(directions[1], "share-rose")
+        self.assertEqual(directions[2], "share-fell")
+
+    def test_sub_threshold_move_records_nothing(self):
+        self.poll({0: [(1, 5000), (2, 5000)]})
+        self.poll({0: [(1, 5010), (2, 4990)]})
+        self.assertEqual(self.events(), [])
+
+    def test_entry_and_exit_are_events(self):
+        self.poll({0: [(1, 50), (2, 50)]})
+        self.poll({0: [(1, 50), (3, 50)]})
+        rows = {netuid: direction for netuid, direction, _, _ in self.events()}
+        self.assertEqual(rows[3], "entered")
+        self.assertEqual(rows[2], "left")
+
+    def test_curation_parameter_transition_reseeds_without_storming(self):
+        self.poll({0: [(1, 50), (2, 50)]})
+        result = self.poll({0: [(1, 95), (2, 5)]}, reseed=True)
+        self.assertIn("re-seeded", result["seeded"])
+        self.assertEqual(self.events(), [])
+        # the re-seeded map is the new baseline, so the next quiet pass is
+        # quiet rather than replaying the suppressed move
+        self.poll({0: [(1, 95), (2, 5)]})
+        self.assertEqual(self.events(), [])
+
+    def test_validator_count_and_basis_travel_with_the_event(self):
+        self.poll({0: [(1, 50), (2, 50)]})
+        self.poll({0: [(1, 90), (2, 10)]})
+        count, basis = self.conn.execute(
+            "SELECT validator_count, weighting_basis FROM rotation_events "
+            "LIMIT 1").fetchone()
+        self.assertEqual(count, 1)
+        self.assertEqual(basis, "unweighted")
+
+
+class CrossingDurabilityTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = al.open_store(os.path.join(self.tmp, "live.db"))
+        self.addCleanup(self.conn.close)
+        self.cfg = make_config(durability_window_hours=48)
+
+    def add(self, netuid, direction, hours_ago):
+        when = (datetime.datetime.now(datetime.timezone.utc)
+                - datetime.timedelta(hours=hours_ago)).isoformat()
+        cursor = self.conn.execute(
+            "INSERT INTO gate_events (observed_at, netuid, direction, share, "
+            "theta, prev_side, block_number, eligibility) "
+            "VALUES (?, ?, ?, 0.1, 0.09, 'below', 1, 'pending')",
+            (when, netuid, direction))
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def state(self, event_id):
+        return self.conn.execute(
+            "SELECT eligibility FROM gate_events WHERE id = ?",
+            (event_id,)).fetchone()[0]
+
+    def test_window_elapses_to_eligible(self):
+        event_id = self.add(1, "rose-above", 50)
+        counts = al.resolve_crossing_eligibility(self.conn, self.cfg)
+        self.assertEqual(counts["eligible"], 1)
+        self.assertEqual(self.state(event_id), "eligible")
+
+    def test_fresh_crossing_stays_pending(self):
+        event_id = self.add(1, "rose-above", 1)
+        al.resolve_crossing_eligibility(self.conn, self.cfg)
+        self.assertEqual(self.state(event_id), "pending")
+
+    def test_reversal_inside_the_window_blocks_both(self):
+        first = self.add(1, "rose-above", 50)
+        second = self.add(1, "fell-below", 40)
+        al.resolve_crossing_eligibility(self.conn, self.cfg)
+        self.assertEqual(self.state(first), "reversed")
+        self.assertEqual(self.state(second), "reversed")
+
+    def test_reversal_outside_the_window_does_not_block(self):
+        first = self.add(1, "rose-above", 100)
+        self.add(1, "fell-below", 10)
+        al.resolve_crossing_eligibility(self.conn, self.cfg)
+        self.assertEqual(self.state(first), "eligible")
+
+    def test_a_second_pass_preserves_a_settled_reversal(self):
+        first = self.add(1, "rose-above", 50)
+        self.add(1, "fell-below", 40)
+        al.resolve_crossing_eligibility(self.conn, self.cfg)
+        al.resolve_crossing_eligibility(self.conn, self.cfg)
+        self.assertEqual(self.state(first), "reversed")
+
+    def test_other_netuids_do_not_reverse_each_other(self):
+        first = self.add(1, "rose-above", 50)
+        self.add(2, "fell-below", 40)
+        al.resolve_crossing_eligibility(self.conn, self.cfg)
+        self.assertEqual(self.state(first), "eligible")
+
+    def test_pre_existing_crossings_are_eligible_after_migration(self):
+        self.conn.execute(
+            "INSERT INTO gate_events (observed_at, netuid, direction, share, "
+            "theta, prev_side, block_number) "
+            "VALUES (?, 9, 'rose-above', 0.1, 0.09, 'below', 1)",
+            (datetime.datetime.now(datetime.timezone.utc).isoformat(),))
+        self.conn.execute("UPDATE gate_events SET eligibility = NULL "
+                          "WHERE netuid = 9")
+        self.conn.commit()
+        self.conn.close()
+        reopened = al.open_store(os.path.join(self.tmp, "live.db"))
+        self.addCleanup(reopened.close)
+        self.assertEqual(reopened.execute(
+            "SELECT eligibility FROM gate_events WHERE netuid = 9"
+        ).fetchone()[0], "eligible")
+
+    def test_new_crossings_are_recorded_pending(self):
+        gcfg = make_config(confirm_polls=1)["gate_signal"]
+        al.update_gate_sides(self.conn, gcfg, 0.15, {1: 0.30}, {1: True}, 100)
+        al.update_gate_sides(self.conn, gcfg, 0.15, {1: 0.05}, {1: True}, 101)
+        self.assertEqual(self.conn.execute(
+            "SELECT eligibility FROM gate_events ORDER BY id DESC LIMIT 1"
+        ).fetchone()[0], "pending")
+
 if __name__ == "__main__":
     unittest.main()

@@ -259,3 +259,179 @@ class HoveringSuppressionTests(unittest.TestCase):
         self.spec["source_db"] = db2
         events, _ = tg.gate_crossing_events(db2, None, self.ctx)
         self.assertEqual(len(events), 1)
+
+
+# ---------------------------------------------------------------------------
+# Durability guard + the root-rotation class (change: rotation-signal-gate)
+# ---------------------------------------------------------------------------
+
+ELIGIBILITY_SCHEMA = """
+CREATE TABLE gate_events (
+    id INTEGER PRIMARY KEY,
+    observed_at TEXT NOT NULL,
+    netuid INTEGER NOT NULL,
+    direction TEXT NOT NULL,
+    share REAL NOT NULL,
+    theta REAL NOT NULL,
+    prev_side TEXT NOT NULL,
+    emission_enabled INTEGER,
+    block_number INTEGER,
+    eligibility TEXT
+);
+CREATE TABLE rotation_events (
+    id INTEGER PRIMARY KEY,
+    observed_at TEXT NOT NULL,
+    netuid INTEGER NOT NULL,
+    direction TEXT NOT NULL,
+    prev_share REAL,
+    new_share REAL,
+    validator_count INTEGER NOT NULL,
+    weighting_basis TEXT NOT NULL,
+    block_number INTEGER
+);
+"""
+
+
+class CrossingEligibilityTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.live_db = os.path.join(self.tmp.name, "livedata.db")
+        conn = sqlite3.connect(self.live_db)
+        conn.executescript(ELIGIBILITY_SCHEMA)
+        conn.commit()
+        conn.close()
+        self.config = make_config(self.tmp.name)
+        self.spec = {"enabled": True, "tier": "instant",
+                     "source_db": self.live_db, "cooldown_hours": 24}
+        self.store = tg.open_store(os.path.join(self.tmp.name, "tg.db"))
+        self.addCleanup(self.store.close)
+        self.ctx = {"config": self.config, "spec": self.spec,
+                    "connection": self.store, "tier": "instant"}
+
+    def add(self, netuid, eligibility, direction="fell-below"):
+        conn = sqlite3.connect(self.live_db)
+        cursor = conn.execute(
+            "INSERT INTO gate_events (observed_at, netuid, direction, share, "
+            "theta, prev_side, emission_enabled, block_number, eligibility) "
+            "VALUES (?, ?, ?, 0.005, 0.010, 'above', 1, 900, ?)",
+            (_iso(), netuid, direction, eligibility))
+        conn.commit()
+        row = cursor.lastrowid
+        conn.close()
+        return row
+
+    def test_eligible_crossing_pages(self):
+        self.add(1, "eligible")
+        events, wm = tg.gate_crossing_events(self.live_db, None, self.ctx)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(wm, "1")
+
+    def test_reversed_crossing_is_recorded_and_never_paged(self):
+        self.add(2, "reversed")
+        events, wm = tg.gate_crossing_events(self.live_db, None, self.ctx)
+        self.assertEqual(events, [])
+        self.assertEqual(wm, "1")  # advanced past it
+        status, detail = self.store.execute(
+            "SELECT status, final_failure FROM events").fetchone()
+        self.assertEqual(status, "suppressed")
+        self.assertIn("reversed", detail)
+
+    def test_pending_crossing_holds_the_watermark(self):
+        self.add(3, "pending")
+        events, wm = tg.gate_crossing_events(self.live_db, None, self.ctx)
+        self.assertEqual(events, [])
+        self.assertIsNone(wm)  # unchanged, so a later scan reconsiders it
+
+    def test_pending_crossing_blocks_later_eligible_ones(self):
+        self.add(3, "pending")
+        self.add(4, "eligible")
+        events, wm = tg.gate_crossing_events(self.live_db, None, self.ctx)
+        self.assertEqual(events, [])
+        self.assertIsNone(wm)
+
+    def test_legacy_store_without_the_column_is_all_eligible(self):
+        legacy = os.path.join(self.tmp.name, "legacy.db")
+        seed_live(legacy)
+        add_crossing(legacy, 7)
+        events, _ = tg.gate_crossing_events(legacy, None, self.ctx)
+        self.assertEqual(len(events), 1)
+
+
+class RootRotationClassTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.live_db = os.path.join(self.tmp.name, "livedata.db")
+        conn = sqlite3.connect(self.live_db)
+        conn.executescript(ELIGIBILITY_SCHEMA)
+        conn.commit()
+        conn.close()
+        self.config = make_config(self.tmp.name)
+        self.ctx = {"config": self.config,
+                    "spec": {"enabled": True, "tier": "shadow",
+                             "source_db": self.live_db}}
+
+    def add(self, netuid=51, direction="share-rose", prev=0.05, new=0.09,
+            basis="stake-weighted", validators=20):
+        conn = sqlite3.connect(self.live_db)
+        conn.execute(
+            "INSERT INTO rotation_events (observed_at, netuid, direction, "
+            "prev_share, new_share, validator_count, weighting_basis, "
+            "block_number) VALUES (?, ?, ?, ?, ?, ?, ?, 9028008)",
+            (_iso(), netuid, direction, prev, new, validators, basis))
+        conn.commit()
+        conn.close()
+
+    def test_missing_table_is_inert(self):
+        empty = os.path.join(self.tmp.name, "empty.db")
+        sqlite3.connect(empty).close()
+        events, wm = tg.root_rotation_events(empty, None, self.ctx)
+        self.assertEqual(events, [])
+        self.assertIsNone(wm)
+
+    def test_renders_recorded_figures_only(self):
+        self.add()
+        events, wm = tg.root_rotation_events(self.live_db, None, self.ctx)
+        self.assertEqual(len(events), 1)
+        text = events[0]["text"]
+        self.assertIn("subnet 51", text)
+        self.assertIn("5.00%", text)
+        self.assertIn("9.00%", text)
+        self.assertIn("20 validators", text)
+        self.assertIn("9028008", text)
+        self.assertEqual(wm, "1")
+        self.assertEqual(events[0]["event_class"], "root-rotation")
+
+    def test_stake_weighted_basis_is_named(self):
+        self.add(basis="stake-weighted")
+        events, _ = tg.root_rotation_events(self.live_db, None, self.ctx)
+        self.assertIn("share of dividend flow", events[0]["text"])
+
+    def test_unweighted_basis_is_stated_plainly(self):
+        self.add(basis="unweighted")
+        text = tg.root_rotation_events(self.live_db, None, self.ctx)[0][0]["text"]
+        self.assertIn("unweighted", text)
+        self.assertIn("counts validators, not TAO", text)
+        self.assertIn("not a share of dividend flow", text)
+
+    def test_entry_and_exit_render_without_a_missing_share(self):
+        self.add(netuid=7, direction="entered", prev=None, new=0.02)
+        self.add(netuid=8, direction="left", prev=0.03, new=None)
+        events, _ = tg.root_rotation_events(self.live_db, None, self.ctx)
+        self.assertEqual(len(events), 2)
+        self.assertIn("n/a to 2.00%", events[0]["text"])
+        self.assertIn("3.00% to n/a", events[1]["text"])
+
+    def test_no_em_or_en_dashes(self):
+        self.add()
+        text = tg.root_rotation_events(self.live_db, None, self.ctx)[0][0]["text"]
+        self.assertNotIn("—", text)
+        self.assertNotIn("–", text)
+
+    def test_watermark_only_returns_new_rows(self):
+        self.add()
+        self.add(netuid=52)
+        events, wm = tg.root_rotation_events(self.live_db, "1", self.ctx)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(wm, "2")

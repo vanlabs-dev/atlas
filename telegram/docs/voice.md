@@ -76,6 +76,13 @@ first use in a message, bare after):
 | `basket` | one root validator's escrowed fund of subnet alpha, fed by root dividends |
 | `basket index` | the NAV-weighted average of all live baskets; a new fund starts on this line |
 | `display price` | a basket's raw price divided by its baseline, so funds of any age compare |
+| `root weight vector` | a root validator's chosen split of its dividends across subnets |
+| `destination share` | one subnet's slice of all curated root dividends |
+| `stake-weighted` | counted by how much root stake each validator holds |
+| `unweighted` | counted one validator per vote, not by stake |
+| `curated root flow` | root dividends being redirected by validator weight vectors |
+| `durability window` | the wait before a bar crossing counts as settled |
+| `shadow` | recorded and measured, deliberately not sent |
 
 Banned words are banned as symbols too. Write the emission gate as
 `gate(s) = s^h / (s^h + bar^h)`. A formula is prose here: a banned word

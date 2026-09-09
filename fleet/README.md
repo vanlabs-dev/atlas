@@ -203,6 +203,19 @@ audited (`signals-failed`) and never counts as a reconcile process error.
   are honest: `pending` / `recorded` / `late` / `unavailable` — a failed
   fetch never delays an alert. `effectiveness` reports per class ×
   horizon medians vs baseline; it ranks nothing and recommends nothing.
+- **The ledger measures ANY netuid-scoped class** (change:
+  rotation-signal-gate). Entries are keyed by a source triple
+  (source store, source row id, netuid), so livedata's gate
+  crossings and root-rotation events are entered on the same terms
+  as fleet signals; the hourly pass reads those stores strictly
+  read-only. Measurement never reads the delivery tier, so a class
+  demoted to `briefing` keeps filling — that is the only way a
+  demotion can ever be reversed on evidence. `effectiveness` names
+  each class's current tier beside its figures, marks a horizon
+  unreadable when pending outcomes outnumber filled ones, and says
+  whether the 7-day sample meets `min_filled_for_promotion`
+  (default 30). A class reaches a paging tier only by an operator
+  decision recorded in `docs/decisions.md` against such a read.
 - **Two-unit scheduling.** Extraction runs here (fleet unit); the
   Telegram scan runs in the repo unit — delivery may lag extraction by up
   to one scheduling cycle (~1h), accepted by design: every signal class

@@ -183,6 +183,61 @@ absence threshold. A subnet recording more than
 record, carry a `hovering` annotation, and the flag clears only after a
 full quiet window.
 
+## Root weight vectors and crossing durability (change: rotation-signal-gate)
+
+The same hourly pass reads every per-validator root weight vector at the
+gate poll's finalized block, over the same keyless RPC, in **two calls**:
+one `state_getKeys` on `Weights` at the root netuid, then one
+`state_queryStorageAt` over exactly the keys that returned.
+`state_getPairs` would do it in one, but the public endpoint refuses it as
+unsafe (code 4003, verified 2026-09-09). `Weights` is Identity-hashed on
+both halves, so the validator uid is the two bytes after the netuid in the
+key tail; each value decodes as compact-length-prefixed
+`Vec<(u16 netuid, u16 weight)>`.
+
+The read **fails closed and persists nothing for the pass** on any of: a
+batch shorter than the enumeration, a vector that does not decode, a key
+tail that is not `netuid ++ uid`, or an enumeration over
+`root_rotation.max_enumerated_keys`. A partial map understates whichever
+destinations it lost, which is exactly the kind of quietly-wrong number
+this component refuses to produce.
+
+Each validator's vector is normalised to itself, then the vectors are
+combined into an aggregate destination map. When
+`root_rotation.stake_weighted` is set, the combination is weighted by each
+validator's root stake, resolved with two further **derived** batched reads
+at the same block: `Keys[ROOT][uid]` for the hotkey, then
+`TotalHotkeyAlpha[hotkey][ROOT]` (u64 RAO). Neither is enumerated:
+`TotalHotkeyAlpha` holds ~48k keys and unbounded scans of it are refused
+with an RPC work limit. If the stake read fails, the map falls back to
+unweighted, records a health event, and is **labelled unweighted** in the
+store and in every rendering. That label matters: an unweighted map counts
+validators rather than TAO, so it is not a share of dividend flow and must
+never be presented as one.
+
+A destination whose share moves past `root_rotation.share_change_threshold`
+(absolute, not relative), or that enters or leaves the map, records a
+`rotation_events` row carrying both shares, the contributing validator
+count, the weighting basis and the block. The first map seeds silently, and
+a pass on which the curation master switch or the concentration cap
+transitioned re-seeds silently: that transition re-prices every vector at
+once and is already reported by the chain-parameter watch.
+
+The read is independently disableable (`root_rotation.enabled`) and is
+deliberately **not** gated by `gate_signal.enabled`, on the same reasoning
+as the chain-parameter watch: rolling back the gate signal must not
+silently stop observing root curation.
+
+**Crossing durability.** A gate-crossing event now carries a persisted
+`eligibility`. A confirmed crossing starts `pending` and becomes `eligible`
+only after `gate_signal.durability_window_hours` (default 48) passes with
+no opposing crossing for that netuid; an opposing crossing inside the
+window marks **both** `reversed` and permanently undeliverable, and both
+rows are retained. Eligibility is stored, never recomputed on read, so a
+restart cannot resurrect a settled reversal. Crossings recorded before this
+change are backfilled `eligible` so the upgrade does not swallow a backlog.
+Set the window to 0 to page on confirmation as before.
+
 ## Secrets
 
 `TAOSTATS_API_KEY` from the repo-root `.env` (0600; template

@@ -59,7 +59,14 @@
       "beta": "a share count in one root validator's basket; its TAO value is beta x fund value / all beta",
       "basket": "one root validator's escrowed fund of subnet alpha, fed by root dividends",
       "basket index": "the NAV-weighted average of all live baskets; a new fund starts on this line",
-      "display price": "a basket's raw price divided by its baseline, so funds of any age compare"
+      "display price": "a basket's raw price divided by its baseline, so funds of any age compare",
+      "root weight vector": "a root validator's chosen split of its dividends across subnets",
+      "destination share": "one subnet's slice of all curated root dividends",
+      "stake-weighted": "counted by how much root stake each validator holds",
+      "unweighted": "counted one validator per vote, not by stake",
+      "curated root flow": "root dividends being redirected by validator weight vectors",
+      "durability window": "the wait before a bar crossing counts as settled",
+      "shadow": "recorded and measured, deliberately not sent"
     }
   },
   "repository_update": {
@@ -87,7 +94,7 @@
       "tier": "instant"
     },
     "chain-parameter-change": {
-      "_comment": "Root-settable chain-parameter transitions (change: network-drift-443). DISABLED at ship time — enable together with livedata chain_params.enabled at deploy, and seed this class's watermark first so the seeded observations cannot backfill-flood. Reads livedata's chain_param_events read-only past a row-id watermark. Instant tier, priority just below chain upgrades. NO cooldown and no digest by design: a knob like the Root Reborn curation switch cannot burst, and suppressing a second flip would be the wrong failure. `governs` maps an item to the one-line description rendered in the body (escaped like every other value).",
+      "_comment": "Root-settable chain-parameter transitions (change: network-drift-443). DISABLED at ship time \u2014 enable together with livedata chain_params.enabled at deploy, and seed this class's watermark first so the seeded observations cannot backfill-flood. Reads livedata's chain_param_events read-only past a row-id watermark. Instant tier, priority just below chain upgrades. NO cooldown and no digest by design: a knob like the Root Reborn curation switch cannot burst, and suppressing a second flip would be the wrong failure. `governs` maps an item to the one-line description rendered in the body (escaped like every other value).",
       "enabled": true,
       "source_db": "var/livedata/livedata.db",
       "governs": {
@@ -102,8 +109,9 @@
     "subnet-registry": {
       "_comment": "Netuid set and chain-name changes between consecutive panel snapshots (change: pulse-briefing). The first snapshot seeds silently; a registration, deregistration, or on-chain rename pages at instant tier.",
       "enabled": true,
-      "tier": "instant",
-      "source_db": "var/livedata/livedata.db"
+      "tier": "briefing",
+      "source_db": "var/livedata/livedata.db",
+      "_tier_comment": "DEMOTED to briefing 2026-09-09 (change: rotation-signal-gate). All six alerts in the preceding 30 days were `renamed`: a subnet changing its display name has no action behind it. Registration and deregistration still ride the daily briefing. Flip back to instant to roll back."
     },
     "fail-closed": {
       "_comment": "One page per outage when the gate poll or the chain-parameter watch has recorded only failures for longer than window_hours (change: pulse-briefing). Keyed by the outage's first failure so a persisting outage never pages twice; recovery re-arms the key.",
@@ -113,7 +121,7 @@
       "window_hours": 6
     },
     "gate-crossing": {
-      "_comment": "Emission-gate crossing alerts (change: gate-crossing-signal). DISABLED at ship time — enable together with livedata gate_signal.enabled at deploy (the whole rollback is flipping both back). Reads livedata's gate_events read-only past a row-id watermark. Instant tier, priority just below chain upgrades; cooldown_hours dampens per-netuid paging (suppressed events are recorded in the ledger, never dropped).",
+      "_comment": "Emission-gate crossing alerts (change: gate-crossing-signal). DISABLED at ship time \u2014 enable together with livedata gate_signal.enabled at deploy (the whole rollback is flipping both back). Reads livedata's gate_events read-only past a row-id watermark. Instant tier, priority just below chain upgrades; cooldown_hours dampens per-netuid paging (suppressed events are recorded in the ledger, never dropped).",
       "enabled": true,
       "source_db": "var/livedata/livedata.db",
       "cooldown_hours": 24,
@@ -141,6 +149,30 @@
       "enabled": true,
       "source_db": "var/knowledge/knowledge.db",
       "tier": "instant"
+    },
+    "root-rotation": {
+      "_comment": "Shifts in where curated root dividends point (change: rotation-signal-gate). SHADOW on introduction: events are recorded and measured in the effectiveness ledger but nothing is sent, so the class accrues evidence before it can ever page. Promote to instant only against a filled 7-day ledger read that beats the fleet baseline, and record that decision in docs/decisions.md.",
+      "enabled": true,
+      "tier": "shadow",
+      "source_db": "var/livedata/livedata.db"
+    },
+    "econ-code": {
+      "_comment": "DEMOTED 2026-09-09 on its own effectiveness read: at n=212 (1d) and n=185 (7d) the class median was -0.278% vs a -0.305% fleet baseline at one day and -2.175% vs -1.873% at seven, so no edge at one day and worse than baseline at seven. Detection, the econ judge, the cooldown and the ledger all continue: the 30-day horizon is still half-pending and is the only thing that could reverse this. Flip back to instant to roll back.",
+      "enabled": true,
+      "tier": "briefing",
+      "delivery_only": true
+    },
+    "narrative-cluster": {
+      "_comment": "Unchanged. n=9 at the 1d horizon is too small to read either way; it stays instant until its own sample is readable.",
+      "enabled": true,
+      "tier": "instant",
+      "delivery_only": true
+    },
+    "watchlist": {
+      "_comment": "Unchanged and operator-curated: these terms were chosen by hand, so the class carries intent that the ledger cannot see. n=3.",
+      "enabled": true,
+      "tier": "instant",
+      "delivery_only": true
     }
   },
   "_tier_comment": "Every class carries a delivery tier (change: pulse-briefing): instant pages on the scan that finds the event; briefing records the event as `briefed`, advances the watermark, and surfaces it only through the pulse briefing. Ships with every class instant (today's behaviour); the planned demotion to briefing tier for econ-code/gate-crossing/repository-update/fleet-signal/schema-drift/knowledge-ingestion is one config commit, and flipping a tier back is the rollback.",

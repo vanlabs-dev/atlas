@@ -57,6 +57,17 @@ CLASS_ECON = "econ-code"
 CLASS_DIGEST = "signal-digest"
 TIER_INSTANT = "instant"
 TIER_DIGEST = "digest"
+# Ledger source stores (change: rotation-signal-gate). An entry is keyed by
+# (source store, source row id, netuid), so a livedata row id can never be
+# confused with a fleet event id.
+SOURCE_FLEET = "fleet"
+SOURCE_LIVEDATA = "livedata"
+# Netuid-scoped classes livedata produces, read into the ledger by the hourly
+# fleet pass. Each maps to (table, netuid column, timestamp column).
+LIVEDATA_MEASURED = {
+    "gate-crossing": ("gate_events", "netuid", "observed_at"),
+    "root-rotation": ("rotation_events", "netuid", "observed_at"),
+}
 
 # Term kinds.
 KIND_DEP = "dependency"
@@ -134,17 +145,22 @@ CREATE TABLE IF NOT EXISTS signal_prices (
     PRIMARY KEY (ts, netuid)
 );
 CREATE TABLE IF NOT EXISTS signal_entries (
+    source_store TEXT NOT NULL DEFAULT 'fleet',
     event_id INTEGER NOT NULL,
     netuid INTEGER NOT NULL,
+    source_class TEXT,
+    created_at TEXT,
     price_tao REAL,
     as_of TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
-    PRIMARY KEY (event_id, netuid)
+    PRIMARY KEY (source_store, event_id, netuid)
 );
 CREATE TABLE IF NOT EXISTS signal_outcomes (
     id INTEGER PRIMARY KEY,
+    source_store TEXT NOT NULL DEFAULT 'fleet',
     event_id INTEGER NOT NULL,
     netuid INTEGER NOT NULL,
+    source_class TEXT,
     horizon_days INTEGER NOT NULL,
     due_at TEXT NOT NULL,
     exit_price_tao REAL,
@@ -152,7 +168,7 @@ CREATE TABLE IF NOT EXISTS signal_outcomes (
     baseline_return_pct REAL,
     status TEXT NOT NULL DEFAULT 'pending',
     filled_at TEXT,
-    UNIQUE (event_id, netuid, horizon_days)
+    UNIQUE (source_store, event_id, netuid, horizon_days)
 );
 CREATE TABLE IF NOT EXISTS signal_econ_verdicts (
     content_hash TEXT PRIMARY KEY,
@@ -225,6 +241,13 @@ DEFAULT_SIGNALS_CFG: Dict[str, Any] = {
     # Effectiveness measurement.
     "outcome_horizons_days": [1, 7, 30],
     "price_retention_days": 120,
+    # Promotion floor (change: rotation-signal-gate). A class needs at least
+    # this many FILLED 7-day outcomes before an operator may promote it to a
+    # paging tier. A floor on sample size, not a significance test: the report
+    # prints medians and counts and a human decides. Strawman — reset from
+    # `calibrate`/`effectiveness` evidence on-device.
+    "min_filled_for_promotion": 30,
+    "promotion_horizon_days": 7,
     "backfill_max_commits": 500,
 }
 
@@ -288,6 +311,50 @@ def ensure_schema(connection: sqlite3.Connection) -> None:
     """Create the signals tables if absent. Owns only its own tables —
     the reconcile store's schema is never touched (fleet-search pattern)."""
     connection.executescript(SCHEMA_SQL)
+    _migrate_ledger_source(connection)
+
+
+def _has_column(connection: sqlite3.Connection, table: str,
+                column: str) -> bool:
+    return any(row[1] == column for row in
+               connection.execute("PRAGMA table_info(%s)" % table))
+
+
+def _migrate_ledger_source(connection: sqlite3.Connection) -> None:
+    """Rebuild the ledger tables onto the source triple (change:
+    rotation-signal-gate). Pre-change rows were keyed by a `signal_events`
+    id alone, which cannot distinguish a fleet event from a livedata event
+    that happens to share a row id. Existing rows backfill as store `fleet`,
+    carrying their class and creation time out of `signal_events` so entry
+    filling no longer needs that join. Idempotent: a store already on the
+    new shape is left alone."""
+    if _has_column(connection, "signal_entries", "source_store"):
+        return
+    connection.executescript("""
+        ALTER TABLE signal_entries RENAME TO signal_entries_pre_source;
+        ALTER TABLE signal_outcomes RENAME TO signal_outcomes_pre_source;
+    """)
+    connection.executescript(SCHEMA_SQL)
+    connection.execute(
+        "INSERT INTO signal_entries (source_store, event_id, netuid, "
+        "source_class, created_at, price_tao, as_of, status) "
+        "SELECT 'fleet', e.event_id, e.netuid, ev.class, ev.created_at, "
+        "e.price_tao, e.as_of, e.status FROM signal_entries_pre_source e "
+        "LEFT JOIN signal_events ev ON ev.id = e.event_id")
+    connection.execute(
+        "INSERT INTO signal_outcomes (id, source_store, event_id, netuid, "
+        "source_class, horizon_days, due_at, exit_price_tao, return_pct, "
+        "baseline_return_pct, status, filled_at) "
+        "SELECT o.id, 'fleet', o.event_id, o.netuid, ev.class, "
+        "o.horizon_days, o.due_at, o.exit_price_tao, o.return_pct, "
+        "o.baseline_return_pct, o.status, o.filled_at "
+        "FROM signal_outcomes_pre_source o "
+        "LEFT JOIN signal_events ev ON ev.id = o.event_id")
+    connection.executescript("""
+        DROP TABLE signal_entries_pre_source;
+        DROP TABLE signal_outcomes_pre_source;
+    """)
+    connection.commit()
 
 
 def state_get(connection: sqlite3.Connection, key: str) -> Optional[str]:
@@ -1308,26 +1375,110 @@ def _instant_members(connection: sqlite3.Connection,
     return [netuid] if netuid is not None else []
 
 
+def enter_measured_event(connection: sqlite3.Connection, cfg: Dict[str, Any],
+                         source_store: str, event_id: int, netuid: int,
+                         event_class: str, created_at: str) -> None:
+    """Enter one netuid-scoped event into the effectiveness ledger by its
+    source triple (change: rotation-signal-gate). Idempotent on re-entry:
+    a second call for the same (store, row id, netuid) changes nothing, so
+    a store re-read cannot duplicate or reset a filled row.
+
+    Measurement is deliberately NOT conditioned on the delivery tier: a
+    demoted class keeps filling, which is the only way a demotion can ever
+    be reversed on evidence (design D5)."""
+    connection.execute(
+        "INSERT OR IGNORE INTO signal_entries (source_store, event_id, "
+        "netuid, source_class, created_at, status) VALUES (?, ?, ?, ?, ?, ?)",
+        (source_store, event_id, netuid, event_class, created_at, ST_PENDING))
+    created = _parse_iso(created_at)
+    for horizon in cfg["outcome_horizons_days"]:
+        due = (created + datetime.timedelta(days=int(horizon))).isoformat()
+        connection.execute(
+            "INSERT OR IGNORE INTO signal_outcomes (source_store, event_id, "
+            "netuid, source_class, horizon_days, due_at, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (source_store, event_id, netuid, event_class, int(horizon), due,
+             ST_PENDING))
+
+
 def _ensure_measurement_rows(connection: sqlite3.Connection,
                              cfg: Dict[str, Any]) -> None:
-    """Entries (pending) and outcome horizon rows for every instant event
-    that lacks them. Idempotent."""
+    """Entries (pending) and outcome horizon rows for every fleet-store
+    event that lacks them. Idempotent. The `tier` filter here selects
+    events rather than digest lines; it is not the delivery tier, which
+    lives in the notifier's class registry and never gates measurement."""
     rows = connection.execute(
-        "SELECT id, created_at FROM signal_events WHERE tier = ?",
+        "SELECT id, class, created_at FROM signal_events WHERE tier = ?",
         (TIER_INSTANT,)).fetchall()
-    for event_id, created_at in rows:
+    for event_id, event_class, created_at in rows:
         for netuid in _instant_members(connection, event_id):
-            connection.execute(
-                "INSERT OR IGNORE INTO signal_entries (event_id, netuid, "
-                "status) VALUES (?, ?, ?)", (event_id, netuid, ST_PENDING))
-            created = _parse_iso(created_at)
-            for horizon in cfg["outcome_horizons_days"]:
-                due = (created
-                       + datetime.timedelta(days=int(horizon))).isoformat()
-                connection.execute(
-                    "INSERT OR IGNORE INTO signal_outcomes (event_id, netuid, "
-                    "horizon_days, due_at, status) VALUES (?, ?, ?, ?, ?)",
-                    (event_id, netuid, int(horizon), due, ST_PENDING))
+            enter_measured_event(connection, cfg, SOURCE_FLEET, event_id,
+                                 netuid, event_class, created_at)
+
+
+def _livedata_db_path() -> Optional[str]:
+    """Resolved path to the livedata store, via livedata's own config —
+    never a hardcoded path. None if livedata is not importable."""
+    sys.path.insert(0, os.path.join(_REPO_ROOT, "livedata"))
+    try:
+        import atlas_live as al  # noqa: E402
+        return al.resolve(al.load_config()["db"])
+    except Exception:  # noqa: BLE001 — fail-soft by contract
+        return None
+
+
+def ingest_livedata_events(connection: sqlite3.Connection,
+                           cfg: Dict[str, Any],
+                           db_path: Optional[str] = None) -> Dict[str, int]:
+    """Enter livedata's netuid-scoped events into the ledger (change:
+    rotation-signal-gate). The livedata store is opened STRICTLY read-only:
+    measurement never writes to the store that owns the event.
+
+    Gate crossings are entered only once livedata has marked them eligible
+    for delivery, so the ledger measures what would actually page and not
+    the reversals that never will. Rotation events are entered on sight.
+    Fail-soft: a missing store, a missing table, or an unreadable row leaves
+    the ledger untouched and never blocks the pass."""
+    entered: Dict[str, int] = {}
+    path = db_path if db_path is not None else _livedata_db_path()
+    if not path or not os.path.exists(path):
+        return entered
+    try:
+        source = sqlite3.connect("file:%s?mode=ro" % path, uri=True)
+    except sqlite3.Error:
+        return entered
+    try:
+        tables = {row[0] for row in source.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'")}
+        for event_class, (table, nid_col, ts_col) in LIVEDATA_MEASURED.items():
+            if table not in tables:
+                continue
+            where = ""
+            if table == "gate_events" and any(
+                    r[1] == "eligibility" for r in
+                    source.execute("PRAGMA table_info(gate_events)")):
+                where = " WHERE eligibility = 'eligible'"
+            try:
+                rows = source.execute(
+                    "SELECT id, %s, %s FROM %s%s"
+                    % (nid_col, ts_col, table, where)).fetchall()
+            except sqlite3.Error:
+                continue
+            count = 0
+            for row_id, netuid, observed_at in rows:
+                if netuid is None or not observed_at:
+                    continue
+                before = connection.total_changes
+                enter_measured_event(connection, cfg, SOURCE_LIVEDATA,
+                                     int(row_id), int(netuid), event_class,
+                                     observed_at)
+                if connection.total_changes > before:
+                    count += 1
+            if count:
+                entered[event_class] = count
+    finally:
+        source.close()
+    return entered
 
 
 def _measurement_needed(connection: sqlite3.Connection, now: str) -> bool:
@@ -1371,8 +1522,11 @@ def run_measurement(connection: sqlite3.Connection, config: Dict[str, Any],
     cfg = signals_cfg(config)
     now = now or _utc_now()
     _ensure_measurement_rows(connection, cfg)
+    ingested = ingest_livedata_events(connection, cfg)
     summary = {"fetched": False, "entries_filled": 0, "outcomes_filled": 0,
                "unavailable": 0}
+    if ingested:
+        summary["ingested"] = ingested
     if not _measurement_needed(connection, now):
         connection.commit()
         return summary
@@ -1394,10 +1548,10 @@ def run_measurement(connection: sqlite3.Connection, config: Dict[str, Any],
 
     # Entries: price at (or nearest after) event creation.
     entry_rows = connection.execute(
-        "SELECT e.event_id, e.netuid, ev.created_at FROM signal_entries e "
-        "JOIN signal_events ev ON ev.id = e.event_id WHERE e.status = ?",
+        "SELECT source_store, event_id, netuid, created_at "
+        "FROM signal_entries WHERE status = ?",
         (ST_PENDING,)).fetchall()
-    for event_id, netuid, created_at in entry_rows:
+    for source_store, event_id, netuid, created_at in entry_rows:
         if netuid not in vector:
             status = ST_UNAVAILABLE  # deregistered before entry could fill
             price = None
@@ -1406,8 +1560,8 @@ def run_measurement(connection: sqlite3.Connection, config: Dict[str, Any],
             status = ST_LATE if created_at < late_cutoff else ST_RECORDED
         connection.execute(
             "UPDATE signal_entries SET price_tao = ?, as_of = ?, status = ? "
-            "WHERE event_id = ? AND netuid = ?",
-            (price, now, status, event_id, netuid))
+            "WHERE source_store = ? AND event_id = ? AND netuid = ?",
+            (price, now, status, source_store, event_id, netuid))
         if status == ST_UNAVAILABLE:
             summary["unavailable"] += 1
         else:
@@ -1417,7 +1571,8 @@ def run_measurement(connection: sqlite3.Connection, config: Dict[str, Any],
     due_rows = connection.execute(
         "SELECT o.id, o.event_id, o.netuid, o.due_at, en.price_tao, en.as_of, "
         "en.status FROM signal_outcomes o JOIN signal_entries en "
-        "ON en.event_id = o.event_id AND en.netuid = o.netuid "
+        "ON en.source_store = o.source_store AND en.event_id = o.event_id "
+        "AND en.netuid = o.netuid "
         "WHERE o.status = ? AND o.due_at <= ?",
         (ST_PENDING, now)).fetchall()
     for (outcome_id, _event_id, netuid, due_at, entry_price, entry_ts,
@@ -1686,14 +1841,42 @@ def calibrate(connection: sqlite3.Connection, config: Dict[str, Any],
     return report
 
 
-def effectiveness(connection: sqlite3.Connection) -> Dict[str, Any]:
+def delivery_tiers() -> Dict[str, str]:
+    """The notifier's class tier registry, read strictly read-only for
+    REPORTING (change: rotation-signal-gate). Measurement never depends on
+    it: a class absent here is reported as `unregistered` and is still
+    measured. Fail-soft — an unreadable notifier config yields no tiers
+    rather than an error."""
+    path = os.path.join(_REPO_ROOT, "telegram", "config.json")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            classes = (json.load(handle).get("classes") or {})
+    except Exception:  # noqa: BLE001 — fail-soft by contract
+        return {}
+    return {name: spec.get("tier") for name, spec in classes.items()
+            if isinstance(spec, dict) and spec.get("tier")}
+
+
+def effectiveness(connection: sqlite3.Connection,
+                  config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Per alert class × horizon: alerted-subnet median return vs the
     fleet-median baseline, with counts and pending/unavailable tallies.
-    Read-only measurement — ranks nothing, recommends nothing."""
+    Read-only measurement — ranks nothing, recommends nothing.
+
+    Covers every measured class whatever its delivery tier, names that tier
+    next to the figures, and marks a horizon unreadable when pending
+    outcomes outnumber filled ones, so a tier can never be argued for
+    without the evidence being visible beside it."""
+    cfg = signals_cfg(config or {})
+    tiers = delivery_tiers()
+    min_filled = int(cfg["min_filled_for_promotion"])
+    promo_horizon = int(cfg["promotion_horizon_days"])
     rows = connection.execute(
-        "SELECT ev.class, o.horizon_days, o.status, o.return_pct, "
-        "o.baseline_return_pct FROM signal_outcomes o "
-        "JOIN signal_events ev ON ev.id = o.event_id").fetchall()
+        "SELECT COALESCE(o.source_class, ev.class, 'unknown'), "
+        "o.horizon_days, o.status, o.return_pct, o.baseline_return_pct "
+        "FROM signal_outcomes o "
+        "LEFT JOIN signal_events ev "
+        "ON ev.id = o.event_id AND o.source_store = 'fleet'").fetchall()
     buckets: Dict[Tuple[str, int], Dict[str, Any]] = {}
     for event_class, horizon, status, return_pct, baseline in rows:
         bucket = buckets.setdefault((event_class, horizon), {
@@ -1711,18 +1894,30 @@ def effectiveness(connection: sqlite3.Connection) -> Dict[str, Any]:
             bucket["pending"] += 1
     report = []
     for (event_class, horizon), bucket in sorted(buckets.items()):
-        report.append({
+        readable = bucket["filled"] >= bucket["pending"]
+        entry = {
             "class": event_class, "horizon_days": horizon,
+            "tier": tiers.get(event_class, "unregistered"),
             "filled": bucket["filled"], "pending": bucket["pending"],
             "unavailable": bucket["unavailable"],
+            "readable": readable,
             "median_return_pct": (round(statistics.median(bucket["returns"]),
                                         3) if bucket["returns"] else None),
             "median_baseline_pct": (round(statistics.median(
                 bucket["baselines"]), 3) if bucket["baselines"] else None),
-        })
+        }
+        if horizon == promo_horizon:
+            entry["meets_promotion_sample"] = (
+                bucket["filled"] >= min_filled and readable)
+            entry["min_filled_for_promotion"] = min_filled
+        report.append(entry)
     return {"report": report,
+            "min_filled_for_promotion": min_filled,
+            "promotion_horizon_days": promo_horizon,
             "note": "measurement only — medians vs fleet baseline over "
-                    "identical windows; no recommendation derived"}
+                    "identical windows; no recommendation derived. A horizon "
+                    "with readable false has more pending than filled "
+                    "outcomes and cannot justify a tier change."}
 
 
 # ---------------------------------------------------------------------------
@@ -1807,7 +2002,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                                    window_values=args.window,
                                    novelty_values=args.novelty)
             elif args.command == "effectiveness":
-                result = effectiveness(connection)
+                result = effectiveness(connection, config)
             else:
                 return 2
             print(json.dumps(result, indent=2, sort_keys=True))
