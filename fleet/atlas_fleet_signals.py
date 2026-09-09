@@ -1438,7 +1438,15 @@ def ingest_livedata_events(connection: sqlite3.Connection,
     for delivery, so the ledger measures what would actually page and not
     the reversals that never will. Rotation events are entered on sight.
     Fail-soft: a missing store, a missing table, or an unreadable row leaves
-    the ledger untouched and never blocks the pass."""
+    the ledger untouched and never blocks the pass.
+
+    SEEDS SILENTLY, like every other watermark here. The first sight of a
+    class records the store's current high-water row id and enters nothing.
+    Backfilling history would be worse than useless: an event from weeks ago
+    gets today's price as its entry, and every horizon it already passed
+    fills immediately with that same price as the exit, so the ledger fills
+    with fabricated near-zero returns for exactly the class the promotion
+    decision rests on."""
     entered: Dict[str, int] = {}
     path = db_path if db_path is not None else _livedata_db_path()
     if not path or not os.path.exists(path):
@@ -1453,16 +1461,26 @@ def ingest_livedata_events(connection: sqlite3.Connection,
         for event_class, (table, nid_col, ts_col) in LIVEDATA_MEASURED.items():
             if table not in tables:
                 continue
-            where = ""
-            if table == "gate_events" and any(
-                    r[1] == "eligibility" for r in
-                    source.execute("PRAGMA table_info(gate_events)")):
-                where = " WHERE eligibility = 'eligible'"
+            state_key = "ingest:%s" % event_class
+            mark = state_get(connection, state_key)
             try:
+                if mark is None:
+                    high = source.execute(
+                        "SELECT COALESCE(MAX(id), 0) FROM %s" % table
+                    ).fetchone()[0]
+                    state_set(connection, state_key, str(int(high)))
+                    continue  # seeded: history is never entered
+                last_id = int(mark)
+                where = " WHERE id > ?"
+                params: List[Any] = [last_id]
+                if table == "gate_events" and any(
+                        r[1] == "eligibility" for r in
+                        source.execute("PRAGMA table_info(gate_events)")):
+                    where += " AND eligibility = 'eligible'"
                 rows = source.execute(
-                    "SELECT id, %s, %s FROM %s%s"
-                    % (nid_col, ts_col, table, where)).fetchall()
-            except sqlite3.Error:
+                    "SELECT id, %s, %s FROM %s%s ORDER BY id"
+                    % (nid_col, ts_col, table, where), params).fetchall()
+            except (sqlite3.Error, ValueError):
                 continue
             count = 0
             for row_id, netuid, observed_at in rows:
@@ -1473,7 +1491,31 @@ def ingest_livedata_events(connection: sqlite3.Connection,
                                      int(row_id), int(netuid), event_class,
                                      observed_at)
                 if connection.total_changes > before:
-                    count += 1
+                    count += 1  # a re-scanned row is not a new entry
+            # The watermark follows the store's high-water mark, not the
+            # last row entered: a crossing still `pending` must not hold the
+            # mark back, or every later crossing waits behind it.
+            try:
+                high = source.execute(
+                    "SELECT COALESCE(MAX(id), 0) FROM %s" % table
+                ).fetchone()[0]
+            except sqlite3.Error:
+                high = last_id
+            eligible_high = high
+            if table == "gate_events":
+                # A pending crossing may still become eligible, so the mark
+                # stops before the oldest one that has not settled.
+                try:
+                    unsettled = source.execute(
+                        "SELECT MIN(id) FROM gate_events WHERE id > ? AND "
+                        "COALESCE(eligibility, 'eligible') = 'pending'",
+                        (last_id,)).fetchone()[0]
+                except sqlite3.Error:
+                    unsettled = None
+                if unsettled is not None:
+                    eligible_high = int(unsettled) - 1
+            if eligible_high > last_id:
+                state_set(connection, state_key, str(int(eligible_high)))
             if count:
                 entered[event_class] = count
     finally:
