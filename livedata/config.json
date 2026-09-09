@@ -7,7 +7,7 @@
       "quota": {
         "per_minute_cap": 20,
         "min_spacing_seconds": 1.0,
-        "_rate_note": "no documented/observed limit — politeness policy per ATLAS-LIVE-007"
+        "_rate_note": "no documented/observed limit \u2014 politeness policy per ATLAS-LIVE-007"
       }
     },
     "taostats": {
@@ -56,7 +56,7 @@
   },
   "price_tolerance_pairwise": 0.05,
   "gate_signal": {
-    "_comment": "Emission-gate crossing signal (change: gate-crossing-signal). DEFAULTS OFF: `enabled` false makes poll-gate inert and the Telegram gate-crossing class silent — flipping it is the whole rollback. Reads the spec-440 gate state (theta/q/h) from finney via keyless JSON-RPC state_getStorage on PINNED pre-verified keys (twox128('SubtensorModule') ++ twox128(item); verified against live Finney 2026-07-28), all at one finalized block. Null storage is normal (Substrate never writes ValueQuery defaults): null q/h uses assumed_defaults marked assumed-default provenance (spec-440 code defaults — live q was ALREADY explicit 0.75 on 2026-07-28); null/zero theta records gate-inactive. Demand shares come from the subnets_taoswap panel of the same pass, normalized over ALL non-root subnets (the chain's bar universe includes emission-disabled subnets). hysteresis_pct is the relative band around theta a share must exit on confirm_polls consecutive polls to flip a side; absence_clear_polls clears a vanished netuid's side (netuid-reuse guard). rpc_endpoints are tried in order; verify reachability from the Pi at deploy and record the choice in docs/decisions.md.",
+    "_comment": "Emission-gate crossing signal (change: gate-crossing-signal). DEFAULTS OFF: `enabled` false makes poll-gate inert and the Telegram gate-crossing class silent \u2014 flipping it is the whole rollback. Reads the spec-440 gate state (theta/q/h) from finney via keyless JSON-RPC state_getStorage on PINNED pre-verified keys (twox128('SubtensorModule') ++ twox128(item); verified against live Finney 2026-07-28), all at one finalized block. Null storage is normal (Substrate never writes ValueQuery defaults): null q/h uses assumed_defaults marked assumed-default provenance (spec-440 code defaults \u2014 live q was ALREADY explicit 0.75 on 2026-07-28); null/zero theta records gate-inactive. Demand shares come from the subnets_taoswap panel of the same pass, normalized over ALL non-root subnets (the chain's bar universe includes emission-disabled subnets). hysteresis_pct is the relative band around theta a share must exit on confirm_polls consecutive polls to flip a side; absence_clear_polls clears a vanished netuid's side (netuid-reuse guard). rpc_endpoints are tried in order; verify reachability from the Pi at deploy and record the choice in docs/decisions.md.",
     "enabled": true,
     "rpc_endpoints": [
       "https://entrypoint-finney.opentensor.ai"
@@ -67,7 +67,7 @@
       "EmissionGateExponent": "0x658faa385070e074c85bf6b568cf055588c70e8dd0cf4af3aeb977ba2eee1df4",
       "EmissionBarRank": "0x658faa385070e074c85bf6b568cf0555d33bd686290d014475513443305882be"
     },
-    "_rank_comment": "EmissionBarRank (change: network-drift-443) arrived with spec 441 (PR #3014) and CHANGED THE BAR'S SELECTION RULE: when N > 0 theta is pinned to the Nth-largest POSITIVE demand share and EmissionBarQuantile is inert; q-mass selection only applies at N == 0. Codec is SCALE u16 (2 bytes LE), NOT the U64F64 the other three items use. The code default at tag v443 is 32 (pallets/subtensor/src/lib.rs, DefaultEmissionBarRank) — chosen because q=0.75 was crossing at about rank 28, so the upgrade was tuned not to shift the emission curve. NOTE: the v441 RELEASE NOTES say the default is 64 and are WRONG; the code is authoritative. Chain-verified 2026-08-06: the key is unset on Finney, so the default applies and rank mode is ACTIVE.",
+    "_rank_comment": "EmissionBarRank (change: network-drift-443) arrived with spec 441 (PR #3014) and CHANGED THE BAR'S SELECTION RULE: when N > 0 theta is pinned to the Nth-largest POSITIVE demand share and EmissionBarQuantile is inert; q-mass selection only applies at N == 0. Codec is SCALE u16 (2 bytes LE), NOT the U64F64 the other three items use. The code default at tag v443 is 32 (pallets/subtensor/src/lib.rs, DefaultEmissionBarRank) \u2014 chosen because q=0.75 was crossing at about rank 28, so the upgrade was tuned not to shift the emission curve. NOTE: the v441 RELEASE NOTES say the default is 64 and are WRONG; the code is authoritative. Chain-verified 2026-08-06: the key is unset on Finney, so the default applies and rank mode is ACTIVE.",
     "assumed_defaults": {
       "EmissionBarQuantile": 0.61,
       "EmissionGateExponent": 3.0,
@@ -82,10 +82,21 @@
     "_pulse_comment": "pulse-briefing additions: panel_snapshot_retention_days bounds the per-pass per-subnet panel snapshot (hourly x 128 subnets; pruned in the same pass). hover_crossings/hover_window_days flag a subnet as hovering once it records MORE THAN hover_crossings crossings inside the window; flagged crossings are still recorded, carry a hovering annotation, and clear only after a full quiet window. A zero moving price is treated as a panel gap for side tracking (no crossing to zero; counts toward absence), because a live subnet with a pool cannot price at zero.",
     "panel_snapshot_retention_days": 90,
     "hover_crossings": 2,
-    "hover_window_days": 7
+    "hover_window_days": 7,
+    "_durability_comment": "durability_window_hours is the delay before a confirmed crossing becomes ELIGIBLE to page (change: rotation-signal-gate). A crossing cannot be known durable when it is recorded; an opposing crossing inside the window marks BOTH permanently ineligible. Measured 2026-08-10..09-09: 55 crossings across 25 netuids, 18 of them reversing inside 48h, and 9 netuids producing 33 of the 55. At a rank-pinned bar the marginal subnet oscillates by construction, so an oscillation is a state for the standing briefing line, not a pair of pages. Set to 0 to page on confirmation as before (rollback).",
+    "durability_window_hours": 48
+  },
+  "root_rotation": {
+    "_comment": "Root weight vector watch (change: rotation-signal-gate). DEFAULTS ON but independently disableable: `enabled` false makes the read inert and is the whole rollback. Deliberately NOT gated by gate_signal.enabled, so a gate rollback cannot silently stop observing root curation. Reads every per-validator root weight vector at the gate poll's finalized block over the same keyless finney RPC: one state_getKeys on Weights[ROOT] (Identity ++ Identity, so the validator uid is the two bytes after the netuid), then ONE state_queryStorageAt over exactly those keys. state_getPairs would do it in one call but the public endpoint refuses it as unsafe (code 4003, verified 2026-09-09). Each value decodes as compact-length-prefixed Vec<(u16 netuid, u16 weight)>. Fail-closed: a short batch, an undecodable vector, an unexpected key tail, or an enumeration over max_enumerated_keys persists NOTHING for that pass. Live shape at block 0xab6d1b7b (2026-09-09): 20 validator entries, 1833 payload bytes, 96 distinct destinations, largest aggregate share 5.24% against the 1/16 = 6.25% cap.",
+    "enabled": true,
+    "max_enumerated_keys": 512,
+    "_threshold_comment": "share_change_threshold is an ABSOLUTE change in a destination's share of the aggregate map (0..1), not a relative one: on a map whose largest destination holds about 5%, a relative threshold would fire constantly on the long tail. Strawman \u2014 reset from the recorded rotation_events distribution once a few weeks exist.",
+    "share_change_threshold": 0.005,
+    "_basis_comment": "stake_weighted records whether the aggregate destination map is weighted by each validator's root stake. Verified feasible 2026-09-09 (task 2.4): Keys[ROOT][uid] then TotalHotkeyAlpha[hotkey][ROOT], two DERIVED batched reads at the same block, 4 RPC calls and ~5s for the whole pass, no enumeration (TotalHotkeyAlpha holds ~48k keys and an unbounded scan of it is refused with an RPC work limit). It matters: the curating validators held 3,353,474 TAO of root stake and the largest single one held 999,297 of it, so an unweighted map would put a 30% voice at 5%. If the stake read fails the map falls back to unweighted and is LABELLED unweighted everywhere it is presented.",
+    "stake_weighted": true
   },
   "chain_params": {
-    "_comment": "Root-settable chain-parameter watch (change: network-drift-443). DEFAULTS OFF: `enabled` false makes the watch inert and the Telegram chain-parameter-change class silent — flipping it is the whole rollback. Watches discrete knobs whose flip changes network economics without leaving an AdminUtils extrinsic trail (the same reason the gate poll reads q/h rather than assuming code defaults). `source: gate-poll` items are NOT re-read: the gate poll already decodes them at its finalized block and hands them over, so each item is read once and has one history. `source: independent` items carry their own pinned key (twox128('SubtensorModule') ++ twox128(item), verified against live Finney 2026-08-06) and are read at the gate poll's block when it runs — but the watch is deliberately NOT gated by gate_signal.enabled, so rolling back the gate signal cannot silently stop watching the Root Reborn curation switch. Discrete values do not flap, so transitions need no hysteresis; a first observation seeds without emitting one, and a provenance-only change (assumed-default -> explicit at an unchanged value) is recorded but never paged. Netuid-keyed items (change: network-drift-452) additionally declare `hasher` and `netuid`; their pinned `key` is re-derived from the declared hasher on every pass and compared, after the same prefix self-test the mining reads use, so a wrong layout blocks the read instead of returning a null that looks like an unset default. `RootWeightsCap` is read at the root entry only: `subnets/weights.rs` consults `RootWeightsCap[ROOT]` and the map holds one entry (verified 2026-08-31, block 8963841).",
+    "_comment": "Root-settable chain-parameter watch (change: network-drift-443). DEFAULTS OFF: `enabled` false makes the watch inert and the Telegram chain-parameter-change class silent \u2014 flipping it is the whole rollback. Watches discrete knobs whose flip changes network economics without leaving an AdminUtils extrinsic trail (the same reason the gate poll reads q/h rather than assuming code defaults). `source: gate-poll` items are NOT re-read: the gate poll already decodes them at its finalized block and hands them over, so each item is read once and has one history. `source: independent` items carry their own pinned key (twox128('SubtensorModule') ++ twox128(item), verified against live Finney 2026-08-06) and are read at the gate poll's block when it runs \u2014 but the watch is deliberately NOT gated by gate_signal.enabled, so rolling back the gate signal cannot silently stop watching the Root Reborn curation switch. Discrete values do not flap, so transitions need no hysteresis; a first observation seeds without emitting one, and a provenance-only change (assumed-default -> explicit at an unchanged value) is recorded but never paged. Netuid-keyed items (change: network-drift-452) additionally declare `hasher` and `netuid`; their pinned `key` is re-derived from the declared hasher on every pass and compared, after the same prefix self-test the mining reads use, so a wrong layout blocks the read instead of returning a null that looks like an unset default. `RootWeightsCap` is read at the root entry only: `subnets/weights.rs` consults `RootWeightsCap[ROOT]` and the map holds one entry (verified 2026-08-31, block 8963841).",
     "enabled": true,
     "items": [
       {
@@ -247,7 +258,7 @@
         "max_local_age_s": 60,
         "expected_cadence": "~12s block cadence"
       },
-      "_note": "Chain head without runtime spec_version — use chain_head_taostats when spec is needed."
+      "_note": "Chain head without runtime spec_version \u2014 use chain_head_taostats when spec is needed."
     },
     "portfolio_balance_taoswap": {
       "provider": "taoswap",
@@ -313,7 +324,7 @@
         "max_local_age_s": 60,
         "expected_cadence": "~12s block cadence"
       },
-      "_note": "order pinned explicitly — the conviction enactment watch (spec_version >= 425)"
+      "_note": "order pinned explicitly \u2014 the conviction enactment watch (spec_version >= 425)"
     },
     "subnet_identity_taostats": {
       "provider": "taostats",

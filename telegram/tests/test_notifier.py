@@ -67,16 +67,20 @@ def make_config(tmp, **over):
         "classes": {
             "chain-runtime-upgrade": {
                 "enabled": True,
+                "tier": "instant",
                 "source_db": os.path.join(tmp, "livedata.db")},
             "repository-update": {
                 "enabled": True,
+                "tier": "instant",
                 "source_db": os.path.join(tmp, "repotrack.db"),
                 "live_db": os.path.join(tmp, "livedata.db")},
             "schema-drift": {
                 "enabled": True,
+                "tier": "instant",
                 "source_db": os.path.join(tmp, "livedata.db")},
             "knowledge-ingestion": {
                 "enabled": True,
+                "tier": "instant",
                 "source_db": os.path.join(tmp, "knowledge.db")},
         },
     }
@@ -870,6 +874,64 @@ class TierRoutingTests(unittest.TestCase):
         posts = []
         self.scan(posts)
         self.assertEqual(posts, [])
+
+    def test_shadow_tier_sends_nothing_and_advances(self):
+        self.config["classes"]["chain-runtime-upgrade"]["tier"] = "shadow"
+        posts = []
+        summary = self.scan(posts)
+        self.assertEqual(posts, [])
+        self.assertEqual(
+            summary["classes"]["chain-runtime-upgrade"]["shadowed"], 1)
+        self.assertIn(("chain-runtime-upgrade", "shadowed"), self.ledger())
+
+    def test_promotion_does_not_replay_a_shadow_backlog(self):
+        self.config["classes"]["chain-runtime-upgrade"]["tier"] = "shadow"
+        self.scan([])
+        self.config["classes"]["chain-runtime-upgrade"]["tier"] = "instant"
+        posts = []
+        self.scan(posts)
+        self.assertEqual(posts, [])
+
+    def test_unregistered_tier_delivers_nothing(self):
+        self.config["classes"]["chain-runtime-upgrade"].pop("tier")
+        posts = []
+        summary = self.scan(posts)
+        self.assertEqual(posts, [])
+        self.assertEqual(
+            summary["classes"]["chain-runtime-upgrade"]["unregistered"], 1)
+
+    def test_unknown_tier_value_fails_closed(self):
+        self.config["classes"]["chain-runtime-upgrade"]["tier"] = "instnat"
+        posts = []
+        self.scan(posts)
+        self.assertEqual(posts, [])
+
+    def test_ledger_records_the_governing_tier(self):
+        self.config["classes"]["chain-runtime-upgrade"]["tier"] = "shadow"
+        self.scan([])
+        self.assertEqual(self.store.execute(
+            "SELECT tier FROM events WHERE event_class = "
+            "'chain-runtime-upgrade'").fetchone()[0], "shadow")
+
+    def test_delivered_event_records_its_tier_too(self):
+        self.scan([])
+        self.assertEqual(self.store.execute(
+            "SELECT tier FROM events WHERE event_class = "
+            "'chain-runtime-upgrade'").fetchone()[0], "instant")
+
+    def test_event_tier_prefers_the_events_own_class(self):
+        config = {"classes": {"econ-code": {"tier": "briefing"},
+                              "fleet-signal": {"tier": "instant"}}}
+        spec = config["classes"]["fleet-signal"]
+        self.assertEqual(tg.event_tier(config, spec, "econ-code"), "briefing")
+        self.assertEqual(tg.event_tier(config, spec, "watchlist"), "instant")
+        self.assertIsNone(tg.event_tier(config, {}, "watchlist"))
+
+    def test_delivery_only_entry_needs_no_adapter(self):
+        self.config["classes"]["econ-code"] = {
+            "enabled": True, "tier": "briefing", "delivery_only": True}
+        summary = self.scan([])
+        self.assertNotIn("econ-code", summary["classes"])
 
     def test_instant_tier_pages_as_before(self):
         posts = []

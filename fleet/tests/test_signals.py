@@ -670,10 +670,13 @@ class TestMeasurement(SignalsBase):
         status = self.conn.execute(
             "SELECT status FROM signal_entries").fetchone()[0]
         self.assertEqual(status, "pending")
-        # retry succeeds later, marked late (event is old)
+        # retry succeeds later, marked late (event is old). The ledger row
+        # carries its own created_at since the source-triple change, so the
+        # entry is aged there as well as on the source event.
         old = (datetime.datetime.now(tz=datetime.timezone.utc)
                - datetime.timedelta(hours=12)).isoformat()
         self.conn.execute("UPDATE signal_events SET created_at = ?", (old,))
+        self.conn.execute("UPDATE signal_entries SET created_at = ?", (old,))
         self.conn.commit()
         sig.run_measurement(self.conn, self.config,
                             price_fetcher=lambda: {50: 0.01})
@@ -993,3 +996,166 @@ class TestEconGate(SignalsBase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# Generalized ledger: source triple, external entry, tiers, readability
+# (change: rotation-signal-gate)
+# ---------------------------------------------------------------------------
+
+class TestLedgerSourceTriple(SignalsBase):
+    def _fleet_event(self, netuid=50, event_class="econ-code", dedup="e:1"):
+        cursor = self.conn.execute(
+            "INSERT INTO signal_events (class, tier, netuid, term, "
+            "dedup_key, payload_json, created_at) "
+            "VALUES (?, 'instant', ?, NULL, ?, '{}', ?)",
+            (event_class, netuid, dedup, _iso()))
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def _livedata_db(self, gate_rows=(), rotation_rows=()):
+        path = os.path.join(self.tmp, "livedata.db")
+        conn = sqlite3.connect(path)
+        conn.executescript("""
+            CREATE TABLE gate_events (
+                id INTEGER PRIMARY KEY, netuid INTEGER, observed_at TEXT,
+                eligibility TEXT);
+            CREATE TABLE rotation_events (
+                id INTEGER PRIMARY KEY, netuid INTEGER, observed_at TEXT);
+        """)
+        conn.executemany(
+            "INSERT INTO gate_events (id, netuid, observed_at, eligibility) "
+            "VALUES (?, ?, ?, ?)", gate_rows)
+        conn.executemany(
+            "INSERT INTO rotation_events (id, netuid, observed_at) "
+            "VALUES (?, ?, ?)", rotation_rows)
+        conn.commit()
+        conn.close()
+        return path
+
+    def test_migration_backfills_class_and_created_at(self):
+        # Rebuild the pre-change shape, insert a row, then migrate.
+        self.conn.executescript("""
+            DROP TABLE signal_entries;
+            DROP TABLE signal_outcomes;
+            CREATE TABLE signal_entries (
+                event_id INTEGER NOT NULL, netuid INTEGER NOT NULL,
+                price_tao REAL, as_of TEXT,
+                status TEXT NOT NULL DEFAULT 'pending',
+                PRIMARY KEY (event_id, netuid));
+            CREATE TABLE signal_outcomes (
+                id INTEGER PRIMARY KEY, event_id INTEGER NOT NULL,
+                netuid INTEGER NOT NULL, horizon_days INTEGER NOT NULL,
+                due_at TEXT NOT NULL, exit_price_tao REAL, return_pct REAL,
+                baseline_return_pct REAL,
+                status TEXT NOT NULL DEFAULT 'pending', filled_at TEXT,
+                UNIQUE (event_id, netuid, horizon_days));
+        """)
+        event_id = self._fleet_event(netuid=7, event_class="watchlist")
+        self.conn.execute(
+            "INSERT INTO signal_entries (event_id, netuid, status) "
+            "VALUES (?, 7, 'recorded')", (event_id,))
+        self.conn.execute(
+            "INSERT INTO signal_outcomes (event_id, netuid, horizon_days, "
+            "due_at, status) VALUES (?, 7, 7, ?, 'pending')",
+            (event_id, _iso()))
+        self.conn.commit()
+        sig.ensure_schema(self.conn)
+        store, klass, created = self.conn.execute(
+            "SELECT source_store, source_class, created_at "
+            "FROM signal_entries").fetchone()
+        self.assertEqual(store, "fleet")
+        self.assertEqual(klass, "watchlist")
+        self.assertIsNotNone(created)
+        self.assertEqual(self.conn.execute(
+            "SELECT source_class FROM signal_outcomes").fetchone()[0],
+            "watchlist")
+        # idempotent: a second call leaves the migrated shape alone
+        sig.ensure_schema(self.conn)
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM signal_entries").fetchone()[0], 1)
+
+    def test_external_entry_is_idempotent(self):
+        for _ in range(3):
+            sig.enter_measured_event(self.conn, CFG, sig.SOURCE_LIVEDATA,
+                                     11, 42, "gate-crossing", _iso())
+        self.conn.commit()
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM signal_entries").fetchone()[0], 1)
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM signal_outcomes").fetchone()[0],
+            len(CFG["outcome_horizons_days"]))
+
+    def test_same_row_id_in_two_stores_does_not_collide(self):
+        event_id = self._fleet_event(netuid=50)
+        sig.run_measurement(self.conn, self.config,
+                            price_fetcher=lambda: {50: 0.01})
+        sig.enter_measured_event(self.conn, CFG, sig.SOURCE_LIVEDATA,
+                                 event_id, 50, "gate-crossing", _iso())
+        self.conn.commit()
+        stores = sorted(row[0] for row in self.conn.execute(
+            "SELECT source_store FROM signal_entries WHERE event_id = ?",
+            (event_id,)))
+        self.assertEqual(stores, ["fleet", "livedata"])
+
+    def test_ingest_enters_eligible_crossings_only(self):
+        path = self._livedata_db(
+            gate_rows=[(1, 10, _iso(), "eligible"),
+                       (2, 11, _iso(), "reversed"),
+                       (3, 12, _iso(), "pending")],
+            rotation_rows=[(1, 20, _iso())])
+        entered = sig.ingest_livedata_events(self.conn, CFG, db_path=path)
+        self.conn.commit()
+        self.assertEqual(entered.get("gate-crossing"), 1)
+        self.assertEqual(entered.get("root-rotation"), 1)
+        rows = sorted(self.conn.execute(
+            "SELECT source_class, netuid FROM signal_entries"))
+        self.assertEqual(rows, [("gate-crossing", 10), ("root-rotation", 20)])
+
+    def test_ingest_is_fail_soft_on_missing_store(self):
+        entered = sig.ingest_livedata_events(
+            self.conn, CFG, db_path=os.path.join(self.tmp, "absent.db"))
+        self.assertEqual(entered, {})
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM signal_entries").fetchone()[0], 0)
+
+    def test_ingest_rerun_does_not_duplicate(self):
+        path = self._livedata_db(gate_rows=[(1, 10, _iso(), "eligible")])
+        sig.ingest_livedata_events(self.conn, CFG, db_path=path)
+        second = sig.ingest_livedata_events(self.conn, CFG, db_path=path)
+        self.conn.commit()
+        self.assertEqual(second, {})
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM signal_entries").fetchone()[0], 1)
+
+    def test_briefing_tier_class_is_still_measured(self):
+        # A demoted class keeps filling: measurement never reads the tier.
+        self._fleet_event(netuid=50, event_class="econ-code")
+        sig.run_measurement(self.conn, self.config,
+                            price_fetcher=lambda: {50: 0.01})
+        self.assertEqual(self.conn.execute(
+            "SELECT status FROM signal_entries").fetchone()[0], "recorded")
+
+    def test_report_names_tier_and_marks_unreadable(self):
+        sig.enter_measured_event(self.conn, CFG, sig.SOURCE_LIVEDATA,
+                                 1, 10, "root-rotation", _iso())
+        self.conn.execute(
+            "UPDATE signal_outcomes SET status = 'recorded', "
+            "return_pct = 5.0, baseline_return_pct = 1.0 "
+            "WHERE horizon_days = 1")
+        self.conn.commit()
+        report = sig.effectiveness(self.conn, self.config)["report"]
+        by_horizon = {row["horizon_days"]: row for row in report
+                      if row["class"] == "root-rotation"}
+        self.assertTrue(by_horizon[1]["readable"])
+        self.assertFalse(by_horizon[7]["readable"])
+        self.assertFalse(by_horizon[7]["meets_promotion_sample"])
+        self.assertIn("tier", by_horizon[1])
+
+    def test_report_covers_external_classes(self):
+        sig.enter_measured_event(self.conn, CFG, sig.SOURCE_LIVEDATA,
+                                 1, 10, "gate-crossing", _iso())
+        self.conn.commit()
+        classes = {row["class"] for row
+                   in sig.effectiveness(self.conn, self.config)["report"]}
+        self.assertIn("gate-crossing", classes)
