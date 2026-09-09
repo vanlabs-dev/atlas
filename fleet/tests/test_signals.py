@@ -1098,12 +1098,29 @@ class TestLedgerSourceTriple(SignalsBase):
             (event_id,)))
         self.assertEqual(stores, ["fleet", "livedata"])
 
-    def test_ingest_enters_eligible_crossings_only(self):
+    def test_first_ingest_seeds_silently(self):
         path = self._livedata_db(
-            gate_rows=[(1, 10, _iso(), "eligible"),
-                       (2, 11, _iso(), "reversed"),
-                       (3, 12, _iso(), "pending")],
+            gate_rows=[(1, 10, _iso(), "eligible")],
             rotation_rows=[(1, 20, _iso())])
+        entered = sig.ingest_livedata_events(self.conn, CFG, db_path=path)
+        self.conn.commit()
+        self.assertEqual(entered, {})
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM signal_entries").fetchone()[0], 0)
+        self.assertEqual(sig.state_get(self.conn, "ingest:gate-crossing"), "1")
+
+    def test_ingest_enters_eligible_crossings_only(self):
+        path = self._livedata_db()
+        sig.ingest_livedata_events(self.conn, CFG, db_path=path)  # seed
+        conn = sqlite3.connect(path)
+        conn.executemany(
+            "INSERT INTO gate_events (id, netuid, observed_at, eligibility) "
+            "VALUES (?, ?, ?, ?)",
+            [(1, 10, _iso(), "eligible"), (2, 11, _iso(), "reversed")])
+        conn.execute("INSERT INTO rotation_events (id, netuid, observed_at) "
+                     "VALUES (1, 20, ?)", (_iso(),))
+        conn.commit()
+        conn.close()
         entered = sig.ingest_livedata_events(self.conn, CFG, db_path=path)
         self.conn.commit()
         self.assertEqual(entered.get("gate-crossing"), 1)
@@ -1111,6 +1128,45 @@ class TestLedgerSourceTriple(SignalsBase):
         rows = sorted(self.conn.execute(
             "SELECT source_class, netuid FROM signal_entries"))
         self.assertEqual(rows, [("gate-crossing", 10), ("root-rotation", 20)])
+
+    def test_pending_crossing_holds_the_ingest_mark(self):
+        path = self._livedata_db()
+        sig.ingest_livedata_events(self.conn, CFG, db_path=path)  # seed
+        conn = sqlite3.connect(path)
+        conn.executemany(
+            "INSERT INTO gate_events (id, netuid, observed_at, eligibility) "
+            "VALUES (?, ?, ?, ?)",
+            [(1, 10, _iso(), "pending"), (2, 11, _iso(), "eligible")])
+        conn.commit()
+        conn.close()
+        entered = sig.ingest_livedata_events(self.conn, CFG, db_path=path)
+        self.conn.commit()
+        # the eligible one is measured at once (waiting would only push its
+        # entry price further from its event), but the mark stops before the
+        # pending row so that row is still reconsidered
+        self.assertEqual(entered.get("gate-crossing"), 1)
+        self.assertEqual(sig.state_get(self.conn, "ingest:gate-crossing"), "0")
+        # once the pending one settles it is entered too, and the mark moves
+        conn = sqlite3.connect(path)
+        conn.execute("UPDATE gate_events SET eligibility = 'eligible' "
+                     "WHERE id = 1")
+        conn.commit()
+        conn.close()
+        entered = sig.ingest_livedata_events(self.conn, CFG, db_path=path)
+        self.conn.commit()
+        self.assertEqual(entered.get("gate-crossing"), 1)
+        self.assertEqual(sig.state_get(self.conn, "ingest:gate-crossing"), "2")
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM signal_entries").fetchone()[0], 2)
+
+    def test_historical_events_are_never_backfilled(self):
+        old = _iso(days_ago=40)
+        path = self._livedata_db(gate_rows=[(1, 10, old, "eligible"),
+                                            (2, 11, old, "eligible")])
+        sig.ingest_livedata_events(self.conn, CFG, db_path=path)
+        self.conn.commit()
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM signal_outcomes").fetchone()[0], 0)
 
     def test_ingest_is_fail_soft_on_missing_store(self):
         entered = sig.ingest_livedata_events(
@@ -1120,7 +1176,13 @@ class TestLedgerSourceTriple(SignalsBase):
             "SELECT COUNT(*) FROM signal_entries").fetchone()[0], 0)
 
     def test_ingest_rerun_does_not_duplicate(self):
-        path = self._livedata_db(gate_rows=[(1, 10, _iso(), "eligible")])
+        path = self._livedata_db()
+        sig.ingest_livedata_events(self.conn, CFG, db_path=path)  # seed
+        conn = sqlite3.connect(path)
+        conn.execute("INSERT INTO gate_events (id, netuid, observed_at, "
+                     "eligibility) VALUES (1, 10, ?, 'eligible')", (_iso(),))
+        conn.commit()
+        conn.close()
         sig.ingest_livedata_events(self.conn, CFG, db_path=path)
         second = sig.ingest_livedata_events(self.conn, CFG, db_path=path)
         self.conn.commit()
