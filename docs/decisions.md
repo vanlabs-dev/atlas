@@ -399,10 +399,30 @@ daily and weekly clock. Shinogi deltas compare against the last shinogi
 publish on a six-hour clock, which is a different series, and keeping them
 apart keeps compose read-only against every existing store.
 
+**Device findings (checked on the Pi 2026-09-09), correcting `AGENTS.md`.**
+`AGENTS.md` says the Atlas remote is SSH. On the device it is not: the live
+checkout `/home/pi/atlas` has remote
+`https://github.com/vanlabs-dev/atlas.git` and pulls anonymously.
+`/home/pi/.ssh/` holds `authorized_keys` and `known_hosts` and no private
+key, so `ssh -T git@github.com` from the Pi is
+`Permission denied (publickey)`. There is no `/home/pi/.gitconfig` at all,
+so no `user.name`, no `user.email` and no credential helper, which makes
+passing identity per invocation with `git -c` a requirement rather than a
+nicety. `gh` is not installed. A stale `/home/pi/github/atlas` clone at
+`first commit` (2026-07-11) survives from an earlier layout and is not the
+live checkout.
+
+Consequences applied: the shinogi checkout is cloned over HTTPS, and every
+git call the renderer makes runs with `GIT_TERMINAL_PROMPT=0`,
+`GIT_ASKPASS`, `ssh -o BatchMode=yes`, stdin closed and a 120s timeout, so
+a missing credential fails the pass instead of hanging a timer-driven
+oneshot on a username prompt.
+
 **Still blocked on the operator:** the Pi has no write credential for
-`vanlabs-dev/shinogi`, so `publish` ships `false`. Compose, render, scan
-and hash comparison are implemented and tested without it. Creating or
-moving a credential is not part of this change.
+`vanlabs-dev/shinogi` and no means to authenticate one, so `publish` ships
+`false`. Compose, render, scan and hash comparison are implemented and
+tested without it. Creating or moving a credential is not part of this
+change.
 
 ## Still open
 

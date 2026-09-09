@@ -14,8 +14,10 @@ See `proposal.md` for motivation. The constraints that shape the approach:
 - The stores live on the Pi. Only `var/fleet/www/` exists in this checkout,
   so compose cannot be exercised against real data off-device. Everything
   verifiable here must be verifiable against a fixture store.
-- The Pi reaches Atlas by `git pull` in `/home/pi/atlas`. It has no write
-  credential for `vanlabs-dev/shinogi`.
+- The Pi reaches Atlas by `git pull` in `/home/pi/atlas`, over HTTPS and
+  anonymously. It holds no private SSH key, no `~/.gitconfig` and no
+  credential helper, so it can read any public repo and write none. See
+  "Plain `git`, never `gh`" below for what was found on the device.
 
 ## Goals / Non-Goals
 
@@ -218,12 +220,31 @@ user.email=...`, so the publish does not depend on the checkout's local
 config being right and cannot be silently changed by it. No attribution
 trailer, per both repos' rules.
 
-### Plain `git` over SSH, never `gh`
+### Plain `git`, never `gh`, and never able to prompt
 
-The push is `git push` in `/home/pi/shinogi` over the SSH remote. `gh`
-authenticates separately from `git` and Atlas `AGENTS.md` requires
-confirming the active account before any writing `gh` command, which a
-timer cannot do.
+The push is `git push` in the shinogi checkout. `gh` authenticates
+separately from `git` and Atlas `AGENTS.md` requires confirming the active
+account before any writing `gh` command, which a timer cannot do. `gh` is
+not installed on the device anyway.
+
+Checked on the device 2026-09-09, and it corrects what `AGENTS.md` says
+about the remote:
+
+- Atlas on the Pi is cloned from `https://github.com/vanlabs-dev/atlas.git`,
+  **not** the SSH remote `AGENTS.md` describes. It pulls anonymously.
+- `/home/pi/.ssh/` holds `authorized_keys` and `known_hosts` and **no
+  private key**. `ssh -T git@github.com` from the Pi is
+  `Permission denied (publickey)`, so an SSH remote cannot be used there
+  without a new key.
+- There is **no `/home/pi/.gitconfig`**: no `user.name`, no `user.email`,
+  no credential helper. Passing identity per invocation with `git -c` is
+  therefore required, not merely tidy; without it every commit would fail.
+
+Consequence for the push: git must never be able to sit on a credential
+prompt, or a oneshot unit would hang rather than fail. Every git call runs
+with `GIT_TERMINAL_PROMPT=0`, `GIT_ASKPASS`, `ssh -o BatchMode=yes`, stdin
+closed, and a 120s timeout. Verified on the device: the push fails with
+`could not read Username for 'https://github.com'` and returns.
 
 ## Risks / Trade-offs
 
@@ -233,10 +254,12 @@ timer cannot do.
   test in the shinogi repo, in its own session, so it accepts both the
   shell and a published edition. Sequence it before the push is enabled;
   it does not block composing or writing.
-- **No write credential on the Pi for `vanlabs-dev/shinogi`.** → The push
-  ships disabled. Compose, render, write and hash comparison are
-  implemented and verified without it. Creating or moving a credential is
-  the operator's decision and is not part of this change.
+- **No write credential on the Pi for `vanlabs-dev/shinogi`, and no way to
+  make one without an operator decision.** The device holds no private SSH
+  key and no git credential helper, and reaches GitHub over HTTPS
+  anonymously. → The push ships disabled. Compose, render, write and hash
+  comparison are implemented and verified without it. Creating or moving a
+  credential is the operator's decision and is not part of this change.
 - **Compose cannot be run against real data from this machine.** → Every
   test runs against a fixture store built in the test. The first real
   edition is verified on the Pi with the push still disabled, by reading
@@ -267,12 +290,18 @@ timer cannot do.
 
 ## Migration Plan
 
-1. Land the module, config, unit files, README and tests in Atlas. Nothing
-   runs on the device yet.
+1. Land the module, config, unit files, README and tests in Atlas, and
+   **push `main` to GitHub**. The device pulls from
+   `https://github.com/vanlabs-dev/atlas.git`, so a local commit is
+   invisible to it; a commit that is not pushed makes step 2 a no-op and
+   the module will not exist on the Pi.
 2. `git pull` in `/home/pi/atlas`. Run `atlas_shinogi.py compose --dry-run`
    by hand and read the document it would write. Confirm the sections, the
    gaps, and the exclusion scan against real stores.
-3. Clone `vanlabs-dev/shinogi` to `/home/pi/shinogi`, read-only for now.
+3. Clone `vanlabs-dev/shinogi` to `/home/pi/shinogi` over **HTTPS**
+   (`https://github.com/vanlabs-dev/shinogi.git`), which is what the device
+   can do today. The repo is public, so the clone needs no credential. An
+   SSH remote would need a key the Pi does not have.
 4. Widen the contract test in the shinogi repo.
 5. Resolve the push credential with the operator.
 6. Install the timer and service, publication still disabled, and confirm
