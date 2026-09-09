@@ -1,0 +1,29 @@
+# Atlas shinogi renderer: compose the public edition from the Atlas stores
+# and publish it into the shinogi checkout on a fact change (change:
+# shinogi-renderer). Install (operator, needs sudo):
+#   sudo cp ~/atlas/shinogi/systemd/atlas-shinogi.{service,timer} \
+#     /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now atlas-shinogi.timer
+#
+# Its own unit, not an ExecStartPost on atlas-fleet.service: that unit runs
+# the repo reconcile pass, and a bug here writes to a public site. The
+# operator must be able to stop publishing without stopping reconciliation.
+#
+# Preconditions the unit does not create and will not work around: a
+# shinogi checkout at the configured checkout_dir, and a write credential
+# for that remote. Without either, the pass fails closed and writes
+# nothing. `publish` stays false in shinogi/config.json until the operator
+# has resolved the credential.
+[Unit]
+Description=Atlas shinogi public edition
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=pi
+WorkingDirectory=/home/pi/atlas
+ExecStart=/usr/bin/python3 /home/pi/atlas/shinogi/atlas_shinogi.py publish
+Nice=10
+IOSchedulingClass=idle

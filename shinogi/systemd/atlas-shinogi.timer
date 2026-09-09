@@ -1,0 +1,19 @@
+# Atlas shinogi renderer timer, every 6h, matching the fleet cadence and
+# the Cloudflare Pages Free build budget (500 a month; six-hourly tops out
+# near 124, and an edition whose facts have not moved is not published at
+# all).
+#
+# Offset to :55. The fleet timer starts at 00/6:20 with a 15m randomized
+# delay, so the reconcile pass begins between :20 and :35; :55 puts this
+# render after it, so mine_econ and metric_activity are the current pass's.
+# livedata is refreshed hourly and independently.
+[Unit]
+Description=Atlas shinogi public edition timer
+
+[Timer]
+OnCalendar=*-*-* 00/6:55:00
+RandomizedDelaySec=3m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
