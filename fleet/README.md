@@ -215,7 +215,11 @@ audited (`signals-failed`) and never counts as a reconcile process error.
   unreadable when pending outcomes outnumber filled ones, and says
   whether the 7-day sample meets `min_filled_for_promotion`
   (default 30). A class reaches a paging tier only by an operator
-  decision recorded in `docs/decisions.md` against such a read.
+  decision recorded in `docs/decisions.md` against such a read. The
+  ingest SEEDS SILENTLY on first sight of a class: history is never
+  backfilled, because an event entered long after it happened takes
+  today's price as its entry and every horizon it already passed
+  fills at that same price, which fabricates near-zero returns.
 - **Two-unit scheduling.** Extraction runs here (fleet unit); the
   Telegram scan runs in the repo unit — delivery may lag extraction by up
   to one scheduling cycle (~1h), accepted by design: every signal class

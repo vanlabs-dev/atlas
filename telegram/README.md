@@ -26,11 +26,14 @@ priority — a live chain upgrade surfaces before repo alerts in the same scan:
 |---|---|---|
 | `chain-runtime-upgrade` | `var/livedata/livedata.db` (`spec_upgrades`) | the **live** Finney runtime `spec_version` changed (the network changed) |
 | `chain-parameter-change` | `var/livedata/livedata.db` (`chain_param_events`) | a root-settable economic knob changed value (change: network-drift-443): the three emission-gate bar parameters plus `RootWeightSettingEnabled`, the Root Reborn curation switch. Instant tier, **no cooldown and no digest** — such a knob cannot burst, and suppressing a second flip would be the wrong failure. A bar-parameter transition also states that the bar was re-priced for every subnet and that per-subnet crossing pages were withheld for that pass |
-| `gate-crossing` | `var/livedata/livedata.db` (`gate_events`) | a subnet's demand share crossed the emission-gate bar in either direction (change: gate-crossing-signal) — an economic cliff event; instant tier with a per-netuid cooldown. Since network-drift-443 the body also names the active bar mode (rank-pinned or q-mass) and the bar's own movement, attributing the crossing to the bar when the bar alone accounts for it |
-| `fleet-signal` | `var/fleet/fleet.db` (`signal_events`, read **strictly read-only**) | fleet-signals queue (change: fleet-signals): `narrative-cluster` / `watchlist` / `econ-code` page immediately; `signal-digest` rows are held durably in `pending_signal`, ride the next instant fleet alert, or flush via `digest_backstop_hours` — never paged, never dropped |
+| `gate-crossing` | `var/livedata/livedata.db` (`gate_events`) | a subnet's demand share crossed the emission-gate bar in either direction (change: gate-crossing-signal) — an economic cliff event; instant tier with a per-netuid cooldown. Since network-drift-443 the body also names the active bar mode (rank-pinned or q-mass) and the bar's own movement, attributing the crossing to the bar when the bar alone accounts for it. Since rotation-signal-gate a crossing pages only once livedata marks it `eligible`: one reversed inside the 48h durability window is recorded and never paged, and one still `pending` holds the watermark for a later scan |
+| `fleet-signal` | `var/fleet/fleet.db` (`signal_events`, read **strictly read-only**) | fleet-signals queue (change: fleet-signals): `narrative-cluster` and `watchlist` page immediately, `econ-code` is registered `briefing` and no longer pages (change: rotation-signal-gate); `signal-digest` rows are held durably in `pending_signal`, ride the next instant fleet alert, or flush via `digest_backstop_hours` — never paged, never dropped |
 | `repository-update` | `var/repotrack/repotrack.db` (`change_ranges`) | a **significant** tracked commit range (Phase 3 timer); churn is digested, not paged |
 | `schema-drift` | `var/livedata/livedata.db` (`integration_health`) | a live provider response stopped validating (Phase 4) |
 | `knowledge-ingestion` | `var/knowledge/knowledge.db` (`intake_runs`) | a new ingest run staged units for review (Phase 2) |
+| `subnet-registry` | `var/livedata/livedata.db` (`panel_snapshot`) | a netuid appears, disappears, or changes its on-chain name between consecutive snapshots (change: pulse-briefing); the first snapshot seeds silently. Registered `briefing` since rotation-signal-gate: all six alerts in the preceding 30 days were renames |
+| `fail-closed` | `var/livedata/livedata.db` (`integration_health`) | the gate poll or the chain-parameter watch has recorded only failures for longer than `window_hours` (change: pulse-briefing), keyed by the outage's first failure so a persisting outage pages once |
+| `root-rotation` | `var/livedata/livedata.db` (`rotation_events`) | a destination's share of the curated root dividend map moved past `share_change_threshold`, or entered or left the map (change: rotation-signal-gate). Registered `shadow`: recorded and measured, sends nothing until promoted |
 
 **Fleet signal alerts** carry the term/subnet facts as single-fact `·`
 lines (cluster: members, first mover with date and `code` SHA, adoption
@@ -113,12 +116,23 @@ entry only.
 Every class carries a `tier`: `instant` pages on the scan that finds the
 event; `briefing` records the event in the ledger with status `briefed`,
 advances the watermark, and surfaces it only through the pulse briefing.
-Ships with every class instant; the planned quiet state demotes
-econ-code, gate-crossing, repository-update, fleet-signal, schema-drift
-and knowledge-ingestion to briefing tier in one config commit. Flipping a
-tier back is the per-class rollback.
+Every class carries a registered `tier` and a class the registry does not
+name delivers nothing, so drift between the class list and the registry
+fails closed. Three tiers: `instant` pages, `briefing` records as `briefed`
+and rides the pulse edition, `shadow` records and is carried nowhere.
+`shadow` is the default for a new netuid-scoped class, so nothing new can
+page by accident. The tier is resolved per event, not per adapter, so the
+three classes the fleet-signal queue emits are demotable independently.
+Every processed event records the governing tier in the delivery ledger.
+Flipping a tier value is the per-class rollback.
 
-Two new instant classes: `subnet-registry` (a netuid appears, disappears,
+A class reaches a paging tier only by an operator decision recorded in
+`docs/decisions.md` against a filled effectiveness read that beats the
+fleet baseline (change: rotation-signal-gate). Demotion never stops
+measurement, which is the only way a demotion can later be reversed on
+evidence.
+
+Two classes arrived with the briefing: `subnet-registry` (a netuid appears, disappears,
 or changes its on-chain name between consecutive panel snapshots; the
 first snapshot seeds silently) and `fail-closed` (one page per outage when
 the gate poll or the chain-parameter watch has recorded only failures for
