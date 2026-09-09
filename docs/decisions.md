@@ -351,6 +351,59 @@ because each one corrects a belief that looked right and was not.
   of it. `active_miners` in the panel is the earner count less the owner's
   earning hotkey (verified exactly across eight subnets).
 
+## shinogi renderer decisions (2026-09-09, change: shinogi-renderer)
+
+The renderer that fills `https://shinogi.dev` lives in Atlas, where the
+stores are. Four decisions were taken against the handover that opened the
+work, three of them correcting it.
+
+**Module location: a top-level `shinogi/`, not a module under `telegram/`.**
+The handover argued a sibling of `atlas_briefing.py` is lower friction
+because the briefing readers are the dependency. It is not: cross-directory
+import is the established pattern here (`fleet/atlas_fleet_mining.py:305`
+reaching `livedata/`, `fleet/atlas_fleet_index.py:77` reaching
+`repotrack/`, `telegram/atlas_telegram.py:212` reaching `inventory/`). The
+module reaches both `telegram/` and `fleet/`, so no parent directory
+removes the cost, and the repo is one directory per capability.
+
+**Publish commits as `vanlabs-dev <vanlabs@pm.me>`, not `vaNlabs`.** The
+handover specified the Atlas identity. Every commit in the shinogi repo is
+authored `vanlabs-dev <vanlabs@pm.me>` and its `AGENTS.md` states that
+name; the publish keeps the target repo's own history consistent. Identity
+is passed per invocation with `git -c`, so the pass does not depend on the
+checkout's local config and cannot be silently changed by it.
+
+**Its own oneshot unit and timer, not `ExecStartPost=-` on
+`atlas-fleet.service`.** The shinogi `AGENTS.md` "Next" section suggests
+the latter and predates this design. `atlas-fleet.service` runs the repo
+reconcile pass; a bug in this one writes to a public site, and the operator
+must be able to stop publishing without stopping reconciliation. The timer
+runs at `00/6:55` so it lands after the fleet pass (which starts between
+:20 and :35 with its randomized delay) and reads that pass's `mine_econ`
+and `metric_activity`.
+
+**The publish gate hashes the facts, not the document.** Found while
+implementing, and it corrects the change's own design doc. The as-of line
+carries the compose time, which moves on every pass, so a plain document
+hash differs every six hours and the gate never holds: it would commit a
+new timestamp over unchanged facts about 124 times a month and leave the
+shinogi history useless as a record of what moved. `fact_digest()` hashes
+the document with the as-of line normalised out. When nothing moved, the
+live page keeps the compose time of the edition that is published, which is
+what the contract asks the line to state. The delta spec was amended before
+the code landed.
+
+**Publish state lives in `var/shinogi/shinogi.db`, not the notifier ledger.**
+The briefing keeps `briefing:figures` in the notifier `meta` table on a
+daily and weekly clock. Shinogi deltas compare against the last shinogi
+publish on a six-hour clock, which is a different series, and keeping them
+apart keeps compose read-only against every existing store.
+
+**Still blocked on the operator:** the Pi has no write credential for
+`vanlabs-dev/shinogi`, so `publish` ships `false`. Compose, render, scan
+and hash comparison are implemented and tested without it. Creating or
+moving a credential is not part of this change.
+
 ## Still open
 
 **Gate calibration read (~2026-08-11) — carry these into it.** Three
