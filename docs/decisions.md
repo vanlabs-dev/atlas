@@ -418,11 +418,31 @@ git call the renderer makes runs with `GIT_TERMINAL_PROMPT=0`,
 a missing credential fails the pass instead of hanging a timer-driven
 oneshot on a username prompt.
 
-**Still blocked on the operator:** the Pi has no write credential for
-`vanlabs-dev/shinogi` and no means to authenticate one, so `publish` ships
-`false`. Compose, render, scan and hash comparison are implemented and
-tested without it. Creating or moving a credential is not part of this
-change.
+**Credential resolved 2026-09-11: a write-scoped deploy key, not a token.**
+An ed25519 keypair was generated on the Pi (`~/.ssh/id_ed25519_shinogi`,
+fingerprint `SHA256:X4AhCwtMCZ6qxMv89Po0fLLXrxAVH49B1T2496p52aI`), its
+public half registered on `vanlabs-dev/shinogi` as a deploy key with write
+access, and the checkout pointed at the SSH remote through a `Host
+github.com` entry with `IdentitiesOnly yes`. A deploy key was chosen over a
+fine-grained PAT because it is scoped to that one repository, never expires,
+and puts no token on disk. `ssh -T git@github.com` from the Pi answers
+`Hi vanlabs-dev/shinogi!`, confirming the scope. Atlas itself still pulls
+over HTTPS anonymously and is unaffected.
+
+**The timer runs on local time, deliberately.** `atlas-fleet.timer` has no
+`UTC=true`, so it fires on `Pacific/Auckland`. `atlas-shinogi.timer` must do
+the same: the :20 and :55 offsets only keep their ordering while both share
+a clock, and the zone moves between +12 and +13. Under NZDT a UTC schedule
+would run the render 25 minutes before the fleet pass rather than after it,
+and the page would carry the previous pass's mining and activity figures.
+Recorded in the unit file so it is not "fixed" later.
+
+**Deployed 2026-09-11.** First edition published 2026-09-10 20:42 UTC at
+block 9039402. Pass one and pass two both published, correctly: the second
+drops the first-edition line and gains deltas, which is a real content
+change. Passes three and four reported `unchanged` and made no commit, so
+the fact gate holds. Commits land as `vanlabs-dev <vanlabs@pm.me>` with no
+trailer.
 
 ## Still open
 

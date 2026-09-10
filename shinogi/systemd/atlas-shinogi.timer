@@ -7,6 +7,18 @@
 # delay, so the reconcile pass begins between :20 and :35; :55 puts this
 # render after it, so mine_econ and metric_activity are the current pass's.
 # livedata is refreshed hourly and independently.
+#
+# LOCAL TIME ON PURPOSE. Do NOT add UTC=true "for consistency" with the
+# page's UTC as-of line. atlas-fleet.timer runs on local time, and the
+# ordering above only holds while both sit on the same clock. The device is
+# Pacific/Auckland, which shifts between +12 and +13: under NZDT a UTC
+# schedule would land this render 25 minutes BEFORE the fleet pass instead
+# of after it, and the page would report the previous pass's mining and
+# activity figures.
+#
+# A DST transition can skip or repeat one slot. Persistent=true catches up
+# a skipped one, and a repeat is harmless because the fact gate makes the
+# second pass a no-op.
 [Unit]
 Description=Atlas shinogi public edition timer
 

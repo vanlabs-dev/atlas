@@ -84,15 +84,18 @@ gate crossing pages only after a 48h durability window with no reversal.
 Expected volume falls from about 6.6 pages a day to 1 or 2; the one-week
 confirmation is due 2026-09-16.
 
-**shinogi-renderer** (2026-09-09, built, not deployed): `https://shinogi.dev`
-serves a shell whose as-of line still reads `awaiting first Atlas publish`.
-A new top-level `shinogi/` composes the public edition from the livedata and
-fleet stores read-only, to the page contract frozen in that repo, and
-publishes it into a second checkout when a fact on the page has moved. It is
-a second reader over those stores, not a wrapper around the briefing, whose
-section builders return operator lines. Blocked on one operator decision:
-the Pi has no write credential for `vanlabs-dev/shinogi`, so `publish` ships
-`false`.
+**shinogi-renderer** (2026-09-11, deployed, not archived): `https://shinogi.dev`
+serves real data. A new top-level `shinogi/` composes the public edition from
+the livedata and fleet stores read-only, to the page contract frozen in that
+repo, and publishes it into a second checkout when a fact on the page has
+moved. It is a second reader over those stores, not a wrapper around the
+briefing, whose section builders return operator lines. On the device: a
+write-scoped deploy key for `vanlabs-dev/shinogi` at
+`~/.ssh/id_ed25519_shinogi`, the checkout at `/home/pi/shinogi` on the SSH
+remote, and `atlas-shinogi.timer` at `00/6:55` local time. First edition
+published 2026-09-10 20:42 UTC at block 9039402; the fact gate held from the
+third pass. Follow-up: `shinogi/tests/test_page_contract.py` still asserts
+the pre-Atlas shell and is red until widened in that repo.
 
 **Known gap: the corpus is three chain releases behind.** Finney ran 453
 (2026-09-03), 454 (2026-09-04) and 455 (2026-09-07); detection recorded and
