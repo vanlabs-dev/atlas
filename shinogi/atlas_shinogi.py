@@ -275,10 +275,24 @@ def network_facts(src: Any, cfg: Dict[str, Any], start: str,
                 "%g hour bound." % (observed_at[:16], stale_hours)))
         else:
             figures["theta"] = theta
-            items.append(_fact(
-                "Emission-gate bar at %s%s, rank %s, %s subnets above it."
-                % (_num(theta, 5), _delta(theta, prev.get("theta")),
-                   _num(rank), _num(above))))
+            # rank and above_count are recorded per poll and either can be
+            # NULL. Build the line from what is present and name what is
+            # not, rather than letting "not recorded" stand in mid-sentence.
+            bits = ["Emission-gate bar at %s%s"
+                    % (_num(theta, 5), _delta(theta, prev.get("theta")))]
+            if rank is not None:
+                bits.append("rank %s" % _num(rank))
+            if above is not None:
+                bits.append("%s above it"
+                            % _plural(int(above), "subnet", "subnets"))
+            items.append(_fact(", ".join(bits) + "."))
+            absent = [label for label, value in (("its rank", rank),
+                                                 ("the above-bar count",
+                                                  above))
+                      if value is None]
+            if absent:
+                items.append(_gap("The bar is recorded without %s."
+                                  % " and ".join(absent)))
         if brief._table(live, "gate_events"):
             moves = brief._one(live, "SELECT COUNT(*) FROM gate_events "
                                      "WHERE observed_at > ?", (start,))

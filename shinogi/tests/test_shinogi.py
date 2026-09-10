@@ -38,7 +38,7 @@ def _iso(hours_ago=0.0, anchor=None):
 # ---------------------------------------------------------------------------
 
 def build_live(path, vitals_hours=2.0, gate_hours=1.0, with_names=True,
-               anchor=None):
+               anchor=None, rank=32, above_count=32):
     import atlas_live as live
     conn = live.open_store(path)
     conn.execute("INSERT INTO meta (key, value) VALUES ('last_live_spec', "
@@ -47,7 +47,8 @@ def build_live(path, vitals_hours=2.0, gate_hours=1.0, with_names=True,
         "INSERT INTO gate_state (observed_at, gate_active, theta, q, "
         "q_provenance, h, h_provenance, endpoint, rank, above_count) "
         "VALUES (?, 1, 0.00412, 0.75, 'assumed-default', 0.1, "
-        "'assumed-default', 'finney', 32, 32)", (_iso(gate_hours, anchor),))
+        "'assumed-default', 'finney', ?, ?)",
+        (_iso(gate_hours, anchor), rank, above_count))
     conn.execute(
         "INSERT INTO chain_param_events (item, prev_value, new_value, "
         "prev_provenance, new_provenance, observed_at) VALUES "
@@ -842,6 +843,35 @@ if __name__ == "__main__":
 
 class ReadabilityTests(unittest.TestCase):
     """Public prose: counts agree in number and large figures group."""
+
+    def test_absent_above_bar_count_is_named_not_inlined(self):
+        """Seen on the device: above_count is NULL on some polls, which
+        rendered as 'rank 32, not recorded subnets above it'."""
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            build_live(config["live_db"], above_count=None)
+            _e, document, _l = sh.build(config, None)
+            self.assertNotIn("not recorded subnets above it", document)
+            self.assertIn("Emission-gate bar at 0.00412, rank 32.", document)
+            self.assertIn("The bar is recorded without the above-bar count.",
+                          document)
+
+    def test_absent_rank_and_count_are_both_named(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            build_live(config["live_db"], rank=None, above_count=None)
+            _e, document, _l = sh.build(config, None)
+            self.assertIn("Emission-gate bar at 0.00412.", document)
+            self.assertIn("without its rank and the above-bar count",
+                          document)
+
+    def test_a_single_subnet_above_the_bar_reads_singular(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            build_live(config["live_db"], above_count=1)
+            _e, document, _l = sh.build(config, None)
+            self.assertIn("1 subnet above it", document)
+            self.assertNotIn("1 subnets above it", document)
 
     def test_singular_and_grouped_figures(self):
         with tempfile.TemporaryDirectory() as tmp:
