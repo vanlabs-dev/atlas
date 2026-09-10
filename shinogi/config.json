@@ -1,7 +1,7 @@
 {
-  "_comment": "shinogi renderer (change: shinogi-renderer): composes the public shinogi.dev edition from stores already on disk, read-only, and publishes it into a second checkout when the content hash changes. No provider call, no model call, no chain call. Atlas writes shinogi; shinogi is never read back. Rollback: enabled false stops compose and publish and touches nothing else; publish false composes and writes nothing. The push stays false until the Pi has a write credential for vanlabs-dev/shinogi.",
+  "_comment": "shinogi renderer (change: shinogi-renderer): composes the public shinogi.dev edition from stores already on disk, read-only, and publishes it into a second checkout when the content hash changes. No provider call, no model call, no chain call. Atlas writes shinogi; shinogi is never read back. Rollback: enabled false stops compose and publish and touches nothing else; publish false composes and writes nothing. Publishing enabled 2026-09-11: the Pi holds a write-scoped deploy key for vanlabs-dev/shinogi at ~/.ssh/id_ed25519_shinogi and the checkout at checkout_dir uses the SSH remote.",
   "enabled": true,
-  "publish": false,
+  "publish": true,
   "checkout_dir": "/home/pi/shinogi",
   "page_file": "index.html",
   "state_db": "var/shinogi/shinogi.db",
