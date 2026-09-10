@@ -207,6 +207,15 @@ randomized delay. The fleet timer starts at `00/6:20` with
 :55 puts the render after it, so `mine_econ` and `metric_activity` are the
 current pass's. `livedata` is refreshed hourly and independently.
 
+The schedule is **local time, deliberately**, matching `atlas-fleet.timer`.
+Adding `UTC=true` to align it with the page's UTC as-of line would be a
+regression: the device is `Pacific/Auckland`, which moves between +12 and
++13, and the two timers only keep their ordering while they share a clock.
+Under NZDT a UTC schedule would fire this render 25 minutes before the
+fleet pass rather than after it, and the page would report the previous
+pass's mining and activity figures. Confirmed on the device 2026-09-11:
+fleet next at 12:22 NZST, shinogi next at 12:55 NZST.
+
 ### Publish commits as `vanlabs-dev <vanlabs@pm.me>`
 
 The handover says to author publish commits as `vaNlabs <vanlabs@pm.me>`.
