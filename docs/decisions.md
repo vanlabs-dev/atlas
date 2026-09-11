@@ -444,6 +444,62 @@ change. Passes three and four reported `unchanged` and made no commit, so
 the fact gate holds. Commits land as `vanlabs-dev <vanlabs@pm.me>` with no
 trailer.
 
+## pulse-briefing and rotation-signal-gate acceptance (2026-09-11)
+
+Read off the device before archiving both changes.
+
+**pulse-briefing 6.3, composition makes no provider or judge call: PASS.**
+The seven daily editions in the last week land at 07:0x UTC, and the audit
+table shows two calls near each one (`chain_head_taostats`,
+`subnets_taoswap`). Those are not the briefing. The same two operations run
+every hour of the day, and hour 07 carries **4 calls, the same as hours 01
+to 05, 08 to 11, 13 to 17 and 19 to 23**; only the four 6-hourly fleet hours
+(00, 06, 12, 18) differ. Composition adds zero calls. Temporal proximity
+alone could not have settled this, which is why the operation names and the
+per-hour baseline were read rather than a window count.
+
+The econ judge runs at detection, not at compose: 54 verdicts were recorded
+in the week and the briefing reads rows that already exist.
+
+**pulse-briefing 6.5, gate calibration read: recorded.**
+
+| | |
+|---|---|
+| Instant-tier events in the week | 3 |
+| Verdict distribution, 30 days | high 66, med 61, none 50, low 26, unjudged 2 |
+| Hovering at the bar | SN34 |
+
+**pulse-briefing 6.4 is SUPERSEDED, not done.** It says to flip six classes
+to `briefing` in one commit. `rotation-signal-gate` (2026-09-09) established
+that a class's tier moves only on an operator decision recorded against a
+filled effectiveness read. A blanket flip of six classes on no ledger read
+contradicts that rule directly, and would demote classes the later change
+deliberately left instant. The later change did the same job on evidence,
+demoting `econ-code` and `subnet-registry` on their own reads. The task is
+closed as superseded and no blanket flip was made.
+
+**rotation-signal-gate 6.5, volume against the baseline: confirmed early,
+on a two-day window rather than the seven the task asks for.** The change
+deployed 2026-09-09; this is 2026-09-11. Recorded now because the signal is
+already unambiguous, and flagged as short.
+
+| | |
+|---|---|
+| Pre-change baseline | 199 delivered in 30 days, about 6.6 a day |
+| Instant-tier events in the last 7 days | 3 |
+| Since the deploy (2 days) | `econ-code` 11 briefed, `subnet-registry` 3 briefed, `root-rotation` 2 shadowed, and 3 pages |
+| Pages per day since deploy | about 1.5, against the predicted 1 to 2 |
+
+The demotions are doing exactly what they were meant to: 11 `econ-code` and
+3 `subnet-registry` events in two days recorded as `briefed` and paged
+nobody, where before they were the bulk of the stream (99 `econ-code`
+delivered in the prior 30 days). `root-rotation` records and measures at
+`shadow` and has paged nothing, as designed.
+
+One gate-crossing in that window carries no tier. It is dated
+2026-09-09T05:04Z, before the deploy that day, so it predates the tier
+registry rather than escaping it.
+
 ## Still open
 
 **Gate calibration read (~2026-08-11) — carry these into it.** Three

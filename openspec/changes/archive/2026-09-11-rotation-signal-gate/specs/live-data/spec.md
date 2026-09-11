@@ -119,6 +119,12 @@ share that moved from a bar that moved beneath a stationary share. A crossing
 SHALL NOT be described, downstream or in status output, as a demand movement
 when the recorded bar movement accounts for it.
 
+A subnet that records more than a configured number of crossings inside a
+configured window SHALL be flagged as hovering. While flagged, its crossings
+SHALL still be recorded and SHALL carry a hovering annotation, so downstream
+consumers can summarise rather than report them individually. The flag SHALL
+clear when the subnet has stayed on one side for the full window.
+
 A recorded crossing SHALL NOT be eligible for delivery until a configured
 durability window has elapsed without an opposing crossing for the same
 netuid. A crossing for which an opposing crossing is recorded inside that
@@ -149,6 +155,19 @@ SHALL skip polling and event production entirely.
   configured consecutive polls
 - **THEN** exactly one gate-crossing event is recorded with direction,
   share, theta, the previous observation's theta, previous side, and its
+  annotation
+
+#### Scenario: Hovering subnet is flagged and annotated
+
+- **WHEN** a subnet records more than the configured number of crossings
+  inside the configured window
+- **THEN** it is flagged as hovering and each further crossing while flagged
+  is recorded with the hovering annotation
+
+#### Scenario: Hovering flag clears after a stable window
+
+- **WHEN** a flagged subnet stays on one side for the full window
+- **THEN** the flag is cleared and its next crossing is recorded without the
   annotation
 
 #### Scenario: Crossing becomes eligible only after the durability window

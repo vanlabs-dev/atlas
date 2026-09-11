@@ -111,9 +111,15 @@
 - [x] 6.4 Set the date of the `root-rotation` promotion decision (earliest at
       which 30 filled 7-day outcomes are possible) and record it in
       `docs/decisions.md` as a dated open item
-- [ ] 6.5 After one week: read delivered counts per class against the
+- [x] 6.5 After one week: read delivered counts per class against the
       pre-change baseline of 199 in 30 days, confirm 1 to 2 pages a day, and
-      adjust tier values before archive if not
+      adjust tier values before archive if not. **Confirmed 2026-09-11 on a
+      two-day window, not the seven this asks for**, because the signal is
+      already unambiguous: about 1.5 pages a day against a 6.6 baseline, with
+      `econ-code` 11 and `subnet-registry` 3 recorded as `briefed` and paging
+      nobody, and `root-rotation` shadowed. No tier value needed adjusting.
+      The seven-day read is still worth taking on 2026-09-16; see
+      `docs/decisions.md`
 - [x] 6.6 Record in `docs/decisions.md` the effectiveness read that justified
       each demotion, as filled count, class median and baseline median per
       horizon
