@@ -60,6 +60,46 @@ The fleet metrics report carries `netuid` and `org` and no subnet name, and
 `org` is a GitHub organisation, not the recorded name. A netuid with no
 recorded name renders that gap.
 
+## What the page looks like
+
+One full-bleed page, desktop first (`min-width: 1100px`, no mobile
+breakpoints). Inter and JetBrains Mono from Google Fonts, a sticky masthead
+carrying the as-of line, a hero stating the largest recorded movement beside
+four stat tiles, then the five sections on a 2:1 grid.
+
+Charts are inline SVG computed in this module from recorded series. No
+library, no script, no browser call, so the page still reads with scripting
+off:
+
+| Chart | Series |
+|---|---|
+| Bar and TAO sparklines | `gate_state.theta`, `network_vitals.tao_usd` |
+| Demand share across the bar universe | newest `panel_snapshot.share` per netuid, sorted, log scale, with the emission-gate rank marked |
+| Mover detail | that netuid's recent `panel_snapshot` readings |
+| Meters | subnet share of stake, ranked of observed, push coverage |
+
+A chart introduces no figure the page does not otherwise report, and never
+estimates, interpolates or smooths. A series with fewer than two recorded
+points renders nothing rather than a misleading flat line.
+
+The contract requires the page to be readable with scripting disabled and
+bans any browser data fetch. It permits a typeface and presentation script.
+
+## Attention is grouped, and its reason is derived
+
+`score_subnet` returns a category, and on the real fleet **93 of 106 public
+rows carry the same one**. One phrase per category therefore rendered ten
+identical lines that told a reader nothing.
+
+`why_phrase()` derives the phrase from the score's own components
+(`div_signed`, `cold`, `econ_fresh`, `pulse_spike`), stating direction in
+words. `group_attention()` then collapses rows that share a reason, so the
+repetition is stated once with a count and the exceptions stand out.
+
+The contract bans the numeric score, direction-cue glyphs and the board
+thesis sentence. It does not ban direction stated in words, and a test
+asserts no derived phrase contains a digit or a glyph.
+
 ## Stale bounds are per input
 
 - **Emission-gate bar**: 26 hours (`stale_hours`, the briefing default).
@@ -91,9 +131,9 @@ contract asks the line to state.
 
 ## Before any write
 
-The rendered document is scanned for operator material and for the page
-contract's self-contained rules. A hit fails the pass closed and writes
-nothing. The guarded case is a stored row that itself carries operator
+The rendered document is scanned for operator material, for any call that
+would fetch data in the browser, and for any external asset that is not a
+typeface source. A hit fails the pass closed and writes nothing. The guarded case is a stored row that itself carries operator
 material, for example a verdict line quoting a path or an address: the
 composer cannot know that in advance, the scan can.
 
@@ -146,23 +186,24 @@ Identity is passed per invocation with `git -c user.name` and
 `git -c user.email`. The device has no `~/.gitconfig`, so this is required:
 without it the commit fails outright.
 
-**It creates and moves no credential.** That is an operator decision.
+**It creates and moves no credential.** That stays an operator decision.
 
-## Device reality (checked 2026-09-09)
+## On the device
 
-`AGENTS.md` describes the Atlas remote as SSH. On the Pi it is not:
+Live since 2026-09-10. `atlas-shinogi.timer` runs it every six hours.
 
 | | |
 |---|---|
 | Atlas checkout | `/home/pi/atlas`, remote `https://github.com/vanlabs-dev/atlas.git`, pulls anonymously |
-| Pi SSH keys | none; `~/.ssh/` holds only `authorized_keys` and `known_hosts` |
-| `ssh -T git@github.com` from the Pi | `Permission denied (publickey)` |
-| `~/.gitconfig` | does not exist |
+| shinogi checkout | `/home/pi/shinogi`, remote `git@github.com:vanlabs-dev/shinogi.git` |
+| Publish credential | a write-scoped deploy key for the shinogi repo alone, `~/.ssh/id_ed25519_shinogi`, selected by a `Host github.com` entry with `IdentitiesOnly yes` |
+| `~/.gitconfig` | does not exist, which is why identity is passed per invocation |
 | `gh` | not installed |
 
-So the shinogi checkout is cloned over HTTPS (the repo is public, no
-credential needed) and **the push cannot authenticate at all** until the
-operator provides a credential. `publish` stays `false` until then.
+**The remotes differ by design.** The deploy key reaches the shinogi repo
+and nothing else; Atlas itself is still pulled anonymously over HTTPS and
+the device cannot push to it. A commit that is not pushed from the
+workstation is invisible to the device.
 
 There is also a stale `/home/pi/github/atlas` clone at `first commit`
 (2026-07-11) from an earlier layout. It is not the live checkout and
