@@ -7,6 +7,7 @@ network, or the real remote."""
 import datetime
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -242,7 +243,13 @@ class ComposeShapeTests(unittest.TestCase):
             self.assertEqual(page.h3, ["Code", "Narrative"])
             self.assertEqual(len(page.asof), 1)
             self.assertEqual(page.scripts, [])
-            self.assertEqual(page.links, [])
+            # The amended contract allows a typeface source and nothing else.
+            for link in page.links:
+                self.assertTrue(
+                    any(h in link.get("href", "")
+                        for h in ("fonts.googleapis.com",
+                                  "fonts.gstatic.com")),
+                    "unexpected link: %r" % link)
             self.assertEqual(leaks, [])
 
     def test_empty_edition_keeps_every_landmark(self):
@@ -260,15 +267,25 @@ class ComposeShapeTests(unittest.TestCase):
                            "Missing the fleet store"):
                 self.assertIn(phrase, document)
 
-    def test_self_contained_document(self):
+    def test_no_data_is_fetched_in_the_browser(self):
+        """Presentation may load a typeface. Pulling a reported figure in
+        the browser may not: Atlas is the only writer."""
         with tempfile.TemporaryDirectory() as tmp:
             config = make_config(tmp)
             build_live(config["live_db"])
             build_fleet(config["fleet_db"])
-            _e, document, _l = sh.build(config, None)
-            for banned in ("<script", "XMLHttpRequest", "fetch(", "@import",
-                           "stylesheet", 'href="http'):
+            _e, document, leaks = sh.build(config, None)
+            self.assertEqual(leaks, [])
+            for banned in ("XMLHttpRequest", "fetch(", "@import",
+                           "EventSource", "new WebSocket"):
                 self.assertNotIn(banned, document)
+            self.assertNotIn("<script", document)
+            for url in re.findall(r'(?:href|src)="(https?://[^"]+)"',
+                                  document):
+                self.assertTrue(
+                    any(h in url for h in ("fonts.googleapis.com",
+                                           "fonts.gstatic.com")),
+                    "non-typeface external asset: %r" % url)
 
 
 class AsOfTests(unittest.TestCase):
@@ -396,8 +413,11 @@ class DeltaTests(unittest.TestCase):
                          "'{\"theta\": 999.0}')")
             conn.commit()
             conn.close()
-            _e, document, _l = sh.build(config, None)
-            self.assertNotIn("999", document)
+            edition, document, _l = sh.build(config, None)
+            self.assertNotEqual(edition["figures"].get("theta"), 999.0)
+            body = document[document.index("<body>"):]
+            self.assertNotIn("999.0", body)
+            self.assertNotIn("briefing:figures", document)
 
 
 class AttentionTests(unittest.TestCase):
@@ -441,7 +461,8 @@ class AttentionTests(unittest.TestCase):
             self.assertIsNone(gap)
             self.assertEqual([r["netuid"] for r in rows], expected)
             for row in rows:
-                self.assertIn(row["why"], sh.WHY_PHRASE.values())
+                self.assertTrue(row["why"], "every row needs a reason")
+                self.assertNotIn("score", row)
 
     def test_cap_holds_at_the_configured_row_count(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -597,12 +618,20 @@ class ExclusionTests(unittest.TestCase):
         self.assertTrue(sh.scan("<p>0x%s</p>" % ("ab" * 32)))
         self.assertTrue(sh.scan("<p>10.0.0.4</p>"))
 
-    def test_scan_rejects_external_and_scripted_assets(self):
+    def test_scan_rejects_data_fetch_and_non_typeface_assets(self):
         self.assertTrue(sh.scan('<script src="x"></script>'))
         self.assertTrue(sh.scan('<link rel="stylesheet" href="/a.css">'))
         self.assertTrue(sh.scan("<style>@import url(x);</style>"))
         self.assertTrue(sh.scan("<p>fetch(url)</p>"))
+        self.assertTrue(sh.scan("<p>new WebSocket(u)</p>"))
         self.assertTrue(sh.scan('<a href="https://example.com">x</a>'))
+
+    def test_scan_allows_a_typeface_and_inline_script(self):
+        """The amended contract permits presentation, not data fetching."""
+        self.assertEqual(sh.scan(
+            '<link rel="stylesheet" '
+            'href="https://fonts.googleapis.com/css2?family=Inter">'), [])
+        self.assertEqual(sh.scan("<script>document.title=1</script>"), [])
 
     def test_exact_shinogi_contract_tokens_are_all_covered(self):
         contract_tokens = ("mining.budget_band", "TaoStats quota",
@@ -884,3 +913,157 @@ class ReadabilityTests(unittest.TestCase):
             self.assertIn("1 material incentive-code change and", document)
             self.assertIn("7,313,368 TAO staked", document)
             self.assertIn("1,420 new accounts", document)
+
+
+class WhyPhraseTests(unittest.TestCase):
+    """The reason token alone is not renderable: on the real fleet 93 of
+    106 public rows score `divergence`, so the phrase must be derived."""
+
+    def test_divergence_states_direction_in_words(self):
+        cold = {"why": "divergence", "div_signed": -71, "cold": True}
+        warm = {"why": "divergence", "div_signed": -71, "cold": False}
+        ahead = {"why": "divergence", "div_signed": 55, "cold": False}
+        self.assertEqual(sh.why_phrase(cold),
+                         "priced ahead of a repository that has gone quiet")
+        self.assertEqual(sh.why_phrase(warm),
+                         "priced ahead of its code activity")
+        self.assertEqual(sh.why_phrase(ahead),
+                         "building faster than the price reflects")
+        self.assertNotEqual(sh.why_phrase(cold), sh.why_phrase(ahead))
+
+    def test_fresh_distinguishes_its_two_causes(self):
+        self.assertEqual(
+            sh.why_phrase({"why": "fresh", "econ_fresh": True}),
+            "reward or emission code changed this pass")
+        self.assertEqual(
+            sh.why_phrase({"why": "fresh", "pulse_spike": True}),
+            "branch activity spiked this pass")
+
+    def test_unknown_token_is_a_gap_not_a_raw_token(self):
+        self.assertIsNone(sh.why_phrase({"why": "something-new"}))
+
+    def test_no_phrase_carries_a_score_or_a_glyph(self):
+        for sc in ({"why": w, "div_signed": -60, "cold": True,
+                    "econ_fresh": True, "pulse_spike": True}
+                   for w in sh.WHY_PHRASE):
+            phrase = sh.why_phrase(sc) or ""
+            for glyph in ("▲", "▼", "◆"):
+                self.assertNotIn(glyph, phrase)
+            self.assertFalse(any(ch.isdigit() for ch in phrase))
+
+
+class GroupingTests(unittest.TestCase):
+    def test_identical_reasons_collapse_into_one_group(self):
+        rows = [{"netuid": n, "name": "n%d" % n, "why": "priced ahead"}
+                for n in range(8)]
+        rows += [{"netuid": 99, "name": "x", "why": "branch spiked"}]
+        groups = sh.group_attention(rows)
+        self.assertEqual([g[0] for g in groups],
+                         ["priced ahead", "branch spiked"])
+        self.assertEqual([len(g[1]) for g in groups], [8, 1])
+
+    def test_grouping_preserves_board_order(self):
+        rows = [{"netuid": 1, "why": "a"}, {"netuid": 2, "why": "b"},
+                {"netuid": 3, "why": "a"}]
+        groups = sh.group_attention(rows)
+        self.assertEqual([g[0] for g in groups], ["a", "b"])
+        self.assertEqual([r["netuid"] for r in groups[0][1]], [1, 3])
+
+    def test_a_missing_reason_is_named(self):
+        groups = sh.group_attention([{"netuid": 1, "why": None}])
+        self.assertEqual(groups[0][0], "reason not recorded")
+
+
+class ChartTests(unittest.TestCase):
+    def test_sparkline_needs_two_points(self):
+        self.assertEqual(sh.sparkline([]), "")
+        self.assertEqual(sh.sparkline([1.0]), "")
+        self.assertIn("<svg", sh.sparkline([1.0, 2.0, 1.5]))
+
+    def test_sparkline_is_inline_and_fetches_nothing(self):
+        svg = sh.sparkline([1.0, 2.0, 3.0], fill_id="x", label="t")
+        self.assertEqual(sh.scan(svg), [])
+        self.assertNotIn("http", svg)
+
+    def test_distribution_marks_the_rank_and_the_faller(self):
+        shares = [(i, (128 - i) / 1000.0) for i in range(128)]
+        svg = sh.distribution_svg(shares, rank=32, falling=[7])
+        self.assertEqual(svg.count("<rect"), 128)
+        self.assertIn('class="b fall"', svg)
+        self.assertIn('class="thresh"', svg)
+        self.assertIn("rank 1<", svg)
+        self.assertEqual(sh.scan(svg), [])
+
+    def test_distribution_without_a_rank_draws_no_threshold(self):
+        shares = [(i, 0.01) for i in range(10)]
+        self.assertNotIn("thresh", sh.distribution_svg(shares, rank=None))
+
+    def test_distribution_needs_two_subnets(self):
+        self.assertEqual(sh.distribution_svg([(1, 0.5)], rank=1), "")
+
+    def test_zero_share_does_not_break_the_log_scale(self):
+        svg = sh.distribution_svg([(1, 0.09), (2, 0.0), (3, 0.0)], rank=1)
+        self.assertIn("<rect", svg)
+        self.assertNotIn("nan", svg.lower())
+
+
+class SeriesTests(unittest.TestCase):
+    def test_series_readers_refuse_an_unexpected_column(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            build_live(config["live_db"])
+            src = sh._brief()._Sources(config)
+            try:
+                with self.assertRaises(sh.ShinogiError):
+                    sh.vitals_series(src, "1=1; DROP TABLE meta")
+                with self.assertRaises(sh.ShinogiError):
+                    sh.netuid_series(src, 12, "oops")
+            finally:
+                src.close()
+
+    def test_absent_store_yields_empty_series_not_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            src = sh._brief()._Sources(config)
+            try:
+                self.assertEqual(sh.theta_series(src), [])
+                self.assertEqual(sh.share_distribution(src), [])
+                self.assertEqual(sh.vitals_series(src, "tao_usd"), [])
+            finally:
+                src.close()
+
+    def test_distribution_is_sorted_largest_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            build_live(config["live_db"])
+            src = sh._brief()._Sources(config)
+            try:
+                shares = sh.share_distribution(src)
+            finally:
+                src.close()
+            self.assertEqual(shares, sorted(shares, key=lambda r: -r[1]))
+
+
+class LedeTests(unittest.TestCase):
+    def test_lede_names_the_largest_mover(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            build_live(config["live_db"])
+            build_fleet(config["fleet_db"])
+            edition, document, _l = sh.build(config, None)
+            self.assertIn("SN", edition["lede"])
+            self.assertIn(edition["lede"], document)
+
+    def test_lede_falls_back_rather_than_inventing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            edition, _d, _l = sh.build(config, None)
+            self.assertEqual(edition["lede"],
+                             "No recorded figure moved in this window.")
+
+
+class ZeroDeltaTests(unittest.TestCase):
+    def test_a_delta_that_rounds_to_zero_is_suppressed(self):
+        self.assertIsNone(sh._delta_value(100.0, 100.0))
+        self.assertEqual(sh._delta(100.0, 100.0), "")
+        self.assertIn("+10.0%", sh._delta(110.0, 100.0))
