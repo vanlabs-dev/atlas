@@ -1149,3 +1149,33 @@ class ZeroDeltaTests(unittest.TestCase):
         self.assertIsNone(sh._delta_value(100.0, 100.0))
         self.assertEqual(sh._delta(100.0, 100.0), "")
         self.assertIn("+10.0%", sh._delta(110.0, 100.0))
+
+
+class ScriptingOffTests(unittest.TestCase):
+    """The page must not need script to be read. Atlas is the only writer,
+    so every figure is in the delivered document."""
+
+    def test_stripping_every_script_leaves_the_page_intact(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            build_live(config["live_db"])
+            build_fleet(config["fleet_db"])
+            _e, document, _l = sh.build(config, None)
+            stripped = re.sub(r"<script\b.*?</script>", "", document,
+                              flags=re.S | re.I)
+            page = parse(stripped)
+            self.assertEqual(tuple(page.ids), SECTION_IDS)
+            self.assertEqual(page.h1, ["SHINOGI"])
+            self.assertEqual(page.h3, ["Code", "Narrative"])
+            self.assertEqual(len(page.asof), 1)
+            for figure in ("0.00412", "318.42", "7,313,368"):
+                self.assertIn(figure, stripped)
+
+    def test_a_chart_introduces_no_figure_the_page_does_not_report(self):
+        """A chart may only draw what is already recorded."""
+        # share is a fraction of the whole, so 0.09 is 9 percent
+        svg = sh.distribution_svg([(1, 0.09), (2, 0.04)], rank=1)
+        self.assertIn("9.000% demand share", svg)
+        self.assertIn("4.000% demand share", svg)
+        self.assertNotIn("nan", svg.lower())
+        self.assertEqual(svg.count("<rect"), 2)

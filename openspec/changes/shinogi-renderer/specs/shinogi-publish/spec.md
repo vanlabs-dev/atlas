@@ -43,10 +43,12 @@ the `SHINOGI` wordmark, an as-of element, and the five section landmarks
 `network`, `movers`, `mining`, `attention`, `code-narrative` in that
 order, with `Code` and `Narrative` subheadings inside the last one.
 
-The document SHALL contain no script, no external stylesheet, font, or
-link, and no browser-side data fetch. Every section landmark SHALL be
+Every figure the edition reports SHALL be present in the delivered
+document. The composer SHALL NOT emit anything that fetches, requests or
+derives a reported figure in the browser, and SHALL NOT emit an external
+asset other than a typeface source. Every section landmark SHALL be
 present on every edition, including an edition whose every input is
-missing.
+missing, and SHALL remain legible with scripting disabled.
 
 #### Scenario: Landmark order holds on a full edition
 
@@ -59,11 +61,17 @@ missing.
 - **THEN** the five landmarks are still present in the contract order
   and each body names its missing input
 
-#### Scenario: Self-contained document
+#### Scenario: No data is fetched in the browser
 
 - **WHEN** the composed document is inspected
-- **THEN** it contains no script element, no stylesheet or font link, no
-  `@import`, and no browser-side fetch
+- **THEN** it carries no data-fetch call and no external asset other
+  than a typeface source
+
+#### Scenario: Legible with scripting off
+
+- **WHEN** every script element is removed from the composed document
+- **THEN** the five landmarks, the wordmark and the as-of line are all
+  still present
 
 ### Requirement: The as-of line states compose time and the recorded block
 
@@ -122,6 +130,9 @@ publish and SHALL compare each figure that has a prior value against the
 figure set of the previous shinogi publish. Deltas SHALL NOT be derived
 from the Telegram briefing watermark or its figure set.
 
+A change that rounds to zero SHALL be suppressed rather than shown, and a
+figure that did not move SHALL simply carry no delta.
+
 When no previous shinogi publish exists, the edition SHALL state that it
 is the first edition and SHALL show no figure deltas.
 
@@ -136,6 +147,11 @@ is the first edition and SHALL show no figure deltas.
 - **WHEN** a previous shinogi figure set is stored
 - **THEN** each figure with a prior value shows its change against that
   set
+
+#### Scenario: A delta that rounds to zero is not shown
+
+- **WHEN** a figure is unchanged from the previous publish
+- **THEN** no delta is rendered beside it
 
 #### Scenario: Telegram state is not read for deltas
 
@@ -180,12 +196,40 @@ direction cue, or a board thesis sentence.
 
 The attention section SHALL list at most ten subnets ordered by the fleet
 attention score descending, and SHALL omit any subnet whose attention
-signal is unpaired emission opacity. Each row's reason SHALL be one of
-the recorded attention reasons rendered as a short public phrase.
+signal is unpaired emission opacity.
+
+Each row's reason SHALL be derived from the recorded attention signal's
+own components, not from its category alone. The dominant category is
+near-constant across the fleet, so a fixed phrase per category renders a
+list of identical lines that tells a reader nothing. A derived reason
+SHALL state direction in words and SHALL NOT state the numeric score,
+a direction-cue glyph, or a board thesis sentence. An unrecognised
+category SHALL render as a named gap, never as a raw token.
+
+Rows that share a reason SHALL be grouped, and each group SHALL state its
+reason once with its membership count, so that repetition is stated
+rather than repeated and an exception is visible.
 
 A row whose recorded on-chain name is absent SHALL name that gap and
 SHALL NOT invent a name. When no row remains after the cap and the
 opacity filter, the section SHALL name that gap.
+
+#### Scenario: One category, two directions
+
+- **WHEN** two subnets share the dominant attention category but differ
+  in the direction of that signal
+- **THEN** their reasons read differently
+
+#### Scenario: Rows sharing a reason are grouped
+
+- **WHEN** several rows carry the same reason
+- **THEN** they render as one group stating that reason once with its
+  count
+
+#### Scenario: No reason carries a score or a glyph
+
+- **WHEN** any reason is rendered
+- **THEN** it contains no numeric score and no direction-cue glyph
 
 #### Scenario: Cap and order
 
@@ -208,6 +252,35 @@ opacity filter, the section SHALL name that gap.
 
 - **WHEN** no subnet qualifies
 - **THEN** the section names the gap and lists no rows
+
+### Requirement: Charts are drawn from recorded series
+
+Where a recorded series exists, the edition MAY render it as a chart. A
+chart SHALL be drawn from stored rows only, SHALL be delivered inside the
+document, and SHALL carry no external asset and no browser-side call.
+
+A series with too few points to mean anything SHALL render no chart
+rather than a misleading one. A series that is not recorded SHALL yield
+no chart, and its section SHALL still state its facts and its gaps.
+
+A chart SHALL NOT introduce a figure the page does not otherwise report,
+and SHALL NOT estimate, interpolate or smooth a value it was not given.
+
+#### Scenario: A chart is inline and self-contained
+
+- **WHEN** a chart is rendered
+- **THEN** it is present in the delivered document and requests nothing
+
+#### Scenario: Too few points
+
+- **WHEN** a series holds fewer than two recorded points
+- **THEN** no chart is rendered for it
+
+#### Scenario: Absent series
+
+- **WHEN** the store behind a chart is absent
+- **THEN** the chart is omitted and the section still names its facts
+  and gaps
 
 ### Requirement: The seven-day push count is the stored fact
 
@@ -236,9 +309,28 @@ SHALL leave the published document in place with the compose time of the
 edition that is published, and SHALL report that the edition was
 unchanged.
 
+Before writing, the pass SHALL bring the checkout up to date with its
+remote by fast-forward only. The shinogi repository holds its own page
+contract and test, so a commit made there directly would otherwise leave
+the checkout behind and every later push rejected, which an unattended
+pass cannot resolve. A checkout that has diverged SHALL fail closed
+rather than be merged.
+
 Commits SHALL be authored as the personal identity and SHALL carry no
 attribution trailer. Atlas SHALL NOT read the shinogi repository for any
-input to an edition.
+input to an edition; bringing the checkout up to date is repository
+state, not an edition input.
+
+#### Scenario: Checkout behind its remote
+
+- **WHEN** the checkout is behind the remote and can fast-forward
+- **THEN** it is fast-forwarded and the edition publishes on top
+
+#### Scenario: Checkout diverged from its remote
+
+- **WHEN** the checkout holds commits the remote does not, and is also
+  behind it
+- **THEN** the pass fails closed naming the divergence and writes nothing
 
 #### Scenario: Facts unchanged and the clock has moved
 
@@ -280,8 +372,20 @@ credential.
 - **WHEN** the configured shinogi checkout does not exist
 - **THEN** the pass fails closed naming that reason and writes nothing
 
-#### Scenario: Push credential absent
+#### Scenario: Remote unreachable
 
-- **WHEN** the push is attempted with no usable write credential
+- **WHEN** the remote cannot be reached
+- **THEN** the pass fails closed before writing anything, and the
+  checkout is untouched
+
+#### Scenario: Push refused
+
+- **WHEN** the remote is reachable but refuses the write
 - **THEN** the pass fails closed naming that reason, the local commit
-  state is left recoverable, and no credential is created or moved
+  is left recoverable, nothing is reset, and no credential is created
+  or moved
+
+#### Scenario: Git can never wait on a prompt
+
+- **WHEN** any git command the pass runs would ask for a credential
+- **THEN** it fails immediately instead of blocking

@@ -18,7 +18,19 @@ Every commit and every push uses the personal identity:
 |---|---|
 | Git author | `vaNlabs <vanlabs@pm.me>` |
 | GitHub account | `vanlabs-dev` |
-| Remote | `vanlabs-dev/atlas` over SSH |
+| Remote, workstation | `git@github.com:vanlabs-dev/atlas.git` (SSH, read and write) |
+| Remote, Pi | `https://github.com/vanlabs-dev/atlas.git` (HTTPS, anonymous, read only) |
+
+**The remote is not the same on both hosts.** The workstation pushes over
+SSH. The Pi holds no private SSH key and no credential helper, so it pulls
+anonymously over HTTPS and cannot push at all. A commit that is not pushed
+from the workstation does not exist as far as the device is concerned, and
+`git pull` on the Pi will silently find nothing.
+
+The Pi also has no `~/.gitconfig`, so it has no `user.name` or
+`user.email`. Anything that commits there must pass identity per
+invocation with `git -c user.name=... -c user.email=...` or the commit
+fails outright.
 
 Verify the author before any commit lands. If `git var GIT_AUTHOR_IDENT`
 shows anything else, stop and fix it rather than committing.
