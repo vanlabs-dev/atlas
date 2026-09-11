@@ -9,7 +9,9 @@ observable retries, cross-provider disagreement surfacing, and read-only
 Hermes tools whose answers carry provider and time metadata or state
 unavailability plainly — never an invented or silently cached value
 (PRD §12.7 ATLAS-API-001…008, §12.8 ATLAS-LIVE-001…009).
+
 ## Requirements
+
 ### Requirement: Contract discovery gates adapter construction
 
 No production adapter SHALL be built for a provider endpoint until a
@@ -414,13 +416,20 @@ its history exists.
 
 The live-data component SHALL compute per-subnet demand shares as
 `moving_price x (1 - miner_burn)` normalized over ALL non-root subnets in
-the typed-validated TaoSwap subnets panel from the same pass —
+the typed-validated TaoSwap subnets panel from the same pass;
 emission-disabled subnets SHALL be included in the normalization, matching
 the chain's bar computation, with `emission_is_enabled` carried as an
 annotation rather than a filter. If the panel is unavailable or fails
 validation, no shares SHALL be computed and no gate events SHALL be
 produced for that pass. Share computation SHALL never trigger additional
 provider calls beyond the existing panel poll.
+
+A panel entry whose moving price is zero or missing SHALL remain in the
+normalization universe with a zero weight, but SHALL be treated as a missing
+observation for side tracking: it SHALL NOT produce a crossing to or from a
+zero share, and it SHALL count toward that subnet's absence threshold. A
+live subnet with a pool cannot have a zero moving price, so a zero is a gap
+in the panel, not a demand reading.
 
 #### Scenario: Shares from a valid panel
 
@@ -433,6 +442,13 @@ provider calls beyond the existing panel poll.
 - **WHEN** the panel reports subnets with emission disabled
 - **THEN** those subnets are included in the share normalization and their
   disabled state is carried as an annotation on any event they produce
+
+#### Scenario: Zero price is a gap, not a crossing
+
+- **WHEN** a subnet previously above the bar reports a zero or missing moving
+  price in one pass
+- **THEN** no crossing is recorded for that pass, the subnet's side is
+  unchanged, and the pass counts toward its absence threshold
 
 #### Scenario: No panel, no shares
 
@@ -456,6 +472,22 @@ share that moved from a bar that moved beneath a stationary share. A crossing
 SHALL NOT be described, downstream or in status output, as a demand movement
 when the recorded bar movement accounts for it.
 
+A subnet that records more than a configured number of crossings inside a
+configured window SHALL be flagged as hovering. While flagged, its crossings
+SHALL still be recorded and SHALL carry a hovering annotation, so downstream
+consumers can summarise rather than report them individually. The flag SHALL
+clear when the subnet has stayed on one side for the full window.
+
+A recorded crossing SHALL NOT be eligible for delivery until a configured
+durability window has elapsed without an opposing crossing for the same
+netuid. A crossing for which an opposing crossing is recorded inside that
+window SHALL be marked reversed and SHALL NEVER become eligible for delivery;
+both the crossing and its reversal SHALL be retained. Eligibility SHALL be a
+persisted property of the event, so a restart cannot make a reversed crossing
+deliverable. Because the bar is rank-pinned, a subnet at the bar oscillates by
+construction, and an oscillation is a state reported by the standing briefing
+line rather than an event.
+
 Lifecycle guards SHALL prevent false crossings: the first observation of a
 subnet seeds its side without an event; a subnet absent from the panel for a
 configured number of consecutive polls has its side cleared, and its
@@ -477,6 +509,38 @@ SHALL skip polling and event production entirely.
 - **THEN** exactly one gate-crossing event is recorded with direction,
   share, theta, the previous observation's theta, previous side, and its
   annotation
+
+#### Scenario: Hovering subnet is flagged and annotated
+
+- **WHEN** a subnet records more than the configured number of crossings
+  inside the configured window
+- **THEN** it is flagged as hovering and each further crossing while flagged
+  is recorded with the hovering annotation
+
+#### Scenario: Hovering flag clears after a stable window
+
+- **WHEN** a flagged subnet stays on one side for the full window
+- **THEN** the flag is cleared and its next crossing is recorded without the
+  annotation
+
+#### Scenario: Crossing becomes eligible only after the durability window
+
+- **WHEN** a confirmed crossing is recorded and the configured durability
+  window elapses with no opposing crossing for that netuid
+- **THEN** the event is marked eligible for delivery at that point and not
+  before
+
+#### Scenario: Reversed crossing is retained and never delivered
+
+- **WHEN** an opposing crossing for the same netuid is recorded inside the
+  durability window
+- **THEN** both crossings are retained, the first is marked reversed, and
+  neither becomes eligible for delivery
+
+#### Scenario: Restart cannot resurrect a reversed crossing
+
+- **WHEN** the component restarts after marking a crossing reversed
+- **THEN** the crossing remains ineligible for delivery
 
 #### Scenario: Bar-parameter change re-seeds instead of storming
 
@@ -818,3 +882,155 @@ prevent the remaining subnets from being recorded.
 - **WHEN** one subnet's watched value fails to decode
 - **THEN** that subnet records nothing and every other subnet's observation
   is persisted
+
+### Requirement: Per-poll panel snapshot with computed demand share
+
+Each pass that validates the TaoSwap subnets panel SHALL persist one snapshot
+row per non-root subnet carrying the reference block, the computed demand
+share, and the panel fields the briefing reads: moving price, spot price,
+emission share and its recorded 1-day and 30-day evolution, inflow, outflow,
+24-hour volume, holder count, market cap, active miners, miner burn, dereg
+risk level, prune rank, immunity flag, contested and takeover-eligible flags,
+and the recorded name. Fields absent from the panel SHALL persist as null,
+never as zero. Retention SHALL be bounded by a configured number of days and
+pruned in the same pass. A pass without a validated panel SHALL write no
+snapshot rows.
+
+#### Scenario: Snapshot written with the share
+
+- **WHEN** a pass computes demand shares from a validated panel
+- **THEN** one snapshot row per non-root subnet is persisted at the pass's
+  reference block including that subnet's computed share
+
+#### Scenario: Missing field is null
+
+- **WHEN** a panel entry lacks one of the snapshot fields
+- **THEN** that column persists as null for that row
+
+#### Scenario: Retention prune
+
+- **WHEN** snapshot rows are older than the configured retention
+- **THEN** they are removed in the same pass and the newest rows are kept
+
+### Requirement: Daily network vitals are persisted from keyless calls
+
+Once per calendar day the live-data component SHALL fetch the TaoSwap network
+statistics and daily TAO/USD close through the existing contract-validated
+adapters and persist one vitals row carrying the upstream date, total staked
+TAO, root and subnet stake, subnet stake share, new accounts, subnet
+registration cost, and the TAO/USD close. The fetch SHALL count against no
+TaoStats quota, SHALL follow the existing validation and freshness envelope,
+and a failed or invalid fetch SHALL record a health event and persist
+nothing for that day.
+
+#### Scenario: One vitals row per day
+
+- **WHEN** the daily vitals fetch succeeds
+- **THEN** one row is persisted for that upstream date and repeated passes
+  that day do not add another
+
+#### Scenario: Invalid vitals persist nothing
+
+- **WHEN** the vitals response fails validation
+- **THEN** a health event is recorded and no vitals row is written
+
+### Requirement: Root weight vectors are read at the gate-poll block and aggregated into a destination map
+
+The live-data component SHALL read every per-validator root weight vector at
+the same finalized block as the emission-gate poll, over the existing keyless
+JSON-RPC path, using the established storage-key derivation self-test and the
+established batched multi-key read. The read SHALL enumerate the weight map's
+entries at the root netuid and SHALL fetch every returned key in one batched
+request at that block. A storage-enumeration or batch method that the endpoint
+refuses SHALL NOT be used; the requirement is one enumeration call plus one
+batched value read.
+
+Each vector SHALL be decoded as a length-prefixed sequence of
+(destination netuid, weight) pairs. A vector that fails to decode, a key whose
+derivation does not match the observed key layout, or a batch that returns
+fewer entries than were enumerated SHALL fail the read closed for that pass,
+recording a health event and persisting no partial map, rather than storing a
+map that understates a destination.
+
+Each pass SHALL persist every validator's vector and an aggregate destination
+map covering all destinations. The aggregate SHALL be stake-weighted by each
+validator's root stake when that figure is available from the same pass, and
+SHALL be recorded as unweighted and labelled unweighted when it is not.
+The weighting basis SHALL be persisted with the map, so a consumer never has
+to infer it.
+
+The read SHALL be independently disableable, and SHALL NOT be gated by the
+emission-gate kill switch, so disabling the gate signal cannot silently stop
+observing root curation.
+
+#### Scenario: One enumeration and one batched read at one block
+
+- **WHEN** a pass reads root weight vectors
+- **THEN** the map's entries at the root netuid are enumerated once, every
+  returned key is read in one batched request at the gate poll's finalized
+  block, and the block reference is persisted with the result
+
+#### Scenario: Undecodable vector fails the pass closed
+
+- **WHEN** any returned vector does not decode as a sequence of
+  (netuid, weight) pairs
+- **THEN** the pass records a health event, persists no vectors and no
+  aggregate map for that pass, and the previous stored map is left intact
+
+#### Scenario: Short batch is not treated as an empty vector
+
+- **WHEN** the batched read returns fewer entries than were enumerated
+- **THEN** the pass fails closed rather than recording the missing validators
+  as having no destinations
+
+#### Scenario: Weighting basis is always stated
+
+- **WHEN** an aggregate destination map is persisted
+- **THEN** it carries whether it is stake-weighted or unweighted, and an
+  unweighted map is labelled unweighted wherever it is presented
+
+#### Scenario: Root read survives a gate-signal rollback
+
+- **WHEN** the emission-gate signal is disabled
+- **THEN** the root weight vector read continues on the hourly pass
+
+### Requirement: A material shift in the aggregate root destination map is recorded as an event
+
+The component SHALL compare each pass's aggregate destination map against the
+previously persisted map and SHALL record a durable root-rotation event when a
+destination's share of the aggregate changes by more than a configured
+threshold, or when a destination enters or leaves the map. Each event SHALL
+persist the destination netuid, the previous and new shares, the number of
+validators contributing to the change, the weighting basis, the block
+reference, and the observation time.
+
+The first persisted map SHALL seed silently without recording events. A pass
+in which the curation master switch or the concentration cap transitions SHALL
+re-seed the map silently and record no rotation events, because such a
+transition re-prices every vector at once and is already reported by the
+chain-parameter watch.
+
+#### Scenario: Destination share moves past the threshold
+
+- **WHEN** a destination's aggregate share changes by more than the configured
+  threshold between two persisted maps
+- **THEN** one root-rotation event is recorded carrying both shares, the
+  contributing validator count, the weighting basis, and the block reference
+
+#### Scenario: First map seeds silently
+
+- **WHEN** the first aggregate destination map is persisted
+- **THEN** it is stored and no rotation events are recorded
+
+#### Scenario: Curation parameter transition re-seeds instead of storming
+
+- **WHEN** a pass records a transition in the curation master switch or the
+  concentration cap
+- **THEN** the aggregate map is re-seeded, no rotation events are recorded for
+  that pass, and the chain-parameter transition alone reports the change
+
+#### Scenario: New destination is an event
+
+- **WHEN** a destination netuid appears in the aggregate map that was absent
+  from the previous map
+- **THEN** one root-rotation event is recorded for its entry

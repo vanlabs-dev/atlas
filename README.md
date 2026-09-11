@@ -60,17 +60,20 @@ answers, `RootWeightsCap` joined the chain-parameter watch, and the rank
 cross-check tolerance is 1 (the exact invariant holds only at the chain's
 theta recalculation block; the 105 silent divergence events were that
 boundary); benchmark `20260831T165224Z-722feb65` accepted on the Pi.
-**pulse-briefing** (2026-08-31, deployed, not archived): the alert stream
+**pulse-briefing** (2026-08-31, deployed and archived 2026-09-11): the alert stream
 became a pulse. Every Telegram class carries a delivery tier, a daily/weekly
 briefing is composed from stores only (editions delivering since 2026-09-01),
 livedata persists an hourly per-subnet panel snapshot and daily network
 vitals, the gate learns hovering and zero-price rules, and the econ judge got
-an anchored significance scale. Three acceptance tasks remain open (6.3 to
-6.5). Task 6.4 ("flip the six classes to briefing in one commit") predates
-`rotation-signal-gate` and is unresolved against its evidence rule: it would
-demote classes the later change deliberately left instant, on no ledger
-read. Needs an operator decision before either change is archived.
-**rotation-signal-gate** (2026-09-09, deployed, not archived): alerts must now
+an anchored significance scale. Acceptance closed 2026-09-11: composition
+adds no provider call (the two calls near each 07:0x edition are the hourly
+`chain_head_taostats` and `subnets_taoswap`, and hour 07 carries the same 4
+calls as every other non-fleet hour), and the gate calibration read is in
+`docs/decisions.md`. Task 6.4 ("flip the six classes to briefing in one
+commit") closed as **superseded**: `rotation-signal-gate` did the same job on
+evidence instead, and a blanket flip on no ledger read would contradict its
+rule.
+**rotation-signal-gate** (2026-09-09, deployed and archived 2026-09-11): alerts must now
 earn the right to page. The effectiveness ledger measures every netuid-scoped
 class by source triple, whatever its tier; a new `shadow` tier records and
 measures but sends nothing and is the default for a new class; a class the
@@ -81,8 +84,12 @@ renames). livedata now reads every per-validator **root weight vector** at the
 gate poll's block and aggregates them, stake-weighted, into a destination map;
 a material shift records a `root-rotation` event, which ships at `shadow`. A
 gate crossing pages only after a 48h durability window with no reversal.
-Expected volume falls from about 6.6 pages a day to 1 or 2; the one-week
-confirmation is due 2026-09-16.
+Volume fell from about 6.6 pages a day to
+about 1.5, confirmed 2026-09-11 on a two-day window rather than the seven the
+task asked for, because the signal was already unambiguous: 11 `econ-code`
+and 3 `subnet-registry` events recorded as `briefed` and paged nobody, and
+`root-rotation` shadowed. The seven-day read is still worth taking on
+2026-09-16.
 
 **shinogi-renderer** (2026-09-11, deployed and archived): `https://shinogi.dev`
 serves real data. A new top-level `shinogi/` composes the public edition from

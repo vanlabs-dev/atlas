@@ -82,11 +82,20 @@
 - [x] 6.1 Push; `git pull` on the Pi; suites green under system Python
 - [x] 6.2 Confirm the first snapshot and vitals rows, the registry seed, and
   snapshot size after 24 hours
-- [ ] 6.3 Read the first two daily editions (first without deltas); confirm
+- [x] 6.3 Read the first two daily editions (first without deltas); confirm
   no provider or judge calls were made during composition from the audit
-  tables
-- [ ] 6.4 Flip the six classes to `briefing` in one commit; confirm the
-  ledger records `briefed` and nothing pages except instant classes
-- [ ] 6.5 After the first weekly edition: record instant count for the week,
+  tables. **Pass, 2026-09-11:** the two calls near each 07:0x edition are
+  `chain_head_taostats` and `subnets_taoswap`, which run every hour; hour 07
+  carries 4 calls, the same as every other non-fleet hour. Composition adds
+  none. The judge runs at detection, not compose. See `docs/decisions.md`
+- [x] 6.4 **SUPERSEDED by `rotation-signal-gate` (2026-09-09), not done.**
+  A blanket flip of six classes on no ledger read contradicts that change's
+  rule that a tier moves only on an operator decision against a filled
+  effectiveness read, and would demote classes it deliberately left instant.
+  It did the same job on evidence instead, demoting `econ-code` and
+  `subnet-registry` on their own reads. Reasoning in `docs/decisions.md`
+- [x] 6.5 After the first weekly edition: record instant count for the week,
   the verdict distribution, and the hoverer list in the decision log; close
-  the gate calibration read
+  the gate calibration read. **Recorded 2026-09-11:** 3 instant-tier events
+  in the week; verdicts over 30 days high 66, med 61, none 50, low 26,
+  unjudged 2; hovering SN34

@@ -129,6 +129,14 @@ watermark for the next scan.
 - **THEN** no page is sent for them, they are recorded as briefed, and the
   watermark advances
 
+#### Scenario: Briefing tier records without paging
+
+- **WHEN** the next scan runs after extraction queued a narrative-cluster
+  event and the class tier is `briefing`
+- **THEN** no message is sent, the event is recorded as briefed, and the
+  signal-source watermark advances past it
+
+
 ### Requirement: Gate-crossing is an instant-tier class with per-netuid cooldown
 
 The notifier SHALL page emission-gate crossing events that the live-data
@@ -212,3 +220,17 @@ the other classes.
 - **WHEN** the gate-crossing class is disabled in configuration
 - **THEN** the scan processes the other classes unchanged and no
   gate-crossing watermark advances
+
+#### Scenario: Briefing tier records the crossing
+
+- **WHEN** the scan finds an unseen confirmed gate-crossing event and the
+  class tier is `briefing`
+- **THEN** the event is recorded as briefed, no page is sent, and the
+  crossing is available to the briefing's subnets section
+
+#### Scenario: Hovering crossing does not page
+
+- **WHEN** the class tier is `instant` and the crossing carries the hovering
+  annotation
+- **THEN** the event is recorded as suppressed and no page is sent
+
