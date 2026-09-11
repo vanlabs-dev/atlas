@@ -797,13 +797,33 @@ class PublishTests(unittest.TestCase):
             with open(page, encoding="utf-8") as fh:
                 self.assertIn("<p>shell</p>", fh.read())
 
-    def test_no_push_credential_fails_closed_and_keeps_the_commit(self):
+    def test_unreachable_remote_fails_before_writing_anything(self):
+        """The sync runs first, so an unreachable remote costs nothing:
+        no local commit is made that could never be pushed."""
         with tempfile.TemporaryDirectory() as tmp:
             config = self._ready(tmp)
             subprocess.run(["git", "-C", config["checkout_dir"], "remote",
                             "set-url", "origin",
                             os.path.join(tmp, "no-such-remote.git")],
                            check=True)
+            before = self._head(config)
+            with self.assertRaises(sh.ShinogiError) as caught:
+                sh.run(config)
+            self.assertIn("cannot reach origin", str(caught.exception))
+            self.assertEqual(before, self._head(config))
+            page = os.path.join(config["checkout_dir"], "index.html")
+            with open(page, encoding="utf-8") as fh:
+                self.assertIn("<p>shell</p>", fh.read())
+
+    def test_a_rejected_push_leaves_a_recoverable_local_commit(self):
+        """A read-only deploy key is the real case: fetch succeeds, push is
+        refused. The commit stays local and nothing is reset."""
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._ready(tmp)
+            hook = os.path.join(tmp, "remote.git", "hooks", "pre-receive")
+            with open(hook, "w") as fh:
+                fh.write("#!/bin/sh\necho 'read-only' >&2\nexit 1\n")
+            os.chmod(hook, 0o755)
             with self.assertRaises(sh.ShinogiError) as caught:
                 sh.run(config)
             self.assertIn("cannot push", str(caught.exception))
@@ -813,9 +833,9 @@ class PublishTests(unittest.TestCase):
                  "--format=%s"], capture_output=True, text=True).stdout
             self.assertIn("Publish edition", log)
 
-    def test_push_to_an_unauthenticated_https_remote_fails_not_hangs(self):
-        """The device reaches GitHub over HTTPS with no credential. Git must
-        fail closed rather than block a timer-driven unit on a prompt."""
+    def test_an_unauthenticated_https_remote_fails_not_hangs(self):
+        """Git must fail closed rather than block a timer-driven unit on a
+        credential prompt."""
         with tempfile.TemporaryDirectory() as tmp:
             config = self._ready(tmp)
             subprocess.run(
@@ -824,8 +844,7 @@ class PublishTests(unittest.TestCase):
                 check=True)
             with self.assertRaises(sh.ShinogiError) as caught:
                 sh.run(config)
-            self.assertIn("cannot push", str(caught.exception))
-            self.assertIn("local and recoverable", str(caught.exception))
+            self.assertIn("cannot reach origin", str(caught.exception))
 
     def test_git_runs_with_prompts_disabled(self):
         self.assertEqual(sh._GIT_ENV["GIT_TERMINAL_PROMPT"], "0")
@@ -845,6 +864,69 @@ class PublishTests(unittest.TestCase):
                  "--format=%an <%ae>"], capture_output=True,
                 text=True).stdout.strip()
             self.assertEqual(author, "vanlabs-dev <vanlabs@pm.me>")
+
+    def test_a_checkout_behind_origin_is_fast_forwarded(self):
+        """Someone commits to the shinogi repo directly (the contract and
+        its test live there). The pass must catch up, not be rejected."""
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._ready(tmp)
+            other = os.path.join(tmp, "other")
+            subprocess.run(["git", "clone", "-q",
+                            os.path.join(tmp, "remote.git"), other],
+                           check=True)
+            for k, v in (("user.name", "someone"),
+                         ("user.email", "s@example.com")):
+                subprocess.run(["git", "-C", other, "config", k, v],
+                               check=True)
+            with open(os.path.join(other, "AGENTS.md"), "w") as fh:
+                fh.write("edited elsewhere\n")
+            subprocess.run(["git", "-C", other, "add", "AGENTS.md"],
+                           check=True)
+            subprocess.run(["git", "-C", other, "commit", "-q", "-m",
+                            "Edit docs"], check=True)
+            subprocess.run(["git", "-C", other, "push", "-q", "origin",
+                            "main"], check=True)
+
+            self.assertEqual(sh.run(config)["status"], "published")
+            log = subprocess.run(
+                ["git", "-C", config["checkout_dir"], "log", "--format=%s"],
+                capture_output=True, text=True).stdout
+            self.assertIn("Edit docs", log)
+            self.assertIn("Publish edition", log)
+            self.assertEqual(
+                subprocess.run(["git", "-C", config["checkout_dir"], "status",
+                                "-sb"], capture_output=True,
+                               text=True).stdout.count("behind"), 0)
+
+    def test_a_diverged_checkout_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._ready(tmp)
+            other = os.path.join(tmp, "other")
+            subprocess.run(["git", "clone", "-q",
+                            os.path.join(tmp, "remote.git"), other],
+                           check=True)
+            for k, v in (("user.name", "someone"),
+                         ("user.email", "s@example.com")):
+                subprocess.run(["git", "-C", other, "config", k, v],
+                               check=True)
+            with open(os.path.join(other, "AGENTS.md"), "w") as fh:
+                fh.write("theirs\n")
+            subprocess.run(["git", "-C", other, "add", "-A"], check=True)
+            subprocess.run(["git", "-C", other, "commit", "-q", "-m",
+                            "Theirs"], check=True)
+            subprocess.run(["git", "-C", other, "push", "-q", "origin",
+                            "main"], check=True)
+            # and a local commit the remote has never seen
+            with open(os.path.join(config["checkout_dir"], "LOCAL.md"),
+                      "w") as fh:
+                fh.write("local only\n")
+            subprocess.run(["git", "-C", config["checkout_dir"], "add",
+                            "LOCAL.md"], check=True)
+            subprocess.run(["git", "-C", config["checkout_dir"], "commit",
+                            "-q", "-m", "Local"], check=True)
+            with self.assertRaises(sh.ShinogiError) as caught:
+                sh.run(config)
+            self.assertIn("diverged", str(caught.exception))
 
     def test_publication_disabled_composes_and_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
