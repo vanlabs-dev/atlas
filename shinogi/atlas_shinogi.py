@@ -33,6 +33,7 @@ import datetime
 import hashlib
 import html
 import json
+import math
 import os
 import re
 import sqlite3
@@ -53,8 +54,12 @@ SECTION_ORDER = (("network", "Network"), ("movers", "Subnet movers"),
                  ("mining", "Mining"), ("attention", "Attention"),
                  ("code-narrative", "Code / narrative"))
 
-# The six reasons score_subnet can return, as short public phrases. No
-# score, no direction cue, no board thesis reaches the page.
+# The reason token alone is not enough to render. On the real fleet 93 of
+# 106 public rows score `divergence`, so mapping the six tokens to six
+# fixed phrases produces a page of near-identical lines that says nothing.
+# `score_subnet` also returns div_signed, cold, econ_fresh and pulse_spike;
+# the contract bans direction-cue *glyphs*, the numeric score and the board
+# thesis, not direction stated in words. So the phrase is derived.
 WHY_PHRASE = {
     "divergence": "code activity and price are moving apart",
     "emission": "emission routed away from miners",
@@ -63,6 +68,31 @@ WHY_PHRASE = {
     "opaque": "emission split is not readable from the repository",
     "quiet": "no signal beyond presence",
 }
+
+
+def why_phrase(sc: Dict[str, Any]) -> Optional[str]:
+    """A short public reason, differentiated by the score's own components.
+    Returns None when the reason token is unrecognised, so the row names
+    that gap instead of printing a raw token."""
+    why = sc.get("why")
+    if why == "divergence":
+        signed = sc.get("div_signed")
+        if signed is None:
+            return WHY_PHRASE["divergence"]
+        if signed < 0:
+            return ("priced ahead of a repository that has gone quiet"
+                    if sc.get("cold") else "priced ahead of its code activity")
+        return "building faster than the price reflects"
+    if why == "fresh":
+        if sc.get("econ_fresh"):
+            return "reward or emission code changed this pass"
+        if sc.get("pulse_spike"):
+            return "branch activity spiked this pass"
+        return WHY_PHRASE["fresh"]
+    if why == "abandon":
+        return ("repository has gone quiet while the price holds up"
+                if sc.get("cold") else WHY_PHRASE["abandon"])
+    return WHY_PHRASE.get(why)
 
 
 class ShinogiError(Exception):
@@ -209,10 +239,17 @@ def _sn_list(netuids: Sequence[Any]) -> str:
     return ", ".join("SN%s" % n for n in netuids)
 
 
-def _delta(new: Any, old: Any) -> str:
-    """Suffix a figure with its change since the previous shinogi publish.
-    Empty on a first edition or when either side is absent."""
+def _delta_value(new: Any, old: Any) -> Optional[str]:
+    """The signed change since the previous shinogi publish, or None.
+    A change that rounds to zero is suppressed: `+0.0%` is noise."""
     pct = _brief()._delta_pct(new, old)
+    if not pct or pct in ("+0.0%", "-0.0%"):
+        return None
+    return pct
+
+
+def _delta(new: Any, old: Any) -> str:
+    pct = _delta_value(new, old)
     return " (%s since last publish)" % pct if pct else ""
 
 
@@ -248,6 +285,7 @@ def network_facts(src: Any, cfg: Dict[str, Any], start: str,
             release = None
         if release is not None:
             line += ", released as %s" % release["subject"]
+            figures["release"] = release["subject"]
         items.append(_fact(line + "."))
         figures["spec"] = int(spec)
 
@@ -275,6 +313,8 @@ def network_facts(src: Any, cfg: Dict[str, Any], start: str,
                 "%g hour bound." % (observed_at[:16], stale_hours)))
         else:
             figures["theta"] = theta
+            figures["rank"] = rank
+            figures["above"] = above
             # rank and above_count are recorded per poll and either can be
             # NULL. Build the line from what is present and name what is
             # not, rather than letting "not recorded" stand in mid-sentence.
@@ -313,6 +353,10 @@ def network_facts(src: Any, cfg: Dict[str, Any], start: str,
     else:
         date, usd, staked, share, accounts = vit
         figures["tao_usd"] = usd
+        figures["staked"] = staked
+        figures["share_pct"] = share
+        figures["accounts"] = accounts
+        figures["vitals_date"] = date
         # Vitals are a daily observation. They carry their date and are not
         # stale for age alone.
         items.append(_fact(
@@ -324,25 +368,39 @@ def network_facts(src: Any, cfg: Dict[str, Any], start: str,
 
 
 def mover_facts(src: Any, cfg: Dict[str, Any], start: str
-                ) -> List[Tuple[str, str]]:
+                ) -> Tuple[List[Tuple[str, str]], Optional[Dict[str, Any]]]:
+    """(items, lead). The largest mover is returned alongside the items so
+    compose can chart it without a second pass over the panel."""
     brief = _brief()
     items: List[Tuple[str, str]] = []
     live = src.live
     if live is None or not brief._table(live, "panel_snapshot"):
-        return [_gap("Missing panel snapshots: no movers can be ranked.")]
+        return [_gap("Missing panel snapshots: no movers can be "
+                     "ranked.")], None
 
+    lead: Optional[Dict[str, Any]] = None
     for netuid, old, new, ob, nb, pct in brief._movers(
             live, start, "moving_price_tao",
             float(cfg.get("price_move_threshold_pct", 15)), 6):
         items.append(_fact(
             "SN%d alpha price %+.1f%%, from %.5f TAO at block %s to %.5f TAO "
             "at block %s." % (netuid, pct, old, ob, new, nb)))
+        if lead is None or abs(pct) > abs(lead["raw"]):
+            lead = {"netuid": netuid, "kind": "alpha price",
+                    "pct": "%+.1f%%" % pct, "raw": pct, "column": "share",
+                    "detail": "%.5f TAO at block %s to %.5f TAO at block %s"
+                              % (old, ob, new, nb)}
     for netuid, old, new, ob, nb, pct in brief._movers(
             live, start, "share",
             float(cfg.get("share_move_threshold_pct", 25)), 4):
         items.append(_fact(
             "SN%d demand share %+.1f%%, from %.4f%% at block %s to %.4f%% at "
             "block %s." % (netuid, pct, old * 100, ob, new * 100, nb)))
+        if lead is None or abs(pct) > abs(lead["raw"]):
+            lead = {"netuid": netuid, "kind": "demand share",
+                    "pct": "%+.1f%%" % pct, "raw": pct, "column": "share",
+                    "detail": "%.4f%% at block %s to %.4f%% at block %s"
+                              % (old * 100, ob, new * 100, nb)}
     if not items:
         items.append(_fact("No subnet crossed a mover threshold in this "
                            "window."))
@@ -372,7 +430,7 @@ def mover_facts(src: Any, cfg: Dict[str, Any], start: str
         if hover:
             items.append(_fact("Hovering at the bar (%d): %s."
                                % (len(hover), _sn_list(hover))))
-    return items
+    return items, lead
 
 
 def mining_facts(src: Any, cfg: Dict[str, Any], prev: Dict[str, Any]
@@ -400,12 +458,16 @@ def mining_facts(src: Any, cfg: Dict[str, Any], prev: Dict[str, Any]
     top = [int(r[0]) for r in ranked[:10]]
     figures["mining_top10"] = top
 
+    figures["mining_observed"] = len(rows)
+    figures["mining_ranked"] = len(ranked)
     if not ranked:
         items.append(_gap("Missing a ranked mining head: every observed "
                           "subnet was cut."))
     else:
         head = ranked[0]
         name = head[1]
+        figures["mining_head"] = int(head[0])
+        figures["mining_head_name"] = name
         items.append(_fact(
             "Board head: SN%d, %s." % (head[0], name if name else
                                        "name not recorded")))
@@ -468,7 +530,7 @@ def attention_rows(src: Any, cfg: Dict[str, Any], fleet_config: Dict[str, Any]
             continue
         netuid = item["row"]["netuid"]
         rows.append({"netuid": netuid, "name": names.get(int(netuid)),
-                     "why": WHY_PHRASE.get(item["sc"]["why"])})
+                     "why": why_phrase(item["sc"])})
     if not rows:
         return [], "Missing attention rows: no subnet carries a public " \
                    "attention signal."
@@ -559,6 +621,87 @@ def narrative_facts(src: Any, start: str) -> List[Tuple[str, str]]:
                            "formed in this window.")]
 
 
+# ---------------------------------------------------------------------------
+# Series. The charts are drawn from recorded rows like every other figure:
+# a series that is not recorded yields None and its chart is simply absent.
+# ---------------------------------------------------------------------------
+
+def theta_series(src: Any, limit: int = 48) -> List[float]:
+    """Recent emission-gate bar observations, oldest first."""
+    brief = _brief()
+    live = src.live
+    if live is None or not brief._table(live, "gate_state"):
+        return []
+    rows = live.execute(
+        "SELECT theta FROM gate_state WHERE theta IS NOT NULL "
+        "ORDER BY id DESC LIMIT ?", (int(limit),)).fetchall()
+    return [r[0] for r in rows][::-1]
+
+
+def vitals_series(src: Any, column: str, limit: int = 30
+                  ) -> List[Tuple[str, float]]:
+    """(date, value) for a network_vitals column, oldest first."""
+    brief = _brief()
+    live = src.live
+    if live is None or not brief._table(live, "network_vitals"):
+        return []
+    if column not in ("tao_usd", "total_staked_tao", "subnets_share_pct"):
+        raise ShinogiError("refusing an unrecognised vitals column %r"
+                           % column)
+    rows = live.execute(
+        "SELECT date, %s FROM network_vitals WHERE %s IS NOT NULL "
+        "ORDER BY date DESC LIMIT ?" % (column, column),
+        (int(limit),)).fetchall()
+    return [(r[0], r[1]) for r in rows][::-1]
+
+
+def share_distribution(src: Any) -> List[Tuple[int, float]]:
+    """(netuid, share) for the newest snapshot of every subnet, largest
+    first. This is the bar universe, and the emission-gate rank indexes
+    straight into it."""
+    brief = _brief()
+    live = src.live
+    if live is None or not brief._table(live, "panel_snapshot"):
+        return []
+    return [(int(r[0]), r[1]) for r in live.execute(
+        "SELECT netuid, share FROM panel_snapshot WHERE id IN "
+        "(SELECT MAX(id) FROM panel_snapshot GROUP BY netuid) "
+        "AND share IS NOT NULL ORDER BY share DESC")]
+
+
+def netuid_series(src: Any, netuid: int, column: str, limit: int = 14
+                  ) -> List[float]:
+    """One subnet's recent panel readings, oldest first."""
+    brief = _brief()
+    live = src.live
+    if live is None or not brief._table(live, "panel_snapshot"):
+        return []
+    if column not in ("share", "moving_price_tao", "alpha_price_tao"):
+        raise ShinogiError("refusing an unrecognised panel column %r"
+                           % column)
+    rows = live.execute(
+        "SELECT %s FROM panel_snapshot WHERE netuid = ? AND %s IS NOT NULL "
+        "ORDER BY id DESC LIMIT ?" % (column, column),
+        (int(netuid), int(limit))).fetchall()
+    return [r[0] for r in rows][::-1]
+
+
+def group_attention(rows: List[Dict[str, Any]]
+                    ) -> List[Tuple[str, List[Dict[str, Any]]]]:
+    """Collapse rows that share a reason. Ten rows carrying one phrase is
+    the failure this exists to prevent: grouped, the repetition is stated
+    once and the exceptions become visible."""
+    groups: List[Tuple[str, List[Dict[str, Any]]]] = []
+    index: Dict[str, int] = {}
+    for row in rows:
+        key = row.get("why") or "reason not recorded"
+        if key not in index:
+            index[key] = len(groups)
+            groups.append((key, []))
+        groups[index[key]][1].append(row)
+    return groups
+
+
 def asof_block(src: Any) -> Optional[int]:
     """Newest recorded chain block from the panel snapshot."""
     brief = _brief()
@@ -567,6 +710,109 @@ def asof_block(src: Any) -> Optional[int]:
         return None
     block = brief._one(live, "SELECT MAX(block_number) FROM panel_snapshot")
     return int(block) if block is not None else None
+
+
+# ---------------------------------------------------------------------------
+# Charts. Inline SVG drawn from the recorded series. No library, no script,
+# no external asset: the geometry is computed here and the marks ship in the
+# document, so the page still reads with scripting off.
+# ---------------------------------------------------------------------------
+
+def _points(values: Sequence[float], width: float, height: float,
+            pad: float = 1.0) -> List[Tuple[float, float]]:
+    lo, hi = min(values), max(values)
+    span = (hi - lo) or 1.0
+    last = len(values) - 1 or 1
+    return [(pad + (width - 2 * pad) * (i / last),
+             height - pad - (height - 2 * pad) * ((v - lo) / span))
+            for i, v in enumerate(values)]
+
+
+def sparkline(values: Sequence[float], width: float = 160.0,
+              height: float = 40.0, stroke: str = "#c9b98d",
+              fill_id: Optional[str] = None, label: str = "") -> str:
+    """A single-series trend. Two points is the minimum that means
+    anything; fewer renders nothing rather than a misleading flat line."""
+    if len(values) < 2:
+        return ""
+    pts = _points(values, width, height)
+    line = "M " + " L ".join("%.2f %.2f" % p for p in pts)
+    area = ("%s L %.2f %.2f L %.2f %.2f Z"
+            % (line, pts[-1][0], height, pts[0][0], height))
+    out = ['<svg class="spark" width="%g" height="%g" viewBox="0 0 %g %g" '
+           'role="img" aria-label="%s">' % (width, height, width, height,
+                                            _esc(label))]
+    if fill_id:
+        out.append(
+            '<defs><linearGradient id="%s" x1="0" y1="0" x2="0" y2="1">'
+            '<stop offset="0%%" stop-color="%s" stop-opacity=".30"/>'
+            '<stop offset="100%%" stop-color="%s" stop-opacity="0"/>'
+            '</linearGradient></defs>' % (fill_id, stroke, stroke))
+        out.append('<path d="%s" fill="url(#%s)"/>' % (area, fill_id))
+    out.append('<path d="%s" fill="none" stroke="%s" stroke-width="1.6" '
+               'stroke-linejoin="round" stroke-linecap="round"/>'
+               % (line, stroke))
+    out.append('<circle cx="%.2f" cy="%.2f" r="2.7" fill="%s"/>'
+               % (pts[-1][0], pts[-1][1], stroke))
+    out.append("</svg>")
+    return "".join(out)
+
+
+# The distribution stretches to any viewport, so its geometry is authored
+# in a fixed user space and the browser scales x. Bars are square-ended:
+# a corner radius would distort under the non-uniform scale.
+_DIST_W = 1600.0
+_DIST_H = 210.0
+
+
+def distribution_svg(shares: Sequence[Tuple[int, float]], rank: Optional[int],
+                     highlight: Sequence[int] = (),
+                     falling: Sequence[int] = ()) -> str:
+    """Every subnet's demand share, sorted, on a log scale so the tail stays
+    visible. The emission-gate rank indexes straight into this order, which
+    is why the threshold line lands where it does."""
+    if len(shares) < 2:
+        return ""
+    values = [max(v * 100.0, 0.0) for _n, v in shares]
+    floor = 0.01
+    top = max(values)
+    lo, hi = math.log10(floor), math.log10(top + floor)
+    span = (hi - lo) or 1.0
+    slot = _DIST_W / len(shares)
+    bar = slot * 0.72
+    out = ['<svg class="dist" viewBox="0 0 %g %g" preserveAspectRatio="none" '
+           'role="img" aria-label="Demand share for %d subnets, sorted, '
+           'with the emission-gate bar marked">'
+           % (_DIST_W, _DIST_H, len(shares))]
+    for i, (netuid, share) in enumerate(shares):
+        value = max(share * 100.0, 0.0)
+        height = max(1.5, _DIST_H * (math.log10(value + floor) - lo) / span)
+        if netuid in falling:
+            cls = "b fall"
+        elif netuid in highlight:
+            cls = "b hi"
+        elif rank is not None and i < rank:
+            cls = "b above"
+        else:
+            cls = "b below"
+        out.append(
+            '<rect class="%s" x="%.2f" y="%.2f" width="%.2f" height="%.2f">'
+            '<title>SN%d  %.3f%% demand share  rank %d</title></rect>'
+            % (cls, i * slot + (slot - bar) / 2, _DIST_H - height, bar,
+               height, netuid, value, i + 1))
+    if rank is not None and 0 < rank <= len(shares):
+        out.append('<line class="thresh" x1="%.1f" y1="0" x2="%.1f" y2="%g"/>'
+                   % (rank * slot, rank * slot, _DIST_H))
+    out.append("</svg>")
+    return "".join(out)
+
+
+def meter(fraction: float, left: str, right: str) -> str:
+    pct = max(0.0, min(1.0, fraction)) * 100.0
+    return ('<div class="meter"><div class="mtrack">'
+            '<div class="mfill" style="width:%.2f%%"></div></div>'
+            '<div class="mlab"><span>%s</span><span>%s</span></div></div>'
+            % (pct, _esc(left), _esc(right)))
 
 
 # ---------------------------------------------------------------------------
@@ -612,15 +858,19 @@ def compose(config: Dict[str, Any], state: Optional[sqlite3.Connection],
             sections[name] = items
             figures.update(figs)
 
-        for name, builder in (
-                ("movers", lambda: mover_facts(src, config, start)),
-                ("narrative", lambda: narrative_facts(src, start))):
-            try:
-                sections[name] = builder()
-            except sqlite3.Error as exc:
-                sections[name] = [_gap("Missing %s facts: the store is not "
-                                       "readable (%s)."
-                                       % (name, type(exc).__name__))]
+        lead: Optional[Dict[str, Any]] = None
+        try:
+            sections["movers"], lead = mover_facts(src, config, start)
+        except sqlite3.Error as exc:
+            sections["movers"] = [_gap("Missing movers facts: the store is "
+                                       "not readable (%s)."
+                                       % type(exc).__name__)]
+        try:
+            sections["narrative"] = narrative_facts(src, start)
+        except sqlite3.Error as exc:
+            sections["narrative"] = [_gap("Missing narrative facts: the "
+                                          "store is not readable (%s)."
+                                          % type(exc).__name__)]
 
         try:
             rows, gap = attention_rows(src, config, fleet_config)
@@ -631,12 +881,42 @@ def compose(config: Dict[str, Any], state: Optional[sqlite3.Connection],
         sections["attention_gap"] = gap
 
         block = asof_block(src)
+        charts = {
+            "theta": theta_series(src),
+            "tao": [v for _d, v in vitals_series(src, "tao_usd")],
+            "shares": share_distribution(src),
+        }
+        if lead:
+            charts["mover"] = dict(
+                lead, series=netuid_series(src, lead["netuid"],
+                                           lead["column"]))
     finally:
         src.close()
 
+    sections["attention_groups"] = group_attention(
+        sections.get("attention") or [])
     return {"asof_time": now.strftime("%Y-%m-%d %H:%M UTC"),
             "asof_block": block, "first_edition": first_edition,
-            "window_start": start, "sections": sections, "figures": figures}
+            "window_start": start, "sections": sections, "figures": figures,
+            "charts": charts, "lede": _lede(sections, figures, charts),
+            "prev_theta": prev.get("theta")}
+
+
+def _lede(sections: Dict[str, Any], figures: Dict[str, Any],
+          charts: Dict[str, Any]) -> str:
+    """One sentence naming the largest recorded movement in this edition.
+    Derived from the facts already assembled; it states nothing the page
+    does not also show, and falls back to the quiet case rather than
+    reaching for something to say."""
+    mover = charts.get("mover")
+    if mover:
+        return ("SN%d moved %s on %s in this window."
+                % (mover["netuid"], mover["pct"], mover["kind"]))
+    theta = figures.get("theta")
+    if theta is not None and figures.get("rank") is not None:
+        return ("The bar held at %s and no subnet crossed it."
+                % _num(theta, 5))
+    return "No recorded figure moved in this window."
 
 
 # ---------------------------------------------------------------------------
@@ -644,162 +924,365 @@ def compose(config: Dict[str, Any], state: Optional[sqlite3.Connection],
 # Every interpolated value is escaped.
 # ---------------------------------------------------------------------------
 
+_FONTS = (
+    '<link rel="preconnect" href="https://fonts.googleapis.com">'
+    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+    '<link href="https://fonts.googleapis.com/css2?'
+    'family=Inter:wght@400;500;600;700&'
+    'family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">'
+)
+
 _CSS = """
-    :root {
-      --bg: #0e1114;
-      --fg: #e6e8eb;
-      --muted: #8b939c;
-      --line: #2a3036;
-      --accent: #c4b48a;
-    }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; background: var(--bg); color: var(--fg); }
-    body {
-      min-height: 100vh;
-      font: 15px/1.45 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, monospace;
-      padding: 28px 22px 48px;
-    }
-    header {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: baseline;
-      gap: 12px 24px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--line);
-    }
-    h1 {
-      margin: 0;
-      font-size: 13px;
-      letter-spacing: 0.18em;
-      font-weight: 700;
-    }
-    .tag { color: var(--muted); font-size: 12px; }
-    .asof { color: var(--muted); font-size: 12px; margin-left: auto; }
-    main { max-width: 52rem; padding-top: 28px; }
-    section { margin: 0 0 2em; }
-    h2 {
-      margin: 0 0 0.55em;
-      font-size: 13px;
-      letter-spacing: 0.12em;
-      font-weight: 700;
-    }
-    h3 {
-      margin: 1.1em 0 0.45em;
-      font-size: 12px;
-      letter-spacing: 0.08em;
-      font-weight: 700;
-      color: var(--muted);
-    }
-    p { margin: 0 0 1em; color: var(--muted); }
-    ul { margin: 0 0 1em; padding-left: 1.1em; }
-    li { margin: 0 0 0.3em; }
-    .gap { margin: 0 0 0.6em; }
-    .edition { margin: 0 0 2em; color: var(--accent); }
-    .uid { color: var(--fg); }
-    .nm { color: var(--accent); }
-    footer {
-      margin-top: 48px;
-      padding-top: 16px;
-      border-top: 1px solid var(--line);
-      color: var(--muted);
-      font-size: 12px;
-    }
+:root{
+  --bg:#0b0d10; --s1:#111419; --s2:#161a20; --line:#232830; --hair:#1a1f26;
+  --fg:#eceef1; --fg2:#9aa3ad; --fg3:#646d78;
+  --accent:#c9b98d; --accent-dim:#7a7057; --dn:#e2806c; --up:#74b98a;
+  --r:14px; --pad:40px;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--fg);min-width:1100px;
+  font:400 15.5px/1.6 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1600px 620px at 8% -10%, rgba(201,185,141,.07), transparent 60%);
+}
+.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+.bar{
+  position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:18px;
+  padding:0 var(--pad);height:58px;background:rgba(11,13,16,.82);
+  backdrop-filter:blur(14px);border-bottom:1px solid var(--line);
+}
+h1{margin:0;font-size:13.5px;font-weight:700;letter-spacing:.28em}
+.tagline{color:var(--fg2);font-size:13.5px}
+.asof{
+  font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;
+  margin-left:auto;display:flex;align-items:center;gap:9px;font-size:12.5px;
+  color:var(--fg2);background:var(--s1);border:1px solid var(--line);
+  padding:6px 13px;border-radius:999px;
+}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--up);box-shadow:0 0 0 3px rgba(116,185,138,.14)}
+.hero{
+  display:grid;grid-template-columns:minmax(30ch,0.9fr) 2.1fr;gap:56px;
+  align-items:center;padding:52px var(--pad) 46px;border-bottom:1px solid var(--hair);
+}
+.eyebrow{font-size:11px;letter-spacing:.22em;color:var(--accent-dim);font-weight:600;margin:0 0 14px}
+.lede{margin:0;font-size:clamp(28px,2.5vw,44px);line-height:1.2;font-weight:600;letter-spacing:-.024em}
+.lede em{font-style:normal;color:var(--accent)}
+.edition{margin:16px 0 0;font-size:13px;color:var(--fg3)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.kpi{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);padding:17px 19px 15px}
+.kpi .k{font-size:11.5px;color:var(--fg2);letter-spacing:.04em;text-transform:uppercase}
+.kpi .v{font-size:27px;font-weight:600;letter-spacing:-.022em;margin-top:7px;line-height:1.1}
+.kpi .v small{font-size:14px;color:var(--fg3);font-weight:500}
+.kpi .m{display:flex;gap:7px;align-items:baseline;font-size:12px;color:var(--fg3);margin-top:3px;flex-wrap:wrap}
+.kpi .gap{font-size:13px;color:var(--fg3);margin-top:9px;line-height:1.4}
+.spark{margin-top:11px;display:block}
+.d{font-weight:600} .d.up{color:var(--up)} .d.dn{color:var(--dn)}
+section{padding:44px var(--pad);border-bottom:1px solid var(--hair)}
+section:last-of-type{border-bottom:0}
+.sh{display:flex;align-items:center;gap:10px;margin:0 0 8px}
+.sh svg{flex:none;color:var(--accent)}
+h2{margin:0;font-size:12px;font-weight:600;letter-spacing:.18em;color:var(--fg2);text-transform:uppercase}
+h3{margin:0 0 12px;font-size:11px;font-weight:600;letter-spacing:.2em;color:var(--fg3);text-transform:uppercase}
+.take{margin:0 0 24px;font-size:20px;line-height:1.4;font-weight:500;letter-spacing:-.012em;max-width:78ch}
+.panel{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px}
+.cap{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:16px}
+.cap .t{font-size:13px;font-weight:500}
+.cap .n{font-size:12px;color:var(--fg3)}
+.dist{width:100%;height:210px;display:block}
+.dist .below{fill:#2a313a} .dist .above{fill:#49535f}
+.dist .hi{fill:var(--accent)} .dist .fall{fill:var(--dn)}
+.dist:hover rect{opacity:.4} .dist rect:hover{opacity:1}
+.thresh{stroke:var(--fg2);stroke-width:1}
+.grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;align-items:start}
+.stack{display:flex;flex-direction:column;gap:16px}
+.rows{display:flex;flex-direction:column}
+.r{display:grid;grid-template-columns:9em 1fr auto;gap:20px;align-items:center;
+   padding:13px 0;border-top:1px solid var(--hair)}
+.r:first-child{border-top:0}
+.id{display:flex;flex-direction:column;gap:1px}
+.uid{font-size:14px;font-weight:600}
+.nm{font-size:12px;color:var(--fg2)}
+.why{font-size:14.5px;line-height:1.45}
+.why .q{color:var(--fg3);font-size:12.5px;display:block;margin-top:3px}
+.fig{text-align:right;font-size:20px;font-weight:600;letter-spacing:-.015em}
+.fig .q{display:block;font-size:11px;color:var(--fg3);font-weight:400;margin-top:2px}
+.facts{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}
+.facts li{padding:11px 0;border-top:1px solid var(--hair);font-size:14.5px;line-height:1.5}
+.facts li:first-child{border-top:0}
+.gap{color:var(--fg3);font-size:14px;line-height:1.5;margin:0 0 8px}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{font-size:12px;padding:3px 9px;border-radius:7px;background:var(--s2);
+      border:1px solid var(--line);color:var(--fg2)}
+.chip b{color:var(--fg);font-weight:600}
+.grouphd{font-size:11px;letter-spacing:.14em;color:var(--fg3);margin:0 0 4px;
+         padding-top:4px;text-transform:uppercase}
+.meter{margin-top:14px}
+.mtrack{height:7px;border-radius:99px;background:#232a33;overflow:hidden}
+.mfill{height:100%;background:var(--accent);border-radius:99px}
+.mlab{display:flex;justify-content:space-between;font-size:12px;color:var(--fg3);margin-top:9px}
+footer{padding:34px var(--pad) 54px;color:var(--fg3);font-size:12.5px;display:flex;gap:13px;flex-wrap:wrap}
+.dot{color:var(--line)}
 """
+
+_ICON = {
+    "network": '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" '
+               'stroke="currentColor" stroke-width="1.8" stroke-linecap="round">'
+               '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 '
+               '0 18a14 14 0 0 1 0-18"/></svg>',
+    "movers": '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" '
+              'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" '
+              'stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/>'
+              '<path d="M21 7v5h-5"/></svg>',
+    "mining": '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" '
+              'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" '
+              'stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/>'
+              '<path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>',
+    "attention": '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" '
+                 'stroke="currentColor" stroke-width="1.8" stroke-linecap="round">'
+                 '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1'
+                 'M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>'
+                 '<circle cx="12" cy="12" r="3.2"/></svg>',
+    "code-narrative": '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" '
+                      'stroke="currentColor" stroke-width="1.8" '
+                      'stroke-linecap="round" stroke-linejoin="round">'
+                      '<path d="M8 6l-5 6 5 6M16 6l5 6-5 6"/></svg>',
+}
 
 
 def _esc(value: Any) -> str:
     return html.escape("" if value is None else str(value), quote=True)
 
 
-def _body(items: Sequence[Tuple[str, str]]) -> List[str]:
-    """Facts render as one list; each gap renders as its own line."""
-    out: List[str] = []
-    facts = [text for kind, text in items if kind == "fact"]
-    gaps = [text for kind, text in items if kind == "gap"]
+def _facts_list(items: Sequence[Tuple[str, str]]) -> str:
+    """Facts as a list, each gap as its own line. A section with neither
+    still says so, because an empty landmark is not allowed to be silent."""
+    facts = [t for kind, t in items if kind == "fact"]
+    gaps = [t for kind, t in items if kind == "gap"]
+    out = []
     if facts:
-        out.append("      <ul>")
-        out.extend("        <li>%s</li>" % _esc(text) for text in facts)
-        out.append("      </ul>")
-    for text in gaps:
-        out.append('      <p class="gap">%s</p>' % _esc(text))
+        out.append('<ul class="facts">')
+        out.extend("<li>%s</li>" % _esc(t) for t in facts)
+        out.append("</ul>")
+    out.extend('<p class="gap">%s</p>' % _esc(t) for t in gaps)
     if not out:
-        out.append('      <p class="gap">Missing every input for this '
-                   'section.</p>')
-    return out
+        out.append('<p class="gap">Missing every input for this section.</p>')
+    return "".join(out)
 
 
-def _attention_body(rows: Sequence[Dict[str, Any]],
-                    gap: Optional[str]) -> List[str]:
-    if not rows:
-        return ['      <p class="gap">%s</p>'
-                % _esc(gap or "Missing fleet attention facts.")]
-    out = ["      <ul>"]
-    for row in rows:
-        name = row.get("name")
-        why = row.get("why")
-        out.append(
-            '        <li><span class="uid">SN%s</span> '
-            '<span class="nm">%s</span> %s</li>'
-            % (_esc(row["netuid"]),
-               _esc(name) if name else "name not recorded",
-               _esc(why) if why else "reason not recorded"))
-    out.append("      </ul>")
-    return out
+def _kpi(label: str, value: Optional[str], meta: str = "",
+         extra: str = "", gap: str = "") -> str:
+    """One stat tile. A figure the fact layer withheld (absent, or past its
+    own stale bound) renders the gap by name and no number."""
+    out = ['<div class="kpi"><div class="k">%s</div>' % _esc(label)]
+    if value is None:
+        out.append('<p class="gap">%s</p>' % _esc(gap or "not recorded"))
+    else:
+        out.append('<div class="v mono">%s</div>' % value)
+        if meta:
+            out.append('<div class="m">%s</div>' % meta)
+        out.append(extra)
+    out.append("</div>")
+    return "".join(out)
+
+
+def _section(sid: str, heading: str, take: str, body: str) -> List[str]:
+    return ['<section id="%s">' % sid,
+            '<div class="sh">%s<h2>%s</h2></div>'
+            % (_ICON.get(sid, ""), _esc(heading)),
+            '<p class="take">%s</p>' % _esc(take) if take else "",
+            body, "</section>"]
+
+
+def _hero(edition: Dict[str, Any]) -> str:
+    figures = edition["figures"]
+    charts = edition["charts"]
+    theta = figures.get("theta")
+    usd = figures.get("tao_usd")
+
+    bar_meta = ""
+    delta = _delta_value(theta, edition.get("prev_theta"))
+    if delta:
+        cls = "up" if delta.startswith("+") else "dn"
+        bar_meta = ('<span class="d %s">%s</span><span>since last publish'
+                    '</span>' % (cls, _esc(delta)))
+    elif figures.get("rank") is not None:
+        bar_meta = '<span>rank %s</span>' % _esc(figures["rank"])
+
+    tiles = [
+        _kpi("Emission-gate bar",
+             None if theta is None else _esc(_num(theta, 5)),
+             bar_meta,
+             sparkline(charts.get("theta") or [], fill_id="sparkBar",
+                       label="Emission-gate bar over recent observations"),
+             gap="The bar is not recorded, or is past its stale bound."),
+        _kpi("TAO", None if usd is None else "$" + _esc(_num(usd, 2)),
+             '<span>observed %s</span>' % _esc(figures.get("vitals_date", "")),
+             sparkline(charts.get("tao") or [], stroke="#9aa3ad",
+                       fill_id="sparkTao",
+                       label="TAO in USD over recorded days"),
+             gap="Network vitals are not recorded."),
+        _kpi("Staked",
+             None if figures.get("staked") is None
+             else "%s <small>TAO</small>" % _esc(_grouped(figures["staked"])),
+             '<span class="d">%s%%</span><span>held by subnets</span>'
+             % _esc(_num(figures.get("share_pct"), 2)),
+             meter((figures.get("share_pct") or 0) / 100.0,
+                   "subnets", "root and free"),
+             gap="Stake is not recorded."),
+        _kpi("Runtime spec",
+             None if figures.get("spec") is None else _esc(figures["spec"]),
+             '<span>%s</span>' % _esc(figures.get("release", "release not "
+                                                  "recorded")),
+             '<div class="chips" style="margin-top:18px">%s%s</div>'
+             % ('<span class="chip"><b>%s</b> above the bar</span>'
+                % _esc(figures["above"])
+                if figures.get("above") is not None else "",
+                '<span class="chip"><b>%s</b> side changes</span>'
+                % _esc(figures["side_changes"])
+                if figures.get("side_changes") is not None else ""),
+             gap="The runtime spec is not recorded."),
+    ]
+    edition_note = ('<p class="edition">First edition. No previous publish '
+                    'to compare against, so no figure shows a change.</p>'
+                    if edition["first_edition"] else "")
+    return ('<div class="hero"><div><p class="eyebrow">THIS EDITION</p>'
+            '<p class="lede">%s</p>%s</div><div class="kpis">%s</div></div>'
+            % (_esc(edition["lede"]), edition_note, "".join(tiles)))
+
+
+def _attention_body(edition: Dict[str, Any]) -> str:
+    groups = edition["sections"].get("attention_groups") or []
+    if not groups:
+        return ('<p class="gap">%s</p>'
+                % _esc(edition["sections"].get("attention_gap")
+                       or "Missing fleet attention facts."))
+    panels = []
+    for reason, rows in groups:
+        body = []
+        for row in rows:
+            name = row.get("name")
+            body.append(
+                '<div class="r" style="grid-template-columns:9em 1fr">'
+                '<div class="id"><span class="uid mono">SN%s</span>'
+                '<span class="nm">%s</span></div><div class="why">%s</div>'
+                '</div>'
+                % (_esc(row["netuid"]),
+                   _esc(name) if name else "name not recorded",
+                   _esc(reason)))
+        panels.append('<div class="panel"><p class="grouphd">%s &#183; %d</p>'
+                      '<div class="rows">%s</div></div>'
+                      % (_esc(reason), len(rows), "".join(body)))
+    if len(panels) == 1:
+        return panels[0]
+    return ('<div class="grid">%s<div class="stack">%s</div></div>'
+            % (panels[0], "".join(panels[1:])))
+
+
+def _movers_body(edition: Dict[str, Any]) -> str:
+    charts = edition["charts"]
+    mover = charts.get("mover")
+    items = edition["sections"].get("movers") or []
+    if not mover:
+        return '<div class="panel">%s</div>' % _facts_list(items)
+    cls = "dn" if mover["raw"] < 0 else "up"
+    lead = ('<div class="panel"><div class="r">'
+            '<div class="id"><span class="uid mono">SN%s</span>'
+            '<span class="nm">%s</span></div>'
+            '<div class="why">%s<span class="q mono">%s</span></div>'
+            '<div class="fig mono" style="color:var(--%s)">%s</div></div></div>'
+            % (_esc(mover["netuid"]), _esc(mover["kind"]),
+               sparkline(mover.get("series") or [], width=260, height=58,
+                         stroke="#e2806c" if mover["raw"] < 0 else "#74b98a",
+                         label="SN%s recent readings" % mover["netuid"]),
+               _esc(mover["detail"]), cls, _esc(mover["pct"])))
+    rest = [t for kind, t in items if kind == "fact"
+            and not t.startswith("SN%d " % mover["netuid"])]
+    side = "".join('<div class="panel">%s</div>' % _esc(t) for t in rest)
+    gaps = "".join('<p class="gap">%s</p>' % _esc(t)
+                   for kind, t in items if kind == "gap")
+    return ('<div class="grid">%s<div class="stack">%s</div></div>%s'
+            % (lead, side or '<div class="panel">Nothing else crossed a '
+                             'threshold.</div>', gaps))
 
 
 def render(edition: Dict[str, Any]) -> str:
     sections = edition["sections"]
+    figures = edition["figures"]
     block = edition["asof_block"]
-    asof = "as of %s · block %s" % (
-        edition["asof_time"],
-        block if block is not None else "not recorded")
+    asof = "as of %s \u00b7 block %s" % (
+        edition["asof_time"], block if block is not None else "not recorded")
+
+    dist = distribution_svg(
+        edition["charts"].get("shares") or [], figures.get("rank"),
+        falling=[edition["charts"]["mover"]["netuid"]]
+        if edition["charts"].get("mover") else [])
+    network_body = _facts_list(sections.get("network") or [])
+    if dist:
+        network_body = (
+            '<div class="panel"><div class="cap">'
+            '<div class="t">Demand share across the bar universe</div>'
+            '<div class="n mono">%d subnets &#183; sorted &#183; log scale'
+            '</div></div>%s</div>'
+            '<div style="margin-top:16px">%s</div>'
+            % (len(edition["charts"]["shares"]), dist, network_body))
+
+    ranked = figures.get("mining_ranked")
+    observed = figures.get("mining_observed")
+    if ranked is not None and observed:
+        head = figures.get("mining_head")
+        mining_body = (
+            '<div class="grid"><div class="panel"><div class="cap" '
+            'style="margin:0"><div class="t">Ranked of observed</div>'
+            '<div class="n mono">%s / %s</div></div>%s</div>'
+            '<div class="panel"><div class="k" style="font-size:11.5px;'
+            'color:var(--fg2);letter-spacing:.04em;text-transform:uppercase">'
+            'Board head</div><div class="v mono" style="font-size:27px;'
+            'font-weight:600;margin-top:7px">%s</div>'
+            '<div style="font-size:13px;color:var(--accent);margin-top:2px">'
+            '%s</div></div></div>'
+            % (_esc(ranked), _esc(observed),
+               meter(ranked / float(observed), "%s ranked" % _esc(ranked),
+                     "%s cut" % _esc(observed - ranked)),
+               "SN%s" % _esc(head) if head is not None else "not recorded",
+               _esc(figures.get("mining_head_name") or "name not recorded")))
+    else:
+        mining_body = '<div class="panel">%s</div>' % _facts_list(
+            sections.get("mining") or [])
 
     out: List[str] = [
-        "<!DOCTYPE html>",
-        '<html lang="en">',
-        "<head>",
-        '  <meta charset="utf-8">',
-        '  <meta name="viewport" content="width=device-width, '
-        'initial-scale=1">',
-        "  <title>shinogi</title>",
-        '  <meta name="description" content="A lean read on Bittensor '
-        'subnets.">',
-        "  <style>" + _CSS + "  </style>",
-        "</head>",
-        "<body>",
-        "  <header>",
-        "    <h1>SHINOGI</h1>",
-        '    <div class="tag">%s</div>' % _esc(TAGLINE),
-        '    <div class="asof">%s</div>' % _esc(asof),
-        "  </header>",
-        "  <main>",
+        "<!DOCTYPE html>", '<html lang="en">', "<head>",
+        '<meta charset="utf-8">',
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        "<title>shinogi</title>",
+        '<meta name="description" content="A lean read on Bittensor subnets.">',
+        _FONTS,
+        "<style>" + _CSS + "</style>",
+        "</head>", "<body>",
+        '<div class="bar"><h1>SHINOGI</h1>'
+        '<div class="tagline">%s</div>'
+        '<div class="asof"><span class="pulse"></span>%s</div></div>'
+        % (_esc(TAGLINE), _esc(asof)),
+        _hero(edition),
     ]
-    if edition["first_edition"]:
-        out.append('    <p class="edition">First edition. No previous '
-                   'publish to compare against, so no figure shows a '
-                   'change.</p>')
-    for sid, heading in SECTION_ORDER:
-        out.append('    <section id="%s">' % sid)
-        out.append("      <h2>%s</h2>" % _esc(heading))
-        if sid == "attention":
-            out.extend(_attention_body(sections.get("attention") or [],
-                                       sections.get("attention_gap")))
-        elif sid == "code-narrative":
-            out.append("      <h3>Code</h3>")
-            out.extend(_body(sections.get("code") or []))
-            out.append("      <h3>Narrative</h3>")
-            out.extend(_body(sections.get("narrative") or []))
-        else:
-            key = {"network": "network", "movers": "movers",
-                   "mining": "mining"}[sid]
-            out.extend(_body(sections.get(key) or []))
-        out.append("    </section>")
-    out.extend(["  </main>",
-                "  <footer>%s</footer>" % _esc(FOOTER),
-                "</body>",
-                "</html>",
-                ""])
-    return "\n".join(out)
+    out += _section("network", "Network", "", network_body)
+    out += _section("movers", "Subnet movers", "", _movers_body(edition))
+    out += _section("mining", "Mining", "", mining_body)
+    out += _section("attention", "Attention", "", _attention_body(edition))
+    out += ['<section id="code-narrative">',
+            '<div class="sh">%s<h2>Code / narrative</h2></div>'
+            % _ICON["code-narrative"],
+            '<div class="grid"><div><h3>Code</h3>'
+            '<div class="panel">%s</div></div>'
+            '<div><h3>Narrative</h3><div class="panel">%s</div></div></div>'
+            % (_facts_list(sections.get("code") or []),
+               _facts_list(sections.get("narrative") or [])),
+            "</section>"]
+    out += ["<footer><span>shinogi.dev</span><span class=\"dot\">&#183;</span>"
+            "<span>public read-only</span><span class=\"dot\">&#183;</span>"
+            "<span>data from Atlas</span><span class=\"dot\">&#183;</span>"
+            "<span>every figure traces to a recorded row</span></footer>",
+            "</body>", "</html>", ""]
+    return "\n".join(x for x in out if x)
 
 
 # ---------------------------------------------------------------------------
@@ -847,10 +1330,15 @@ _LEAK_PATTERNS: Tuple[Tuple[str, str], ...] = (
 )
 
 # The page contract's self-contained rules.
-_ASSET_TOKENS: Tuple[str, ...] = (
-    "<script", "XMLHttpRequest", "fetch(", "@import", 'rel="stylesheet"',
-    "rel='stylesheet'", 'href="http', "href='http", 'src="http', "src='http",
+# What must never reach the page. Presentation may load a typeface and run
+# script; pulling a reported figure in the browser may not, because Atlas is
+# the only writer and the page must read with scripting off.
+_DATA_FETCH_TOKENS: Tuple[str, ...] = (
+    "XMLHttpRequest", "fetch(", "EventSource", "new WebSocket",
+    "navigator.sendBeacon", "@import",
 )
+
+_FONT_HOSTS: Tuple[str, ...] = ("fonts.googleapis.com", "fonts.gstatic.com")
 
 
 def scan(document: str) -> List[str]:
@@ -864,9 +1352,22 @@ def scan(document: str) -> List[str]:
         match = re.search(pattern, document)
         if match is not None:
             found.append("%s %r" % (label, match.group(0)))
-    for token in _ASSET_TOKENS:
+    for token in _DATA_FETCH_TOKENS:
         if token.lower() in lowered:
-            found.append("external or scripted asset %r" % token)
+            found.append("browser data fetch %r" % token)
+    for url in re.findall(r'(?:href|src)="(https?://[^"]+)"', document):
+        if not any(host in url for host in _FONT_HOSTS):
+            found.append("external asset that is not a typeface %r" % url)
+    if re.search(r'<script[^>]*\ssrc=', document, re.I):
+        found.append("external script")
+    for tag in re.findall(r'<link[^>]*>', document, re.I):
+        if "stylesheet" not in tag.lower():
+            continue
+        href = re.search(r'href="([^"]*)"', tag)
+        target = href.group(1) if href else ""
+        if not any(host in target for host in _FONT_HOSTS):
+            found.append("stylesheet that is not a typeface source %r"
+                         % target)
     return found
 
 
