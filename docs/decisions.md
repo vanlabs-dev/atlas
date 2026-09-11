@@ -502,8 +502,13 @@ registry rather than escaping it.
 
 ## Still open
 
-**Gate calibration read (~2026-08-11) — carry these into it.** Three
-findings from the 2026-08-06 drift work change what the read is looking at:
+**Gate calibration read: CLOSED 2026-09-11** with the `pulse-briefing`
+acceptance (task 6.5, recorded above): 3 instant-tier events in the week,
+verdicts over 30 days high 66 / med 61 / none 50 / low 26 / unjudged 2,
+hovering SN34. `rotation-signal-gate` then made the tuning question mostly
+moot by gating a crossing on a 48h durability window rather than on
+`hysteresis_pct` alone. The three findings below are retained because they
+still bound any future read of this data:
 
 - **Events 1–26 predate bar-mode and `prev_theta` tracking.** They render
   without a mode or an attribution, and cannot be re-analysed for
