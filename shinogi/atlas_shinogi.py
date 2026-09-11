@@ -1451,6 +1451,32 @@ def publish(config: Dict[str, Any], document: str) -> Dict[str, Any]:
         raise ShinogiError("shinogi checkout %s is dirty; refusing to write "
                            "over uncommitted work" % checkout)
 
+    # Anyone may commit to the shinogi repo directly (the contract and its
+    # test live there). A checkout left behind origin would have its push
+    # rejected, and an unattended timer cannot resolve that, so sync first.
+    # Fast-forward only: a diverged checkout is an operator problem, not
+    # something this pass may paper over with a merge.
+    branch = config.get("branch", "main")
+    code, out, err = _git(checkout, "fetch", "--quiet", "origin", branch)
+    if code != 0:
+        raise ShinogiError("cannot reach origin/%s: %s"
+                           % (branch, err.strip() or out.strip()))
+    code, counts, _err = _git(checkout, "rev-list", "--left-right",
+                              "--count", "HEAD...FETCH_HEAD")
+    if code == 0 and counts.split():
+        ahead, behind = (int(x) for x in counts.split())
+        if behind and ahead:
+            raise ShinogiError(
+                "shinogi checkout has diverged from origin/%s (%d ahead, "
+                "%d behind); refusing to publish over it" % (branch, ahead,
+                                                             behind))
+        if behind:
+            code, out, err = _git(checkout, "merge", "--ff-only",
+                                  "FETCH_HEAD")
+            if code != 0:
+                raise ShinogiError("cannot fast-forward to origin/%s: %s"
+                                   % (branch, err.strip() or out.strip()))
+
     code, committed, _err = _git(checkout, "show", "HEAD:%s" % page)
     if code == 0 and fact_digest(committed) == fact_digest(document):
         return {"changed": False, "sha256": digest, "path": target,
@@ -1470,14 +1496,12 @@ def publish(config: Dict[str, Any], document: str) -> Dict[str, Any]:
 
     # A failed push leaves the local commit in place and the last deploy
     # live. Recovering it is the operator's call; this does not reset.
-    code, out, err = _git(checkout, "push", "origin",
-                          config.get("branch", "main"))
+    code, out, err = _git(checkout, "push", "origin", branch)
     if code != 0:
         raise ShinogiError(
-            "cannot push to origin/%s: %s. The device holds no write "
-            "credential for this remote, so the commit is local and "
+            "cannot push to origin/%s: %s. The commit is local and "
             "recoverable; nothing was reset."
-            % (config.get("branch", "main"), err.strip() or out.strip()))
+            % (branch, err.strip() or out.strip()))
     return {"changed": True, "sha256": digest, "path": target, "pushed": True}
 
 
