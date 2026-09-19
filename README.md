@@ -266,10 +266,11 @@ Worth taking, not blocking:
   It was confirmed early on a two-day window (about 1.5 pages a day against
   a 6.6 baseline) because the signal was unambiguous. The full week is still
   the honest read.
-- **`network-drift-455` is implemented off-device.** Corpus is grounded at
-  spec 455. Remaining: `git pull` on the Pi, first gate pass seeds the
-  switch with no alert, corpus ingest + on-device battery, board ranked
-  count unchanged by the rename, one synthetic collapsed render.
+- **`network-drift-455` is deployed; the retrieval battery is blocked.**
+  Watch seeded at block 9104227 with no alert. Corpus run
+  `20260919T211016Z-89b50d9b` is active. Re-run the 35-exchange battery
+  once Hermes is off the 429 limit (current model is `gpt-6-astra`, not
+  the validated `grok-4.5`).
 
 **Phase 6** (monitoring frontend) follows. Its §21 blocking questions stay
 open: Q36 access location, Q37 auth, Q38 LAN HTTPS/certs, Q39 first-screen

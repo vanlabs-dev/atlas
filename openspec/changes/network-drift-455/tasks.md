@@ -102,11 +102,11 @@
 
 - [x] 7.1 All suites green off-device: `livedata`, `telegram`, `fleet`,
       `knowledge`, `shinogi`.
-- [ ] 7.2 `git pull` on the Pi; confirm the next gate pass seeds the switch
+- [x] 7.2 `git pull` on the Pi; confirm the next gate pass seeds the switch
       across every subnet with no alert and no health event.
 - [ ] 7.3 Ingest and activate the new corpus run; run the battery on the
       device and accept it.
-- [ ] 7.4 Confirm the board's ranked count is unchanged by the rename alone,
+- [x] 7.4 Confirm the board's ranked count is unchanged by the rename alone,
       and that it now carries the switch reference block.
 - [ ] 7.5 Inspect one synthetic collapsed render on the device before a real
       transition arrives, then record the acceptance entry in
