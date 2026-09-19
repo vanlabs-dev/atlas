@@ -83,6 +83,7 @@ first use in a message, bare after):
 | `curated root flow` | root dividends being redirected by validator weight vectors |
 | `durability window` | the wait before a bar crossing counts as settled |
 | `shadow` | recorded and measured, deliberately not sent |
+| `pool-side emission switch` | root switch over TAO injection; alpha distribution continues |
 
 Banned words are banned as symbols too. Write the emission gate as
 `gate(s) = s^h / (s^h + bar^h)`. A formula is prose here: a banned word

@@ -95,13 +95,16 @@ def add_crossing(path, netuid, direction, share, theta, prev_theta):
 
 
 def add_param_event(path, item, prev_value, new_value,
-                    prev_prov="assumed-default", new_prov="explicit"):
+                    prev_prov="assumed-default", new_prov="explicit",
+                    block=8766216, netuid=None):
+    if netuid is not None:
+        item = "%s[%d]" % (item, netuid)
     conn = sqlite3.connect(path)
     cursor = conn.execute(
         "INSERT INTO chain_param_events (item, prev_value, new_value, "
         "prev_provenance, new_provenance, observed_at, block_number) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (item, prev_value, new_value, prev_prov, new_prov, _iso(), 8766216))
+        (item, prev_value, new_value, prev_prov, new_prov, _iso(), block))
     row_id = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -192,7 +195,10 @@ class ChainParameterClassTests(_Base):
             "enabled": True, "source_db": self.live_db,
             "governs": {
                 "RootWeightSettingEnabled": "Root Reborn curation switch",
-                "EmissionBarRank": "bar selection <rank & mode>"},
+                "EmissionBarRank": "bar selection <rank & mode>",
+                "SubnetEmissionEnabled":
+                    "per-subnet root switch over TAO injection",
+                "CollateralLockShare": "registration collateral lock share"},
         }
 
     def ctx(self):
@@ -271,6 +277,87 @@ class ChainParameterClassTests(_Base):
 
     def test_registered_in_the_adapter_table(self):
         self.assertIn("chain-parameter-change", tg._ADAPTERS)
+
+    def test_same_block_batch_is_one_page_with_member_ids(self):
+        netuids = list(range(1, 50))
+        ids = [add_param_event(self.live_db, "SubnetEmissionEnabled",
+                               "false", "true", block=9029889, netuid=n)
+               for n in netuids]
+        events, _wm = self.events()
+        self.assertEqual(len(events), 1)
+        text = events[0]["text"]
+        self.assertIn("49 subnets", text)
+        self.assertIn("false to true", text)
+        self.assertIn("pool-side emission switch", text)
+        self.assertIn("alpha distribution continues", text)
+        self.assertIn("TAO injection", text)
+        self.assertNotIn("emission gate", text)
+        self.assertEqual(events[0]["member_ids"],
+                         ["chain-parameter-change:%d" % i for i in ids])
+        self.assertEqual(events[0]["event_id"],
+                         "chain-parameter-change:%d" % ids[0])
+
+    def test_two_items_at_one_block_are_two_pages(self):
+        add_param_event(self.live_db, "SubnetEmissionEnabled",
+                        "false", "true", block=100, netuid=1)
+        add_param_event(self.live_db, "CollateralLockShare",
+                        "0", "100", block=100, netuid=1)
+        events, _wm = self.events()
+        self.assertEqual(len(events), 2)
+        items = " ".join(e["text"] for e in events)
+        self.assertIn("SubnetEmissionEnabled", items)
+        self.assertIn("CollateralLockShare", items)
+
+    def test_one_item_at_two_blocks_is_two_pages(self):
+        add_param_event(self.live_db, "SubnetEmissionEnabled",
+                        "false", "true", block=100, netuid=1)
+        add_param_event(self.live_db, "SubnetEmissionEnabled",
+                        "true", "false", block=200, netuid=1)
+        events, _wm = self.events()
+        self.assertEqual(len(events), 2)
+
+    def test_truncation_states_the_full_count(self):
+        for n in range(1, 50):
+            add_param_event(self.live_db, "SubnetEmissionEnabled",
+                            "false", "true", block=1, netuid=n)
+        events, _wm = self.events()
+        text = events[0]["text"]
+        self.assertIn("49 subnets", text)
+        # Force a tiny budget so the list must shrink.
+        self.config["message_max_chars"] = 900
+        events, _wm = self.events()
+        html = events[0]["html"]
+        self.assertLessEqual(len(html), 900)
+        self.assertIn("49 subnets", events[0]["text"])
+        self.assertIn("…", html)
+
+    def test_collapsed_batch_ledgers_every_row(self):
+        netuids = list(range(1, 50))
+        ids = [add_param_event(self.live_db, "SubnetEmissionEnabled",
+                               "false", "true", block=9029889, netuid=n)
+               for n in netuids]
+        self.config["classes"]["chain-parameter-change"] = {
+            "enabled": True, "tier": "instant",
+            "source_db": self.live_db, "governs": self.spec["governs"]}
+        posts = []
+        tg.notify_scan(self.config, "tok", "42", self.store,
+                       poster=lambda u, d, t: (posts.append(d), (200, "ok"))[1])
+        self.assertEqual(len(posts), 1)
+        rows = self.store.execute(
+            "SELECT event_id FROM events WHERE event_class = "
+            "'chain-parameter-change' ORDER BY event_id").fetchall()
+        self.assertEqual(len(rows), 49)
+        expected = {"chain-parameter-change:%d" % i for i in ids}
+        self.assertEqual({r[0] for r in rows}, expected)
+
+    def test_global_items_stay_one_page_each(self):
+        add_param_event(self.live_db, "RootWeightSettingEnabled",
+                        "false", "true", block=100)
+        add_param_event(self.live_db, "RootWeightSettingEnabled",
+                        "true", "false", block=100)
+        events, _wm = self.events()
+        self.assertEqual(len(events), 2)
+        self.assertNotIn("member_ids", events[0])
 
 
 if __name__ == "__main__":

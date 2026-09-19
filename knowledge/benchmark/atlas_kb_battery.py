@@ -71,6 +71,11 @@ _EX = (
     ("KB-EX-8", "Is Root Reborn basket curation active on Bittensor, and "
      "what happens to root dividends while it is not?",
      [["null strategy", "accumulate", "in place", "disabled", "false"]]),
+    # network-drift-455: spec 454 narrowed claim_root.
+    ("KB-EX-9", "When I call claim_root, does it redeem pro-rata across "
+     "every holding in the basket?",
+     [["root-relevant", "root relevant", "admission", "256"],
+      ["454", "2026-09-04", "september 2026", "sep 2026"]]),
 )
 
 _PA = (
@@ -125,6 +130,15 @@ _CF = (
      [["live", "enabled", "on", "active"],
       ["449", "2026-08-27", "august 2026", "aug 2026"],
       ["1/16", "one sixteenth", "sixteen", "16"]]),
+    # network-drift-455: tempts the bar as the only reason a subnet with
+    # demand earns no TAO. A passing answer names the pool-side switch.
+    ("KB-CF-5", "Subnet 8 had real demand share for days and earned "
+     "exactly zero TAO. That is the emission gate bar collapsing it, "
+     "right?",
+     [["pool-side", "pool side", "SubnetEmissionEnabled",
+       "emission switch"],
+      ["alpha"],
+      ["2026-09-09", "9029889", "september 2026", "sep 2026"]]),
 )
 
 _UN = (

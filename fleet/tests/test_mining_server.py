@@ -82,6 +82,7 @@ class TestBoard(MiningServerBase):
         out = self.store.mining_board(10, False)
         self.assertEqual({r["netuid"] for r in out["ranked"]}, {1, 8})
         self.assertEqual(out["cut_summary"], {mine.CUT_BURN: 1})
+        self.assertEqual(out["switch_block_ref"], 8789861)
 
     def test_board_carries_both_timestamps(self):
         self.seed()

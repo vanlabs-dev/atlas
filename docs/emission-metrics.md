@@ -106,6 +106,36 @@ Conversion formulas are in §2.1 — derive in alpha, convert last.
 
 ---
 
+## 2.1 The bar is read, not computed (2026-09-11)
+
+Atlas does not compute `EmissionGateBar` (theta). It reads it from chain
+storage on a pinned key that re-derives as
+`twox128("SubtensorModule") ++ twox128(item)`. What Atlas computes is the
+demand share it compares against theta:
+`moving_price x (1 - miner_burn)`, normalized over the TaoSwap panel's
+non-root set.
+
+Measured at block 9041640: the 32nd-largest share was `0.0086453632`
+against a chain theta of `0.0086161991`, **+0.34%**, with exactly 32
+subnets at or above the bar. Dropping the miner-burn factor gives -15.54%
+and 27 above, so the coupling is load-bearing and correct.
+
+The chain's own `get_subnets_to_emit_to` is narrower than that panel set.
+It also requires a recorded `FirstEmissionBlockNumber`, `SubtokenEnabled`
+true, and network registration allowed. Atlas normalises over every
+non-root priced panel subnet, which at the measurement included SN59,
+SN76 and SN86, none of which the chain emits to. Their shares sit inside
+the +0.34% residual. The difference is accepted, not unknown: the rank
+cross-check is the standing measure of whether it has grown material. A
+divergence beyond tolerance is a possible universe divergence, not only
+a panel fault.
+
+Including subnets whose pool-side emission switch is off is correct: the
+chain selects the bar over the share distribution first and applies that
+switch afterwards.
+
+---
+
 ## 3. `emission_miner_burn`
 
 **Unit: percent, 0–100.** Not a fraction. Verified: 75 of 129 values exceed 1.0;

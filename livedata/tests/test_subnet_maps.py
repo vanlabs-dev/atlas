@@ -179,6 +179,12 @@ class Codecs(unittest.TestCase):
         self.assertEqual(al.decode_by_codec("vec_u16", vec_u16_hex([1])), [1])
         self.assertEqual(
             al.decode_by_codec("identity_name", identity_hex("Apex")), "Apex")
+        self.assertIs(al.decode_by_codec("bool", "0x01"), True)
+        self.assertIs(al.decode_by_codec("bool", "0x00"), False)
+
+    def test_bool_map_codec_rejects_neither_encoding(self):
+        with self.assertRaises(ValueError):
+            al.decode_by_codec("bool", "0x02")
 
     def test_identity_map_is_read_at_the_same_block_as_the_rest(self):
         self.assertEqual(al.SUBNET_MAP_ITEMS["SubnetIdentitiesV3"],
@@ -237,16 +243,21 @@ def _key_for(item, netuid):
     return al.storage_key_identity_u16(al.SUBTENSOR_PALLET, item, netuid)
 
 
+def bool_hex(value):
+    return "0x01" if value else "0x00"
+
+
 class FakeChain:
     """Stub RPC serving derived keys, so the tests exercise the real
     derivation rather than a hand-written key table."""
 
     def __init__(self, tables, block="0xabc", number=8789861,
-                 fail_method=None):
+                 fail_method=None, drop_query_item=None):
         self.tables = tables
         self.block = block
         self.number = number
         self.fail_method = fail_method
+        self.drop_query_item = drop_query_item
         self.calls = []
 
     def __call__(self, method, params):
@@ -271,6 +282,8 @@ class FakeChain:
             wanted = set(params[0])
             changes = []
             for item, rows in self.tables.items():
+                if item == self.drop_query_item:
+                    continue
                 for netuid, payload in rows.items():
                     key = _key_for(item, netuid)
                     if key in wanted:
@@ -281,7 +294,7 @@ class FakeChain:
 
 
 def tables(burn=None, network_n=None, incentive=None, collateral=None,
-           identity=None):
+           identity=None, emission=None):
     return {
         "MinerBurned": burn if burn is not None else {
             1: u96f32_hex(0.3456), 8: u96f32_hex(0.0)},
@@ -293,6 +306,8 @@ def tables(burn=None, network_n=None, incentive=None, collateral=None,
         "SubnetIdentitiesV3": identity if identity is not None else {
             1: identity_hex("Apex", "https://github.com/macrocosm-os/apex"),
             8: identity_hex("deprecated", "")},
+        "SubnetEmissionEnabled": emission if emission is not None else {
+            1: bool_hex(True), 8: bool_hex(True)},
     }
 
 
@@ -310,6 +325,9 @@ class ReadSubnetMaps(unittest.TestCase):
         self.assertEqual(out["values"]["Incentive"][1], [100, 0, 50, 0])
         self.assertEqual(out["values"]["SubnetIdentitiesV3"][1], "Apex")
         self.assertEqual(out["values"]["SubnetIdentitiesV3"][8], "deprecated")
+        self.assertIs(out["values"]["SubnetEmissionEnabled"][1], True)
+        self.assertIs(out["values"]["SubnetEmissionEnabled"][8], True)
+        self.assertEqual(out.get("failed_items"), {})
 
     def test_every_value_shares_one_block(self):
         rpc = FakeChain(tables())
@@ -380,6 +398,38 @@ class ReadSubnetMaps(unittest.TestCase):
         with self.assertRaises(al.FatalLiveError):
             al.read_subnet_maps(bad, rpc=rpc)
         self.assertEqual(rpc.calls, [])
+
+    def test_absent_switch_entry_is_missing_not_failed(self):
+        """A subnet with no SubnetEmissionEnabled key is off-by-default at
+        the watch layer; the map read itself just omits it."""
+        rpc = FakeChain(tables(emission={1: bool_hex(True)}))
+        out = al.read_subnet_maps(CONFIG, rpc=rpc)
+        self.assertTrue(out["ok"])
+        self.assertIs(out["values"]["SubnetEmissionEnabled"][1], True)
+        self.assertNotIn(8, out["values"]["SubnetEmissionEnabled"])
+        self.assertNotIn("SubnetEmissionEnabled", out.get("failures") or {})
+        self.assertEqual(out.get("failed_items"), {})
+
+    def test_empty_switch_batch_fails_the_item_not_the_read(self):
+        rpc = FakeChain(tables(emission={}))
+        out = al.read_subnet_maps(CONFIG, rpc=rpc)
+        self.assertTrue(out["ok"])
+        self.assertIn("SubnetEmissionEnabled", out["empty_items"])
+        self.assertEqual(out["failed_items"]["SubnetEmissionEnabled"],
+                         "empty batch")
+        self.assertEqual(out["values"]["SubnetEmissionEnabled"], {})
+        self.assertIn(1, out["values"]["MinerBurned"])
+        self.assertIn(1, out["values"]["SubnetworkN"])
+
+    def test_short_switch_batch_fails_the_item_not_the_read(self):
+        rpc = FakeChain(tables(), drop_query_item="SubnetEmissionEnabled")
+        out = al.read_subnet_maps(CONFIG, rpc=rpc)
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["failed_items"]["SubnetEmissionEnabled"],
+                         "short batch")
+        self.assertEqual(out["values"]["SubnetEmissionEnabled"], {})
+        self.assertIn(1, out["values"]["MinerBurned"])
+        self.assertIn("CollateralLockShare", out["empty_items"])
 
 
 if __name__ == "__main__":

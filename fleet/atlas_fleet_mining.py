@@ -26,8 +26,9 @@ What the economics actually turn on, verified on-device 2026-08-07:
   only single digits of UIDs earn anything, so a pool-divided-by-field
   average is meaningless and is never produced. Concentration is reported
   instead.
-- A gate-disabled subnet still pays its miners alpha; it loses the TAO
-  inflow backing it. Cut for a decaying price, not for absent payment.
+- A subnet with the pool-side emission switch off still pays its miners
+  alpha; it loses the TAO inflow backing it. Cut for a decaying price,
+  not for absent payment, and not because of the emission-gate bar.
 
 Invariants inherited from the fleet: read-only over clones, never builds or
 executes subnet code, additive tables in the shared fleet store, per-subnet
@@ -78,7 +79,7 @@ CONF_CHAIN_UNAVAILABLE = "chain-unavailable"
 CONF_INCOMPLETE = "incomplete-inputs"
 
 # Cut ladder rungs, in application order.
-CUT_GATE = "gate-disabled"
+CUT_GATE = "pool-side-switch-off"
 CUT_IDENTITY = "identity-placeholder"
 CUT_BURN = "owner-capture"
 CUT_CONCENTRATION = "winner-take-all"
@@ -438,8 +439,8 @@ def classify_cut(cfg: Dict[str, Any], row: Dict[str, Any],
     """
     if row.get("gate_state") == "disabled":
         return (CUT_GATE,
-                "emission gate disabled: alpha is still distributed to "
-                "miners but no TAO inflow backs it, so the alpha price "
+                "pool-side emission switch off: alpha is still distributed "
+                "to miners but no TAO inflow backs it, so the alpha price "
                 "decays and TAO income tends to zero")
     identity = row.get("identity_state")
     if identity == IDENT_PLACEHOLDER:
@@ -530,19 +531,22 @@ def collect_inputs(config: Dict[str, Any], live: Optional[Any] = None,
             chain = live.read_subnet_maps(live_config)
         gate_sides = _gate_states(live, connection)
 
-        # Hand the already-read collateral map to the watch. No extra call.
+        # Hand the already-read maps to the watches. No extra call.
         if chain.get("ok"):
             netuids = sorted(chain["values"].get("SubnetworkN", {}).keys())
-            try:
-                live.run_subnet_param_watch(
-                    connection, live_config, "CollateralLockShare", netuids,
-                    chain["values"].get("CollateralLockShare", {}),
-                    failures=(chain.get("failures") or {}).get(
-                        "CollateralLockShare"),
-                    block_hash=chain.get("block_hash"),
-                    block_number=chain.get("block_number"))
-            except Exception:  # noqa: BLE001 — watch never fails the screen
-                pass
+            failed_items = chain.get("failed_items") or {}
+            for item in ("CollateralLockShare", "SubnetEmissionEnabled"):
+                if item in failed_items:
+                    continue
+                try:
+                    live.run_subnet_param_watch(
+                        connection, live_config, item, netuids,
+                        chain["values"].get(item, {}),
+                        failures=(chain.get("failures") or {}).get(item),
+                        block_hash=chain.get("block_hash"),
+                        block_number=chain.get("block_number"))
+                except Exception:  # noqa: BLE001 — watch never fails the screen
+                    pass
     finally:
         connection.close()
     return {"panel": panel, "chain": chain, "gate_sides": gate_sides}
@@ -1060,6 +1064,7 @@ def report(connection: sqlite3.Connection, config: Dict[str, Any],
         "counts": {"observed": len(rows), "ranked": len(ranked),
                    "cut": len(cut)},
         "cut_summary": _cut_summary(cut),
+        "switch_block_ref": rows[0]["block_ref"] if rows else None,
         "ranked": ranked[:limit],
     }
     if include_cut:
@@ -1180,7 +1185,7 @@ def render_html(view: Dict[str, Any]) -> str:
         "<title>Atlas mining triage</title><style>%s</style></head><body>"
         "<h1>Mining triage</h1>"
         "<div class=\"sub\">economics observed %s &middot; feasibility "
-        "scanned %s &middot; %s<br>%s<br>"
+        "scanned %s &middot; %s &middot; switch at block %s<br>%s<br>"
         "alpha distributed per block is a protocol constant, so ranking is "
         "driven by price, owner capture, and concentration, never by "
         "emission quantity<br>"
@@ -1203,7 +1208,10 @@ def render_html(view: Dict[str, Any]) -> str:
         "<div class=\"note\">%s</div></body></html>"
         % (_CSS,
            _esc(view.get("econ_ts")), _esc(view.get("feasibility_ts")),
-           band_note, _esc(view.get("miner_share_source") or ""),
+           band_note,
+           _esc(view.get("switch_block_ref") if view.get("switch_block_ref")
+                is not None else "n/a"),
+           _esc(view.get("miner_share_source") or ""),
            "".join(rows) or "<tr><td colspan=\"12\" class=\"note\">"
                             "no observations yet</td></tr>",
            view.get("counts", {}).get("observed", 0),
