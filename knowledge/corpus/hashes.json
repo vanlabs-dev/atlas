@@ -3,8 +3,8 @@
   "sync_date": "2026-09-20",
   "coverage_date": "2026-09-20",
   "files": {
-    "ground-truth.md": "107dbc343d58c334509da7ee06975d7ba46a953289ffb2d4f5fefa3f33b75b5f",
-    "fact-patterns.md": "ba1de2e8d6bdad5427d1ba6b085506063f42425beda8332d07d2b5b65a43ab76",
+    "ground-truth.md": "e57840e208314bfcf00163ed5cba750a169cb49f73e79b2ff09a73af25d1284a",
+    "fact-patterns.md": "8ff54642ee5d0b611b64504296a10fa71c162b962c6d962ff7eebd8e3bfa2614",
     "negative-claim-rules.md": "c7922e471e7cae16e31b09128b802704fbc11dd6561ca8a65efc2f351da6f941"
   },
   "note": "sha256 over newline-normalized (LF) bytes; see load_corpus"

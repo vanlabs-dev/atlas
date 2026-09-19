@@ -52,7 +52,7 @@ Pattern: a subnet with real demand (nonzero moving price, nonzero demand share) 
 
 **Check**: the bar is a continuous Hill function of demand share. The pool-side emission switch is a binary root-settable per-netuid bool. The chain draws the bar first, then zeroes TAO for subnets whose switch is off and redistributes that TAO to the rest. Alpha distribution continues either way. A subnet can sit above the bar and still earn no TAO.
 
-Fix: name the pool-side emission switch (dated: the 2026-09-09 flip at block 9029889 is the worked example). Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
+Fix: name the pool-side emission switch (`SubnetEmissionEnabled`). Live off set (2026-09-20, spec 467): netuids 29, 35, 36. Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
 
 ### 5. Validators mine
 Pattern: "validators mine/mining/produce work"
@@ -89,10 +89,10 @@ Pattern: "subnet X's demand rose above the bar" when what actually happened is t
 
 Fix: a rank-pinned bar IS a demand share, so it moves on its own as the distribution shifts, and a subnet can change side with a completely stationary share. Compare the bar to its previous value before attributing a crossing to the subnet. Worked example: the spec-441 bar reset on 2026-08-03 dropped theta about 14.5% in one poll and pushed subnets 49, 67, 79 and 81 above the bar without their shares moving.
 
-### 7f. Root Reborn curation described as dormant, or a specific validator described as curating without evidence
-Pattern: "curation is disabled", "root dividends just accumulate in place", "validators cannot set root weights yet", or "validator X is deploying basket capital" with no weight vector cited.
+### 7f. Root Reborn curation described as live, or a validator described as curating
+Pattern: "curation is on/live/enabled", "`RootWeightSettingEnabled` is true", "validators set root weights", or "validator X is deploying basket capital".
 
-Fix: Curation is LIVE since spec 449 (2026-08-27): `RootWeightSettingEnabled` is true and `set_root_weights` works under a 1/16 `RootWeightsCap` (at least 16 destinations). It is per validator: a fund whose validator has set no vector still runs the null strategy. State the mechanism as live; attribute curation to a specific validator only from its public weight vector. In force since spec 441 and unchanged: only root-registered hotkeys earn root dividends (the remainder is recycled), root unstakes sit behind a hold interval, calls 122/123 are retired.
+Fix: Curation is OFF. `RootWeightSettingEnabled` is false (unset) since spec 464 (2026-09-17, block 9088729). Every fund runs the null strategy: root dividends accumulate in place. Live `Weights[ROOT]` reads are empty. Do not describe a validator as curating. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
 
 ## WARNINGS (verify but don't block)
 

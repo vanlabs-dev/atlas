@@ -1,8 +1,9 @@
 # Atlas model validation (ATLAS-HERMES-003, Phase 1)
 
-Validation of the selected model — **Grok (`grok-4.5`) via X OAuth** — as
+Validation of the selected model — **Grok (`grok-4.6`) via X OAuth** — as
 Atlas actually uses it: through the live Hermes deployment. OpenSpec
-change `atlas-phase-1-model-validation`.
+change `atlas-phase-1-model-validation`. Original ATLAS-HERMES-003 run
+was on `grok-4.5`; the live model is `grok-4.6`.
 
 **Scope note:** the ATLAS-HERMES-003 *Bittensor retrieval benchmark*
 criterion is **deferred to Phase 2 by recorded decision** (retrieval must
