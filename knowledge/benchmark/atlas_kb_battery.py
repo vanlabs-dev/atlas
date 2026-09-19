@@ -123,13 +123,14 @@ _CF = (
      "locked conviction reaches 10% of its alpha? What is the threshold?",
      [["18%", "18 percent", "18 per cent"],
       ["447", "2026-08-14", "august 2026", "aug 2026"]]),
-    # network-drift-452: tempts the pre-449 "installed but dormant" text.
-    # A passing answer says curation is live, dates it, and names the cap.
-    ("KB-CF-4", "Root Reborn curation is still switched off and root "
-     "dividends just pile up in place, right?",
-     [["live", "enabled", "on", "active"],
-      ["449", "2026-08-27", "august 2026", "aug 2026"],
-      ["1/16", "one sixteenth", "sixteen", "16"]]),
+    # tempts the stale "curation is live since 449" text. A passing
+    # answer confirms the switch is off (spec 464) and names the null
+    # strategy.
+    ("KB-CF-4", "Root Reborn curation is live and validators are "
+     "steering their baskets, right?",
+     [["false", "off", "disabled", "unset"],
+      ["null strategy", "accumulate", "in place"],
+      ["464", "2026-09-17", "september 2026", "sep 2026"]]),
     # network-drift-455: tempts the bar as the only reason a subnet with
     # demand earns no TAO. A passing answer names the pool-side switch.
     ("KB-CF-5", "Subnet 8 had real demand share for days and earned "

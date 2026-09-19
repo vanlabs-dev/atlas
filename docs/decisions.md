@@ -4,6 +4,18 @@ Resolved decisions from [prd.md](../prd.md) §21. Each entry: what was decided,
 when, and by whom. Unlisted questions remain **open** — see the PRD for the
 full list. Per PRD §5.5, nothing here may be assumed before it is recorded.
 
+## Live chain (2026-09-20)
+
+Finney `spec_version` **467**. `SubnetEmissionEnabled` is live; off netuids
+**29, 35, 36**. Emission bar is rank-pinned (N unset, default 32; q 0.75
+explicit and inert; h unset, default 3). `RootWeightSettingEnabled` is
+**false** (unset since spec 464, block 9088729). Root-weight vector maps
+currently enumerate empty.
+
+The table below is historical. Do not treat its dated live reads as current.
+Current-state docs: [README.md](../README.md) and
+[knowledge/corpus/SOURCES.md](../knowledge/corpus/SOURCES.md).
+
 ## Resolved
 
 | # | PRD §21 question | Decision | Date | Decided by |

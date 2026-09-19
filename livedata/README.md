@@ -102,8 +102,8 @@ theta to the Nth-largest positive demand share and makes q **inert**;
 N = 0 is the old q-mass fallback. Every observation therefore records its
 derived `bar_mode` (`rank` | `q-mass`), so a crossing stays interpretable
 with the mode of its own pass rather than whatever the bar is doing
-later. Live Finney: N unset, so the v443 code default of 32 applies and
-rank mode is active while q sits explicit at 0.75, unused.
+later. Live Finney (spec 467, 2026-09-20): N unset, default 32, rank mode
+active; q sits explicit at 0.75, unused.
 
 Because a rank-pinned bar is itself a demand share, it moves on its own,
 so each crossing also records the previous observation's theta and the
@@ -138,8 +138,10 @@ Discrete root-settable knobs whose flip changes network economics with no
 AdminUtils extrinsic trail. The three bar parameters are handed over
 already decoded by the gate poll — one storage read per item, one durable
 history — while `RootWeightSettingEnabled` (the Root Reborn basket
-curation master switch, currently `false`, so dividends accumulate in
-place) is read on its own pinned key at the same finalized block. Each
+curation master switch, currently `false` since spec 464, so dividends
+accumulate in place) is read on its own pinned key at the same finalized
+block. `SubnetEmissionEnabled` is a netuid-keyed map on the same watch:
+live off set is 29, 35, 36. Each
 pass persists one observation per item with `explicit` or
 `assumed-default` provenance; a differing value records a durable
 transition. No hysteresis (these do not flap), a first observation seeds
