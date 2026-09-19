@@ -123,3 +123,17 @@ abandonment or inactivity language ("abandoned", "dormant", "inactive",
 on-chain identity field and nothing more. The moment the article
 characterizes the project rather than reporting the chain fact, the normal
 negative-claim gate applies again.
+
+---
+
+## Demand share is not TAO earned
+
+Positive demand share does NOT imply the subnet earns TAO.
+
+The emission-gate bar can collapse a below-bar subnet's TAO toward zero.
+Independently, the pool-side emission switch (`SubnetEmissionEnabled`) can
+zero the TAO-side injection of a subnet that still has substantial demand
+and still distributes alpha. Do not write that a subnet "earns nothing
+because it is below the bar" unless the switch is on and the share is
+below the bar. A zero TAO reading with nonzero demand is first a switch
+question, then a bar question.

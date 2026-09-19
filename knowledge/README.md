@@ -34,8 +34,8 @@ ATLAS-RET-001…007, and ATLAS-TOOL-001…004 via OpenSpec change
 
 ## The benchmark (acceptance gate)
 
-33 tagged exchanges through live Hermes with the knowledge toolset:
-22 grounded (exact/paraphrase/historical/conflict, markers + tool-call
+35 tagged exchanges through live Hermes with the knowledge toolset:
+24 grounded (exact/paraphrase/historical/conflict, markers + tool-call
 required) and 11 refusal (unsupported/adversarial, the MV-RI-4 re-test:
 dated corpus facts or explicit refusal, never a value presented as live).
 Reuses the generalized model-validation machinery (runner

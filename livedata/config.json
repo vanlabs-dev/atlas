@@ -137,6 +137,13 @@
         "codec": "u16",
         "default": 4096,
         "governs": "root basket concentration cap: the largest u16-normalized share of a set_root_weights vector one destination may take; 4096/65535 = 1/16 forces a curated basket across at least 16 destinations (spec 449 default, DefaultRootWeightsCap)"
+      },
+      {
+        "item": "SubnetEmissionEnabled",
+        "source": "subnet-map",
+        "codec": "bool",
+        "default": false,
+        "governs": "per-subnet root switch over TAO injection, not the emission-gate bar: off zeroes the TAO-side share and redistributes it across enabled subnets; alpha distribution continues"
       }
     ]
   },

@@ -47,6 +47,13 @@ Pattern: "root validators vote/voting/decide/determine emissions"
 
 Fix: Root validator voting was replaced by dTAO in February 2025. Emissions are now gated price-based: EMA price x (1 - miner_burn), normalized across emit-enabled subnets, then passed through the emission gate.
 
+### 4a. Zero TAO attributed to the emission-gate bar alone
+Pattern: a subnet with real demand (nonzero moving price, nonzero demand share) earning no TAO is explained only by the emission-gate bar, theta, "below the bar", or "gated emission collapsed", with no mention of the pool-side emission switch / `SubnetEmissionEnabled`.
+
+**Check**: the bar is a continuous Hill function of demand share. The pool-side emission switch is a binary root-settable per-netuid bool. The chain draws the bar first, then zeroes TAO for subnets whose switch is off and redistributes that TAO to the rest. Alpha distribution continues either way. A subnet can sit above the bar and still earn no TAO.
+
+Fix: name the pool-side emission switch (dated: the 2026-09-09 flip at block 9029889 is the worked example). Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
+
 ### 5. Validators mine
 Pattern: "validators mine/mining/produce work"
 

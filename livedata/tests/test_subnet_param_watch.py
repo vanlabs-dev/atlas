@@ -126,5 +126,88 @@ class SubnetParamWatch(unittest.TestCase):
                                       UNIVERSE, {})
 
 
+SWITCH = "SubnetEmissionEnabled"
+
+
+class EmissionSwitchWatch(unittest.TestCase):
+    """Pool-side emission switch (change: network-drift-455)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.conn = al.open_store(os.path.join(self.tmp.name, "live.db"))
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp.cleanup()
+
+    def watch(self, values, failures=None, block=100):
+        return al.run_subnet_param_watch(
+            self.conn, CONFIG, SWITCH, UNIVERSE, values,
+            failures=failures, block_hash="0x%x" % block, block_number=block)
+
+    def test_first_observation_seeds_every_subnet_without_transitions(self):
+        out = self.watch({1: True, 4: True, 8: True, 19: True})
+        self.assertEqual(out["status"], "ok")
+        self.assertEqual(len(out["observed"]), len(UNIVERSE))
+        self.assertEqual(out["transitions"], [])
+
+    def test_absent_entry_seeds_as_off_not_as_a_failed_read(self):
+        out = self.watch({1: True, 4: True, 8: True})
+        self.assertEqual(out["transitions"], [])
+        name = al.netuid_item(SWITCH, 19)
+        row = self.conn.execute(
+            "SELECT value, provenance FROM chain_params WHERE item = ?",
+            (name,)).fetchone()
+        self.assertEqual(row, ("false", "assumed-default"))
+        self.assertNotIn(name, out["skipped"])
+
+    def test_seed_then_transition_carries_netuid_values_and_block(self):
+        self.watch({n: True for n in UNIVERSE})
+        out = self.watch({1: True, 4: True, 8: True, 19: False}, block=200)
+        self.assertEqual(len(out["transitions"]), 1)
+        event = out["transitions"][0]
+        self.assertEqual(event["netuid"], 19)
+        self.assertEqual(event["base_item"], SWITCH)
+        self.assertEqual(event["prev_value"], "true")
+        self.assertEqual(event["new_value"], "false")
+        row = self.conn.execute(
+            "SELECT block_number FROM chain_param_events").fetchone()
+        self.assertEqual(row[0], 200)
+
+    def test_same_block_batch_records_every_netuid(self):
+        self.watch({n: False for n in UNIVERSE})
+        out = self.watch({n: True for n in UNIVERSE}, block=9029889)
+        self.assertEqual(len(out["transitions"]), len(UNIVERSE))
+        self.assertEqual({t["netuid"] for t in out["transitions"]},
+                         set(UNIVERSE))
+        stored = [r[0] for r in self.conn.execute(
+            "SELECT block_number FROM chain_param_events")]
+        self.assertEqual(stored, [9029889] * len(UNIVERSE))
+
+    def test_short_batch_skips_the_switch_without_touching_collateral(self):
+        """A failed switch read must not prevent CollateralLockShare from
+        seeding, which is the 'other watched items' isolation."""
+        al.run_subnet_param_watch(
+            self.conn, CONFIG, ITEM, UNIVERSE, {}, block_number=100)
+        skipped = al.watch_subnet_emission_switch(
+            self.conn, CONFIG,
+            maps={"ok": True,
+                  "values": {"SubnetworkN": {n: 256 for n in UNIVERSE},
+                             "SubnetEmissionEnabled": {}},
+                  "failures": {},
+                  "failed_items": {"SubnetEmissionEnabled": "short batch"},
+                  "block_number": 200})
+        self.assertEqual(skipped["status"], "skipped")
+        self.assertEqual(skipped["reason"], "short batch")
+        rows = self.conn.execute(
+            "SELECT COUNT(*) FROM chain_params WHERE item LIKE ?",
+            (SWITCH + "[%",)).fetchone()[0]
+        self.assertEqual(rows, 0)
+        collateral = self.conn.execute(
+            "SELECT COUNT(*) FROM chain_params WHERE item LIKE ?",
+            (ITEM + "[%",)).fetchone()[0]
+        self.assertEqual(collateral, len(UNIVERSE))
+
+
 if __name__ == "__main__":
     unittest.main()

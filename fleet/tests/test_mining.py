@@ -221,8 +221,12 @@ class TestCutLadder(unittest.TestCase):
         rung, detail = mine.classify_cut(
             self.cfg, {"gate_state": "disabled", "miner_burn_pct": 0.0}, None)
         self.assertEqual(rung, mine.CUT_GATE)
+        self.assertEqual(rung, "pool-side-switch-off")
+        self.assertIn("pool-side emission switch", detail)
         self.assertIn("no TAO inflow", detail)
         self.assertNotIn("pays nothing", detail)
+        self.assertNotIn("emission gate", detail)
+        self.assertNotIn("demand", detail.lower())
 
     def test_burn_ceiling_cuts_and_records_the_value(self):
         rung, detail = mine.classify_cut(
@@ -857,12 +861,16 @@ class TestReport(MiningBase):
         view = mine.report(self.conn, self.config)
         self.assertEqual(view["cut_summary"],
                          {mine.CUT_GATE: 1, mine.CUT_BURN: 1})
+        self.assertEqual(view["switch_block_ref"], 8789861)
+        self.assertNotIn("emission gate", json.dumps(view["cut_summary"]))
 
     def test_cut_subnets_are_retrievable_with_reasons(self):
         self.seed()
         view = mine.report(self.conn, self.config, include_cut=True)
         reasons = {r["netuid"]: r["cut_detail"] for r in view["cut"]}
         self.assertIn("no TAO inflow", reasons[5])
+        self.assertIn("pool-side emission switch", reasons[5])
+        self.assertNotIn("emission gate", reasons[5])
         self.assertIn("99.50", reasons[4])
 
     def test_headline_is_the_entrant_figure_not_the_incumbent(self):

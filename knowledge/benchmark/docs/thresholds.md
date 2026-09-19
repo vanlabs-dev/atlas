@@ -16,7 +16,7 @@ OP one of `>=`, `<=`, `==`.
 
 ## Rationale (not machine-parsed)
 
-- **correct-with-evidence ≥ 0.9** — over the 22 grounded exchanges
+- **correct-with-evidence ≥ 0.9** — over the 24 grounded exchanges
   (exact/paraphrase/historical/conflict): expected-evidence markers in
   the answer AND a knowledge-tool call in the exchange. This is the
   deferred ATLAS-HERMES-003 "Bittensor retrieval benchmark" pass bar.

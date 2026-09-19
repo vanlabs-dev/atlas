@@ -1808,12 +1808,24 @@ SUBNET_MAP_ITEMS: Dict[str, str] = {
     # (verified 2026-08-12); V3 is the live item, 124 entries against 128
     # subnets, so an absent entry is a real state and not a read fault.
     "SubnetIdentitiesV3": "identity_name",
+    # Pool-side emission switch (change: network-drift-455). A root-settable
+    # bool: present entries are 0x01/0x00; an absent entry is off, because
+    # the runtime ValueQuery default is false. Empty or short batches of
+    # THIS item fail the item closed (see SUBNET_MAP_FAIL_EMPTY).
+    "SubnetEmissionEnabled": "bool",
 }
 
 # A map known to be written every tempo. If the control comes back empty the
 # read is not trusted: that is the signature of a wrong prefix, not of an
 # empty chain.
 SUBNET_MAP_CONTROL = "MinerBurned"
+
+# Maps whose empty or short batch is a derivation fault, not a real
+# all-absent state. An empty SubnetEmissionEnabled key set is
+# indistinguishable from every subnet being off, so it must not seed 128
+# "off" rows. CollateralLockShare is the opposite: it is dormant
+# network-wide and an empty map is the documented default.
+SUBNET_MAP_FAIL_EMPTY = frozenset({"SubnetEmissionEnabled"})
 
 _KEYS_PAGE = 400
 _QUERY_CHUNK = 256
@@ -1912,10 +1924,12 @@ def read_subnet_maps(config: Dict[str, Any],
     key_to_slot: Dict[str, Tuple[str, int]] = {}
     all_keys: List[str] = []
     empty_items: List[str] = []
+    enumerated: Dict[str, int] = {item: 0 for item in items}
     try:
         for item in items:
             prefix = storage_prefix(SUBTENSOR_PALLET, item)
             keys, netuids = _enumerate_map_keys(rpc, prefix, block_hash)
+            enumerated[item] = len(keys)
             if not keys:
                 empty_items.append(item)
             for key, netuid in zip(keys, netuids):
@@ -1932,6 +1946,7 @@ def read_subnet_maps(config: Dict[str, Any],
 
     values: Dict[str, Dict[int, Any]] = {item: {} for item in items}
     failures: Dict[str, Dict[int, str]] = {item: {} for item in items}
+    returned: Dict[str, int] = {item: 0 for item in items}
     for start in range(0, len(all_keys), _QUERY_CHUNK):
         chunk = all_keys[start:start + _QUERY_CHUNK]
         read = rpc("state_queryStorageAt", [chunk, block_hash])
@@ -1944,6 +1959,7 @@ def read_subnet_maps(config: Dict[str, Any],
                 if slot is None:
                     continue
                 item, netuid = slot
+                returned[item] = returned.get(item, 0) + 1
                 if raw is None:
                     continue  # unset key: absent, not a failure
                 try:
@@ -1951,13 +1967,29 @@ def read_subnet_maps(config: Dict[str, Any],
                 except ValueError as exc:
                     failures[item][netuid] = str(exc)
 
+    # Per-item fail-closed: an empty or short batch of a populated map is
+    # a wrong prefix or a truncated query, not 128 subnets flipping off.
+    # The rest of the read still stands.
+    failed_items: Dict[str, str] = {}
+    for item in items:
+        if item not in SUBNET_MAP_FAIL_EMPTY:
+            continue
+        if enumerated.get(item, 0) == 0:
+            failed_items[item] = "empty batch"
+        elif returned.get(item, 0) < enumerated.get(item, 0):
+            failed_items[item] = "short batch"
+        if item in failed_items:
+            values[item] = {}
+            failures[item] = {}
+
     return {"ok": True,
             "block_hash": block_hash,
             "block_number": block_number,
             "values": values,
             "failures": {item: fails
                          for item, fails in failures.items() if fails},
-            "empty_items": empty_items}
+            "empty_items": empty_items,
+            "failed_items": failed_items}
 
 
 # ---------------------------------------------------------------------------
@@ -2484,6 +2516,7 @@ def poll_gate_state(connection: sqlite3.Connection,
 PARAM_PROVIDER = "finney-rpc"
 PARAM_OPERATION = "watch_chain_params"
 PARAM_SOURCE_GATE = "gate-poll"
+PARAM_SOURCE_SUBNET = "subnet-map"
 
 
 def param_value_text(value: Any) -> str:
@@ -2591,6 +2624,10 @@ def run_chain_param_watch(connection: sqlite3.Connection,
         item = spec.get("item")
         if not item:
             continue
+        if spec.get("source") == PARAM_SOURCE_SUBNET:
+            # Netuid-keyed maps are watched by watch_subnet_emission_switch
+            # from the same pass, not as a single state_getStorage.
+            continue
         if spec.get("source") == PARAM_SOURCE_GATE:
             if item not in gate_values:
                 skipped.append(item)
@@ -2659,7 +2696,13 @@ _NETUID_ITEM_RE = re.compile(r"^(?P<item>[A-Za-z0-9_]+)\[(?P<netuid>\d+)\]$")
 # Substrate never writes ValueQuery defaults, so an absent key means the
 # documented default. For the collateral share that default is 0: unset means
 # the whole registration price is burned and nothing is locked.
-SUBNET_PARAM_DEFAULTS: Dict[str, Any] = {"CollateralLockShare": 0}
+SUBNET_PARAM_DEFAULTS: Dict[str, Any] = {
+    "CollateralLockShare": 0,
+    # Runtime ValueQuery default is false: an absent entry is disabled,
+    # and that state is recorded as assumed-default, distinct from a
+    # failed read (which skips the subnet).
+    "SubnetEmissionEnabled": False,
+}
 
 
 def netuid_item(item: str, netuid: int) -> str:
@@ -2733,6 +2776,60 @@ def run_subnet_param_watch(connection: sqlite3.Connection,
     return {"status": "ok", "item": item, "observed": observed,
             "skipped": skipped, "transitions": transitions,
             "block_number": block_number}
+
+
+# Items the gate pass reads just to watch the pool-side switch. SubnetworkN
+# is the observation universe (every registered subnet); the switch itself
+# is the watched map. Adding keys to this batch adds no new pass.
+_SWITCH_WATCH_ITEMS: Dict[str, str] = {
+    "SubnetworkN": "u16",
+    "SubnetEmissionEnabled": "bool",
+}
+
+
+def watch_subnet_emission_switch(connection: sqlite3.Connection,
+                                 config: Dict[str, Any],
+                                 rpc: Optional[Any] = None,
+                                 maps: Optional[Dict[str, Any]] = None
+                                 ) -> Dict[str, Any]:
+    """Seed or transition SubnetEmissionEnabled from a batched map read.
+
+    When `maps` is supplied (the mining screen already read the maps) this
+    makes no network call. When it is not (the hourly gate pass) it reads
+    only the two items above at one finalized block. An empty or short
+    switch batch skips the watch rather than recording every subnet off.
+    Fail-isolated: a bad map read never blinds the caller.
+    """
+    pcfg = config.get("chain_params") or {}
+    if not pcfg.get("enabled"):
+        return {"status": "disabled"}
+    if maps is None:
+        try:
+            maps = read_subnet_maps(config, items=_SWITCH_WATCH_ITEMS,
+                                    rpc=rpc)
+        except (FatalLiveError, TypeError, AttributeError, ValueError):
+            return {"status": "skipped", "reason": "map-read-failed"}
+    if not maps or not maps.get("ok"):
+        return {"status": "skipped",
+                "reason": (maps or {}).get("error") or "map-read-failed"}
+    failed = maps.get("failed_items") or {}
+    if "SubnetEmissionEnabled" in failed:
+        return {"status": "skipped",
+                "reason": failed["SubnetEmissionEnabled"]}
+    values = maps.get("values") or {}
+    failures = maps.get("failures") or {}
+    universe = set(values.get("SubnetworkN") or {})
+    universe |= set(values.get("SubnetEmissionEnabled") or {})
+    universe |= set(failures.get("SubnetworkN") or {})
+    universe |= set(failures.get("SubnetEmissionEnabled") or {})
+    if not universe:
+        return {"status": "skipped", "reason": "no-universe"}
+    return run_subnet_param_watch(
+        connection, config, "SubnetEmissionEnabled", sorted(universe),
+        values.get("SubnetEmissionEnabled") or {},
+        failures=failures.get("SubnetEmissionEnabled"),
+        block_hash=maps.get("block_hash"),
+        block_number=maps.get("block_number"))
 
 
 def compute_demand_shares(subnets: List[Dict[str, Any]]
@@ -3008,6 +3105,10 @@ def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
         connection, config, rpc=rpc, bar_params=state.get("bar_params"),
         block_hash=state.get("block_hash"),
         block_number=state.get("block_number"))
+    switch_watch = watch_subnet_emission_switch(connection, config, rpc=rpc)
+    if switch_watch.get("transitions"):
+        watch.setdefault("transitions", []).extend(
+            switch_watch["transitions"])
     bar_param_change = [t for t in (watch.get("transitions") or [])
                         if t["item"] in _GATE_ITEMS]
 
@@ -3144,6 +3245,10 @@ def _cmd_poll_gate() -> int:
             # silently stop the other. Bar parameters pause (that is where
             # their values come from); independent items keep being read.
             watch = run_chain_param_watch(connection, config)
+            switch_watch = watch_subnet_emission_switch(connection, config)
+            if switch_watch.get("transitions"):
+                watch.setdefault("transitions", []).extend(
+                    switch_watch["transitions"])
             if watch["status"] != "disabled":
                 summary = {"status": "ok", "gate": "disabled",
                            "chain_params": watch}

@@ -433,6 +433,22 @@ def ledger_record(connection: sqlite3.Connection, event_id: str,
     connection.commit()
 
 
+def ledger_collapsed_members(connection: sqlite3.Connection,
+                             event: Dict[str, Any], status: str,
+                             attempted_at: Optional[str], retry_count: int,
+                             detail: Optional[str],
+                             tier: Optional[str] = None) -> None:
+    """Ledger every collapsed row against its own event id. The page uses
+    the first member's id; the rest must still be recorded so replay and
+    de-duplication stay per-fact."""
+    for member_id in event.get("member_ids") or []:
+        if member_id == event.get("event_id"):
+            continue
+        ledger_record(connection, member_id, event["event_class"],
+                      event["created_at"], attempted_at, status,
+                      retry_count, detail, tier=tier)
+
+
 # ---------------------------------------------------------------------------
 # Scrubber (ATLAS-TG-004) — refuse, never truncate
 # ---------------------------------------------------------------------------
@@ -1897,6 +1913,101 @@ _PARAM_MODE_WORDS = {
         "the bar has fallen back to q-mass selection",
 }
 
+_NETUID_ITEM_RE = re.compile(r"^(?P<item>[A-Za-z0-9_]+)\[(?P<netuid>\d+)\]$")
+_PARAM_FETCH_LIMIT = 256
+_NETUID_LIST_CAP = 40
+
+
+def parse_netuid_item(name: str) -> Tuple[str, Optional[int]]:
+    """Split a composite watched-item name; netuid is None for a global."""
+    match = _NETUID_ITEM_RE.match(name or "")
+    if match is None:
+        return name, None
+    return match.group("item"), int(match.group("netuid"))
+
+
+def _param_event_id(row_id: int) -> str:
+    return "chain-parameter-change:%s" % row_id
+
+
+def _switch_body_line(base_item: str, _new_value: str) -> Optional[str]:
+    if base_item != "SubnetEmissionEnabled":
+        return None
+    return ("pool-side emission switch: alpha distribution continues "
+            "while TAO injection stops")
+
+
+def _render_param_event(item: str, prev_value: str, new_value: str,
+                        prev_prov: str, new_prov: str, observed_at: str,
+                        block_number: Any, governs: Dict[str, str],
+                        max_chars: int, glosses: Dict[str, str],
+                        netuids: Optional[List[int]] = None
+                        ) -> Tuple[str, str, Optional[str]]:
+    """Return (plain, html, next_action) for one page, single or collapsed."""
+    base_item, _netuid = parse_netuid_item(item)
+    count = len(netuids) if netuids else 1
+    collapsed = bool(netuids) and count > 1
+    if collapsed:
+        headline = ("Atlas · chain parameter changed · %s · %d subnets"
+                    % (base_item, count))
+        lines = [
+            "%s: %s to %s on %d subnets" % (base_item, prev_value,
+                                            new_value, count),
+            "source: %s to %s" % (prev_prov, new_prov),
+            "reference block: %s · observed: %s"
+            % (block_number if block_number is not None else "n/a",
+               observed_at),
+        ]
+    else:
+        headline = "Atlas · chain parameter changed · %s" % item
+        lines = [
+            "%s: %s to %s" % (item, prev_value, new_value),
+            "source: %s to %s" % (prev_prov, new_prov),
+            "reference block: %s · observed: %s"
+            % (block_number if block_number is not None else "n/a",
+               observed_at),
+        ]
+    if base_item == "EmissionBarRank":
+        moved = ("to-qmass" if new_value == "0"
+                 else "to-rank" if prev_value == "0" else None)
+        if moved:
+            lines.append(_PARAM_MODE_WORDS[(base_item, moved)])
+    switch_line = _switch_body_line(base_item, new_value)
+    if switch_line:
+        lines.append(switch_line)
+    if governs.get(base_item):
+        lines.append("governs: %s" % governs[base_item])
+    next_action = None
+    if base_item in ("EmissionBarRank", "EmissionBarQuantile",
+                     "EmissionGateExponent"):
+        lines.append("the bar was re-priced for every subnet · "
+                     "per-subnet crossing alerts were withheld for "
+                     "that pass by design")
+        next_action = ("next: review your subnet positions against "
+                       "the new gate terms")
+    elif base_item == "RootWeightSettingEnabled":
+        next_action = ("next: review root basket positions · the "
+                       "curation switch changed")
+    elif base_item == "SubnetEmissionEnabled":
+        next_action = ("next: review subnet positions · the pool-side "
+                       "emission switch moved")
+    expandable = ""
+    if collapsed and netuids:
+        shown = netuids[:_NETUID_LIST_CAP]
+        listing = ", ".join("subnet %d" % n for n in shown)
+        if len(netuids) > _NETUID_LIST_CAP:
+            listing += " … and %d more" % (len(netuids) - _NETUID_LIST_CAP)
+        expandable = "subnets: %s" % listing
+        lines.append("%d subnets listed%s"
+                     % (count,
+                        " (truncated)" if len(netuids) > _NETUID_LIST_CAP
+                        else ""))
+    plain = render_plain(headline, lines, expandable, None, max_chars,
+                         next_action=next_action, glosses=glosses)
+    html = render_html(headline, lines, expandable, None, max_chars,
+                       next_action=next_action, glosses=glosses)
+    return plain, html, next_action
+
 
 def chain_parameter_change_events(source_db: str, watermark: Optional[str],
                                   ctx: Optional[Dict[str, Any]] = None
@@ -1904,7 +2015,12 @@ def chain_parameter_change_events(source_db: str, watermark: Optional[str],
                                              Optional[str]]:
     """Root-settable chain parameters that changed value, recorded by
     livedata. Reads the transition table read-only past this class's own
-    watermark, independent of every other class."""
+    watermark, independent of every other class.
+
+    Netuid-keyed items sharing one (item, reference block) collapse into
+    a single page. Each underlying row still has its own event id so the
+    delivery ledger records every fact.
+    """
     conn = open_source_ro(source_db)
     if conn is None:
         return [], watermark
@@ -1918,8 +2034,8 @@ def chain_parameter_change_events(source_db: str, watermark: Optional[str],
         rows = conn.execute(
             "SELECT id, item, prev_value, new_value, prev_provenance, "
             "new_provenance, observed_at, block_number "
-            "FROM chain_param_events WHERE id > ? ORDER BY id ASC LIMIT 50",
-            (last_id,)).fetchall()
+            "FROM chain_param_events WHERE id > ? ORDER BY id ASC LIMIT ?",
+            (last_id, _PARAM_FETCH_LIMIT)).fetchall()
     finally:
         conn.close()
 
@@ -1928,51 +2044,60 @@ def chain_parameter_change_events(source_db: str, watermark: Optional[str],
     spec = ctx.get("spec") or {}
     max_chars = int(config.get("message_max_chars", 3500))
     _lexicon, glosses = voice_maps(config)
-    # Operator-supplied text: rendered through the same escaping path as
-    # every other interpolated value.
     governs = dict(spec.get("governs") or {})
 
-    events: List[Dict[str, Any]] = []
+    grouped: Dict[Tuple[Any, ...], List[Any]] = {}
+    order: List[Tuple[Any, ...]] = []
     high = last_id
-    for (row_id, item, prev_value, new_value, prev_prov, new_prov,
-         observed_at, block_number) in rows:
+    for row in rows:
+        row_id, item, prev_value, new_value, prev_prov, new_prov, \
+            observed_at, block_number = row
         high = max(high, int(row_id))
-        headline = "Atlas · chain parameter changed · %s" % item
-        lines = [
-            "%s: %s to %s" % (item, prev_value, new_value),
-            "source: %s to %s" % (prev_prov, new_prov),
-            "reference block: %s · observed: %s"
-            % (block_number if block_number is not None else "n/a",
-               observed_at),
-        ]
-        if item == "EmissionBarRank":
-            moved = ("to-qmass" if new_value == "0"
-                     else "to-rank" if prev_value == "0" else None)
-            if moved:
-                lines.append(_PARAM_MODE_WORDS[(item, moved)])
-        if governs.get(item):
-            lines.append("governs: %s" % governs[item])
-        next_action = None
-        if item in ("EmissionBarRank", "EmissionBarQuantile",
-                    "EmissionGateExponent"):
-            # Explains the deliberate silence: the pass that recorded this
-            # re-seeded every side rather than paging |M - N| crossings.
-            lines.append("the bar was re-priced for every subnet · "
-                         "per-subnet crossing alerts were withheld for "
-                         "that pass by design")
-            next_action = ("next: review your subnet positions against "
-                           "the new gate terms")
-        elif item == "RootWeightSettingEnabled":
-            next_action = ("next: review root basket positions · the "
-                           "curation switch changed")
-        plain = render_plain(headline, lines, "", None, max_chars,
-                             next_action=next_action, glosses=glosses)
-        html = render_html(headline, lines, "", None, max_chars,
-                           next_action=next_action, glosses=glosses)
-        events.append({"event_id": "chain-parameter-change:%s" % row_id,
-                       "event_class": "chain-parameter-change",
-                       "created_at": _utc_now(), "text": plain,
-                       "html": html})
+        base_item, netuid = parse_netuid_item(item)
+        if netuid is None:
+            key: Tuple[Any, ...] = ("global", int(row_id))
+        else:
+            key = ("netuid", base_item, block_number)
+        if key not in grouped:
+            order.append(key)
+            grouped[key] = []
+        grouped[key].append(row)
+
+    events: List[Dict[str, Any]] = []
+    for key in order:
+        group = grouped[key]
+        first = group[0]
+        row_id, item, prev_value, new_value, prev_prov, new_prov, \
+            observed_at, block_number = first
+        member_ids = [_param_event_id(int(r[0])) for r in group]
+        netuids: Optional[List[int]] = None
+        if key[0] == "netuid":
+            parsed = [parse_netuid_item(r[1]) for r in group]
+            netuids = sorted(n for _base, n in parsed if n is not None)
+            # Shared direction: all rows in the group share one block and
+            # one item; mixed values are stated as-is from the first row
+            # plus a count of each.
+            values = {(r[2], r[3]) for r in group}
+            if len(values) == 1:
+                prev_value, new_value = next(iter(values))
+            else:
+                on_count = sum(1 for r in group if r[3] == "true")
+                off_count = len(group) - on_count
+                prev_value, new_value = (
+                    "mixed",
+                    "%d on, %d off" % (on_count, off_count))
+            item = key[1]
+        plain, html, _next = _render_param_event(
+            item, prev_value, new_value, prev_prov, new_prov,
+            observed_at, block_number, governs, max_chars, glosses,
+            netuids=netuids)
+        event: Dict[str, Any] = {
+            "event_id": member_ids[0],
+            "event_class": "chain-parameter-change",
+            "created_at": _utc_now(), "text": plain, "html": html}
+        if len(member_ids) > 1:
+            event["member_ids"] = member_ids
+        events.append(event)
     return events, (str(high) if high else watermark)
 
 
@@ -2358,12 +2483,18 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
                               event["event_class"], event["created_at"],
                               None, non_paging_status, 0, None,
                               tier=tier or STATUS_UNREGISTERED)
+                ledger_collapsed_members(
+                    connection, event, non_paging_status, None, 0, None,
+                    tier=tier or STATUS_UNREGISTERED)
                 counts[non_paging_status] = counts.get(
                     non_paging_status, 0) + 1
                 continue
             try:
                 status = deliver_event(connection, config, token, chat_id,
                                        event, poster=poster, tier=tier)
+                ledger_collapsed_members(
+                    connection, event, status, _utc_now(), 0, None,
+                    tier=tier)
                 counts[status] = counts.get(status, 0) + 1
                 if (status == STATUS_DELIVERED
                         and event.get("digest_range_ids")):
@@ -2384,6 +2515,9 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
                               event["event_class"], event["created_at"],
                               _utc_now(), STATUS_FAILED, 0,
                               redact(str(exc)))
+                ledger_collapsed_members(
+                    connection, event, STATUS_FAILED, _utc_now(), 0,
+                    redact(str(exc)))
         if new_wm and new_wm != wm:
             watermark_set(connection, event_class, new_wm)
         else:

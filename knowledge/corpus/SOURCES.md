@@ -7,36 +7,25 @@ Verbatim snapshot of the confirmed July 2026 Bittensor corpus (decision
 | field | value |
 |---|---|
 | Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
-| Sync date | 2026-08-31 |
-| Coverage date | 2026-08-31 (last upstream edit) |
+| Sync date | 2026-09-20 |
+| Coverage date | 2026-09-20 (last upstream edit) |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Known staleness at snapshot time
 
-**The corpus is grounded at spec 452. Finney has run 453, 454 and 455 since**
-(453 at block 8,988,192 on 2026-09-03; 454 at 8,996,901 on 2026-09-04; 455 at
-9,018,443 on 2026-09-07). Detection recorded and paged all three; grounding
-has not followed. Nothing the corpus states was made false by them, but three
-claims are now incomplete and two areas have no coverage at all:
+**The corpus is grounded at spec 455.** Spec 453 (block 8,988,192, 2026-09-03),
+454 (8,996,901, 2026-09-04) and 455 (9,018,443, 2026-09-07) are absorbed:
+`claim_root` admission (454), basket-escrow transfer rejection (453),
+registration queue (453), proxy call filters (453, 454, 455) and the
+crowdloan pallet as a filter fact.
 
-- `ground-truth.md:81` says `claim_root` redeems "pro-rata across every
-  holding". Spec 454 narrowed it: only root-relevant hotkeys are claimed,
-  admission is `root-relevant hotkeys + actual basket rows <= 256`, and a
-  holding that rounds to a zero take leaves the claim unsettled instead of
-  charging a fee for nothing.
-- `ground-truth.md:81` describes the basket escrow but not that spec 453
-  rejects user stake transfers into it (`CannotUseSystemAccount`).
-- `ground-truth.md:23` (subnet burn cost) does not mention the registration
-  queue. Spec 453 moved the pricing and rate-limit update to queue time for
-  deferred registrations and reserves the hotkey for the paying coldkey.
-- No coverage of **proxy call filters** (453 closed nested-proxy filter
-  laundering, 454 re-allowed `transfer_stake` through `ContractCallFilter`,
-  455 denies EVM, Contracts and Crowdloan to `NonTransfer` and `NonFungible`)
-  or of the **crowdloan pallet**.
-
-Closing this is the `network-drift-455` change, proposed but not yet drafted.
-No new root-settable knob appeared, so the chain-parameter watch needs no new
-item.
+The pool-side emission switch (`SubnetEmissionEnabled`) is in the corpus
+and on the chain-parameter watch. It was missed earlier because it is not
+drift from 453-455: it landed 2026-05-12 (PR #2657), before the emission
+gate, and no single release introduced it. The sentence "No new
+root-settable knob appeared, so the chain-parameter watch needs no new
+item" was true about 453 to 455 and false about the watch set. The
+2026-09-09 flip at block 9029889 is the worked example.
 
 The **2026-08-31 re-sync** (change: network-drift-452) brought the
 corpus from spec 443 to spec 452, verified against the merged subtensor code

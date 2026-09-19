@@ -66,7 +66,8 @@
       "unweighted": "counted one validator per vote, not by stake",
       "curated root flow": "root dividends being redirected by validator weight vectors",
       "durability window": "the wait before a bar crossing counts as settled",
-      "shadow": "recorded and measured, deliberately not sent"
+      "shadow": "recorded and measured, deliberately not sent",
+      "pool-side emission switch": "root switch over TAO injection; alpha distribution continues"
     }
   },
   "repository_update": {
@@ -102,7 +103,8 @@
         "EmissionBarQuantile": "q-mass bar value, applied only when the bar rank is 0",
         "EmissionGateExponent": "gate sharpness: how hard emission collapses below the bar",
         "RootWeightSettingEnabled": "Root Reborn basket curation master switch: while false every fund runs the null strategy and root dividends accumulate in place",
-        "RootWeightsCap": "root basket concentration cap: the largest share of a root weight vector one destination may take (4096 of 65535 is 1/16, so a curated basket spreads across at least 16 destinations)"
+        "RootWeightsCap": "root basket concentration cap: the largest share of a root weight vector one destination may take (4096 of 65535 is 1/16, so a curated basket spreads across at least 16 destinations)",
+        "SubnetEmissionEnabled": "per-subnet root switch over TAO injection, not the emission-gate bar: off zeroes the TAO-side share and redistributes it; alpha distribution continues"
       },
       "tier": "instant"
     },
