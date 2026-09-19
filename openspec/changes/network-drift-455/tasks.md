@@ -80,7 +80,7 @@
       must be explained by the pool-side switch, dated, not by the bar.
 - [x] 5.2 Add a case: a `claim_root` question must state the spec-454
       admission rule.
-- [ ] 5.3 Run the battery off-device against the new corpus and confirm it
+- [x] 5.3 Run the battery off-device against the new corpus and confirm it
       meets the existing threshold sheet with no fabrications.
 
 ## 6. Documentation
@@ -104,10 +104,10 @@
       `knowledge`, `shinogi`.
 - [x] 7.2 `git pull` on the Pi; confirm the next gate pass seeds the switch
       across every subnet with no alert and no health event.
-- [ ] 7.3 Ingest and activate the new corpus run; run the battery on the
+- [x] 7.3 Ingest and activate the new corpus run; run the battery on the
       device and accept it.
 - [x] 7.4 Confirm the board's ranked count is unchanged by the rename alone,
       and that it now carries the switch reference block.
-- [ ] 7.5 Inspect one synthetic collapsed render on the device before a real
+- [x] 7.5 Inspect one synthetic collapsed render on the device before a real
       transition arrives, then record the acceptance entry in
       `docs/decisions.md`.
