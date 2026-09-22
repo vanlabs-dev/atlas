@@ -2324,8 +2324,111 @@ def fail_closed_events(source_db: str, watermark: Optional[str],
     return events, watermark
 
 
+def _maintenance_delivery_state(connection: sqlite3.Connection,
+                                config: Dict[str, Any], event_id: str
+                                ) -> Tuple[Optional[str], int]:
+    """Maintenance alone has durable, lifetime-bounded cross-scan retries.
+
+    retry.max_attempts bounds HTTP attempts; the maintenance class's
+    retry_cooldown_seconds (default 300) spaces attempts across scans.
+    """
+    row = connection.execute(
+        "SELECT status, attempted_at, retry_count FROM events WHERE event_id=?",
+        (event_id,)).fetchone()
+    if row is None:
+        return None, 0
+    status, attempted_at, attempts = row
+    if status != STATUS_FAILED:
+        return STATUS_SUPPRESSED, attempts
+    if attempts >= int(config["retry"]["max_attempts"]):
+        return "blocked", attempts
+    cooldown = float(config["classes"]["maintenance-status"].get(
+        "retry_cooldown_seconds", 300))
+    if attempted_at and (datetime.datetime.fromisoformat(_utc_now())
+                         - datetime.datetime.fromisoformat(attempted_at)
+                         ).total_seconds() < cooldown:
+        return "retry-wait", attempts
+    return None, attempts
+
+
+def maintenance_status_events(source_db: str, watermark: Optional[str],
+                              ctx: Optional[Dict[str, Any]] = None
+                              ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Read the orchestrator's append-only notification queue, never mutate it."""
+    conn = open_source_ro(source_db)
+    if conn is None:
+        return [], watermark
+    try:
+        if conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                "AND name = 'maintenance_notifications'").fetchone() is None:
+            return [], watermark
+        config = (ctx or {}).get("config") or {}
+        store = (ctx or {}).get("connection")
+        rows = []
+        scanned_to = int(watermark or 0)
+        pending_before = None
+        # Limit work that can send, not rows examined: an early cooling
+        # failure must not trap newer events behind a fixed-size page.
+        for row in conn.execute(
+                "SELECT id, upgrade_id, status, detail, created_at "
+                "FROM maintenance_notifications WHERE id > ? ORDER BY id",
+                (scanned_to,)):
+            scanned_to = row[0]
+            if store is not None:
+                state, attempts = _maintenance_delivery_state(
+                    store, config, "maintenance:%s:%s" % (row[1], row[2]))
+                if state == "retry-wait" or (state is None and attempts):
+                    pending_before = (row[0] - 1 if pending_before is None
+                                      else pending_before)
+                if state is not None:
+                    continue
+            rows.append(row)
+            if len(rows) >= 50:
+                break
+        new_watermark = str(min(scanned_to, pending_before)
+                            if pending_before is not None else scanned_to)
+    finally:
+        conn.close()
+    config = (ctx or {}).get("config") or {}
+    _lexicon, glosses = voice_maps(config)
+    max_chars = int(config.get("message_max_chars", 3500))
+    events = []
+    for row_id, upgrade_id, status, detail, created_at in rows:
+        # Validate the whole fetched batch before returning any event. Never
+        # include malformed source values in errors (they may contain secrets).
+        try:
+            valid = (type(row_id) is int and row_id > 0
+                     and isinstance(upgrade_id, str)
+                     and re.fullmatch(r"[A-Za-z0-9:._-]{1,200}", upgrade_id)
+                     and status in ("detected", "blocked", "activated")
+                     and isinstance(detail, str) and detail.strip()
+                     and len(detail) <= 1000
+                     and not any(ord(c) < 32 or ord(c) == 127 for c in detail)
+                     and isinstance(created_at, str)
+                     and datetime.datetime.fromisoformat(created_at).utcoffset()
+                     is not None)
+        except (ValueError, TypeError):
+            valid = False
+        if not valid:
+            raise FatalTelegramError("malformed maintenance notification")
+        headline = "Atlas · maintenance %s" % status
+        lines = ["upgrade: %s" % upgrade_id, detail,
+                 "source: maintenance orchestrator · observed: %s" % created_at]
+        events.append({
+            "event_id": "maintenance:%s:%s" % (upgrade_id, status),
+            "source_row_id": row_id,
+            "event_class": "maintenance-status", "created_at": created_at,
+            "text": render_plain(headline, lines, "", None, max_chars,
+                                 glosses=glosses),
+            "html": render_html(headline, lines, "", None, max_chars,
+                                glosses=glosses)})
+    return events, new_watermark if scanned_to else watermark
+
+
 _ADAPTERS: Dict[str, Callable[..., Tuple[List[Dict[str, Any]],
                                          Optional[str]]]] = {
+    "maintenance-status": maintenance_status_events,
     "chain-runtime-upgrade": chain_runtime_upgrade_events,
     "chain-parameter-change": chain_parameter_change_events,
     "subnet-registry": subnet_registry_events,
@@ -2354,7 +2457,31 @@ def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
     created_at = event["created_at"]
     window = int(config.get("coalesce_window_seconds", 3600))
 
-    if ledger_seen_recent(connection, event_id, window):
+    prior_attempts = 0
+    fallback_allowed = True
+    if event_class == "maintenance-status":
+        state, prior_attempts = _maintenance_delivery_state(
+            connection, config, event_id)
+        if state is not None:
+            return state
+        # One transport attempt per scan (plus HTML fallback if budget
+        # permits); retry_count is a lifetime budget for maintenance only.
+        fallback_allowed = prior_attempts + 1 < int(config["retry"]["max_attempts"])
+        config = dict(config, retry=dict(config["retry"], max_attempts=1))
+        maintenance_poster = poster or _do_post
+
+        def bounded_poster(url: str, payload: bytes, timeout: int) -> Tuple[int, str]:
+            try:
+                return maintenance_poster(url, payload, timeout)
+            except (urllib.error.URLError, OSError, ValueError):
+                raise
+            except Exception as exc:
+                # Even unexpected transport failures consume an attempt;
+                # otherwise the outer isolation handler resets the budget.
+                raise ValueError(redact(str(exc))) from exc
+
+        poster = bounded_poster
+    elif ledger_seen_recent(connection, event_id, window):
         return STATUS_SUPPRESSED
 
     max_chars = int(config.get("message_max_chars", 3500))
@@ -2378,7 +2505,8 @@ def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
     if html:
         result = send_message(config, token, chat_id, html, poster=poster,
                               parse_mode="HTML")
-        if not result["delivered"] and result.get("status") == 400:
+        if (not result["delivered"] and result.get("status") == 400
+                and fallback_allowed):
             # Rejected formatting must never suppress an alert: resend
             # once as the untagged structured text (never the HTML
             # source) and record the fallback.
@@ -2391,6 +2519,7 @@ def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
     else:
         result = send_message(config, token, chat_id, text, poster=poster)
 
+    result["attempts"] += prior_attempts
     if result["delivered"]:
         ledger_record(connection, event_id, event_class, created_at,
                       _utc_now(), STATUS_DELIVERED, result["attempts"],
@@ -2453,7 +2582,7 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
             continue
         source_db = resolve(spec["source_db"])
         wm = watermark_get(connection, event_class)
-        counts = {"delivered": 0, "suppressed": 0, "failed": 0,
+        counts: Dict[str, Any] = {"delivered": 0, "suppressed": 0, "failed": 0,
                   "scrub-refused": 0, "error": 0}
         ctx = {"config": config, "spec": spec, "connection": connection}
         try:
@@ -2518,6 +2647,22 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
                 ledger_collapsed_members(
                     connection, event, STATUS_FAILED, _utc_now(), 0,
                     redact(str(exc)))
+        if event_class == "maintenance-status":
+            # A later success may not acknowledge an earlier failed send.
+            # Exhausted outcomes remain in the ledger for operator health.
+            exhausted = connection.execute(
+                "SELECT COUNT(*) FROM events WHERE event_class=? "
+                "AND status=? AND retry_count>=?",
+                (event_class, STATUS_FAILED,
+                 int(config["retry"]["max_attempts"]))).fetchone()[0]
+            counts["retry_exhausted"] = exhausted
+            counts["health"] = "blocked" if exhausted else "ok"
+            for event in events:
+                state, attempts = _maintenance_delivery_state(
+                    connection, config, event["event_id"])
+                if state == "retry-wait" or (state is None and attempts):
+                    new_wm = str(min(int(new_wm or 0),
+                                     event["source_row_id"] - 1))
         if new_wm and new_wm != wm:
             watermark_set(connection, event_class, new_wm)
         else:

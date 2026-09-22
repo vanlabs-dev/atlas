@@ -1,0 +1,11 @@
+[Unit]
+Description=Atlas runtime maintenance scan schedule
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=5min
+RandomizedDelaySec=15s
+Unit=atlas-maintenance-scan.service
+
+[Install]
+WantedBy=timers.target

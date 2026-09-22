@@ -1,0 +1,2 @@
+scalecodec==1.2.12
+pytest==9.1.1
