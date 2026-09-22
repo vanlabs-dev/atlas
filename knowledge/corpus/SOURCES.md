@@ -35,8 +35,14 @@ a marker if a corpus claim goes stale before the next re-sync.
 
 ## Re-sync procedure
 
-When the live grounding changes, the hourly Finney spec sync does this.
-Do not wait to be asked.
+The shortcut hourly Finney spec-sync job is retired from automatic writes.
+Its version comparison is diagnostic only; matching versions do not establish
+health, publication, source identity, or completed activation. The guarded
+`maintenance/` controller owns future automated changes after commissioning.
+See `maintenance/README.md` for its completion gate. Until that gate passes,
+automatic publication and activation remain disabled.
+
+For a separately authorized manual refresh, apply these evidence rules:
 
 1. Confirm the tracked clone's `spec_version` is at least the live spec.
    If the clone lags, stop. Do not rewrite from a lagging tree.
@@ -49,11 +55,12 @@ Do not wait to be asked.
 5. Regenerate `hashes.json` (sha256 per file, newline-normalized LF;
    update `sync_date`, `coverage_date`, and `grounded_spec`).
 6. Review `supersession-markers.json`.
-7. `ingest`, review the validation report, `activate` the new run if the
-   secret scan is clean.
-8. Run `python3 knowledge/atlas_spec_publish.py`. It commits the allowlist
-   as `vaNlabs <vanlabs@pm.me>` and fast-forward pushes with the Atlas
-   deploy key. It refuses a non-fast-forward and reads the remote tip back.
+7. Stage ingestion and review the validation report. Do not activate before
+   the controller's tests, independent exact-tree review, publication, and
+   deployment acceptance gates pass.
+8. Publish only through `maintenance/` with its explicit external operator
+   config and signed receipt. `knowledge/atlas_spec_publish.py` now refuses
+   every invocation; it cannot bypass validation or deployment recovery.
    Do not force-push. Do not use the subnt deploy key.
 
 The originals in `intoops-routines` are never modified or deleted from this

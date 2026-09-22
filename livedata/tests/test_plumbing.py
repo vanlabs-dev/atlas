@@ -128,6 +128,21 @@ class StoreTests(unittest.TestCase):
             self.assertIn("[REDACTED-KEY]", row)
             connection.close()
 
+    def test_env_loader_ignores_nonregular_credential_path(self):
+        # Sandbox masks and device paths are not credential files. Do not
+        # open them: a device/FIFO can deny access or block indefinitely.
+        from unittest.mock import patch
+        with patch("builtins.open", side_effect=PermissionError("masked")) as opened:
+            self.assertEqual(al.load_env(os.devnull), {})
+        opened.assert_not_called()
+
+    def test_env_loader_preserves_regular_file_permission_errors(self):
+        from unittest.mock import patch
+        with tempfile.NamedTemporaryFile() as handle:
+            with patch("builtins.open", side_effect=PermissionError("denied")):
+                with self.assertRaises(PermissionError):
+                    al.load_env(handle.name)
+
     def test_env_loader_registers_secret(self):
         with tempfile.TemporaryDirectory() as tmp:
             env_path = os.path.join(tmp, ".env")

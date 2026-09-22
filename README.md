@@ -14,8 +14,10 @@ running on a Raspberry Pi. Built methodically in gated phases via OpenSpec.
 artifact/source verification, isolated coding and testing, independent review,
 publication receipts, guarded activation, and rollback. The operator approved
 scoped automation. The maintenance publisher stays disabled until its
-acceptance gates pass. The Finney spec sync is a separate narrow path: it
-commits its allowlist and fast-forward pushes with the Atlas deploy key.
+acceptance gates pass. The shortcut Finney spec-sync cron is paused and its
+publisher refuses execution. Version equality alone cannot clear a failed
+publication or prove deployment health. Future automatic updates use only the
+guarded maintenance controller after its commissioning gate passes.
 
 See [maintenance/README.md](maintenance/README.md) for policy, commands,
 recovery, and installation. The active change is

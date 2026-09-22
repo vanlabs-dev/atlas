@@ -64,7 +64,12 @@ class IngestTests(unittest.TestCase):
             run = connection.execute(
                 "SELECT coverage_date, parser_version FROM intake_runs "
                 "WHERE run_id = ?", (run_id,)).fetchone()
-            self.assertEqual(run, ("2026-09-20", akb.PARSER_VERSION))
+            # Assert provenance against the input manifest, not a date
+            # that becomes stale on the next validated corpus refresh.
+            with open(os.path.join(CORPUS_DIR, "hashes.json"),
+                      encoding="utf-8") as handle:
+                coverage_date = json.load(handle)["coverage_date"]
+            self.assertEqual(run, (coverage_date, akb.PARSER_VERSION))
             self.assertEqual(connection.execute(
                 "SELECT count(*) FROM units WHERE active = 1"
             ).fetchone()[0], 0, "units must stage inactive")

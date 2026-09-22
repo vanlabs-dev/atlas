@@ -87,6 +87,34 @@ class ConfigAndIdentityTests(unittest.TestCase):
         self.assertEqual(result["values"]["complete"], True)
 
 
+class EnvTokenTests(unittest.TestCase):
+    def test_token_loader_ignores_nonregular_credential_path(self):
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"GITHUB_TOKEN": ""}):
+            with patch("builtins.open", side_effect=PermissionError("masked")) as opened:
+                self.assertIsNone(fleet.load_env_token(os.devnull))
+        opened.assert_not_called()
+
+    def test_token_loader_preserves_regular_file_permission_errors(self):
+        from unittest.mock import patch
+        with tempfile.NamedTemporaryFile() as handle:
+            with patch.dict(os.environ, {"GITHUB_TOKEN": ""}):
+                with patch("builtins.open", side_effect=PermissionError("denied")):
+                    with self.assertRaises(PermissionError):
+                        fleet.load_env_token(handle.name)
+
+    def test_token_loader_registers_file_secret(self):
+        from unittest.mock import patch
+        with tempfile.NamedTemporaryFile(mode="w+") as handle:
+            handle.write('GITHUB_TOKEN="fixture-github-secret-value"\n')
+            handle.flush()
+            with patch.dict(os.environ, {"GITHUB_TOKEN": ""}):
+                self.assertEqual(fleet.load_env_token(handle.name),
+                                 "fixture-github-secret-value")
+            self.assertNotIn("fixture-github-secret-value",
+                             fleet.redact("token fixture-github-secret-value"))
+
+
 class CliMainTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
