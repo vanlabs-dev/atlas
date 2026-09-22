@@ -21,18 +21,29 @@ publication. Publication and activation have separate durable receipts.
 
 **Operational status:** integration and acceptance are pending. System-owned
 producer timers require a one-time authenticated migration. Atlas tool servers
-require managed reader wrappers and a verified client reconnect. Neither
-publication nor activation becomes enabled by this decision-log entry.
-See [maintenance/README.md](../maintenance/README.md) and the active
-[OpenSpec change](../openspec/changes/mainnet-upgrade-maintenance/).
+require managed reader wrappers and a verified client reconnect. The
+maintenance publisher stays disabled. See [maintenance/README.md](../maintenance/README.md)
+and the active [OpenSpec change](../openspec/changes/mainnet-upgrade-maintenance/).
 
-## Dated live-chain snapshot (2026-09-20)
+## Live chain (2026-09-23)
 
-Finney `spec_version` **467**. `SubnetEmissionEnabled` is live; off netuids
-**29, 35, 36**. Emission bar is rank-pinned (N unset, default 32; q 0.75
-explicit and inert; h unset, default 3). `RootWeightSettingEnabled` is
-**false** (unset since spec 464, block 9088729). Root-weight vector maps
-currently enumerate empty.
+Finney `spec_version` **469** (TaoStats chain head, block 9125797,
+request completed 2026-09-22T21:21:18Z; knob read at finalized block
+9125891). `SubnetEmissionEnabled` off netuids **29, 35, 36, 108**
+(finalized block 9125893). Emission bar is rank-pinned (N unset, default
+32; q 0.75 explicit and inert; h unset, default 3).
+`RootWeightSettingEnabled` is **false** (unset). `BasketTradingEnabled`
+is **true** (explicit). Basket curation is off. Basket trading is on and
+is not curation.
+
+Operator authorized the Finney spec sync to commit and push on 2026-09-23.
+The hourly job wakes when the corpus grounded spec lags the live spec and
+the tracked clone has caught up. It updates the corpus from the clone diff
+and live storage reads, regenerates hashes, ingests, and activates. Then
+`knowledge/atlas_spec_publish.py` commits the allowlist and fast-forward
+pushes with the Atlas deploy key, and reads the remote tip back. It does
+not force-push. The maintenance publisher stays disabled. Web leads stay
+out of the confirmed knowledge base (ATLAS-WEB-003).
 
 The table below is historical. Do not treat its dated live reads as current.
 Current-state docs: [README.md](../README.md) and
