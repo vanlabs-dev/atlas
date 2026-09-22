@@ -8,7 +8,22 @@ running on a Raspberry Pi. Built methodically in gated phases via OpenSpec.
 (resolved/open decisions), `openspec/specs/` (accepted capability specs), and
 `openspec/changes/archive/` (completed changes with their proposal/design/tasks).
 
-## Current status (2026-09-20, Finney spec 467)
+## Mainnet maintenance implementation (2026-09-22)
+
+`maintenance/` adds finalized-deployment detection, durable audit jobs,
+artifact/source verification, isolated coding and testing, independent review,
+publication receipts, guarded activation, and rollback. The operator approved
+scoped automation; publication and activation stay **disabled until integrated
+acceptance and the one-time producer/reader migration pass**.
+
+See [maintenance/README.md](maintenance/README.md) for policy, commands,
+recovery, and installation. The active change is
+[`mainnet-upgrade-maintenance`](openspec/changes/mainnet-upgrade-maintenance/).
+A detected or source-mapped runtime does not extend audited corpus coverage.
+The accepted coverage snapshot below remains dated; do not present it as the
+current live chain.
+
+## Dated accepted snapshot (2026-09-20, Finney spec 467)
 
 **Phases 0–5 are complete and accepted on the device.** Hermes Agent
 v0.20.0 runs on the Pi (Grok `grok-4.6` via X OAuth), answering Bittensor

@@ -1,0 +1,19 @@
+[Unit]
+Description=Atlas finalized runtime maintenance scan
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/pi/atlas
+ExecStart=/home/pi/.cache/atlas-maintenance-venv/bin/python -m maintenance.atlas_maintenance scan
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PATH=/home/pi/.local/bin:/usr/bin:/bin
+UMask=0077
+Nice=10
+CPUQuota=150%
+MemoryMax=1G
+TasksMax=96
+TimeoutStartSec=15min
+KillMode=control-group
+NoNewPrivileges=true

@@ -4,7 +4,29 @@ Resolved decisions from [prd.md](../prd.md) §21. Each entry: what was decided,
 when, and by whom. Unlisted questions remain **open** — see the PRD for the
 full list. Per PRD §5.5, nothing here may be assumed before it is recorded.
 
-## Live chain (2026-09-20)
+## Mainnet-maintenance authority (2026-09-22)
+
+**Decided by the operator:** approve the written mainnet-upgrade automation
+plan, an Atlas-only deploy key, resource-bounded isolated Pi tests, gated
+ordinary publication, and validated local code/knowledge activation. Preserve
+personal Git identity and remote branch rules. Exclude secrets, wallets,
+unrelated repos, security/network changes, and autonomous control-plane edits.
+
+The implementation uses finalized deployment evidence rather than observed
+runtime numbers alone. Source provenance means verified official publisher
+artifacts matched to deployed code, not an unperformed reproducible build.
+Every intervening deployment and every Atlas consumer requires an evidence-backed
+disposition. A candidate requires complete tests and independent review before
+publication. Publication and activation have separate durable receipts.
+
+**Operational status:** integration and acceptance are pending. System-owned
+producer timers require a one-time authenticated migration. Atlas tool servers
+require managed reader wrappers and a verified client reconnect. Neither
+publication nor activation becomes enabled by this decision-log entry.
+See [maintenance/README.md](../maintenance/README.md) and the active
+[OpenSpec change](../openspec/changes/mainnet-upgrade-maintenance/).
+
+## Dated live-chain snapshot (2026-09-20)
 
 Finney `spec_version` **467**. `SubnetEmissionEnabled` is live; off netuids
 **29, 35, 36**. Emission bar is rank-pinned (N unset, default 32; q 0.75

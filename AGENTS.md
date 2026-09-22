@@ -19,18 +19,24 @@ Every commit and every push uses the personal identity:
 | Git author | `vaNlabs <vanlabs@pm.me>` |
 | GitHub account | `vanlabs-dev` |
 | Remote, workstation | `git@github.com:vanlabs-dev/atlas.git` (SSH, read and write) |
-| Remote, Pi | `https://github.com/vanlabs-dev/atlas.git` (HTTPS, anonymous, read only) |
+| Remote, Pi reads | `https://github.com/vanlabs-dev/atlas.git` (anonymous HTTPS) |
+| Remote, Pi maintenance pushes | `git@github.com:vanlabs-dev/atlas.git` (Atlas-only deploy key) |
 
-**The remote is not the same on both hosts.** The workstation pushes over
-SSH. The Pi holds no private SSH key and no credential helper, so it pulls
-anonymously over HTTPS and cannot push at all. A commit that is not pushed
-from the workstation does not exist as far as the device is concerned, and
-`git pull` on the Pi will silently find nothing.
+The operator approved scoped mainnet-upgrade maintenance on 2026-09-22.
+The Pi keeps anonymous HTTPS reads and uses its dedicated Atlas deploy key
+only in the deterministic publisher. The coding worker receives no key.
+Automatic ordinary pushes to `main` require complete deployed-source evidence,
+all mandatory tests, independent review, and exact remote readback. Branch
+protections remain enforced. Never force-push. Publication and activation
+remain disabled until the implementation acceptance gates pass.
 
-The Pi also has no `~/.gitconfig`, so it has no `user.name` or
-`user.email`. Anything that commits there must pass identity per
-invocation with `git -c user.name=... -c user.email=...` or the commit
-fails outright.
+This approval also permits resource-bounded isolated Pi tests and validated
+local code/knowledge activation. It excludes secrets, wallets, unrelated
+repos, network/security settings, and maintenance-policy self-modification.
+See `maintenance/README.md` and the approved OpenSpec change.
+
+Supply the personal identity explicitly for maintenance commits, even when
+repo-local Git identity is configured. Do not rely on global configuration.
 
 Verify the author before any commit lands. If `git var GIT_AUTHOR_IDENT`
 shows anything else, stop and fix it rather than committing.
