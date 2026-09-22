@@ -209,10 +209,12 @@ without it the commit fails outright.
 
 ## On the device
 
-The original publisher has been live since 2026-09-10. The subnt rename
-is prepared locally, not deployed. The table below describes the target
-layout. Follow `docs/subnt-rename.md` in the public-page repository before
-starting `atlas-subnt.timer`; preserve the existing publish-state database.
+The original publisher has been live since 2026-09-10. The subnt publisher
+rename was deployed on 2026-09-22 with its prior publish state preserved.
+The renamed service published successfully and `atlas-subnt.timer` is enabled.
+All 75 renderer tests passed on the device. Cloudflare served the edition on
+shinogi.dev; domain cutover to subnt.dev remains pending. See
+`docs/subnt-rename.md` in the public-page repository for the cutover record.
 
 | | |
 |---|---|
