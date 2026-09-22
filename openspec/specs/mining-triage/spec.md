@@ -74,12 +74,26 @@ every excluded subnet, the gate at which it left and the value that
 triggered it. An excluded subnet SHALL remain retrievable with its reason;
 exclusion SHALL NOT be implemented as omission.
 
-The ladder SHALL begin with the emission gate. A gate-disabled subnet still
-distributes alpha to its miners, because the participant distribution runs
-regardless of the gate; what it loses is the TAO inflow backing that alpha,
-so the alpha's price decays and TAO-denominated income tends to zero. The
-recorded reason SHALL say that, and SHALL NOT claim the subnet pays nothing.
-The gate rung is followed by an on-chain identity rung. A subnet whose
+The ladder SHALL begin with the **pool-side emission switch**, and SHALL name
+it as a switch rather than as the emission gate. The two are different
+mechanisms and conflating them misreads the board: the emission-gate bar is a
+continuous function of a subnet's demand share, while this switch is a binary
+root-settable state that can be flipped for many subnets at once without any
+demand moving. A subnet with the switch off still distributes alpha to its
+miners, because the participant distribution runs regardless; what it loses is
+the TAO inflow backing that alpha, so the alpha's price decays and
+TAO-denominated income tends to zero. The recorded reason SHALL say that,
+SHALL NOT claim the subnet pays nothing, and SHALL NOT attribute the
+exclusion to the subnet's demand or to the bar.
+
+Because this rung is driven by an external switch rather than by the subnet's
+own economics, a change in the board's ranked count that follows a switch
+transition SHALL be attributable to it: the board SHALL carry the reference
+block of the switch state it was built from, so a jump in the ranked count can
+be read against the transition record rather than mistaken for a change in
+what subnets are worth entering.
+
+The switch rung is followed by an on-chain identity rung. A subnet whose
 owner-written on-chain `subnet_name` is a placeholder, or which has no
 on-chain identity entry at all, SHALL be excluded: the owner has declared
 the slot is not a going concern, and no income figure makes it enterable.
@@ -113,10 +127,18 @@ concentrated one.
 
 #### Scenario: Gate-disabled subnet is cut with an accurate reason
 
-- **WHEN** a subnet reports emission disabled
-- **THEN** it is excluded at the gate rung with a reason naming unbacked
-  alpha and a decaying price, not absent payment, and it remains
-  retrievable from the store and the query surface as an excluded subnet
+- **WHEN** a subnet reports its pool-side emission switch off
+- **THEN** it is excluded at the switch rung with a reason naming the switch,
+  unbacked alpha and a decaying price, not absent payment and not the
+  emission-gate bar, and it remains retrievable from the store and the query
+  surface as an excluded subnet
+
+#### Scenario: A switch flip is attributable on the board
+
+- **WHEN** the ranked count changes between passes because the pool-side
+  emission switch changed for one or more subnets
+- **THEN** the board carries the reference block of the switch state it was
+  built from, so the change can be read against the recorded transition
 
 #### Scenario: Owner-abandoned subnet is cut on its chain name
 

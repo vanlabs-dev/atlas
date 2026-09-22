@@ -85,6 +85,25 @@ points renders nothing rather than a misleading flat line.
 The contract requires the page to be readable with scripting disabled and
 bans any browser data fetch. It permits a typeface and presentation script.
 
+## The as-of line carries the reader's own clock
+
+The line states UTC, and a reader outside it cannot tell at a glance how old
+an edition is. The masthead therefore carries an empty
+`<time class="ago" datetime=...>` beside the pill, filled in the browser by
+the one inline script on the page: "6 hours ago", with the reader's local
+time on hover. It is presentation only and pulls nothing; with scripting off
+it renders nothing and the absolute line stands alone.
+
+A relative string fixed at compose would be wrong by the second view, because
+an edition sits until a fact moves. Two constraints shape where it lives:
+
+- It is a **sibling** of the `.asof` div, not a child. The contract's parser
+  counts any element inside that div as nesting and would then read the
+  as-of text off the wrong closing tag.
+- `fact_digest()` normalises **both** the as-of line and that element's
+  `datetime`. The instant sits outside the div the line normalisation
+  covers, so missing it would republish unchanged facts every pass.
+
 ## Attention is grouped, and its reason is derived
 
 `score_subnet` returns a category, and on the real fleet **93 of 106 public

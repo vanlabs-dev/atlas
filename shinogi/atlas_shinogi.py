@@ -896,6 +896,7 @@ def compose(config: Dict[str, Any], state: Optional[sqlite3.Connection],
     sections["attention_groups"] = group_attention(
         sections.get("attention") or [])
     return {"asof_time": now.strftime("%Y-%m-%d %H:%M UTC"),
+            "asof_iso": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "asof_block": block, "first_edition": first_edition,
             "window_start": start, "sections": sections, "figures": figures,
             "charts": charts, "lede": _lede(sections, figures, charts),
@@ -952,14 +953,15 @@ body{
   backdrop-filter:blur(14px);border-bottom:1px solid var(--line);
 }
 h1{margin:0;font-size:13.5px;font-weight:700;letter-spacing:.28em}
-.tagline{color:var(--fg2);font-size:13.5px}
+.tagline{color:var(--fg2);font-size:13.5px;margin-right:auto}
 .asof{
   font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;
-  margin-left:auto;display:flex;align-items:center;gap:9px;font-size:12.5px;
+  display:flex;align-items:center;gap:9px;font-size:12.5px;
   color:var(--fg2);background:var(--s1);border:1px solid var(--line);
   padding:6px 13px;border-radius:999px;
 }
 .pulse{width:6px;height:6px;border-radius:50%;background:var(--up);box-shadow:0 0 0 3px rgba(116,185,138,.14)}
+.ago{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--fg2)}
 .hero{
   display:grid;grid-template-columns:minmax(30ch,0.9fr) 2.1fr;gap:56px;
   align-items:center;padding:52px var(--pad) 46px;border-bottom:1px solid var(--hair);
@@ -1205,12 +1207,39 @@ def _movers_body(edition: Dict[str, Any]) -> str:
                              'threshold.</div>', gaps))
 
 
+# Presentation only. The contract allows a script that cannot pull a figure,
+# and the reader's own clock is the one fact the composer does not have: the
+# page states UTC, the reader may not be in it, and an edition sits until a
+# fact moves. Computing the gap in the browser keeps it true for as long as
+# the page is served; a string baked in at compose would be wrong by the
+# second view. The absolute line stays the fallback with scripting off.
+_AGO_JS = (
+    '<script>(function(){'
+    'var el=document.getElementById("ago");if(!el){return}'
+    'var t=Date.parse(el.getAttribute("datetime"));if(isNaN(t)){return}'
+    'function u(n,w){return n+" "+w+(n===1?"":"s")+" ago"}'
+    'function tick(){var s=(Date.now()-t)/1000;'
+    'el.textContent=s<90?"just now":'
+    's<3600?u(Math.floor(s/60),"minute"):'
+    's<86400?u(Math.floor(s/3600),"hour"):'
+    'u(Math.floor(s/86400),"day")}'
+    'tick();try{el.title=new Date(t).toString()}catch(e){}'
+    'el.hidden=false;setInterval(tick,30000);'
+    '})();</script>')
+
+
 def render(edition: Dict[str, Any]) -> str:
     sections = edition["sections"]
     figures = edition["figures"]
     block = edition["asof_block"]
     asof = "as of %s \u00b7 block %s" % (
         edition["asof_time"], block if block is not None else "not recorded")
+    # The contract pins the as-of text exactly and its parser reads any
+    # element inside that div as nesting, so the reader's own clock is an
+    # empty sibling the presentation script fills. With scripting off it
+    # renders nothing rather than a stale "4 hours ago" baked in at compose.
+    ago = ('<time class="ago" id="ago" datetime="%s" hidden></time>'
+           % _esc(edition["asof_iso"])) if edition.get("asof_iso") else ""
 
     dist = distribution_svg(
         edition["charts"].get("shares") or [], figures.get("rank"),
@@ -1259,9 +1288,9 @@ def render(edition: Dict[str, Any]) -> str:
         "<style>" + _CSS + "</style>",
         "</head>", "<body>",
         '<div class="bar"><h1>SHINOGI</h1>'
-        '<div class="tagline">%s</div>'
+        '<div class="tagline">%s</div>%s'
         '<div class="asof"><span class="pulse"></span>%s</div></div>'
-        % (_esc(TAGLINE), _esc(asof)),
+        % (_esc(TAGLINE), ago, _esc(asof)),
         _hero(edition),
     ]
     out += _section("network", "Network", "", network_body)
@@ -1281,7 +1310,7 @@ def render(edition: Dict[str, Any]) -> str:
             "<span>public read-only</span><span class=\"dot\">&#183;</span>"
             "<span>data from Atlas</span><span class=\"dot\">&#183;</span>"
             "<span>every figure traces to a recorded row</span></footer>",
-            "</body>", "</html>", ""]
+            _AGO_JS, "</body>", "</html>", ""]
     return "\n".join(x for x in out if x)
 
 
@@ -1407,6 +1436,7 @@ def _sha256(text: str) -> str:
 
 
 _ASOF_RE = re.compile(r'(<div class="asof">).*?(</div>)', re.S)
+_AGO_RE = re.compile(r'<time class="ago"[^>]*>')
 
 
 def fact_digest(document: str) -> str:
@@ -1418,8 +1448,13 @@ def fact_digest(document: str) -> str:
     about 124 times a month. Gating on the facts means an edition is
     republished only when something it reports actually moved, and a page
     left in place keeps the compose time of the edition that is published,
-    which is the time the contract asks it to state."""
-    return _sha256(_ASOF_RE.sub(r"\1\2", document))
+    which is the time the contract asks it to state.
+
+    The relative-time element carries the same instant as a machine-readable
+    attribute and sits outside that div, so it is normalised out too. Miss it
+    and the gate never holds."""
+    return _sha256(_AGO_RE.sub('<time class="ago">',
+                               _ASOF_RE.sub(r"\1\2", document)))
 
 
 def _atomic_write(path: str, text: str) -> None:
@@ -1488,7 +1523,7 @@ def publish(config: Dict[str, Any], document: str) -> Dict[str, Any]:
         raise ShinogiError("cannot stage %s: %s" % (page, err.strip()))
     code, out, err = _git(
         checkout,
-        "-c", "user.name=%s" % config.get("commit_name", "vanlabs-dev"),
+        "-c", "user.name=%s" % config.get("commit_name", "vaNlabs"),
         "-c", "user.email=%s" % config.get("commit_email", "vanlabs@pm.me"),
         "commit", "-m", "Publish edition")
     if code != 0:
