@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Atlas shinogi renderer (change: shinogi-renderer).
+"""Atlas subnt renderer (change: subnt-renderer).
 
-Composes the public shinogi.dev edition from rows already persisted in the
+Composes the public subnt.dev edition from rows already persisted in the
 livedata and fleet stores, all opened read-only, and publishes it into a
 second checkout when the content hash changes. Composing makes no chain
 call, no provider call and no model call: every figure traces to a stored
@@ -19,10 +19,10 @@ Telegram crosses into the page.
 Stale bounds are per input. The emission-gate bar uses the briefing bound
 of 26 hours. Network vitals carry their observation date and are never
 called stale for age alone. Movers use the window since the previous
-shinogi publish, or `window_hours` before compose on a first edition.
+subnt publish, or `window_hours` before compose on a first edition.
 
-The publish path is one direction only: Atlas writes shinogi, and no file
-in the shinogi checkout is read as an input to an edition. Before any
+The publish path is one direction only: Atlas writes subnt, and no file
+in the subnt checkout is read as an input to an edition. Before any
 write the rendered document is scanned for operator material and for the
 self-contained rules the page contract fixes; a hit fails the pass closed.
 """
@@ -46,7 +46,7 @@ _REPO_ROOT = os.path.dirname(_MODULE_DIR)
 CONFIG_FILE = os.path.join(_MODULE_DIR, "config.json")
 
 TAGLINE = "A lean read on Bittensor subnets"
-FOOTER = "shinogi.dev · public read-only · data from Atlas"
+FOOTER = "subnt.dev · public read-only · data from Atlas"
 
 # Contract order. Every landmark is present on every edition, including one
 # whose every input is missing.
@@ -95,7 +95,7 @@ def why_phrase(sc: Dict[str, Any]) -> Optional[str]:
     return WHY_PHRASE.get(why)
 
 
-class ShinogiError(Exception):
+class SubntError(Exception):
     """The pass fails closed. Nothing is written."""
 
 
@@ -156,11 +156,11 @@ def load_config(path: str = CONFIG_FILE) -> Dict[str, Any]:
         with open(path, "r", encoding="utf-8") as handle:
             config = json.load(handle)
     except (OSError, ValueError) as exc:
-        raise ShinogiError("cannot load config %s: %s" % (path, exc))
+        raise SubntError("cannot load config %s: %s" % (path, exc))
     for key in ("enabled", "publish", "checkout_dir", "state_db", "live_db",
                 "fleet_db"):
         if key not in config:
-            raise ShinogiError("config %s is missing %r" % (path, key))
+            raise SubntError("config %s is missing %r" % (path, key))
     return config
 
 
@@ -173,8 +173,8 @@ CREATE TABLE IF NOT EXISTS meta (
 
 
 def open_state(db_path: str) -> sqlite3.Connection:
-    """The renderer's own store. Shinogi deltas compare against the last
-    shinogi publish on a six-hour clock, which is a different series from
+    """The renderer's own store. Subnt deltas compare against the last
+    subnt publish on a six-hour clock, which is a different series from
     the notifier's daily and weekly `briefing:figures`; keeping them apart
     also keeps compose read-only against every Atlas store."""
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
@@ -240,7 +240,7 @@ def _sn_list(netuids: Sequence[Any]) -> str:
 
 
 def _delta_value(new: Any, old: Any) -> Optional[str]:
-    """The signed change since the previous shinogi publish, or None.
+    """The signed change since the previous subnt publish, or None.
     A change that rounds to zero is suppressed: `+0.0%` is noise."""
     pct = _brief()._delta_pct(new, old)
     if not pct or pct in ("+0.0%", "-0.0%"):
@@ -646,7 +646,7 @@ def vitals_series(src: Any, column: str, limit: int = 30
     if live is None or not brief._table(live, "network_vitals"):
         return []
     if column not in ("tao_usd", "total_staked_tao", "subnets_share_pct"):
-        raise ShinogiError("refusing an unrecognised vitals column %r"
+        raise SubntError("refusing an unrecognised vitals column %r"
                            % column)
     rows = live.execute(
         "SELECT date, %s FROM network_vitals WHERE %s IS NOT NULL "
@@ -677,7 +677,7 @@ def netuid_series(src: Any, netuid: int, column: str, limit: int = 14
     if live is None or not brief._table(live, "panel_snapshot"):
         return []
     if column not in ("share", "moving_price_tao", "alpha_price_tao"):
-        raise ShinogiError("refusing an unrecognised panel column %r"
+        raise SubntError("refusing an unrecognised panel column %r"
                            % column)
     rows = live.execute(
         "SELECT %s FROM panel_snapshot WHERE netuid = ? AND %s IS NOT NULL "
@@ -1282,12 +1282,12 @@ def render(edition: Dict[str, Any]) -> str:
         "<!DOCTYPE html>", '<html lang="en">', "<head>",
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
-        "<title>shinogi</title>",
+        "<title>subnt</title>",
         '<meta name="description" content="A lean read on Bittensor subnets.">',
         _FONTS,
         "<style>" + _CSS + "</style>",
         "</head>", "<body>",
-        '<div class="bar"><h1>SHINOGI</h1>'
+        '<div class="bar"><h1>SUBNT</h1>'
         '<div class="tagline">%s</div>%s'
         '<div class="asof"><span class="pulse"></span>%s</div></div>'
         % (_esc(TAGLINE), ago, _esc(asof)),
@@ -1306,7 +1306,7 @@ def render(edition: Dict[str, Any]) -> str:
             % (_facts_list(sections.get("code") or []),
                _facts_list(sections.get("narrative") or [])),
             "</section>"]
-    out += ["<footer><span>shinogi.dev</span><span class=\"dot\">&#183;</span>"
+    out += ["<footer><span>subnt.dev</span><span class=\"dot\">&#183;</span>"
             "<span>public read-only</span><span class=\"dot\">&#183;</span>"
             "<span>data from Atlas</span><span class=\"dot\">&#183;</span>"
             "<span>every figure traces to a recorded row</span></footer>",
@@ -1321,7 +1321,7 @@ def render(edition: Dict[str, Any]) -> str:
 # in advance; the scan can.
 # ---------------------------------------------------------------------------
 
-# The exact strings shinogi/tests/test_page_contract.py bans, first.
+# The exact strings subnt/tests/test_page_contract.py bans, first.
 OPERATOR_TOKENS: Tuple[str, ...] = (
     "mining.budget_band",
     "TaoStats quota",
@@ -1426,7 +1426,7 @@ def _git(cwd: str, *args: str) -> Tuple[int, str, str]:
                               text=True, env=env, stdin=subprocess.DEVNULL,
                               timeout=_GIT_TIMEOUT)
     except subprocess.TimeoutExpired:
-        raise ShinogiError("git %s did not finish in %ds"
+        raise SubntError("git %s did not finish in %ds"
                            % (args[0] if args else "", _GIT_TIMEOUT))
     return proc.returncode, proc.stdout, proc.stderr
 
@@ -1474,19 +1474,19 @@ def publish(config: Dict[str, Any], document: str) -> Dict[str, Any]:
     digest = _sha256(document)
 
     if not os.path.isdir(checkout):
-        raise ShinogiError("shinogi checkout %s does not exist" % checkout)
+        raise SubntError("subnt checkout %s does not exist" % checkout)
     if not os.path.isdir(os.path.join(checkout, ".git")):
-        raise ShinogiError("shinogi checkout %s is not a git repository"
+        raise SubntError("subnt checkout %s is not a git repository"
                            % checkout)
     code, out, err = _git(checkout, "status", "--porcelain")
     if code != 0:
-        raise ShinogiError("cannot read the checkout state: %s"
+        raise SubntError("cannot read the checkout state: %s"
                            % (err.strip() or out.strip()))
     if out.strip():
-        raise ShinogiError("shinogi checkout %s is dirty; refusing to write "
+        raise SubntError("subnt checkout %s is dirty; refusing to write "
                            "over uncommitted work" % checkout)
 
-    # Anyone may commit to the shinogi repo directly (the contract and its
+    # Anyone may commit to the subnt repo directly (the contract and its
     # test live there). A checkout left behind origin would have its push
     # rejected, and an unattended timer cannot resolve that, so sync first.
     # Fast-forward only: a diverged checkout is an operator problem, not
@@ -1494,22 +1494,22 @@ def publish(config: Dict[str, Any], document: str) -> Dict[str, Any]:
     branch = config.get("branch", "main")
     code, out, err = _git(checkout, "fetch", "--quiet", "origin", branch)
     if code != 0:
-        raise ShinogiError("cannot reach origin/%s: %s"
+        raise SubntError("cannot reach origin/%s: %s"
                            % (branch, err.strip() or out.strip()))
     code, counts, _err = _git(checkout, "rev-list", "--left-right",
                               "--count", "HEAD...FETCH_HEAD")
     if code == 0 and counts.split():
         ahead, behind = (int(x) for x in counts.split())
         if behind and ahead:
-            raise ShinogiError(
-                "shinogi checkout has diverged from origin/%s (%d ahead, "
+            raise SubntError(
+                "subnt checkout has diverged from origin/%s (%d ahead, "
                 "%d behind); refusing to publish over it" % (branch, ahead,
                                                              behind))
         if behind:
             code, out, err = _git(checkout, "merge", "--ff-only",
                                   "FETCH_HEAD")
             if code != 0:
-                raise ShinogiError("cannot fast-forward to origin/%s: %s"
+                raise SubntError("cannot fast-forward to origin/%s: %s"
                                    % (branch, err.strip() or out.strip()))
 
     code, committed, _err = _git(checkout, "show", "HEAD:%s" % page)
@@ -1520,20 +1520,20 @@ def publish(config: Dict[str, Any], document: str) -> Dict[str, Any]:
     _atomic_write(target, document)
     code, out, err = _git(checkout, "add", page)
     if code != 0:
-        raise ShinogiError("cannot stage %s: %s" % (page, err.strip()))
+        raise SubntError("cannot stage %s: %s" % (page, err.strip()))
     code, out, err = _git(
         checkout,
         "-c", "user.name=%s" % config.get("commit_name", "vaNlabs"),
         "-c", "user.email=%s" % config.get("commit_email", "vanlabs@pm.me"),
         "commit", "-m", "Publish edition")
     if code != 0:
-        raise ShinogiError("cannot commit: %s" % (err.strip() or out.strip()))
+        raise SubntError("cannot commit: %s" % (err.strip() or out.strip()))
 
     # A failed push leaves the local commit in place and the last deploy
     # live. Recovering it is the operator's call; this does not reset.
     code, out, err = _git(checkout, "push", "origin", branch)
     if code != 0:
-        raise ShinogiError(
+        raise SubntError(
             "cannot push to origin/%s: %s. The commit is local and "
             "recoverable; nothing was reset."
             % (branch, err.strip() or out.strip()))
@@ -1564,7 +1564,7 @@ def run(config: Dict[str, Any], now: Optional[datetime.datetime] = None
     try:
         edition, document, leaks = build(config, state, now=now)
         if leaks:
-            raise ShinogiError("refusing to publish: %s" % "; ".join(leaks))
+            raise SubntError("refusing to publish: %s" % "; ".join(leaks))
         checkout = os.path.expanduser(config["checkout_dir"])
         target = os.path.join(checkout, config.get("page_file", "index.html"))
         if not config.get("publish"):
@@ -1588,8 +1588,8 @@ def run(config: Dict[str, Any], now: Optional[datetime.datetime] = None
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="atlas_shinogi",
-        description="Atlas shinogi renderer: compose the public edition "
+        prog="atlas_subnt",
+        description="Atlas subnt renderer: compose the public edition "
                     "from the Atlas stores and publish it on a content "
                     "change.")
     parser.add_argument("--config", default=None)
@@ -1631,7 +1631,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 0 if not leaks else 2
         print(json.dumps(run(config), indent=2, sort_keys=True))
         return 0
-    except ShinogiError as exc:
+    except SubntError as exc:
         print("fatal: %s" % exc, file=sys.stderr)
         return 2
 

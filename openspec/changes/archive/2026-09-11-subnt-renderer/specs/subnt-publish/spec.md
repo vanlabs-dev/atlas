@@ -1,7 +1,7 @@
 ## Purpose
 
-Composes the public shinogi.dev edition from facts already recorded in the
-Atlas stores and publishes it into the shinogi checkout, so that a page
+Composes the public subnt.dev edition from facts already recorded in the
+Atlas stores and publishes it into the subnt checkout, so that a page
 readable by anyone carries only recorded, dated, operator-free figures and
 names every input it does not have.
 
@@ -38,8 +38,8 @@ estimate, interpolate, or carry a prior value forward as current.
 ### Requirement: The edition satisfies the frozen page contract
 
 The composer SHALL emit a single self-contained HTML document that
-satisfies the accepted `public-pulse` contract of the shinogi repository:
-the `SHINOGI` wordmark, an as-of element, and the five section landmarks
+satisfies the accepted `public-pulse` contract of the subnt repository:
+the `SUBNT` wordmark, an as-of element, and the five section landmarks
 `network`, `movers`, `mining`, `attention`, `code-narrative` in that
 order, with `Code` and `Narrative` subheadings inside the last one.
 
@@ -101,7 +101,7 @@ The emission-gate bar SHALL use the briefing stale bound of twenty-six
 hours and SHALL be named stale, without its figure presented as current,
 when its newest observation is older than that. Network vitals SHALL be
 shown with their observation date and SHALL NOT be named stale for age
-alone. Panel movers SHALL use the window since the previous shinogi
+alone. Panel movers SHALL use the window since the previous subnt
 publish, or the six hours before compose when no previous publish exists.
 
 #### Scenario: Bar past its bound
@@ -119,32 +119,32 @@ publish, or the six hours before compose when no previous publish exists.
 
 #### Scenario: Mover window follows the previous publish
 
-- **WHEN** a previous shinogi publish exists
+- **WHEN** a previous subnt publish exists
 - **THEN** movers are ranked over the window since that publish, not
   over a fixed six hours
 
-### Requirement: Deltas compare against the previous shinogi publish
+### Requirement: Deltas compare against the previous subnt publish
 
 The composer SHALL persist the edition's figure set on a successful
 publish and SHALL compare each figure that has a prior value against the
-figure set of the previous shinogi publish. Deltas SHALL NOT be derived
+figure set of the previous subnt publish. Deltas SHALL NOT be derived
 from the Telegram briefing watermark or its figure set.
 
 A change that rounds to zero SHALL be suppressed rather than shown, and a
 figure that did not move SHALL simply carry no delta.
 
-When no previous shinogi publish exists, the edition SHALL state that it
+When no previous subnt publish exists, the edition SHALL state that it
 is the first edition and SHALL show no figure deltas.
 
 #### Scenario: First edition
 
-- **WHEN** no previous shinogi figure set is stored
+- **WHEN** no previous subnt figure set is stored
 - **THEN** the page states that it is the first edition and shows
   current values with no deltas
 
 #### Scenario: Later edition
 
-- **WHEN** a previous shinogi figure set is stored
+- **WHEN** a previous subnt figure set is stored
 - **THEN** each figure with a prior value shows its change against that
   set
 
@@ -189,7 +189,7 @@ direction cue, or a board thesis sentence.
 #### Scenario: Publish refuses a leaking document
 
 - **WHEN** a composed document contains a banned operator string
-- **THEN** the pass fails closed, nothing is written to the shinogi
+- **THEN** the pass fails closed, nothing is written to the subnt
   checkout, and the failure is reported
 
 ### Requirement: Attention rows are ranked, capped, and named
@@ -310,14 +310,14 @@ edition that is published, and SHALL report that the edition was
 unchanged.
 
 Before writing, the pass SHALL bring the checkout up to date with its
-remote by fast-forward only. The shinogi repository holds its own page
+remote by fast-forward only. The subnt repository holds its own page
 contract and test, so a commit made there directly would otherwise leave
 the checkout behind and every later push rejected, which an unattended
 pass cannot resolve. A checkout that has diverged SHALL fail closed
 rather than be merged.
 
 Commits SHALL be authored as the personal identity and SHALL carry no
-attribution trailer. Atlas SHALL NOT read the shinogi repository for any
+attribution trailer. Atlas SHALL NOT read the subnt repository for any
 input to an edition; bringing the checkout up to date is repository
 state, not an edition input.
 
@@ -347,7 +347,7 @@ state, not an edition input.
 #### Scenario: Publish stays one-directional
 
 - **WHEN** an edition is composed
-- **THEN** no file in the shinogi checkout other than the published
+- **THEN** no file in the subnt checkout other than the published
   document is read as an input to that edition
 
 ### Requirement: Publishing is separately disableable and fails closed
@@ -356,7 +356,7 @@ Composition and publication SHALL each be independently disableable by
 configuration. When publication is disabled, the composer SHALL still
 produce the document and report where it would have been written.
 
-When the shinogi checkout is missing, is not a repository, or has no
+When the subnt checkout is missing, is not a repository, or has no
 usable push credential, the pass SHALL fail closed with a named reason,
 SHALL leave the checkout unchanged, and SHALL NOT create or move any
 credential.
@@ -369,7 +369,7 @@ credential.
 
 #### Scenario: Checkout missing
 
-- **WHEN** the configured shinogi checkout does not exist
+- **WHEN** the configured subnt checkout does not exist
 - **THEN** the pass fails closed naming that reason and writes nothing
 
 #### Scenario: Remote unreachable

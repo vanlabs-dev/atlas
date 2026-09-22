@@ -1,4 +1,4 @@
-# Atlas shinogi renderer timer, every 6h, matching the fleet cadence and
+# Atlas subnt renderer timer, every 6h, matching the fleet cadence and
 # the Cloudflare Pages Free build budget (500 a month; six-hourly tops out
 # near 124, and an edition whose facts have not moved is not published at
 # all).
@@ -20,7 +20,7 @@
 # a skipped one, and a repeat is harmless because the fact gate makes the
 # second pass a no-op.
 [Unit]
-Description=Atlas shinogi public edition timer
+Description=Atlas subnt public edition timer
 
 [Timer]
 OnCalendar=*-*-* 00/6:55:00

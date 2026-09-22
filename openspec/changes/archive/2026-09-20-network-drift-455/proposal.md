@@ -199,6 +199,6 @@ benchmark gate) without changing them.
   rides the existing batched read at the gate-poll block, so it adds no
   provider call and no TaoStats quota.
 - **Downstream to check:** the mining board's ranked count will move again if
-  the flag moves; `shinogi/atlas_shinogi.py` reads the mining figures and the
+  the flag moves; `subnt/atlas_subnt.py` reads the mining figures and the
   board ordering, so a rung rename must not leak operator text onto the public
   page.
