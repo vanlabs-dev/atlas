@@ -212,8 +212,9 @@ without it the commit fails outright.
 The original publisher has been live since 2026-09-10. The subnt publisher
 rename was deployed on 2026-09-22 with its prior publish state preserved.
 The renamed service published successfully and `atlas-subnt.timer` is enabled.
-All 75 renderer tests passed on the device. Cloudflare served the edition on
-shinogi.dev; domain cutover to subnt.dev remains pending. See
+All 75 renderer tests passed on the device. Cloudflare serves the exact
+published edition at https://subnt.dev over valid HTTPS; unknown paths
+return HTTP 404. The domain cutover is complete; `www` is not configured. See
 `docs/subnt-rename.md` in the public-page repository for the cutover record.
 
 | | |
