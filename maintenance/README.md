@@ -92,13 +92,16 @@ An unset storage value is not proof of a removed storage item.
 
 ## CLI and state
 
-Run from the installed Atlas checkout using the dedicated Python:
+Use the explicit operator-owned runtime config for both manual commands and
+installed scan/worker services. Keep `maintenance/config.json` tracked and
+inert; editing it to enable production makes the checkout dirty and deployment
+correctly refuses it.
 
 ```sh
-/home/pi/.cache/atlas-maintenance-venv/bin/python -m maintenance.atlas_maintenance status
-/home/pi/.cache/atlas-maintenance-venv/bin/python -m maintenance.atlas_maintenance init
-/home/pi/.cache/atlas-maintenance-venv/bin/python -m maintenance.atlas_maintenance scan
-/home/pi/.cache/atlas-maintenance-venv/bin/python -m maintenance.atlas_maintenance process
+/home/pi/.cache/atlas-maintenance-venv/bin/python -m maintenance.atlas_maintenance --config /home/pi/.config/atlas-maintenance/runtime.json status
+/home/pi/.cache/atlas-maintenance-venv/bin/python -m maintenance.atlas_maintenance --config /home/pi/.config/atlas-maintenance/runtime.json init
+/home/pi/.cache/atlas-maintenance-venv/bin/python -m maintenance.atlas_maintenance --config /home/pi/.config/atlas-maintenance/runtime.json scan
+/home/pi/.cache/atlas-maintenance-venv/bin/python -m maintenance.atlas_maintenance --config /home/pi/.config/atlas-maintenance/runtime.json process
 ```
 
 `init` uses the explicit configured historical anchor; it cannot silently reset
@@ -114,8 +117,15 @@ deduplication; it does not claim network-level exactly-once delivery.
 
 ## One-time installation boundary
 
-Do not activate this installation until integrated acceptance passes. The
-following is the reviewed migration shape, not a claim it has run on the Pi.
+Separate pre-commissioning acceptance from operational acceptance. Before
+commissioning, require the reviewed implementation, all mandatory isolated
+tests, and a successful real source audit with independent candidate review.
+Then perform one supervised publication/activation cycle under the operator's
+approved scope. Unattended operation remains disabled until the completion
+gate below, including live client and output checks, passes. A successful
+component suite alone does not authorize commissioning.
+
+The following is the reviewed migration shape, not a claim it has run on the Pi.
 
 1. Preserve the clean live checkout and its exact accepted commit.
 2. Publish the reviewed implementation through the approved repository.
@@ -136,6 +146,15 @@ python3 -m maintenance.install prepare
 python3 -m maintenance.install prepare-readers
 ```
 
+`prepare` creates `/home/pi/.config/atlas-maintenance/runtime.json` from the
+inert tracked defaults and wires both maintenance services to that exact path.
+The config directory is private and the file is owner-readable/writable only.
+`--runtime-config /absolute/literal/path.json` selects a different external
+path for preparation and both units. It must stay outside the checkout.
+Preparation refuses links, unsafe permissions and conflicting operator files;
+it never overwrites enabled switches or reverts operator configuration. Review
+such conflicts explicitly rather than deleting the config to rerun preparation.
+
 `prepare-readers` installs the small trusted controller outside the mutable
 checkout and prints `hermes config set` commands. It changes no Hermes settings.
 It refuses to overwrite different operator files. Its private reader config
@@ -149,10 +168,16 @@ starts with `managed_launches_only: false`.
    server processes are absent. Restart clients through their supported
    lifecycle, then verify a fresh tool handshake for every Atlas server.
 9. Verify the reader pause/check/reload/resume cycle and producer quiescence.
-   `maintenance.install enable` refuses active/enabled system timers or active
-   producer jobs and reads back user timer enablement/activity after installation.
-10. Enable publication/activation only after the real acceptance gate passes.
-    Keep the controller policy and reader configuration outside worker writes.
+   Keep maintenance timers disabled during the supervised first cycle. Use one
+   manual worker with the explicit operator runtime config; controller locks
+   remain mandatory. After pre-commissioning gates pass, enable publication and
+   activation in that external config for the supervised cycle, not in the
+   tracked defaults. Retain exact runtime audit, publication, rollout and live
+   acceptance receipts.
+10. After the completion gate passes, enable unattended scheduling.
+    `maintenance.install enable` refuses active/enabled system timers or active
+    system producer jobs and reads back user timer enablement/activity. Keep
+    controller policy and reader configuration outside worker writes.
 
 No sudo password is stored. No broad passwordless sudo or security exception is
 required. Keep the legacy user `atlas-poll-chain-head.timer` disabled and its
@@ -168,9 +193,9 @@ The public publisher was renamed to subnt before this maintenance installation.
 Use `subnt/atlas_subnt.py` and `atlas-subnt.service`/`atlas-subnt.timer`, not the
 retired publisher paths or units. Preparing user units preserves the current
 renderer command, scheduling, and resource settings; it removes only system
-identity directives. The renderer remains protected from automatic candidate
-edits, and its contract suite remains mandatory. This installation does not
-repeat the completed publisher checkout/state migration.
+identity directives. Installation leaves the renderer unchanged; its contract
+suite remains mandatory for runtime-maintenance candidates. This installation
+does not repeat the completed publisher checkout/state migration.
 
 ## Reader and deployment safety
 
@@ -207,3 +232,26 @@ Before calling the system operational, retain receipts for:
 A blocked job is a valid safety outcome, not a completed upgrade. Inspect its
 saved gate receipt before retrying. Fix missing evidence or permissions rather
 than changing a success flag.
+
+## Fresh-session file review
+
+Each broker call starts a fresh model session. File requests replace the current
+text window rather than accumulating an unbounded transcript. Inspected file
+hashes do not preserve the model's findings: without explicit continuity, a
+model can alternate already-delivered batches until its round budget expires.
+
+The proposer and independent reviewer each maintain their own bounded notebook
+of model-written findings and progress. Notebook file references bind to hashes
+already delivered to that role. These notes are untrusted summaries, not raw
+source evidence, inspection receipts, or permission to edit unread files. The
+reviewer never inherits the coder's notebook. Exact text can still be requested
+again when needed for an edit or review.
+
+Notebook and file-window changes commit together only after validation and
+actual serialized-context checks. Rejected updates preserve the prior state.
+Every correction consumes the existing round budget. Remaining rounds are
+explicit so the model can reserve a call for its final proposal or review.
+
+Caller-added repair feedback also consumes the broker's context budget. Test
+feedback is untrusted data; it cannot change the protocol or evidence gates.
+Keep canonical hashing separate from actual JSON wire-size accounting.

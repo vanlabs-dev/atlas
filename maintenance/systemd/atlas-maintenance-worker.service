@@ -6,7 +6,7 @@ After=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=/home/pi/atlas
-ExecStart=/home/pi/.cache/atlas-maintenance-venv/bin/python -m maintenance.atlas_maintenance process
+ExecStart=/home/pi/.cache/atlas-maintenance-venv/bin/python -m maintenance.atlas_maintenance --config /home/pi/.config/atlas-maintenance/runtime.json process
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PATH=/home/pi/.local/bin:/usr/bin:/bin
 UMask=0077
