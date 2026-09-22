@@ -1,12 +1,12 @@
-# Shinogi Renderer
+# Subnt Renderer
 
 ## Why
 
-`https://shinogi.dev` is live and serves a shell. Its as-of line reads
+`https://subnt.dev` is live and serves a shell. Its as-of line reads
 `awaiting first Atlas publish` and all five sections read
 `Awaiting first Atlas publish`. The page contract is frozen and accepted
-(`shinogi/openspec/specs/public-pulse/spec.md`, 2026-09-02), and nothing
-writes to it. A case-insensitive search for `shinogi` across this repo
+(`subnt/openspec/specs/public-pulse/spec.md`, 2026-09-02), and nothing
+writes to it. A case-insensitive search for `subnt` across this repo
 returns zero hits outside `.git` and `var`.
 
 Atlas already holds every fact the contract asks for, in stores the pulse
@@ -26,14 +26,14 @@ operator lines (`List[str]`), not facts. `compose()` closes with a next
 action or the LAN board URL, and `_atlas_section` emits the TaoStats
 quota and watermark staleness. Wrapping it and dressing the result in
 HTML would publish `192.168.0.150:8480`, `TaoStats quota`, and
-`next: pick mining.budget_band` to the open internet. The shinogi
+`next: pick mining.budget_band` to the open internet. The subnt
 contract test bans those exact strings by name.
 
 So the renderer is a second reader over the same stores, not a wrapper.
 
 ## What Changes
 
-- **A new top-level `shinogi/` directory.** One capability, one
+- **A new top-level `subnt/` directory.** One capability, one
   directory, matching `fleet/`, `livedata/`, `telegram/`, `knowledge/`
   and `repotrack/`. Cross-directory reuse is the established
   `sys.path.insert(0, os.path.join(_REPO_ROOT, ...))` pattern already
@@ -61,16 +61,16 @@ So the renderer is a second reader over the same stores, not a wrapper.
 - **Per-input stale bounds, not a blanket window.** The emission-gate bar
   uses the briefing `stale_hours` default of 26. Network vitals carry
   their observation date and are never called stale for age alone. Panel
-  movers use the window since the previous shinogi publish, or the six
+  movers use the window since the previous subnt publish, or the six
   hours before compose on a first edition.
 - **A publish-state store, separate from the notifier.** A new
-  `var/shinogi/shinogi.db` holds the previous edition's figures, the last
+  `var/subnt/subnt.db` holds the previous edition's figures, the last
   publish time and the last content hash. The briefing's figure set lives
   in the notifier `meta` table under `briefing:figures`
-  (`telegram/atlas_briefing.py:45`); shinogi deltas must compare against
-  the last shinogi publish, not the last Telegram edition, so it keeps
+  (`telegram/atlas_briefing.py:45`); subnt deltas must compare against
+  the last subnt publish, not the last Telegram edition, so it keeps
   its own. The notifier ledger is not written.
-- **A hash-gated publish.** `index.html` is written into the Pi's shinogi
+- **A hash-gated publish.** `index.html` is written into the Pi's subnt
   checkout, its content hash compared against the committed file, and the
   commit and push happen only on a change. Author `vaNlabs
   <vanlabs@pm.me>`, no attribution trailer.
@@ -81,21 +81,21 @@ So the renderer is a second reader over the same stores, not a wrapper.
   `mine_econ` and `metric_activity`.
 - **The push stays disabled until the operator resolves the credential.**
   Compose and write are enabled; the push is gated by config and by the
-  absence of a write credential for `vanlabs-dev/shinogi` on the Pi.
+  absence of a write credential for `vanlabs-dev/subnt` on the Pi.
 
-Out of scope: the shinogi-side contract test change (it belongs in that
+Out of scope: the subnt-side contract test change (it belongs in that
 repo and its own session), any chain call, any provider call, any model
-call, any read of shinogi by Atlas.
+call, any read of subnt by Atlas.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `shinogi-publish`: composing a public edition from recorded store facts
+- `subnt-publish`: composing a public edition from recorded store facts
   under per-input stale bounds; the operator-token exclusion that makes it
-  publishable; edition state and deltas against the previous shinogi
+  publishable; edition state and deltas against the previous subnt
   publish rather than the Telegram briefing; and the hash-gated,
-  one-direction publish to the shinogi checkout.
+  one-direction publish to the subnt checkout.
 
 ### Modified Capabilities
 
@@ -106,28 +106,28 @@ changes.
 
 ## Impact
 
-- **Code:** new `shinogi/atlas_shinogi.py` (facts, compose, publish, CLI),
-  `shinogi/config.json`, `shinogi/README.md`,
-  `shinogi/systemd/atlas-shinogi.{service,timer}`, `shinogi/tests/`.
+- **Code:** new `subnt/atlas_subnt.py` (facts, compose, publish, CLI),
+  `subnt/config.json`, `subnt/README.md`,
+  `subnt/systemd/atlas-subnt.{service,timer}`, `subnt/tests/`.
   No edit to `telegram/atlas_briefing.py` or
   `fleet/atlas_fleet_dashboard.py`: both are imported, neither is changed.
-- **Schema:** one new store, `var/shinogi/shinogi.db`, with a `meta`
+- **Schema:** one new store, `var/subnt/subnt.db`, with a `meta`
   table. No existing store gains a table or a column. Every existing
   store is opened `mode=ro` through `tg.open_source_ro`.
 - **Tests:** compose against a fixture store (section presence, gap
   naming, stale bounds, delta behaviour on first and later editions),
-  the operator-token exclusion list, and the HTML shape the shinogi
-  contract test asserts (landmark order, `<h1>SHINOGI</h1>`,
+  the operator-token exclusion list, and the HTML shape the subnt
+  contract test asserts (landmark order, `<h1>SUBNT</h1>`,
   `<div class="asof">`, two `<h3>` groups, no script, no external asset).
-- **Docs:** `README.md` status and capability table, `shinogi/README.md`,
+- **Docs:** `README.md` status and capability table, `subnt/README.md`,
   `docs/decisions.md` for the module location and the publish-state store.
-- **Device:** one `git pull`; a second checkout at `/home/pi/shinogi`; one
+- **Device:** one `git pull`; a second checkout at `/home/pi/subnt`; one
   new oneshot unit and timer; no new port, provider, credential or model.
   At six-hourly cadence the publish tops out near 124 Cloudflare Pages
   builds a month against the Free tier's 500.
-- **Reversibility:** `enabled: false` in `shinogi/config.json` stops
+- **Reversibility:** `enabled: false` in `subnt/config.json` stops
   compose and publish and touches nothing else. The push is separately
-  gated. Deleting `var/shinogi/shinogi.db` costs one edition's deltas.
-- **Blocked:** the Pi has no write credential for `vanlabs-dev/shinogi`.
+  gated. Deleting `var/subnt/subnt.db` costs one edition's deltas.
+- **Blocked:** the Pi has no write credential for `vanlabs-dev/subnt`.
   Compose, write and hash comparison can land and be verified without it;
   enabling the push cannot. That decision is the operator's.

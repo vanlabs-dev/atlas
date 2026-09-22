@@ -1,7 +1,7 @@
-# shinogi: the public edition
+# subnt: the public edition
 
-OpenSpec change `shinogi-renderer`. Composes the public
-[shinogi.dev](https://shinogi.dev) page from rows already persisted in the
+OpenSpec change `subnt-renderer`. Composes the public
+[subnt.dev](https://subnt.dev) page from rows already persisted in the
 livedata and fleet stores, all opened read-only, and publishes it into a
 second checkout when a fact on the page has moved.
 
@@ -10,7 +10,7 @@ figure traces to a stored row and carries its reference block or its
 observation date. An input that is missing, or past its own stale bound, is
 named on the page instead of estimated.
 
-The publish path is one direction only. **Atlas writes shinogi; shinogi is
+The publish path is one direction only. **Atlas writes subnt; subnt is
 never read back.** No file in the checkout other than the published
 document is touched, and none of it is an input to an edition.
 
@@ -22,7 +22,7 @@ builders return `List[str]` formatted for Telegram, and `compose()` appends
 either the LAN board URL or `next: pick mining.budget_band`. Dressing those
 lines in HTML would publish the board address and the budget-band prompt to
 the open internet, which is exactly what
-`shinogi/tests/test_page_contract.py` bans by name.
+`subnt/tests/test_page_contract.py` bans by name.
 
 So this module re-derives each section as facts, with the same SQL
 semantics, and shares the read primitives rather than the line builders.
@@ -125,14 +125,14 @@ asserts no derived phrase contains a digit or a glyph.
   Past it, the bar is named stale and its theta is not shown as current.
 - **Network vitals**: shown with their observation date. A daily row is
   never called stale for age alone.
-- **Panel movers**: the window since the previous shinogi publish, or
+- **Panel movers**: the window since the previous subnt publish, or
   `window_hours` before compose when there is no previous publish.
 
 ## Editions and deltas
 
-Deltas compare against the **previous shinogi publish**, never against the
+Deltas compare against the **previous subnt publish**, never against the
 Telegram briefing watermark. The figure set, the publish time and the
-content hash live in this module's own store, `var/shinogi/shinogi.db`.
+content hash live in this module's own store, `var/subnt/subnt.db`.
 They are written only after a successful publish, so a composed but
 unpublished edition does not consume the comparison point.
 
@@ -156,15 +156,15 @@ typeface source. A hit fails the pass closed and writes nothing. The guarded cas
 material, for example a verdict line quoting a path or an address: the
 composer cannot know that in advance, the scan can.
 
-`OPERATOR_TOKENS` opens with the exact strings the shinogi contract test
+`OPERATOR_TOKENS` opens with the exact strings the subnt contract test
 bans, then the wider off-page list.
 
 ## Commands
 
 ```
-python3 shinogi/atlas_shinogi.py compose --dry-run     # print, write nothing
-python3 shinogi/atlas_shinogi.py compose --out /tmp/index.html
-python3 shinogi/atlas_shinogi.py publish               # the full pass
+python3 subnt/atlas_subnt.py compose --dry-run     # print, write nothing
+python3 subnt/atlas_subnt.py compose --out /tmp/index.html
+python3 subnt/atlas_subnt.py publish               # the full pass
 ```
 
 `compose` prints the document on stdout and a summary (scan result, byte
@@ -173,7 +173,7 @@ the scan finds anything.
 
 ## Config
 
-`shinogi/config.json`. Rollback: `enabled: false` stops compose and publish
+`subnt/config.json`. Rollback: `enabled: false` stops compose and publish
 and touches nothing else; `publish: false` composes and reports where it
 would have written, but writes nothing.
 
@@ -181,7 +181,7 @@ would have written, but writes nothing.
 |---|---|
 | `enabled` | master switch for the pass |
 | `publish` | write, commit and push; `false` composes only |
-| `checkout_dir` | the shinogi checkout the page is written into |
+| `checkout_dir` | the subnt checkout the page is written into |
 | `state_db` | this module's own store, for deltas and the publish hash |
 | `commit_name` / `commit_email` | passed per invocation with `git -c`; the device has no `~/.gitconfig` |
 | `window_hours` | the mover window on a first edition |
@@ -209,17 +209,20 @@ without it the commit fails outright.
 
 ## On the device
 
-Live since 2026-09-10. `atlas-shinogi.timer` runs it every six hours.
+The original publisher has been live since 2026-09-10. The subnt rename
+is prepared locally, not deployed. The table below describes the target
+layout. Follow `docs/subnt-rename.md` in the public-page repository before
+starting `atlas-subnt.timer`; preserve the existing publish-state database.
 
 | | |
 |---|---|
 | Atlas checkout | `/home/pi/atlas`, remote `https://github.com/vanlabs-dev/atlas.git`, pulls anonymously |
-| shinogi checkout | `/home/pi/shinogi`, remote `git@github.com:vanlabs-dev/shinogi.git` |
-| Publish credential | a write-scoped deploy key for the shinogi repo alone, `~/.ssh/id_ed25519_shinogi`, selected by a `Host github.com` entry with `IdentitiesOnly yes` |
+| subnt checkout | `/home/pi/subnt`, remote `git@github.com:vanlabs-dev/subnt.git` |
+| Publish credential | a write-scoped deploy key for the subnt repo alone, `~/.ssh/id_ed25519_subnt`, selected by a `Host github.com` entry with `IdentitiesOnly yes` |
 | `~/.gitconfig` | does not exist, which is why identity is passed per invocation |
 | `gh` | not installed |
 
-**The remotes differ by design.** The deploy key reaches the shinogi repo
+**The remotes differ by design.** The deploy key reaches the subnt repo
 and nothing else; Atlas itself is still pulled anonymously over HTTPS and
 the device cannot push to it. A commit that is not pushed from the
 workstation is invisible to the device.
@@ -230,7 +233,7 @@ nothing reads it.
 
 ## Deploy
 
-`shinogi/systemd/atlas-shinogi.{service,timer}`, a oneshot unit and a
+`subnt/systemd/atlas-subnt.{service,timer}`, a oneshot unit and a
 six-hour timer offset to :55 so it lands after the fleet pass. It is its own
 unit rather than an `ExecStartPost=-` on `atlas-fleet.service`, because
 that unit runs the repo reconcile pass and a bug here writes to a public
@@ -241,7 +244,7 @@ Install lines are in the service file.
 ## Tests
 
 ```
-python3 -m unittest discover -s shinogi/tests -t shinogi/tests
+python3 -m unittest discover -s subnt/tests -t subnt/tests
 ```
 
 Every test builds its own stores through the real modules' schema, so a

@@ -1,0 +1,20 @@
+{
+  "_comment": "subnt renderer (change: subnt-renderer): composes the public subnt.dev edition from stores already on disk, read-only, and publishes it into a second checkout when the content hash changes. No provider call, no model call, no chain call. Atlas writes subnt; subnt is never read back. Rollback: enabled false stops compose and publish and touches nothing else; publish false composes and writes nothing. Rename pending device migration: move the existing publish state before running this configuration. Publishing originally enabled 2026-09-11. Target credential: a write-scoped deploy key for vanlabs-dev/subnt at ~/.ssh/id_ed25519_subnt; the checkout at checkout_dir must use the SSH remote.",
+  "enabled": true,
+  "publish": true,
+  "checkout_dir": "/home/pi/subnt",
+  "page_file": "index.html",
+  "state_db": "var/subnt/subnt.db",
+  "commit_name": "vaNlabs",
+  "commit_email": "vanlabs@pm.me",
+  "branch": "main",
+  "window_hours": 6,
+  "stale_hours": 26,
+  "price_move_threshold_pct": 15,
+  "share_move_threshold_pct": 25,
+  "attention_rows": 10,
+  "live_db": "var/livedata/livedata.db",
+  "fleet_db": "var/fleet/fleet.db",
+  "repo_db": "var/repotrack/repotrack.db",
+  "knowledge_db": "var/knowledge/knowledge.db"
+}

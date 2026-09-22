@@ -367,13 +367,13 @@ because each one corrects a belief that looked right and was not.
   of it. `active_miners` in the panel is the earner count less the owner's
   earning hotkey (verified exactly across eight subnets).
 
-## shinogi renderer decisions (2026-09-09, change: shinogi-renderer)
+## subnt renderer decisions (2026-09-09, change: subnt-renderer)
 
-The renderer that fills `https://shinogi.dev` lives in Atlas, where the
+The renderer that fills `https://subnt.dev` lives in Atlas, where the
 stores are. Four decisions were taken against the handover that opened the
 work, three of them correcting it.
 
-**Module location: a top-level `shinogi/`, not a module under `telegram/`.**
+**Module location: a top-level `subnt/`, not a module under `telegram/`.**
 The handover argued a sibling of `atlas_briefing.py` is lower friction
 because the briefing readers are the dependency. It is not: cross-directory
 import is the established pattern here (`fleet/atlas_fleet_mining.py:305`
@@ -383,14 +383,14 @@ module reaches both `telegram/` and `fleet/`, so no parent directory
 removes the cost, and the repo is one directory per capability.
 
 **Publish commits as `vanlabs-dev <vanlabs@pm.me>`, not `vaNlabs`.** The
-handover specified the Atlas identity. Every commit in the shinogi repo is
+handover specified the Atlas identity. Every commit in the subnt repo is
 authored `vanlabs-dev <vanlabs@pm.me>` and its `AGENTS.md` states that
 name; the publish keeps the target repo's own history consistent. Identity
 is passed per invocation with `git -c`, so the pass does not depend on the
 checkout's local config and cannot be silently changed by it.
 
 **Its own oneshot unit and timer, not `ExecStartPost=-` on
-`atlas-fleet.service`.** The shinogi `AGENTS.md` "Next" section suggests
+`atlas-fleet.service`.** The subnt `AGENTS.md` "Next" section suggests
 the latter and predates this design. `atlas-fleet.service` runs the repo
 reconcile pass; a bug in this one writes to a public site, and the operator
 must be able to stop publishing without stopping reconciliation. The timer
@@ -403,15 +403,15 @@ implementing, and it corrects the change's own design doc. The as-of line
 carries the compose time, which moves on every pass, so a plain document
 hash differs every six hours and the gate never holds: it would commit a
 new timestamp over unchanged facts about 124 times a month and leave the
-shinogi history useless as a record of what moved. `fact_digest()` hashes
+subnt history useless as a record of what moved. `fact_digest()` hashes
 the document with the as-of line normalised out. When nothing moved, the
 live page keeps the compose time of the edition that is published, which is
 what the contract asks the line to state. The delta spec was amended before
 the code landed.
 
-**Publish state lives in `var/shinogi/shinogi.db`, not the notifier ledger.**
+**Publish state lives in `var/subnt/subnt.db`, not the notifier ledger.**
 The briefing keeps `briefing:figures` in the notifier `meta` table on a
-daily and weekly clock. Shinogi deltas compare against the last shinogi
+daily and weekly clock. Subnt deltas compare against the last subnt
 publish on a six-hour clock, which is a different series, and keeping them
 apart keeps compose read-only against every existing store.
 
@@ -428,25 +428,25 @@ nicety. `gh` is not installed. A stale `/home/pi/github/atlas` clone at
 `first commit` (2026-07-11) survives from an earlier layout and is not the
 live checkout.
 
-Consequences applied: the shinogi checkout is cloned over HTTPS, and every
+Consequences applied: the subnt checkout is cloned over HTTPS, and every
 git call the renderer makes runs with `GIT_TERMINAL_PROMPT=0`,
 `GIT_ASKPASS`, `ssh -o BatchMode=yes`, stdin closed and a 120s timeout, so
 a missing credential fails the pass instead of hanging a timer-driven
 oneshot on a username prompt.
 
 **Credential resolved 2026-09-11: a write-scoped deploy key, not a token.**
-An ed25519 keypair was generated on the Pi (`~/.ssh/id_ed25519_shinogi`,
+An ed25519 keypair was generated on the Pi (`~/.ssh/id_ed25519_subnt`,
 fingerprint `SHA256:X4AhCwtMCZ6qxMv89Po0fLLXrxAVH49B1T2496p52aI`), its
-public half registered on `vanlabs-dev/shinogi` as a deploy key with write
+public half registered on `vanlabs-dev/subnt` as a deploy key with write
 access, and the checkout pointed at the SSH remote through a `Host
 github.com` entry with `IdentitiesOnly yes`. A deploy key was chosen over a
 fine-grained PAT because it is scoped to that one repository, never expires,
 and puts no token on disk. `ssh -T git@github.com` from the Pi answers
-`Hi vanlabs-dev/shinogi!`, confirming the scope. Atlas itself still pulls
+`Hi vanlabs-dev/subnt!`, confirming the scope. Atlas itself still pulls
 over HTTPS anonymously and is unaffected.
 
 **The timer runs on local time, deliberately.** `atlas-fleet.timer` has no
-`UTC=true`, so it fires on `Pacific/Auckland`. `atlas-shinogi.timer` must do
+`UTC=true`, so it fires on `Pacific/Auckland`. `atlas-subnt.timer` must do
 the same: the :20 and :55 offsets only keep their ordering while both share
 a clock, and the zone moves between +12 and +13. Under NZDT a UTC schedule
 would run the render 25 minutes before the fleet pass rather than after it,

@@ -1,6 +1,6 @@
 ## 1. Module skeleton and config
 
-- [x] 1.1 Create `shinogi/` with `atlas_shinogi.py`, `config.json`,
+- [x] 1.1 Create `subnt/` with `atlas_subnt.py`, `config.json`,
       `README.md`, `systemd/` and `tests/`, following the module shape used
       by `fleet/` and `telegram/`
 - [x] 1.2 Add the lazy cross-directory imports for `telegram/` and `fleet/`
@@ -8,13 +8,13 @@
       already used at `fleet/atlas_fleet_mining.py:305` and
       `telegram/atlas_telegram.py:212`; import `_Sources`, `_movers` and
       `tg._release_for_upgrade` rather than copying them
-- [x] 1.3 Write `shinogi/config.json`: `enabled`, `publish`, the four store
+- [x] 1.3 Write `subnt/config.json`: `enabled`, `publish`, the four store
       paths matching the `briefing` keys, `stale_hours` 26,
-      `checkout_dir` `/home/pi/shinogi`, `state_db`
-      `var/shinogi/shinogi.db`, and a rollback comment in the style of
+      `checkout_dir` `/home/pi/subnt`, `state_db`
+      `var/subnt/subnt.db`, and a rollback comment in the style of
       `telegram/config.json`. `page_url` was dropped: nothing in the module
       reads it and dead config is worse than none
-- [x] 1.4 Add the publish-state store: `var/shinogi/shinogi.db` with a
+- [x] 1.4 Add the publish-state store: `var/subnt/subnt.db` with a
       `meta` table, created on first use, holding the previous figure set,
       previous publish time and last content hash
 
@@ -56,11 +56,11 @@
       the six hours before compose on a first edition; load the previous
       figure set; assemble the five sections plus the as-of facts; return
       the edition and its new figure set without writing anything
-- [x] 3.2 Deltas against the previous shinogi figure set only, with a
+- [x] 3.2 Deltas against the previous subnt figure set only, with a
       first-edition statement and no figure deltas when none is stored.
       Do not read the notifier ledger
 - [x] 3.3 Render: emit the shell's exact HTML shape and CSS from
-      `shinogi/index.html`, with `<h1>SHINOGI</h1>`, the tagline, a
+      `subnt/index.html`, with `<h1>SUBNT</h1>`, the tagline, a
       `<div class="asof">`, the five `<section id=...>` landmarks in the
       contract order, and `Code` and `Narrative` `<h3>` groups inside the
       last. Escape every interpolated value
@@ -72,7 +72,7 @@
 ## 4. Exclusion scan
 
 - [x] 4.1 Define the deny list: the exact `OPERATOR_TOKENS` from
-      `shinogi/tests/test_page_contract.py` plus the contract's wider
+      `subnt/tests/test_page_contract.py` plus the contract's wider
       off-page list (wallets, key material, Telegram identifiers, LAN
       addresses, exploit paths, budget band, rent, hardware rung, atlas
       health, watermark, next-action)
@@ -109,8 +109,8 @@
 - [x] 6.1 Fixture store builder: create the four stores in a temp dir with
       the tables and columns the fact layer reads, so every test runs with
       no device and no network
-- [x] 6.2 Contract shape: landmark ids and order, `<h1>SHINOGI</h1>`, the
-      `asof` div, the two `<h3>` groups, using the same parse the shinogi
+- [x] 6.2 Contract shape: landmark ids and order, `<h1>SUBNT</h1>`, the
+      `asof` div, the two `<h3>` groups, using the same parse the subnt
       contract test uses
 - [x] 6.3 Empty edition: no store at all still renders five landmarks,
       each naming its missing input, and the pass reports success
@@ -118,7 +118,7 @@
       time and no theta; a 20h-old vitals row renders its figures with its
       date and is not called stale
 - [x] 6.5 Deltas: first edition states so and shows none; a second edition
-      compares against the stored shinogi figure set; a composed but
+      compares against the stored subnt figure set; a composed but
       unpublished edition leaves the stored set unchanged
 - [x] 6.6 Attention: ordering follows `build_board`, `pure_opaque` rows are
       absent, the cap holds at ten, a missing name renders a gap, and no
@@ -136,7 +136,7 @@
 
 ## 7. Docs and device
 
-- [x] 7.1 `shinogi/README.md`: what the module reads, every shared read
+- [x] 7.1 `subnt/README.md`: what the module reads, every shared read
       point in `telegram/atlas_briefing.py` and
       `fleet/atlas_fleet_dashboard.py`, the config keys, the rollback, and
       the one-direction rule
@@ -144,13 +144,13 @@
       over `ExecStartPost=-` on the fleet unit, the separate publish-state
       store, and the `vanlabs-dev` publish author against the handover's
       `vaNlabs`
-- [x] 7.3 `README.md`: status line and a `shinogi-publish` row in the
+- [x] 7.3 `README.md`: status line and a `subnt-publish` row in the
       capability table
-- [x] 7.4 `systemd/atlas-shinogi.service` and `.timer`: oneshot as `pi` in
+- [x] 7.4 `systemd/atlas-subnt.service` and `.timer`: oneshot as `pi` in
       `/home/pi/atlas`, `OnCalendar=*-*-* 00/6:55:00` with a short
       randomized delay, `Persistent=true`, and the install comment block
       copied from `fleet/systemd/atlas-fleet.service`
-- [x] 7.5 Propose to the operator, do not run: the `/home/pi/shinogi`
+- [x] 7.5 Propose to the operator, do not run: the `/home/pi/subnt`
       clone, the unit install, and the credential decision that gates
       enabling the push (proposed in the session summary; commands are for
       the operator to run)

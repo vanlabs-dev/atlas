@@ -49,8 +49,8 @@
       from through to the board output and the `mining_board` tool.
 - [x] 3.3 Tests in `fleet/tests` for the rung name, the reason text and the
       reference block on the board.
-- [x] 3.4 Confirm the rename passes `shinogi`'s exclusion scan and that the
-      public page still composes clean; run the shinogi suite and one
+- [x] 3.4 Confirm the rename passes `subnt`'s exclusion scan and that the
+      public page still composes clean; run the subnt suite and one
       `compose --dry-run`.
 
 ## 4. Corpus: the pool-side switch and the 452 to 455 drift
@@ -101,7 +101,7 @@
 ## 7. Deploy and accept
 
 - [x] 7.1 All suites green off-device: `livedata`, `telegram`, `fleet`,
-      `knowledge`, `shinogi`.
+      `knowledge`, `subnt`.
 - [x] 7.2 `git pull` on the Pi; confirm the next gate pass seeds the switch
       across every subnet with no alert and no health event.
 - [x] 7.3 Ingest and activate the new corpus run; run the battery on the

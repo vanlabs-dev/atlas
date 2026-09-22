@@ -3,7 +3,7 @@
 See `proposal.md` for motivation. The constraints that shape the approach:
 
 - The page contract is frozen and accepted in another repo
-  (`shinogi/openspec/specs/public-pulse/spec.md`). This design fills it and
+  (`subnt/openspec/specs/public-pulse/spec.md`). This design fills it and
   does not negotiate with it.
 - Every fact already exists in stores that `telegram/atlas_briefing.py`
   reads. None of it exists as facts: the five section builders return
@@ -32,15 +32,15 @@ See `proposal.md` for motivation. The constraints that shape the approach:
 
 **Non-Goals:**
 
-- Any change to the shinogi page contract or its look. The shell's CSS is
+- Any change to the subnt page contract or its look. The shell's CSS is
   the design; this change fills the bodies.
-- The shinogi-side contract test change. It belongs in that repo.
+- The subnt-side contract test change. It belongs in that repo.
 - Enabling the push. That waits on the credential decision.
 - Any second view, feed, history page, or archive of past editions.
 
 ## Decisions
 
-### A top-level `shinogi/` directory, not a module under `telegram/`
+### A top-level `subnt/` directory, not a module under `telegram/`
 
 The repo is one directory per capability: `fleet/`, `livedata/`,
 `telegram/`, `knowledge/`, `repotrack/`, `triage/`, `hermes/`,
@@ -60,13 +60,13 @@ directory removes the cost.
 Layout:
 
 ```
-shinogi/
-  atlas_shinogi.py           facts, compose, render, publish, CLI
+subnt/
+  atlas_subnt.py           facts, compose, render, publish, CLI
   config.json
   README.md
-  systemd/atlas-shinogi.service
-  systemd/atlas-shinogi.timer
-  tests/test_shinogi.py
+  systemd/atlas-subnt.service
+  systemd/atlas-subnt.timer
+  tests/test_subnt.py
 ```
 
 ### Re-derive facts; never wrap `compose()`
@@ -80,7 +80,7 @@ Alternative considered and rejected: call `compose()`, drop the `atlas`
 section and the closing line, and convert the remaining lines to HTML. It
 is less code and it is wrong. It inherits Telegram phrasing, it cannot
 produce the attention section at all (the briefing has none), it cannot
-carry per-figure deltas against the shinogi publish because the briefing's
+carry per-figure deltas against the subnt publish because the briefing's
 deltas are already baked into its strings, and it leaks the moment a new
 line is added upstream to a section this page renders. The leak surface
 becomes "every future edit to `atlas_briefing.py`".
@@ -88,7 +88,7 @@ becomes "every future edit to `atlas_briefing.py`".
 The cost is real: roughly the same query volume written twice, in two
 modules, that can drift. Mitigated by sharing `_Sources` and `_movers`
 rather than re-implementing them, and by naming the shared read points in
-`shinogi/README.md`.
+`subnt/README.md`.
 
 ### The attention strip reuses `build_board`, discards its prose
 
@@ -128,14 +128,14 @@ recorded name.
 
 ### Publish state lives in its own store
 
-`var/shinogi/shinogi.db`, one `meta` table: previous figure set as JSON,
+`var/subnt/subnt.db`, one `meta` table: previous figure set as JSON,
 previous publish time, last published content hash.
 
 Alternative rejected: the notifier `meta` table, where the briefing keeps
 `briefing:figures` (`telegram/atlas_briefing.py:45`). Sharing it would make
 the public page's delta state a row in the Telegram ledger, and the
 briefing's figures are keyed per edition kind on a daily and weekly clock.
-Shinogi deltas must compare against the last shinogi publish, on a
+Subnt deltas must compare against the last subnt publish, on a
 six-hour clock, which is a different series. Keeping them apart also keeps
 compose read-only against every existing store.
 
@@ -146,7 +146,7 @@ would show deltas against a page nobody ever saw.
 ### Exclusion is asserted at publish, not trusted at compose
 
 The module carries a deny list: the exact `OPERATOR_TOKENS` from
-`shinogi/tests/test_page_contract.py` plus the wider off-page list from the
+`subnt/tests/test_page_contract.py` plus the wider off-page list from the
 contract (wallet addresses, key material, Telegram identifiers, LAN
 addresses, exploit paths, budget band, rent, hardware rung, health,
 watermark, next-action). Publish scans the rendered document and fails
@@ -165,8 +165,8 @@ cannot know that in advance; the scan can.
 six-hour cadence.
 
 Consequence: the first real edition produces the literal strings `as of `
-and `block `, which `shinogi/tests/test_page_contract.py` currently asserts
-are absent. That test must be widened in the shinogi repo before a real
+and `block `, which `subnt/tests/test_page_contract.py` currently asserts
+are absent. That test must be widened in the subnt repo before a real
 edition can land green there. Recorded in Risks.
 
 ### The publish gate hashes the facts, not the timestamp
@@ -176,7 +176,7 @@ this document that minute resolution preserves hash gating. It does not: at
 six-hour cadence the minute changes on every pass, so a plain document hash
 differs every time and the gate never holds. Shipping that would commit a
 new timestamp over unchanged facts about 124 times a month and leave the
-shinogi history useless as a record of what moved.
+subnt history useless as a record of what moved.
 
 `fact_digest()` hashes the document with the as-of line normalised out, and
 publish compares that. An edition is republished only when a fact it
@@ -198,10 +198,10 @@ page is a different job with a different blast radius: a bug there writes
 to a public site, and the operator must be able to stop it without
 stopping fleet reconciliation.
 
-The shinogi `AGENTS.md` "Next" section suggests `ExecStartPost=-…` on the
+The subnt `AGENTS.md` "Next" section suggests `ExecStartPost=-…` on the
 fleet unit. That note predates this design and needs updating in that repo.
 
-`atlas-shinogi.timer` runs `OnCalendar=*-*-* 00/6:55:00` with a short
+`atlas-subnt.timer` runs `OnCalendar=*-*-* 00/6:55:00` with a short
 randomized delay. The fleet timer starts at `00/6:20` with
 `RandomizedDelaySec=15m`, so the fleet pass begins between :20 and :35;
 :55 puts the render after it, so `mine_econ` and `metric_activity` are the
@@ -214,12 +214,12 @@ regression: the device is `Pacific/Auckland`, which moves between +12 and
 Under NZDT a UTC schedule would fire this render 25 minutes before the
 fleet pass rather than after it, and the page would report the previous
 pass's mining and activity figures. Confirmed on the device 2026-09-11:
-fleet next at 12:22 NZST, shinogi next at 12:55 NZST.
+fleet next at 12:22 NZST, subnt next at 12:55 NZST.
 
 ### Publish commits as `vanlabs-dev <vanlabs@pm.me>`
 
 The handover says to author publish commits as `vaNlabs <vanlabs@pm.me>`.
-That is the Atlas identity. Every commit in the shinogi repo is authored
+That is the Atlas identity. Every commit in the subnt repo is authored
 `vanlabs-dev <vanlabs@pm.me>`, and its `AGENTS.md` states that name. The
 publish keeps the target repo's own history consistent and uses
 `vanlabs-dev <vanlabs@pm.me>`.
@@ -231,7 +231,7 @@ trailer, per both repos' rules.
 
 ### Plain `git`, never `gh`, and never able to prompt
 
-The push is `git push` in the shinogi checkout. `gh` authenticates
+The push is `git push` in the subnt checkout. `gh` authenticates
 separately from `git` and Atlas `AGENTS.md` requires confirming the active
 account before any writing `gh` command, which a timer cannot do. `gh` is
 not installed on the device anyway.
@@ -257,13 +257,13 @@ closed, and a 120s timeout. Verified on the device: the push fails with
 
 ## Risks / Trade-offs
 
-- **The shinogi contract test fails on the first real edition.** It asserts
+- **The subnt contract test fails on the first real edition.** It asserts
   `page.asof == ["awaiting first Atlas publish"]` and that `as of ` and
   `block ` are absent. A real edition contradicts all three. → Widen that
-  test in the shinogi repo, in its own session, so it accepts both the
+  test in the subnt repo, in its own session, so it accepts both the
   shell and a published edition. Sequence it before the push is enabled;
   it does not block composing or writing.
-- **No write credential on the Pi for `vanlabs-dev/shinogi`, and no way to
+- **No write credential on the Pi for `vanlabs-dev/subnt`, and no way to
   make one without an operator decision.** The device holds no private SSH
   key and no git credential helper, and reaches GitHub over HTTPS
   anonymously. → The push ships disabled. Compose, render, write and hash
@@ -274,7 +274,7 @@ closed, and a 120s timeout. Verified on the device: the push fails with
   edition is verified on the Pi with the push still disabled, by reading
   the written file.
 - **Two modules querying the same tables can drift.** → `_Sources` and
-  `_movers` are imported, not copied. `shinogi/README.md` names every
+  `_movers` are imported, not copied. `subnt/README.md` names every
   shared read point so a future change to the briefing's queries has a
   place that says who else reads them.
 - **`build_board` is the expensive path**, running the full metrics report
@@ -304,27 +304,27 @@ closed, and a 120s timeout. Verified on the device: the push fails with
    `https://github.com/vanlabs-dev/atlas.git`, so a local commit is
    invisible to it; a commit that is not pushed makes step 2 a no-op and
    the module will not exist on the Pi.
-2. `git pull` in `/home/pi/atlas`. Run `atlas_shinogi.py compose --dry-run`
+2. `git pull` in `/home/pi/atlas`. Run `atlas_subnt.py compose --dry-run`
    by hand and read the document it would write. Confirm the sections, the
    gaps, and the exclusion scan against real stores.
-3. Clone `vanlabs-dev/shinogi` to `/home/pi/shinogi` over **HTTPS**
-   (`https://github.com/vanlabs-dev/shinogi.git`), which is what the device
+3. Clone `vanlabs-dev/subnt` to `/home/pi/subnt` over **HTTPS**
+   (`https://github.com/vanlabs-dev/subnt.git`), which is what the device
    can do today. The repo is public, so the clone needs no credential. An
    SSH remote would need a key the Pi does not have.
-4. Widen the contract test in the shinogi repo.
+4. Widen the contract test in the subnt repo.
 5. Resolve the push credential with the operator.
 6. Install the timer and service, publication still disabled, and confirm
    two passes write the expected file and report no change on the second.
 7. Enable publication.
 
-Rollback: `enabled: false` in `shinogi/config.json` stops compose and
+Rollback: `enabled: false` in `subnt/config.json` stops compose and
 publish and touches nothing else; `publish: false` stops only the write to
 the checkout. Disabling the timer stops the pass. A failed push leaves the
 last Cloudflare deploy live.
 
 ## Open Questions
 
-- Whether `/home/pi/shinogi` is where the operator wants the second
+- Whether `/home/pi/subnt` is where the operator wants the second
   checkout. It mirrors `/home/pi/atlas` and is the assumption in the config
   and the unit files. Changing it is a config value, so it does not affect
   the specs or the task breakdown.

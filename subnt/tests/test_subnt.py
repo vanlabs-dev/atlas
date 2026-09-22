@@ -1,5 +1,5 @@
-"""Shinogi renderer tests: store-only composition, the frozen page shape,
-per-input stale bounds, deltas against the previous shinogi publish, the
+"""Subnt renderer tests: store-only composition, the frozen page shape,
+per-input stale bounds, deltas against the previous subnt publish, the
 attention row shape, the operator-exclusion scan, and the hash-gated
 publish. Every test builds its own stores; none touches a device, a
 network, or the real remote."""
@@ -22,7 +22,7 @@ sys.path.insert(0, _MODULE_DIR)
 sys.path.insert(0, os.path.join(_REPO_ROOT, "livedata"))
 sys.path.insert(0, os.path.join(_REPO_ROOT, "fleet"))
 
-import atlas_shinogi as sh  # noqa: E402
+import atlas_subnt as sh  # noqa: E402
 
 
 SECTION_IDS = ("network", "movers", "mining", "attention", "code-narrative")
@@ -152,7 +152,7 @@ def make_config(tmp, **overrides):
         "publish": False,
         "checkout_dir": os.path.join(tmp, "checkout"),
         "page_file": "index.html",
-        "state_db": os.path.join(tmp, "state", "shinogi.db"),
+        "state_db": os.path.join(tmp, "state", "subnt.db"),
         "commit_name": "vanlabs-dev",
         "commit_email": "vanlabs@pm.me",
         "branch": "main",
@@ -171,7 +171,7 @@ def make_config(tmp, **overrides):
 
 
 class Page(HTMLParser):
-    """The same parse shinogi/tests/test_page_contract.py performs."""
+    """The same parse subnt/tests/test_page_contract.py performs."""
 
     def __init__(self):
         super().__init__()
@@ -239,7 +239,7 @@ class ComposeShapeTests(unittest.TestCase):
             _edition, document, leaks = sh.build(config, None)
             page = parse(document)
             self.assertEqual(tuple(page.ids), SECTION_IDS)
-            self.assertEqual(page.h1, ["SHINOGI"])
+            self.assertEqual(page.h1, ["SUBNT"])
             self.assertEqual(page.h3, ["Code", "Narrative"])
             self.assertEqual(len(page.asof), 1)
             # The contract allows presentation script and bans an external
@@ -329,7 +329,7 @@ class RelativeTimeTests(unittest.TestCase):
         return sh.build(config, None, now=now)
 
     def test_the_as_of_text_still_matches_the_published_contract(self):
-        """The shinogi contract anchors that line end to end, and its
+        """The subnt contract anchors that line end to end, and its
         parser counts any element inside the div as nesting."""
         with tempfile.TemporaryDirectory() as tmp:
             _e, document, _l = self._document(tmp)
@@ -422,7 +422,7 @@ class StaleBoundTests(unittest.TestCase):
 
 
 class DeltaTests(unittest.TestCase):
-    """6.5: deltas compare against the previous shinogi publish only."""
+    """6.5: deltas compare against the previous subnt publish only."""
 
     def test_first_edition_states_so_and_shows_no_delta(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -688,7 +688,7 @@ class ExclusionTests(unittest.TestCase):
                     build_fleet(config["fleet_db"], verdict_text=leak)
                     _e, _d, leaks = sh.build(config, None)
                     self.assertTrue(leaks, "expected a leak for %r" % leak)
-                    with self.assertRaises(sh.ShinogiError):
+                    with self.assertRaises(sh.SubntError):
                         sh.run(config)
                     self.assertFalse(os.path.exists(config["checkout_dir"]))
 
@@ -713,7 +713,7 @@ class ExclusionTests(unittest.TestCase):
             'href="https://fonts.googleapis.com/css2?family=Inter">'), [])
         self.assertEqual(sh.scan("<script>document.title=1</script>"), [])
 
-    def test_exact_shinogi_contract_tokens_are_all_covered(self):
+    def test_exact_subnt_contract_tokens_are_all_covered(self):
         contract_tokens = ("mining.budget_band", "TaoStats quota",
                            "192.168.0.150", "t.me/", "api.telegram.org",
                            "next: pick mining.budget_band")
@@ -851,7 +851,7 @@ class PublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             config = make_config(tmp, publish=True)
             build_live(config["live_db"])
-            with self.assertRaises(sh.ShinogiError) as caught:
+            with self.assertRaises(sh.SubntError) as caught:
                 sh.run(config)
             self.assertIn("does not exist", str(caught.exception))
 
@@ -860,7 +860,7 @@ class PublishTests(unittest.TestCase):
             config = make_config(tmp, publish=True)
             build_live(config["live_db"])
             os.makedirs(config["checkout_dir"])
-            with self.assertRaises(sh.ShinogiError) as caught:
+            with self.assertRaises(sh.SubntError) as caught:
                 sh.run(config)
             self.assertIn("not a git repository", str(caught.exception))
 
@@ -870,7 +870,7 @@ class PublishTests(unittest.TestCase):
             stray = os.path.join(config["checkout_dir"], "stray.txt")
             with open(stray, "w", encoding="utf-8") as fh:
                 fh.write("uncommitted\n")
-            with self.assertRaises(sh.ShinogiError) as caught:
+            with self.assertRaises(sh.SubntError) as caught:
                 sh.run(config)
             self.assertIn("dirty", str(caught.exception))
             page = os.path.join(config["checkout_dir"], "index.html")
@@ -887,7 +887,7 @@ class PublishTests(unittest.TestCase):
                             os.path.join(tmp, "no-such-remote.git")],
                            check=True)
             before = self._head(config)
-            with self.assertRaises(sh.ShinogiError) as caught:
+            with self.assertRaises(sh.SubntError) as caught:
                 sh.run(config)
             self.assertIn("cannot reach origin", str(caught.exception))
             self.assertEqual(before, self._head(config))
@@ -904,7 +904,7 @@ class PublishTests(unittest.TestCase):
             with open(hook, "w") as fh:
                 fh.write("#!/bin/sh\necho 'read-only' >&2\nexit 1\n")
             os.chmod(hook, 0o755)
-            with self.assertRaises(sh.ShinogiError) as caught:
+            with self.assertRaises(sh.SubntError) as caught:
                 sh.run(config)
             self.assertIn("cannot push", str(caught.exception))
             self.assertIn("local and recoverable", str(caught.exception))
@@ -920,9 +920,9 @@ class PublishTests(unittest.TestCase):
             config = self._ready(tmp)
             subprocess.run(
                 ["git", "-C", config["checkout_dir"], "remote", "set-url",
-                 "origin", "https://127.0.0.1:9/vanlabs-dev/shinogi.git"],
+                 "origin", "https://127.0.0.1:9/vanlabs-dev/subnt.git"],
                 check=True)
-            with self.assertRaises(sh.ShinogiError) as caught:
+            with self.assertRaises(sh.SubntError) as caught:
                 sh.run(config)
             self.assertIn("cannot reach origin", str(caught.exception))
 
@@ -946,7 +946,7 @@ class PublishTests(unittest.TestCase):
             self.assertEqual(author, "vanlabs-dev <vanlabs@pm.me>")
 
     def test_a_checkout_behind_origin_is_fast_forwarded(self):
-        """Someone commits to the shinogi repo directly (the contract and
+        """Someone commits to the subnt repo directly (the contract and
         its test live there). The pass must catch up, not be rejected."""
         with tempfile.TemporaryDirectory() as tmp:
             config = self._ready(tmp)
@@ -1004,7 +1004,7 @@ class PublishTests(unittest.TestCase):
                             "LOCAL.md"], check=True)
             subprocess.run(["git", "-C", config["checkout_dir"], "commit",
                             "-q", "-m", "Local"], check=True)
-            with self.assertRaises(sh.ShinogiError) as caught:
+            with self.assertRaises(sh.SubntError) as caught:
                 sh.run(config)
             self.assertIn("diverged", str(caught.exception))
 
@@ -1176,9 +1176,9 @@ class SeriesTests(unittest.TestCase):
             build_live(config["live_db"])
             src = sh._brief()._Sources(config)
             try:
-                with self.assertRaises(sh.ShinogiError):
+                with self.assertRaises(sh.SubntError):
                     sh.vitals_series(src, "1=1; DROP TABLE meta")
-                with self.assertRaises(sh.ShinogiError):
+                with self.assertRaises(sh.SubntError):
                     sh.netuid_series(src, 12, "oops")
             finally:
                 src.close()
@@ -1245,7 +1245,7 @@ class ScriptingOffTests(unittest.TestCase):
                               flags=re.S | re.I)
             page = parse(stripped)
             self.assertEqual(tuple(page.ids), SECTION_IDS)
-            self.assertEqual(page.h1, ["SHINOGI"])
+            self.assertEqual(page.h1, ["SUBNT"])
             self.assertEqual(page.h3, ["Code", "Narrative"])
             self.assertEqual(len(page.asof), 1)
             for figure in ("0.00412", "318.42", "7,313,368"):

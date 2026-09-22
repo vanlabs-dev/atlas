@@ -138,14 +138,14 @@ migration is needed.
   → two adversarial cases pin it, and the battery is re-accepted under the
   existing threshold sheet before the corpus is activated on the device.
 - **The public page could inherit the renamed rung text** →
-  `shinogi/atlas_shinogi.py` reads `mine_econ` and `build_board` ordering, and
+  `subnt/atlas_subnt.py` reads `mine_econ` and `build_board` ordering, and
   its exclusion scan fails the pass closed on operator material. The rename is
   checked against that scan before publish rather than assumed safe.
 
 ## Migration Plan
 
 1. Land the watch item, the collapse rule and the rung rename off-device, with
-   suites green in `livedata`, `telegram`, `fleet` and `shinogi`.
+   suites green in `livedata`, `telegram`, `fleet` and `subnt`.
 2. Re-sync the corpus, regenerate `hashes.json`, run the extended battery
    off-device.
 3. `git pull` on the Pi. The next gate pass seeds the switch across every
