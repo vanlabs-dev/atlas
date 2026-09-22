@@ -733,7 +733,8 @@ def _init_repo(path, remote):
     subprocess.run(["git", "-C", path, "add", "index.html"], check=True)
     subprocess.run(["git", "-C", path, "commit", "-q", "-m", "Shell"],
                    check=True)
-    subprocess.run(["git", "init", "-q", "--bare", remote], check=True)
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", remote],
+                   check=True)
     subprocess.run(["git", "-C", path, "remote", "add", "origin", remote],
                    check=True)
     subprocess.run(["git", "-C", path, "push", "-q", "-u", "origin", "main"],
