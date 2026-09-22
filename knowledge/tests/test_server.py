@@ -1,12 +1,13 @@
 """MCP server behavior over real pipes against a real ingested store."""
 
 import ast
+import json
 import os
 import re
 import tempfile
 import unittest
 
-from _helpers import (SERVER_SOURCE, call_server, ingest_real_corpus,
+from _helpers import (CORPUS_DIR, SERVER_SOURCE, call_server, ingest_real_corpus,
                       tool_call)
 
 
@@ -43,7 +44,10 @@ class ServerTests(unittest.TestCase):
         for field in ("unit_id", "source_file", "heading_path",
                       "coverage_date", "evidence_state", "content"):
             self.assertIn(field, top)
-        self.assertEqual(top["coverage_date"], "2026-09-20")
+        with open(os.path.join(CORPUS_DIR, "hashes.json"),
+                  encoding="utf-8") as handle:
+            coverage_date = json.load(handle)["coverage_date"]
+        self.assertEqual(top["coverage_date"], coverage_date)
 
     def test_conflict_surfaced(self):
         # The real corpus has no markers since the 2026-08-06 re-sync;

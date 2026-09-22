@@ -37,7 +37,9 @@ def local_git(repo, *args):
 def integration(tmp_path, request):
     source = Path(__file__).resolve().parents[2]
     repo = tmp_path/'repo'
-    shutil.copytree(source, repo, ignore=shutil.ignore_patterns('.git', 'var', '.venv', '__pycache__', '.pytest_cache', '*.pyc'))
+    # Credentials are neither test inputs nor part of the local Git baseline.
+    # The production sandbox deliberately makes the host .env unreadable.
+    shutil.copytree(source, repo, ignore=shutil.ignore_patterns('.git', '.env', 'var', '.venv', '__pycache__', '.pytest_cache', '*.pyc'))
     # A copied integration suite must not recursively clone and execute itself.
     (repo/'maintenance/tests/test_pipeline_integration.py').unlink()
     (repo/'README.md').write_text('old\n')
@@ -93,6 +95,14 @@ def integration(tmp_path, request):
            ('packet.json','semantic-pins.json','old.decoded-metadata.json','new.decoded-metadata.json')}
     p.save_json(pipe.root/'evidence-receipt.json', {'evidence_receipts': [{'key': [job['genesis'], job['activation_hash'], job['code_hash']], 'packet_dir': str(directory), 'complete': True, 'semantic_files':bound}]})
     return pipe, rpc, calls
+
+
+def test_integration_baseline_excludes_credentials(integration):
+    pipe, _, _ = integration
+    repo = Path(pipe.config['repo'])
+    assert not (repo/'.env').exists()
+    assert '.env' not in local_git(repo, 'ls-files').splitlines()
+    assert (repo/'env.example').is_file()
 
 
 @pytest.mark.parametrize('inventory', [None, {}, {'commit': 'a'*40}])

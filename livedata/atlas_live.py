@@ -298,7 +298,9 @@ _SECRET_VALUES: List[str] = []
 def load_env(path: str = ENV_FILE) -> Dict[str, str]:
     """Parse KEY=VALUE lines. Values are registered for redaction."""
     values: Dict[str, str] = {}
-    if not os.path.exists(path):
+    # Credential sources must be regular files, not sandbox masks/devices
+    # or FIFOs. Keep read errors on actual files visible to the operator.
+    if not os.path.isfile(path):
         return values
     with open(path, "r", encoding="utf-8") as handle:
         for line in handle:

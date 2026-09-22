@@ -1219,7 +1219,9 @@ def load_env_token(env_path: str = ENV_FILE) -> Optional[str]:
     """GITHUB_TOKEN from the environment or the 0600 .env, registered for
     redaction. Absent is fine — the fleet clones anonymously."""
     token = os.environ.get("GITHUB_TOKEN", "").strip()
-    if not token and os.path.exists(env_path):
+    # Devices/FIFOs (including sandbox masks) are not credential files.
+    # Do not suppress permission errors when reading an actual file.
+    if not token and os.path.isfile(env_path):
         with open(env_path, "r", encoding="utf-8") as handle:
             for line in handle:
                 line = line.strip()
