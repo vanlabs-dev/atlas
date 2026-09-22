@@ -102,7 +102,7 @@ theta to the Nth-largest positive demand share and makes q **inert**;
 N = 0 is the old q-mass fallback. Every observation therefore records its
 derived `bar_mode` (`rank` | `q-mass`), so a crossing stays interpretable
 with the mode of its own pass rather than whatever the bar is doing
-later. Live Finney (spec 467, 2026-09-20): N unset, default 32, rank mode
+later. Live Finney (spec 469, 2026-09-23, finalized block 9125891): N unset, default 32, rank mode
 active; q sits explicit at 0.75, unused.
 
 Because a rank-pinned bar is itself a demand share, it moves on its own,

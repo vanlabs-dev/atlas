@@ -144,6 +144,14 @@
         "codec": "bool",
         "default": false,
         "governs": "per-subnet root switch over TAO injection, not the emission-gate bar: off zeroes the TAO-side share and redistributes it across enabled subnets; alpha distribution continues"
+      },
+      {
+        "item": "BasketTradingEnabled",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf0555bc75feffbedac68794fafcb7ac19dc60",
+        "codec": "bool",
+        "default": false,
+        "governs": "network switch for swap_basket. Not the curation switch. Spec 468 set it true with a stamped migration. An explicit false is a durable emergency off."
       }
     ]
   },

@@ -52,7 +52,7 @@ Pattern: a subnet with real demand (nonzero moving price, nonzero demand share) 
 
 **Check**: the bar is a continuous Hill function of demand share. The pool-side emission switch is a binary root-settable per-netuid bool. The chain draws the bar first, then zeroes TAO for subnets whose switch is off and redistributes that TAO to the rest. Alpha distribution continues either way. A subnet can sit above the bar and still earn no TAO.
 
-Fix: name the pool-side emission switch (`SubnetEmissionEnabled`). Live off set (2026-09-20, spec 467): netuids 29, 35, 36. Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
+Fix: name the pool-side emission switch (`SubnetEmissionEnabled`). Live off set (2026-09-23, spec 469, finalized block 9125893): netuids 29, 35, 36, 108. Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
 
 ### 5. Validators mine
 Pattern: "validators mine/mining/produce work"
@@ -92,7 +92,7 @@ Fix: a rank-pinned bar IS a demand share, so it moves on its own as the distribu
 ### 7f. Root Reborn curation described as live, or a validator described as curating
 Pattern: "curation is on/live/enabled", "`RootWeightSettingEnabled` is true", "validators set root weights", or "validator X is deploying basket capital".
 
-Fix: Curation is OFF. `RootWeightSettingEnabled` is false (unset) since spec 464 (2026-09-17, block 9088729). Every fund runs the null strategy: root dividends accumulate in place. Live `Weights[ROOT]` reads are empty. Do not describe a validator as curating. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
+Fix: Curation is OFF. `RootWeightSettingEnabled` is false (unset) since spec 464 (2026-09-17, block 9088729), and was still unset at finalized block 9125891 (2026-09-23). Every fund runs the null strategy: root dividends accumulate in place. Do not describe a validator as curating. Basket trading is a different switch: `BasketTradingEnabled` is true (explicit) at that same block, and it gates `swap_basket` only. Do not treat trading-on as curation-on. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
 
 ## WARNINGS (verify but don't block)
 
