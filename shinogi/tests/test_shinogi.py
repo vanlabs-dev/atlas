@@ -242,7 +242,10 @@ class ComposeShapeTests(unittest.TestCase):
             self.assertEqual(page.h1, ["SHINOGI"])
             self.assertEqual(page.h3, ["Code", "Narrative"])
             self.assertEqual(len(page.asof), 1)
-            self.assertEqual(page.scripts, [])
+            # The contract allows presentation script and bans an external
+            # one, so the rule is on src, not on the element.
+            for script in page.scripts:
+                self.assertNotIn("src", script, "external script: %r" % script)
             # The amended contract allows a typeface source and nothing else.
             for link in page.links:
                 self.assertTrue(
@@ -279,7 +282,9 @@ class ComposeShapeTests(unittest.TestCase):
             for banned in ("XMLHttpRequest", "fetch(", "@import",
                            "EventSource", "new WebSocket"):
                 self.assertNotIn(banned, document)
-            self.assertNotIn("<script", document)
+            self.assertNotIn("import(", document)
+            for script in parse(document).scripts:
+                self.assertNotIn("src", script, "external script: %r" % script)
             for url in re.findall(r'(?:href|src)="(https?://[^"]+)"',
                                   document):
                 self.assertTrue(
@@ -308,6 +313,81 @@ class AsOfTests(unittest.TestCase):
             asof = parse(document).asof[0]
             self.assertIn("block not recorded", asof)
             self.assertNotIn("block 0", asof)
+
+
+class RelativeTimeTests(unittest.TestCase):
+    """The page states UTC; the reader may not be in it. The gap is an
+    empty element the presentation script fills in the browser."""
+
+    CONTRACT = re.compile(r"^as of \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC "
+                          r"\u00b7 block (\d+|not recorded)$")
+
+    def _document(self, tmp, now=None):
+        config = make_config(tmp)
+        build_live(config["live_db"])
+        build_fleet(config["fleet_db"])
+        return sh.build(config, None, now=now)
+
+    def test_the_as_of_text_still_matches_the_published_contract(self):
+        """The shinogi contract anchors that line end to end, and its
+        parser counts any element inside the div as nesting."""
+        with tempfile.TemporaryDirectory() as tmp:
+            _e, document, _l = self._document(tmp)
+            asof = parse(document).asof[0]
+            self.assertRegex(asof, self.CONTRACT)
+            head = document[document.index('<div class="bar"'):
+                            document.index("</div>",
+                                           document.index('class="asof"'))]
+            self.assertNotIn('<time', head[head.index('class="asof"'):])
+
+    def test_the_element_carries_the_compose_instant_and_starts_hidden(self):
+        noon = datetime.datetime(2026, 9, 9, 12, 0,
+                                 tzinfo=datetime.timezone.utc)
+        with tempfile.TemporaryDirectory() as tmp:
+            edition, document, leaks = self._document(tmp, now=noon)
+            self.assertEqual(edition["asof_iso"], "2026-09-09T12:00:00Z")
+            self.assertIn('<time class="ago" id="ago" '
+                          'datetime="2026-09-09T12:00:00Z" hidden></time>',
+                          document)
+            self.assertEqual(leaks, [])
+
+    def test_no_relative_wording_is_baked_in_at_compose(self):
+        """A string fixed at compose is wrong by the second view: an
+        edition sits until a fact moves."""
+        with tempfile.TemporaryDirectory() as tmp:
+            _e, document, _l = self._document(tmp)
+            stripped = re.sub(r"<script\b.*?</script>", "", document,
+                              flags=re.S | re.I)
+            self.assertNotIn(" ago", stripped)
+
+    def test_the_clock_script_is_inline_and_pulls_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _e, document, _l = self._document(tmp)
+            scripts = parse(document).scripts
+            self.assertEqual(len(scripts), 1)
+            self.assertNotIn("src", scripts[0])
+            self.assertEqual(sh.scan(document), [])
+
+    def test_the_digest_ignores_the_machine_readable_instant(self):
+        """It sits outside the as-of div, so the line normalisation alone
+        would let the gate republish unchanged facts every pass."""
+        noon = datetime.datetime(2026, 9, 9, 12, 0,
+                                 tzinfo=datetime.timezone.utc)
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            build_live(config["live_db"], anchor=noon)
+            build_fleet(config["fleet_db"], anchor=noon)
+            state = sh.open_state(config["state_db"])
+            try:
+                sh.state_set(state, "published_at", _iso(6.0, noon))
+                _e, early, _l = sh.build(config, state, now=noon)
+                _e, later, _l = sh.build(
+                    config, state, now=noon + datetime.timedelta(hours=6))
+            finally:
+                state.close()
+            self.assertIn('datetime="2026-09-09T12:00:00Z"', early)
+            self.assertIn('datetime="2026-09-09T18:00:00Z"', later)
+            self.assertEqual(sh.fact_digest(early), sh.fact_digest(later))
 
 
 class StaleBoundTests(unittest.TestCase):

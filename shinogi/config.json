@@ -5,7 +5,7 @@
   "checkout_dir": "/home/pi/shinogi",
   "page_file": "index.html",
   "state_db": "var/shinogi/shinogi.db",
-  "commit_name": "vanlabs-dev",
+  "commit_name": "vaNlabs",
   "commit_email": "vanlabs@pm.me",
   "branch": "main",
   "window_hours": 6,
