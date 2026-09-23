@@ -255,3 +255,21 @@ explicit so the model can reserve a call for its final proposal or review.
 Caller-added repair feedback also consumes the broker's context budget. Test
 feedback is untrusted data; it cannot change the protocol or evidence gates.
 Keep canonical hashing separate from actual JSON wire-size accounting.
+
+## Broker failure diagnostics
+
+A failed broker process writes one fixed diagnostic object to stdout:
+`version`, `category`, and `json_location`. Categories come from a closed set
+in `inference.py`. Only `invalid_json` carries a location (line, column,
+position). The parent rejects anything else and records `broker_failed`.
+Provider text, exception bodies, stderr, and request content never enter the
+diagnostic or the error message.
+
+The broker rejects a completion whose status fields report failure, a partial
+or interrupted run, an incomplete run, or an error. Adapters that omit the
+fields keep the older contract. A present field must be an exact boolean.
+
+The broker never retries a rate limit. Hermes reports a used-up plan and a
+short provider limit with the same `rate_limit` category, so the broker cannot
+tell them apart, and waiting cannot clear a plan cap. The job fails at that
+stage. Normal job retry timing in the controller governs the next attempt.
