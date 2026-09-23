@@ -88,6 +88,34 @@ def _unique(pairs):
     return result
 
 
+def _parse_object_text(response):
+    """Parse one JSON object, tolerating the wrappers models add despite instructions.
+
+    Long answers sometimes arrive inside a Markdown fence or after a short
+    preamble. Accept exactly one object: a bare object, one fenced block, or an
+    object starting on its own line after prose. Anything after the object other
+    than a closing fence still fails, and duplicate keys and nonfinite numbers
+    stay fatal.
+    """
+    decoder = json.JSONDecoder(object_pairs_hook=_unique, parse_constant=_nonfinite)
+    text = response.lstrip('\ufeff').strip()
+    try:
+        return decoder.decode(text)
+    except json.JSONDecodeError as first:
+        error = first
+    starts = [0] if text.startswith('{') else []
+    starts += [i + 1 for i, ch in enumerate(text) if ch == '\n' and text[i + 1:i + 2] == '{']
+    for start in starts:
+        try:
+            value, end = decoder.raw_decode(text, start)
+        except json.JSONDecodeError:
+            continue
+        tail = text[end:].strip()
+        if tail in ('', '```'):
+            return value
+    raise error
+
+
 def infer_json(payload, *, agent_factory=None, max_input_bytes=800000,
                max_output_bytes=200000, timeout=180, route=DEFAULT_ROUTE):
     if route not in ROUTES:
@@ -136,8 +164,7 @@ def infer_json(payload, *, agent_factory=None, max_input_bytes=800000,
         if len(response.encode()) > max_output_bytes:
             raise InferenceError('output budget exceeded', category='output_budget')
         try:
-            parsed = json.loads(response, object_pairs_hook=_unique,
-                                parse_constant=_nonfinite)
+            parsed = _parse_object_text(response)
         except json.JSONDecodeError as exc:
             raise InferenceError('invalid JSON response', category='invalid_json',
                 json_location={'line': exc.lineno, 'column': exc.colno,

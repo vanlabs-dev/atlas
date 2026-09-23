@@ -169,7 +169,7 @@ def child_source(tmp_path):
     ('{}', {'completed': None}, 'invalid_completion_metadata', None),
     ('{}', {'partial': 0}, 'invalid_completion_metadata', None),
     ('{}', {'failed': 'false'}, 'invalid_completion_metadata', None),
-    ('```json\n{}\n```', {}, 'invalid_json', {'line': 1, 'column': 1, 'position': 0}),
+    ('Result: {}', {}, 'invalid_json', {'line': 1, 'column': 1, 'position': 0}),
     ('{} trailing', {}, 'invalid_json', {'line': 1, 'column': 4, 'position': 3}),
 ], ids=lambda value: str(value)[:60])
 def test_child_failure_diagnostics_roundtrip(child_source, response, metadata, category, location):
@@ -423,3 +423,43 @@ def test_claude_route_pins_binary_without_widening_path():
     assert all(env['PATH'] == '/usr/bin:/bin' for env in seen.values())
     with pytest.raises(ValueError):
         i.HermesBroker(python='/p', hermes_source='/h', claude_command='claude')
+
+
+@pytest.mark.parametrize('text', [
+    '{"a": 1}',
+    '```json\n{"a": 1}\n```',
+    '```\n{"a": 1}\n```',
+    'Here is the result:\n{"a": 1}',
+    '\ufeff  {"a": 1}  ',
+])
+def test_parser_accepts_one_wrapped_object(text):
+    assert i._parse_object_text(text) == {'a': 1}
+
+
+@pytest.mark.parametrize('text', [
+    'no json here',
+    '{"a": 1} trailing prose',
+    '```json\n{"a": 1}\n```\nand more',
+    'inline {"a": 1}',
+    '',
+])
+def test_parser_rejects_anything_else(text):
+    with pytest.raises(ValueError):
+        i._parse_object_text(text)
+
+
+def test_parser_keeps_duplicate_and_nonfinite_checks_inside_fences():
+    with pytest.raises(i.InferenceError):
+        i._parse_object_text('```json\n{"a": 1, "a": 2}\n```')
+    with pytest.raises(i.InferenceError):
+        i._parse_object_text('```json\n{"a": NaN}\n```')
+
+
+def test_infer_json_accepts_fenced_answer():
+    class Fenced:
+        tools = []; valid_tool_names = set()
+        def __init__(self, **kwargs): pass
+        def run_conversation(self, text, system_message=None):
+            return {'final_response': '```json\n{"ok": true}\n```', 'messages': [], 'completed': True}
+        def close(self): pass
+    assert i.infer_json({}, agent_factory=Fenced) == {'ok': True}
