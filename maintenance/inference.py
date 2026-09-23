@@ -208,6 +208,11 @@ class HermesBroker:
         env = {k: os.environ[k] for k in ('HOME', 'HERMES_HOME', 'LANG', 'SSL_CERT_FILE',
                'SSL_CERT_DIR') if k in os.environ}
         env.update(PATH='/usr/bin:/bin', PYTHONNOUSERSITE='1')
+        # Non-streamed answers arrive whole. Hermes's implicit stall check (90s,
+        # then 60s as the run budget shrinks) kills slow but healthy calls and
+        # retries them. Pin it to the process deadline so the deadline decides,
+        # and a timeout fails over to the next route instead of 'failed_completion'.
+        env['HERMES_API_CALL_STALE_TIMEOUT'] = str(self.timeout)
         if route == 'claude':
             env['CLAUDE_SUBSCRIPTION_DIRECTSDK_COMMAND'] = self.claude_command
         with tempfile.TemporaryDirectory(prefix='atlas-inference-') as directory:
