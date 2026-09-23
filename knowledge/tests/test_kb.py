@@ -136,6 +136,42 @@ class IngestTests(unittest.TestCase):
                                                activate=False)
         self.assertEqual(akb.activate(db, "nope", actor="op"), 1)
 
+    def test_upgrade_actor_activates_clean_run_and_audits(self):
+        db, run_id, _report = ingest_real_corpus(self.tmp.name,
+                                                 activate=False)
+        self.assertEqual(akb.activate(db, run_id, actor="atlas-upgrade"), 0)
+        connection = sqlite3.connect(db)
+        try:
+            audit = connection.execute(
+                "SELECT actor, action, detail FROM audit ORDER BY id DESC "
+                "LIMIT 1").fetchone()
+        finally:
+            connection.close()
+        self.assertEqual(audit[:2], ("atlas-upgrade", "activate"))
+        self.assertIn(run_id, audit[2])
+
+    def test_upgrade_actor_refuses_rejected_units(self):
+        db, run1, _r1 = ingest_real_corpus(self.tmp.name)
+        run2, _r2 = akb.ingest(db, self.tmp.name)
+        connection = sqlite3.connect(db)
+        try:
+            connection.execute(
+                "UPDATE units SET unit_id = 'dup' WHERE run_id = ? AND id IN "
+                "(SELECT id FROM units WHERE run_id = ? LIMIT 2)",
+                (run2, run2))
+            connection.commit()
+        finally:
+            connection.close()
+        self.assertEqual(akb.activate(db, run2, actor="atlas-upgrade"), 1)
+        connection = sqlite3.connect(db)
+        try:
+            active = connection.execute(
+                "SELECT DISTINCT run_id FROM units WHERE active = 1"
+            ).fetchall()
+        finally:
+            connection.close()
+        self.assertEqual(active, [(run1,)])
+
     def test_hash_mismatch_aborts(self):
         tampered = os.path.join(self.tmp.name, "corpus")
         shutil.copytree(CORPUS_DIR, tampered)

@@ -1,0 +1,17 @@
+# Atlas live spec_version poll (change: runtime-upgrade-pipeline). Keyless
+# finney RPC at the finalized head, TaoStats only when every RPC endpoint
+# fails. Its own unit, so a failing repo update cannot silence detection.
+# Install (user-level, as pi; linger is on):
+#   cp ~/atlas/livedata/systemd/atlas-poll-chain-head.{service,timer} \
+#     ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now atlas-poll-chain-head.timer
+[Unit]
+Description=Atlas live chain-head poll (user-level; no root)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/pi/atlas
+ExecStart=/usr/bin/python3 /home/pi/atlas/livedata/atlas_live.py poll-chain-head

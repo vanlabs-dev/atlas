@@ -1,0 +1,10 @@
+[Unit]
+Description=Atlas runtime upgrade job timer (every 30 minutes)
+
+[Timer]
+OnCalendar=*:00/30
+RandomizedDelaySec=2m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

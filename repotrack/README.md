@@ -93,15 +93,15 @@ sudo systemctl enable --now atlas-repotrack-update.timer
 Verify with `systemctl list-timers atlas-repotrack-update.timer` and
 `python3 repotrack/atlas_repo.py status` after the first firing.
 
-**Phase 5 (+ gate-crossing-signal, 2026-07-28):** the service also runs three
-best-effort `ExecStartPost=-…` steps after each successful update — the live
-chain-head poll (`livedata/atlas_live.py poll-chain-head`, one
-non-interactive TaoStats call that records a live `spec_version` upgrade
-promptly), the emission-gate poll (`livedata/atlas_live.py poll-gate`,
-keyless finney RPC + one TaoSwap panel call recording confirmed gate-bar
-crossings), then the Telegram notifier (`telegram/atlas_telegram.py scan`).
-The polls run *before* the scan
-so fresh upgrade and crossing events are alerted in the same run. The leading `-` on each
+**Phase 5 (+ gate-crossing-signal, 2026-07-28):** the service also runs two
+best-effort `ExecStartPost=-…` steps after each successful update: the
+emission-gate poll (`livedata/atlas_live.py poll-gate`, keyless finney RPC +
+one TaoSwap panel call recording confirmed gate-bar crossings), then the
+Telegram notifier (`telegram/atlas_telegram.py scan`). The poll runs
+*before* the scan so fresh crossing events are alerted in the same run. The
+live chain-head poll left this unit on 2026-09-24 (change:
+runtime-upgrade-pipeline); it runs on its own `atlas-poll-chain-head` timer
+so a failed update no longer silences spec detection. The leading `-` on each
 makes them best-effort, so a poll or Telegram failure never marks this unit
 failed. Re-`cp` the `.service` file and `daemon-reload` if it changes. See
 [telegram/](../telegram/) and [livedata/](../livedata/).

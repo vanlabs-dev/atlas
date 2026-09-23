@@ -9,13 +9,12 @@
 # notifier best-effort — a Telegram failure or missing config NEVER marks
 # this unit failed and never affects the repo update (isolation guarantee).
 #
-# Signal tiering: poll the live chain head (one non-interactive TaoStats
-# call within the 2/min self-cap) BEFORE the Telegram scan, so a live
-# runtime upgrade recorded by the poll is alerted in the same run rather
-# than an hour later. Best-effort like the scan (leading `-`).
+# The live spec poll left this unit (change: runtime-upgrade-pipeline). It
+# runs on its own timer, atlas-poll-chain-head, so a failed repo update no
+# longer silences spec detection. The scan still alerts its upgrade events.
 #
 # Gate-crossing signal: poll the emission-gate state (keyless finney RPC +
-# one TaoSwap panel call) after the chain-head poll and before the scan,
+# one TaoSwap panel call) before the scan,
 # so a confirmed bar crossing is alerted in the same run. Inert until
 # livedata gate_signal.enabled is true. Best-effort (leading `-`).
 [Unit]
@@ -27,6 +26,5 @@ After=network-online.target
 Type=oneshot
 User=pi
 ExecStart=/usr/bin/python3 /home/pi/atlas/repotrack/atlas_repo.py update
-ExecStartPost=-/usr/bin/python3 /home/pi/atlas/livedata/atlas_live.py poll-chain-head
 ExecStartPost=-/usr/bin/python3 /home/pi/atlas/livedata/atlas_live.py poll-gate
 ExecStartPost=-/usr/bin/python3 /home/pi/atlas/telegram/atlas_telegram.py scan

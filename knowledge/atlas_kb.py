@@ -414,7 +414,30 @@ def render_report(report: Dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 
+UPGRADE_ACTOR = "atlas-upgrade"
+
+
+def rejected_units(connection: sqlite3.Connection,
+                   run_id: str) -> List[str]:
+    """Units of a run that the validation report would flag: duplicate unit
+    ids and secret-scan findings. The operator reads these in the report;
+    the upgrade job has no reader, so it refuses them."""
+    rejected = ["duplicate unit id %s" % row[0] for row in connection.execute(
+        "SELECT unit_id FROM units WHERE run_id = ? GROUP BY unit_id "
+        "HAVING count(*) > 1", (run_id,))]
+    for unit_id, content in connection.execute(
+            "SELECT unit_id, content FROM units WHERE run_id = ?",
+            (run_id,)):
+        findings: List[str] = []
+        ahv._scan_for_secrets(content, unit_id, findings)
+        rejected += ["secret-scan %s" % inv.redact(f) for f in findings]
+    return rejected
+
+
 def activate(db_path: str, run_id: str, actor: Optional[str] = None) -> int:
+    """Activate one run. The operator activates after reading the report.
+    The upgrade job activates as `atlas-upgrade` only after its gates and a
+    confirmed push, and never a run with rejected units."""
     actor = actor or ahv._account()
     connection = open_store(db_path)
     try:
@@ -425,6 +448,12 @@ def activate(db_path: str, run_id: str, actor: Optional[str] = None) -> int:
             print("FATAL: no staged units for run %s" % run_id,
                   file=sys.stderr)
             return 1
+        if actor == UPGRADE_ACTOR:
+            rejected = rejected_units(connection, run_id)
+            if rejected:
+                print("FATAL: run %s has rejected units: %s"
+                      % (run_id, "; ".join(rejected[:5])), file=sys.stderr)
+                return 1
         connection.execute("UPDATE units SET active = 0 WHERE active = 1")
         connection.execute(
             "UPDATE units SET active = 1 WHERE run_id = ?", (run_id,))

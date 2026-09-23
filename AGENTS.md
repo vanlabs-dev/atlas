@@ -22,14 +22,17 @@ Every commit and every push uses the personal identity:
 | Remote, Pi reads | `https://github.com/vanlabs-dev/atlas.git` (anonymous HTTPS) |
 | Remote, Pi upgrade pushes | `git@github.com:vanlabs-dev/atlas.git` (Atlas-only deploy key) |
 
-On 2026-09-23 the operator replaced the `maintenance/` pipeline with a simple
-runtime-upgrade job. A Hermes cron job ("Atlas runtime upgrade") watches the
-live runtime spec every 30 minutes. When it changes, an agent updates the
-knowledge corpus and any affected code, runs the tests, and pushes to `main`
-with the Atlas deploy key. It pushes only when all tests pass, never
-force-pushes, and reports to the operator on Telegram. See
-`docs/runtime-upgrade.md`. Scope excludes secrets, wallets, unrelated repos,
-and network/security settings.
+The runtime upgrade job (`upgrade/atlas_upgrade.py`, change
+`runtime-upgrade-pipeline`, 2026-09-24) runs on the Pi every 30 minutes.
+When the live runtime spec moves past the corpus spec, one headless
+`claude -p` session edits the corpus and chain readers in the
+`~/atlas-upgrade` worktree. Code then checks the goal, the edit scope
+(`upgrade/allowed_paths.py`), every test suite, and a live chain-read
+probe. Only then does the job push to `main` with the Atlas deploy key,
+activate the corpus, and report on Telegram. It never force-pushes. See
+`docs/runtime-upgrade.md`. The job may not edit tests, the probe, itself,
+docs other than `docs/decisions.md`, this file, systemd units, or secrets.
+It replaces Hermes cron job `fb98152a3fa1`.
 
 Supply the personal identity explicitly for automated commits, even when
 repo-local Git identity is configured. Do not rely on global configuration.

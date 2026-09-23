@@ -24,6 +24,7 @@ Envelope: unprivileged; writes only `var/livedata/` (gitignored, 0600).
 
 from __future__ import annotations
 
+import collections
 import datetime
 import hashlib
 import json
@@ -397,7 +398,8 @@ def open_store(db_path: str) -> sqlite3.Connection:
                              ("hovering", "INTEGER"),
                              ("eligibility", "TEXT"),
                              ("eligibility_at", "TEXT"))),
-            ("gate_sides", (("hovering", "INTEGER"),))):
+            ("gate_sides", (("hovering", "INTEGER"),)),
+            ("spec_upgrades", (("source", "TEXT"),))):
         columns = {row[1] for row in connection.execute(
             "PRAGMA table_info(%s)" % table)}
         for column, coltype in additions:
@@ -492,8 +494,9 @@ def record_spec_observation(connection: sqlite3.Connection,
     if prev_raw is not None and int(prev_raw) != new_spec:
         cursor = connection.execute(
             "INSERT INTO spec_upgrades (observed_at, prev_spec, new_spec, "
-            "block_reference) VALUES (?, ?, ?, ?)",
-            (_utc_now(), int(prev_raw), new_spec, block))
+            "block_reference, source) VALUES (?, ?, ?, ?, ?)",
+            (_utc_now(), int(prev_raw), new_spec, block,
+             values.get("source", "taostats")))
         upgrade_id = cursor.lastrowid
     meta_set(connection, META_LAST_LIVE_SPEC, str(new_spec))
     if block is not None:
@@ -1655,8 +1658,48 @@ def twox128(name: str) -> bytes:
             + xxh64(raw, 1).to_bytes(8, "little"))
 
 
+# Every storage item Atlas reads (change: runtime-upgrade-pipeline). The
+# probe (atlas_probe.py) checks each entry against live runtime metadata, so
+# a renamed or removed item fails loudly instead of reading as a default.
+# Value types are the metadata names that scale_meta.type_name resolves:
+# FixedU128<U64> is U64F64 and FixedU128<U32> is U96F32.
+ChainRead = collections.namedtuple("ChainRead",
+                                   "pallet item hashers value_type")
+
+CHAIN_READS: Tuple[ChainRead, ...] = tuple(
+    ChainRead(SUBTENSOR_PALLET, item, hashers, value_type)
+    for item, hashers, value_type in (
+        ("EmissionGateBar", (), "FixedU128<U64>"),
+        ("EmissionBarQuantile", (), "FixedU128<U64>"),
+        ("EmissionGateExponent", (), "FixedU128<U64>"),
+        ("EmissionBarRank", (), "u16"),
+        ("RootWeightSettingEnabled", (), "bool"),
+        ("RootWeightsCap", ("blake2_128concat",), "u16"),
+        ("BasketTradingEnabled", (), "bool"),
+        ("BasketClaimRowDustCapTao", (), "u64"),
+        ("BasketClaimRowDustBps", (), "u16"),
+        ("BasketClaimSliceDustTao", (), "u64"),
+        ("SubnetworkN", ("identity",), "u16"),
+        ("Incentive", ("identity",), "Vec<PerU16>"),
+        ("MinerBurned", ("identity",), "FixedU128<U32>"),
+        ("CollateralLockShare", ("identity",), "u16"),
+        ("SubnetIdentitiesV3", ("blake2_128concat",), "SubnetIdentityV3"),
+        ("SubnetEmissionEnabled", ("identity",), "bool"),
+        ("Weights", ("identity", "identity"), "Vec<(u16, u16)>"),
+        ("Keys", ("identity", "identity"), "AccountId32"),
+        ("TotalHotkeyAlpha", ("blake2_128concat", "identity"),
+         "AlphaBalance"),
+    ))
+
+_DECLARED_READS = {(read.pallet, read.item) for read in CHAIN_READS}
+
+
 def storage_prefix(pallet: str, item: str) -> str:
-    """Hex prefix for every entry of a storage item."""
+    """Hex prefix for every entry of a storage item. Refuses an item that
+    CHAIN_READS does not declare, so no read escapes the probe."""
+    if (pallet, item) not in _DECLARED_READS:
+        raise FatalLiveError("storage item %s.%s is not declared in "
+                             "CHAIN_READS" % (pallet, item))
     return "0x" + (twox128(pallet) + twox128(item)).hex()
 
 
@@ -3197,29 +3240,152 @@ def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
 
 
 # ---------------------------------------------------------------------------
-# CLI — scheduled chain-head poll (piggybacked on the hourly repo-update
-# service, before the Telegram scan line). Everything else in this module
-# is served through atlas_live_server.py when Hermes asks; this entry
-# point exists so a live runtime upgrade is detected promptly rather than
-# only when someone queries. Spends one non-interactive TaoStats call.
+# Keyless spec read and live knob read (change: runtime-upgrade-pipeline)
+# ---------------------------------------------------------------------------
+
+
+def _finalized_block(rpc: Any) -> Tuple[Optional[str], Optional[int],
+                                         Optional[str]]:
+    """(block_hash, block_number, error) at the finalized head."""
+    head = rpc("chain_getFinalizedHead", [])
+    if not head.get("ok") or not head.get("result"):
+        return None, None, head.get("error") or "no finalized head"
+    block_hash = head["result"]
+    header = rpc("chain_getHeader", [block_hash])
+    try:
+        number = int(str(header["result"]["number"]), 16)
+    except (KeyError, TypeError, ValueError):
+        return None, None, header.get("error") or "no finalized header"
+    return block_hash, number, None
+
+
+def read_live_spec(config: Dict[str, Any],
+                   rpc: Optional[Any] = None) -> Dict[str, Any]:
+    """Live runtime spec_version through keyless RPC at the finalized head.
+    Returns {ok, spec_version, block_number, block_hash, source: "rpc"} or
+    {ok: False, error}. The spec and the block come from one block hash."""
+    rpc = rpc or (lambda method, params: _rpc_call(config, method, params))
+    block_hash, number, error = _finalized_block(rpc)
+    if error:
+        return {"ok": False, "error": error}
+    version = rpc("state_getRuntimeVersion", [block_hash])
+    spec = (version.get("result") or {}).get("specVersion") \
+        if version.get("ok") else None
+    if not isinstance(spec, int) or isinstance(spec, bool) or spec <= 0:
+        return {"ok": False,
+                "error": version.get("error") or "no valid specVersion"}
+    return {"ok": True, "spec_version": spec, "block_number": number,
+            "block_hash": block_hash, "source": "rpc"}
+
+
+def decode_u64(hex_payload: str) -> int:
+    """Decode a SCALE u64 storage payload (8 bytes little-endian)."""
+    data = _payload_bytes(hex_payload)
+    if len(data) != 8:
+        raise ValueError("expected 8 bytes, got %d" % len(data))
+    return int.from_bytes(data, "little")
+
+
+_CODECS["u64"] = decode_u64
+
+# Plain knobs the corpus states as live values, with their codecs. Unset
+# prints as unset: a code default is not a live value (SOURCES.md rule 3).
+KNOB_ITEMS: Dict[str, str] = {
+    "EmissionBarRank": "u16",
+    "EmissionBarQuantile": "u64f64",
+    "EmissionGateExponent": "u64f64",
+    "RootWeightSettingEnabled": "bool",
+    "BasketTradingEnabled": "bool",
+    "BasketClaimRowDustCapTao": "u64",
+    "BasketClaimRowDustBps": "u16",
+    "BasketClaimSliceDustTao": "u64",
+}
+
+
+def read_knobs(config: Dict[str, Any],
+               rpc: Optional[Any] = None) -> Dict[str, Any]:
+    """Read every corpus-stated live knob at ONE finalized block. Read-only:
+    nothing is persisted. Fails closed on any transport or decode error."""
+    rpc = rpc or (lambda method, params: _rpc_call(config, method, params))
+    spec = read_live_spec(config, rpc)
+    if not spec["ok"]:
+        return spec
+    block_hash = spec["block_hash"]
+    keys = {item: storage_prefix(SUBTENSOR_PALLET, item)
+            for item in KNOB_ITEMS}
+    keys["RootWeightsCap[0]"] = storage_key_blake2_concat_u16(
+        SUBTENSOR_PALLET, "RootWeightsCap", ROOT_NETUID)
+    codecs = dict(KNOB_ITEMS, **{"RootWeightsCap[0]": "u16"})
+    knobs: Dict[str, Any] = {}
+    for name, key in keys.items():
+        read = rpc("state_getStorage", [key, block_hash])
+        if not read.get("ok"):
+            return {"ok": False, "error": read.get("error") or name}
+        raw = read.get("result")
+        try:
+            value = None if raw is None else decode_by_codec(codecs[name],
+                                                             raw)
+        except ValueError as exc:
+            return {"ok": False, "error": "%s: %s" % (name, exc)}
+        knobs[name] = {"value": value, "raw": raw,
+                       "state": "unset" if raw is None else "explicit"}
+
+    # Same block for the map: pin the head the map read asks for.
+    def pinned(method: str, params: List[Any]) -> Dict[str, Any]:
+        if method == "chain_getFinalizedHead":
+            return {"ok": True, "result": block_hash}
+        return rpc(method, params)
+
+    maps = read_subnet_maps(config, dict(_SWITCH_WATCH_ITEMS), rpc=pinned)
+    if not maps.get("ok") or maps.get("failed_items"):
+        return {"ok": False, "error": maps.get("error")
+                or "SubnetEmissionEnabled: %s" % maps.get("failed_items")}
+    enabled = maps["values"]["SubnetEmissionEnabled"]
+    subnets = sorted(n for n in maps["values"]["SubnetworkN"]
+                     if n != ROOT_NETUID)
+    return {"ok": True, "spec_version": spec["spec_version"],
+            "block_number": spec["block_number"], "block_hash": block_hash,
+            "knobs": knobs,
+            "SubnetEmissionEnabled": {
+                "keys": len(enabled), "subnets": len(subnets),
+                "off": [n for n in subnets if not enabled.get(n, False)]}}
+
+
+# ---------------------------------------------------------------------------
+# CLI: scheduled chain-head poll (its own hourly unit,
+# atlas-poll-chain-head, change: runtime-upgrade-pipeline). Everything else
+# in this module is served through atlas_live_server.py when Hermes asks;
+# this entry point exists so a live runtime upgrade is detected promptly
+# rather than only when someone queries. Keyless RPC first; TaoStats (one
+# non-interactive call) only when every RPC endpoint fails.
 # ---------------------------------------------------------------------------
 
 
 def _cmd_poll_chain_head() -> int:
     config = load_config()
-    env = load_env()
     connection = open_store(resolve(config["db"]))
     try:
-        ledger = QuotaLedger(connection, config)
-        result = run_operation(connection, config, ledger,
-                               "chain_head_taostats", interactive=False,
-                               env=env)
-        summary: Dict[str, Any] = {"status": result["status"]}
-        if result["status"] == "ok":
-            summary["spec_version"] = result["values"]["spec_version"]
-            summary["block_number"] = result["values"]["block_number"]
+        live = read_live_spec(config)
+        if live["ok"]:
+            record_spec_observation(connection, live)
+            summary: Dict[str, Any] = {
+                "status": "ok", "source": "rpc",
+                "spec_version": live["spec_version"],
+                "block_number": live["block_number"]}
         else:
-            summary["error"] = result.get("error", {}).get("category")
+            health_event(connection, GATE_PROVIDER, "poll_chain_head",
+                         "provider-failure", live["error"])
+            ledger = QuotaLedger(connection, config)
+            result = run_operation(connection, config, ledger,
+                                   "chain_head_taostats", interactive=False,
+                                   env=load_env())
+            summary = {"status": result["status"], "source": "taostats",
+                       "rpc_error": live["error"]}
+            if result["status"] == "ok":
+                summary["spec_version"] = result["values"]["spec_version"]
+                summary["block_number"] = result["values"]["block_number"]
+            else:
+                summary["error"] = result.get("error", {}).get("category")
         row = connection.execute(
             "SELECT id, prev_spec, new_spec FROM spec_upgrades "
             "ORDER BY id DESC LIMIT 1").fetchone()
@@ -3230,6 +3396,12 @@ def _cmd_poll_chain_head() -> int:
         connection.close()
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0 if summary["status"] == "ok" else 1
+
+
+def _cmd_read_knobs() -> int:
+    result = read_knobs(load_config())
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result["ok"] else 1
 
 
 def _cmd_poll_gate() -> int:
@@ -3346,14 +3518,17 @@ def main(argv: Optional[List[str]] = None) -> int:
                     "atlas_live_server.py serves interactive queries)")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("poll-chain-head",
-                   help="one validated chain-head read; records the live "
-                        "runtime spec_version and an upgrade event on "
-                        "change (non-interactive quota)")
+                   help="one validated chain-head read (keyless RPC, "
+                        "TaoStats fallback); records the live runtime "
+                        "spec_version and an upgrade event on change")
     sub.add_parser("poll-gate",
                    help="one emission-gate pass: theta/q/h from finney "
                         "RPC at a finalized block, demand shares from the "
                         "TaoSwap panel, hysteresis-guarded crossing "
                         "events (inert unless gate_signal.enabled)")
+    sub.add_parser("read-knobs",
+                   help="read-only: every corpus-stated live knob at one "
+                        "finalized block, with its block hash")
     sub.add_parser("status",
                    help="gate state / sides / recent crossing events + "
                         "last live spec_version")
@@ -3363,6 +3538,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             return _cmd_poll_chain_head()
         if args.command == "poll-gate":
             return _cmd_poll_gate()
+        if args.command == "read-knobs":
+            return _cmd_read_knobs()
         if args.command == "status":
             return _cmd_status()
     except FatalLiveError as exc:
