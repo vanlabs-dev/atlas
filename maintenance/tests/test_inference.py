@@ -59,6 +59,17 @@ def test_broker_runs_fixed_module_with_sanitized_environment(monkeypatch):
     assert captured['cwd'] != '/home/pi/atlas'
 
 
+def test_broker_stall_check_matches_the_process_deadline():
+    import subprocess
+    captured = {}
+    def run(command, **kwargs):
+        captured.update(kwargs)
+        return subprocess.CompletedProcess(command, 0, b'{"ok":true}', b'')
+    broker = i.HermesBroker(python='/p', hermes_source='/h', timeout=240, runner=run)
+    broker({})
+    assert float(captured['env']['HERMES_API_CALL_STALE_TIMEOUT']) == captured['timeout']
+
+
 @pytest.mark.parametrize('metadata', [
     {'completed': False}, {'failed': True}, {'partial': True},
     {'interrupted': True}, {'error': 'SECRET provider error'},
