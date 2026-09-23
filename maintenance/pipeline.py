@@ -176,12 +176,37 @@ class Pipeline:
         save_json(self.root/'evidence-receipt.json',receipt)
         return receipt
 
-    def edit(self,job):
-        baseline=git(self.repo,'rev-parse','HEAD').decode().strip()
+    def rebind_evidence(self,baseline):
+        """Rebuild evidence when main moved forward after collection.
+
+        Only a fast-forward is accepted: the collected commit must be an ancestor
+        of the current baseline. Rewritten history still blocks. Chain pins and
+        source evidence are re-read; nothing from the stale packet is reused.
+        """
         packet=self.load('model-packet.json')
         inventory=packet.get('atlas_inventory')
-        if not isinstance(inventory,dict) or inventory.get('commit')!=baseline:
+        collected=inventory.get('commit') if isinstance(inventory,dict) else None
+        if collected==baseline:
+            return packet,None
+        if not isinstance(collected,str) or subprocess.run(
+                ['git','merge-base','--is-ancestor',collected,baseline],cwd=self.repo,
+                stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60).returncode!=0:
             raise ValueError('evidence Atlas inventory does not match candidate baseline')
+        receipt=self.evidence(self.job)
+        packet=self.load('model-packet.json')
+        if packet.get('atlas_inventory',{}).get('commit')!=baseline:
+            raise ValueError('rebuilt evidence does not match candidate baseline')
+        return packet,{'from':collected,'to':baseline,'model_packet_sha256':receipt['model_packet_sha256']}
+
+    def edit(self,job):
+        baseline=git(self.repo,'rev-parse','HEAD').decode().strip()
+        packet,rebound=self.rebind_evidence(baseline)
+        if rebound and self.candidate.exists():
+            # A candidate built on the old baseline is obsolete. Keep it for audit.
+            self.candidate.rename(self.root/('discarded-candidate-'+str(time.time_ns())))
+            for name in ('candidate-receipt.json','repair-progress.json'):
+                if (self.root/name).exists():
+                    (self.root/name).rename(self.root/(name+'.discarded-'+str(time.time_ns())))
         if self.candidate.exists():
             saved=self.root/'candidate-receipt.json'
             if saved.exists():
@@ -208,6 +233,8 @@ class Pipeline:
         save_json(self.root/'proposal.json',proposal)
         receipt={'baseline':baseline,'candidate':git(self.candidate,'rev-parse','HEAD').decode().strip(),
                  'tree':git(self.candidate,'rev-parse','HEAD^{tree}').decode().strip(),'report':report_path}
+        if rebound:
+            receipt['evidence_rebound']=rebound
         save_json(self.root/'candidate-receipt.json',receipt)
         return receipt
 
