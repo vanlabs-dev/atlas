@@ -20,22 +20,18 @@ Every commit and every push uses the personal identity:
 | GitHub account | `vanlabs-dev` |
 | Remote, workstation | `git@github.com:vanlabs-dev/atlas.git` (SSH, read and write) |
 | Remote, Pi reads | `https://github.com/vanlabs-dev/atlas.git` (anonymous HTTPS) |
-| Remote, Pi maintenance pushes | `git@github.com:vanlabs-dev/atlas.git` (Atlas-only deploy key) |
+| Remote, Pi upgrade pushes | `git@github.com:vanlabs-dev/atlas.git` (Atlas-only deploy key) |
 
-The operator approved scoped mainnet-upgrade maintenance on 2026-09-22.
-The Pi keeps anonymous HTTPS reads and uses its dedicated Atlas deploy key
-only in the deterministic publisher. The coding worker receives no key.
-Automatic ordinary pushes to `main` require complete deployed-source evidence,
-all mandatory tests, independent review, and exact remote readback. Branch
-protections remain enforced. Never force-push. Publication and activation
-remain disabled until the implementation acceptance gates pass.
+On 2026-09-23 the operator replaced the `maintenance/` pipeline with a simple
+runtime-upgrade job. A Hermes cron job ("Atlas runtime upgrade") watches the
+live runtime spec every 30 minutes. When it changes, an agent updates the
+knowledge corpus and any affected code, runs the tests, and pushes to `main`
+with the Atlas deploy key. It pushes only when all tests pass, never
+force-pushes, and reports to the operator on Telegram. See
+`docs/runtime-upgrade.md`. Scope excludes secrets, wallets, unrelated repos,
+and network/security settings.
 
-This approval also permits resource-bounded isolated Pi tests and validated
-local code/knowledge activation. It excludes secrets, wallets, unrelated
-repos, network/security settings, and maintenance-policy self-modification.
-See `maintenance/README.md` and the approved OpenSpec change.
-
-Supply the personal identity explicitly for maintenance commits, even when
+Supply the personal identity explicitly for automated commits, even when
 repo-local Git identity is configured. Do not rely on global configuration.
 
 Verify the author before any commit lands. If `git var GIT_AUTHOR_IDENT`

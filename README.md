@@ -8,20 +8,12 @@ running on a Raspberry Pi. Built methodically in gated phases via OpenSpec.
 (resolved/open decisions), `openspec/specs/` (accepted capability specs), and
 `openspec/changes/archive/` (completed changes with their proposal/design/tasks).
 
-## Mainnet maintenance implementation (2026-09-22)
+## Runtime upgrades (2026-09-23)
 
-`maintenance/` adds finalized-deployment detection, durable audit jobs,
-artifact/source verification, isolated coding and testing, independent review,
-publication receipts, guarded activation, and rollback. The operator approved
-scoped automation. The maintenance publisher stays disabled until its
-acceptance gates pass. The shortcut Finney spec-sync cron is paused and its
-publisher refuses execution. Version equality alone cannot clear a failed
-publication or prove deployment health. Future automatic updates use only the
-guarded maintenance controller after its commissioning gate passes.
-
-See [maintenance/README.md](maintenance/README.md) for policy, commands,
-recovery, and installation. The active change is
-[`mainnet-upgrade-maintenance`](openspec/changes/mainnet-upgrade-maintenance/).
+A Hermes cron job watches the live runtime spec every 30 minutes and, on a
+change, updates the corpus and affected code, runs the tests, and pushes to
+`main`. See [docs/runtime-upgrade.md](docs/runtime-upgrade.md). It replaced
+the `maintenance/` pipeline, which was removed.
 
 ## Current status (2026-09-23, Finney spec 469)
 
@@ -44,7 +36,7 @@ Corpus and this README are grounded at 469.
 **On the device:** fleet clones + LAN boards at
 `http://192.168.0.150:8480/` and `/mining.html`; hourly gate poll and
 chain-parameter watch; Telegram pulse + subnt.dev public edition.
-OpenSpec change `mainnet-upgrade-maintenance` is active. The 455 switch
+The 455 switch
 watch is deployed (`063d206`).
 
 Investment/rotation tooling is Phase 7 territory. Archived change history

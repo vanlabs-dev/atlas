@@ -88,11 +88,6 @@
     "digest_backstop_hours": 24
   },
   "classes": {
-    "maintenance-status": {
-      "enabled": true,
-      "tier": "instant",
-      "source_db": "var/maintenance/maintenance.db"
-    },
     "chain-runtime-upgrade": {
       "_comment": "Class order is delivery priority: a live chain upgrade surfaces before repo alerts in the same scan.",
       "enabled": true,

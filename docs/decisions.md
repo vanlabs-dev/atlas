@@ -4,26 +4,14 @@ Resolved decisions from [prd.md](../prd.md) §21. Each entry: what was decided,
 when, and by whom. Unlisted questions remain **open** — see the PRD for the
 full list. Per PRD §5.5, nothing here may be assumed before it is recorded.
 
-## Mainnet-maintenance authority (2026-09-22)
+## Runtime-upgrade automation (2026-09-23)
 
-**Decided by the operator:** approve the written mainnet-upgrade automation
-plan, an Atlas-only deploy key, resource-bounded isolated Pi tests, gated
-ordinary publication, and validated local code/knowledge activation. Preserve
-personal Git identity and remote branch rules. Exclude secrets, wallets,
-unrelated repos, security/network changes, and autonomous control-plane edits.
-
-The implementation uses finalized deployment evidence rather than observed
-runtime numbers alone. Source provenance means verified official publisher
-artifacts matched to deployed code, not an unperformed reproducible build.
-Every intervening deployment and every Atlas consumer requires an evidence-backed
-disposition. A candidate requires complete tests and independent review before
-publication. Publication and activation have separate durable receipts.
-
-**Operational status:** integration and acceptance are pending. System-owned
-producer timers require a one-time authenticated migration. Atlas tool servers
-require managed reader wrappers and a verified client reconnect. The
-maintenance publisher stays disabled. See [maintenance/README.md](../maintenance/README.md)
-and the active [OpenSpec change](../openspec/changes/mainnet-upgrade-maintenance/).
+**Decided by the operator:** replace the `maintenance/` pipeline (about
+10,000 lines, never commissioned) with a simple upgrade job, and let it push
+to `main` automatically when tests pass. The 2026-09-22 maintenance authority
+is superseded. `maintenance/`, its OpenSpec change, the retired spec publisher,
+and the Telegram `maintenance-status` class are removed. See
+[runtime-upgrade.md](runtime-upgrade.md).
 
 ## Live chain (2026-09-23)
 
@@ -36,15 +24,8 @@ request completed 2026-09-22T21:21:18Z; knob read at finalized block
 is **true** (explicit). Basket curation is off. Basket trading is on and
 is not curation.
 
-Operator authorized autonomous updates with health and quality gates on
-2026-09-23. This supersedes the shortcut spec-sync publication route: the cron
-is paused and `knowledge/atlas_spec_publish.py` refuses execution. Its in-sync
-check did not exercise autonomous rewrites or publication recovery. Future
-automated updates must use the guarded maintenance controller, preserving
-source evidence, isolated tests, independent review, durable publication and
-activation receipts, and retry/recovery checks. Publication and activation
-remain disabled until commissioning passes. Existing chain watchers remain
-active. Web leads stay out of the confirmed knowledge base (ATLAS-WEB-003).
+Runtime upgrades are automated; see the runtime-upgrade entry above.
+Web leads stay out of the confirmed knowledge base (ATLAS-WEB-003).
 
 The table below is historical. Do not treat its dated live reads as current.
 Current-state docs: [README.md](../README.md) and
