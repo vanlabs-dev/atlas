@@ -13,54 +13,6 @@ Two halves with different owners:
 Governing spec: PRD §12.11 (ATLAS-TG-001…006) and the accepted
 `telegram-integration` capability.
 
-## Maintenance notification input contract
-
-`maintenance-status` consumes `var/maintenance/maintenance.db` read-only and
-uses the existing notifier scan, delivery ledger, scrubber, HTML renderer,
-and bounded transport retry. The orchestrator, not this notifier, owns and
-creates this append-only queue:
-
-```sql
-CREATE TABLE IF NOT EXISTS maintenance_notifications (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    upgrade_id TEXT NOT NULL,
-    status TEXT NOT NULL CHECK(status IN ('detected','blocked','activated')),
-    detail TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    UNIQUE(upgrade_id, status)
-);
-```
-
-Producer contract:
-
-- `upgrade_id`: stable identity of the upgrade, **not** an attempt/run ID;
-  1–200 characters matching `[A-Za-z0-9:._-]+`. Keep it identical across
-  detection, blocked retries, and activation.
-- `status`: exactly `detected`, `blocked`, or `activated`. `activated` means
-  the orchestrator has completed its activation checks, not merely started.
-- `detail`: nonblank plain text, at most 1000 characters, no ASCII control
-  characters (including newlines). No secrets; HTML is escaped as data.
-- `created_at`: ISO-8601 timestamp with an explicit timezone.
-- Append using `INSERT ... ON CONFLICT(upgrade_id, status) DO NOTHING`;
-  never replace rows, recycle IDs, or mutate previously queued events.
-  Commit the notification with the associated durable state transition.
-
-The notifier reads up to 50 rows per scan. Its row-ID watermark lives only
-in `var/telegram/telegram.db`. Stable delivery identity is
-`maintenance:{upgrade_id}:{status}`. Every recorded maintenance outcome
-suppresses a repeat permanently while the notifier ledger is retained,
-including after the normal coalescing window or a watermark reset. A failed
-send receives the existing bounded transport retries, not another alert on
-each orchestrator retry. A new status for the same upgrade is a new alert.
-This is not network-level exactly-once delivery: a process crash after a
-successful send but before the ledger commit can replay on restart.
-
-Missing database/table is quiet for backwards-compatible startup. Malformed
-rows fail the fetched batch closed: no batch deliveries and no watermark
-advance; repair the producer data before retrying. No credentials or source
-values are included in validation errors. Disable `classes.maintenance-status`
-to stop this integration without affecting maintenance execution.
-
 ## Outbound notifier
 
 Fail-closed, stdlib-only, read-only toward the device except its own 0600
