@@ -229,6 +229,13 @@ Before calling the system operational, retain receipts for:
 - Supervised restart recovery and a repeated unchanged-chain poll that creates
   neither another commit nor another successful-delivery notification.
 
+Evidence records the Atlas commit it inventoried. When `main` moves forward
+after collection, the edit stage rebuilds the evidence against the new commit
+before proposing changes. The rebuild re-reads chain pins and source evidence
+and counts as no extra attempt. It proceeds only when the collected commit is
+an ancestor of the current `main`; rewritten history still blocks. A candidate
+built on the old commit is kept under `discarded-candidate-*` for audit.
+
 A blocked job is a valid safety outcome, not a completed upgrade. Inspect its
 saved gate receipt before retrying. Fix missing evidence or permissions rather
 than changing a success flag.
