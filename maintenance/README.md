@@ -269,7 +269,32 @@ The broker rejects a completion whose status fields report failure, a partial
 or interrupted run, an incomplete run, or an error. Adapters that omit the
 fields keep the older contract. A present field must be an exact boolean.
 
-The broker never retries a rate limit. Hermes reports a used-up plan and a
+## Inference routes
+
+The broker round-robins two fixed routes, set in `ROUTES` in `inference.py`:
+
+- `claude`: `claude-opus-5-5` on `claude-subscription-directsdk-experimental`.
+- `grok`: `grok-4.7` on `xai-oauth`.
+
+Each call starts on the next route in turn. Model output never selects a
+route, and the child process refuses any route name outside `ROUTES`. The
+sanitized inference `PATH` stays `/usr/bin:/bin`; the Claude route receives the
+absolute Claude Code binary path (`~/.local/bin/claude`) through
+`CLAUDE_SUBSCRIPTION_DIRECTSDK_COMMAND` instead.
+
+A rate limit or process deadline on one route moves the same request to the
+next route at once. Each route is tried at most once per call. Any other
+failure concerns the request or the answer, so it raises without failover.
+
+The broker never waits on a rate limit. Hermes reports a used-up plan and a
 short provider limit with the same `rate_limit` category, so the broker cannot
-tell them apart, and waiting cannot clear a plan cap. The job fails at that
-stage. Normal job retry timing in the controller governs the next attempt.
+tell them apart, and waiting cannot clear a plan cap. When every route fails,
+the job fails at that stage. Normal job retry timing in the controller governs
+the next attempt.
+
+`inference-smoke` probes each route alone, so a working route cannot hide a
+broken one:
+
+```sh
+/home/pi/.cache/atlas-maintenance-venv/bin/python -m maintenance.atlas_maintenance --config /home/pi/.config/atlas-maintenance/runtime.json inference-smoke
+```

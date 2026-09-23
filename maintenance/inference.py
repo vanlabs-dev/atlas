@@ -11,8 +11,15 @@ import sys
 import tempfile
 from pathlib import Path
 
-MODEL = 'gpt-6-astra'
-PROVIDER = 'openai-codex'
+# Fixed, operator-approved routes. Model output never selects a route.
+ROUTES = {
+    'claude': ('claude-opus-5-5', 'claude-subscription-directsdk-experimental'),
+    'grok': ('grok-4.7', 'xai-oauth'),
+}
+ROUTE_ORDER = ('claude', 'grok')
+DEFAULT_ROUTE = ROUTE_ORDER[0]
+# Failures that say nothing about the request itself. The next route may try it.
+_FAILOVER_CATEGORIES = frozenset({'rate_limit', 'upstream_rate_limit', 'deadline'})
 
 
 # This is a failure-only wire format, not model output. Never add free text.
@@ -22,7 +29,7 @@ _DIAGNOSTIC_CATEGORIES = frozenset({
     'invalid_completion_metadata', 'invalid_json', 'duplicate_key',
     'nonfinite_json', 'nonobject_json', 'input_budget', 'output_budget',
     'tools_enabled', 'unexpected_tool_call', 'tool_execution_disabled',
-    'rate_limit', 'upstream_rate_limit',
+    'rate_limit', 'upstream_rate_limit', 'deadline',
 })
 _DIAGNOSTIC_MAX_BYTES = 1024
 
@@ -82,14 +89,17 @@ def _unique(pairs):
 
 
 def infer_json(payload, *, agent_factory=None, max_input_bytes=800000,
-               max_output_bytes=200000, timeout=180):
+               max_output_bytes=200000, timeout=180, route=DEFAULT_ROUTE):
+    if route not in ROUTES:
+        raise InferenceError('unknown inference route')
+    model, provider = ROUTES[route]
     text = json.dumps(payload, allow_nan=False)
     if len(text.encode()) > max_input_bytes:
         raise InferenceError('input budget exceeded; never truncate evidence', category='input_budget')
     if agent_factory is None:
         from run_agent import AIAgent
         agent_factory = AIAgent
-    agent = agent_factory(model=MODEL, provider=PROVIDER, enabled_toolsets=[],
+    agent = agent_factory(model=model, provider=provider, enabled_toolsets=[],
         max_iterations=1, max_tokens=24000, run_budget_seconds=timeout,
         skip_context_files=True, skip_memory=True, skip_background_review=True,
         load_soul_identity=False, save_trajectories=False, quiet_mode=True,
@@ -152,30 +162,63 @@ class HermesBroker:
     No subprocess executable or argument can be selected by model output.
     Credentials reside in the inference process only, never candidate tests.
     """
-    def __init__(self, *, python, hermes_source, timeout=240, runner=subprocess.run):
+    def __init__(self, *, python, hermes_source, timeout=240, runner=subprocess.run,
+                 routes=ROUTE_ORDER, claude_command=None):
         self.python = str(python)
+        # The sanitized PATH excludes ~/.local/bin. Pin the Claude Code binary
+        # by absolute path instead of widening PATH for the inference process.
+        self.claude_command = str(claude_command or Path.home() / '.local/bin/claude')
+        if not Path(self.claude_command).is_absolute():
+            raise ValueError('claude_command must be an absolute path')
         self.hermes_source = str(hermes_source)
         self.timeout = timeout
         self.runner = runner
+        routes = tuple(routes)
+        if not routes or len(set(routes)) != len(routes) or any(r not in ROUTES for r in routes):
+            raise ValueError('routes must be distinct approved route names')
+        self.routes = routes
+        self._next = 0
+        self.last_route = None
 
     def __call__(self, payload):
-        return self._invoke(payload)
+        """Round robin across routes; fail over once per route, never wait.
 
-    def _invoke(self, payload):
+        A rate limit or deadline on one route moves the same request to the
+        next route immediately. Any other failure is about the request or the
+        answer and raises at once.
+        """
+        start = self._next
+        self._next = (self._next + 1) % len(self.routes)
+        for offset in range(len(self.routes)):
+            route = self.routes[(start + offset) % len(self.routes)]
+            try:
+                result = self._invoke(payload, route)
+            except InferenceError as exc:
+                if (exc.diagnostic['category'] not in _FAILOVER_CATEGORIES or
+                        offset == len(self.routes) - 1):
+                    raise
+                continue
+            self.last_route = route
+            return result
+
+    def _invoke(self, payload, route=DEFAULT_ROUTE):
         request = json.dumps(payload, allow_nan=False).encode()
         if len(request) > 800000:
             raise InferenceError('input budget exceeded')
         env = {k: os.environ[k] for k in ('HOME', 'HERMES_HOME', 'LANG', 'SSL_CERT_FILE',
                'SSL_CERT_DIR') if k in os.environ}
         env.update(PATH='/usr/bin:/bin', PYTHONNOUSERSITE='1')
+        if route == 'claude':
+            env['CLAUDE_SUBSCRIPTION_DIRECTSDK_COMMAND'] = self.claude_command
         with tempfile.TemporaryDirectory(prefix='atlas-inference-') as directory:
             try:
                 result = self.runner([self.python, str(Path(__file__).resolve()),
-                    '--broker', self.hermes_source], input=request, stdout=subprocess.PIPE,
+                    '--broker', self.hermes_source, route], input=request, stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE, cwd=directory, env=env, timeout=self.timeout,
                     check=False)
             except subprocess.TimeoutExpired as exc:
-                raise InferenceError('inference process deadline exceeded') from exc
+                raise InferenceError('inference process deadline exceeded',
+                                     category='deadline') from None
         if result.returncode:
             # Do not leak provider error payloads or credential material to job logs.
             diagnostic = _failure_diagnostic(result.stdout)
@@ -212,7 +255,7 @@ def _broker_main():
             if len(request) > 800000:
                 raise InferenceError('input budget exceeded', category='input_budget')
             result = infer_json(json.loads(request, object_pairs_hook=_unique,
-                                           parse_constant=_nonfinite))
+                                           parse_constant=_nonfinite), route=sys.argv[3])
             output = json.dumps(result, allow_nan=False)
         except BaseException as exc:
             # SystemExit/interrupts must not bypass the sanitized failure channel.
@@ -227,6 +270,6 @@ def _broker_main():
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3 or sys.argv[1] != '--broker':
+    if len(sys.argv) != 4 or sys.argv[1] != '--broker' or sys.argv[3] not in ROUTES:
         raise SystemExit('use HermesBroker; no agent command execution supported')
     raise SystemExit(_broker_main())
