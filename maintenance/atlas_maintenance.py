@@ -160,11 +160,16 @@ def main(argv=None):
     state.mkdir(parents=True,exist_ok=True,mode=0o700)
     os.chmod(state,0o700)
     if args.command=='inference-smoke':
-        from .inference import HermesBroker
-        broker=HermesBroker(python=config['hermes_python'],hermes_source=config['hermes_source'],timeout=config['inference_timeout'])
-        result=broker({'protocol':'Return exactly {"ready":true,"tools":false} as JSON.'})
-        if result != {'ready':True,'tools':False}:raise ValueError('inference smoke response mismatch')
-        print(json.dumps(result));return 0
+        from .inference import HermesBroker, ROUTE_ORDER
+        # Probe every route alone so a working route cannot mask a broken one.
+        results={}
+        for route in ROUTE_ORDER:
+            broker=HermesBroker(python=config['hermes_python'],hermes_source=config['hermes_source'],
+                                timeout=config['inference_timeout'],routes=(route,))
+            result=broker({'protocol':'Return exactly {"ready":true,"tools":false} as JSON.'})
+            if result != {'ready':True,'tools':False}:raise ValueError('inference smoke response mismatch: '+route)
+            results[route]=result
+        print(json.dumps(results));return 0
     if args.command=='status':
         # SQLite supplies a consistent view without waiting for a long model job.
         with Store(state/'maintenance.db') as store:

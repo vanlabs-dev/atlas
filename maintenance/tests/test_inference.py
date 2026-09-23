@@ -1,4 +1,5 @@
 import json
+import sys
 import pytest
 from maintenance import inference as i
 
@@ -23,8 +24,7 @@ def test_tool_free_pinned_request():
         return a
     assert i.infer_json({'task': 'smoke'}, agent_factory=factory) == {'ok': True}
     assert seen[0].kwargs['enabled_toolsets'] == []
-    assert seen[0].kwargs['model'] == 'gpt-6-astra'
-    assert seen[0].kwargs['provider'] == 'openai-codex'
+    assert (seen[0].kwargs['model'], seen[0].kwargs['provider']) == i.ROUTES[i.DEFAULT_ROUTE]
     assert seen[0].kwargs['skip_memory'] is True
     assert seen[0].kwargs['skip_context_files'] is True
 
@@ -171,7 +171,8 @@ def test_child_failure_diagnostics_roundtrip(child_source, response, metadata, c
         result = subprocess.run(*args, **kwargs)
         captured.append(result)
         return result
-    broker = i.HermesBroker(python=sys.executable, hermes_source=source, runner=run)
+    broker = i.HermesBroker(python=sys.executable, hermes_source=source, runner=run,
+                            routes=('claude',))
     payload = {'SECRET user': 'SECRET input'}
     with pytest.raises(i.InferenceError) as error:
         broker(payload)
@@ -250,9 +251,10 @@ def test_broker_does_not_retry_a_rate_limit_it_cannot_distinguish_from_a_plan_ca
         if len(calls) == 1:
             return subprocess.CompletedProcess(args, 1, limited, b'SECRET usage limit')
         return subprocess.CompletedProcess(args, 0, b'{"ok":true}', b'')
+    # A single route never waits and never asks the same route twice.
     with pytest.raises(i.InferenceError) as error:
         i.HermesBroker(python='/trusted/python', hermes_source='/trusted/hermes',
-                       runner=run)({'same': 'request'})
+                       runner=run, routes=('claude',))({'same': 'request'})
     assert error.value.diagnostic['category'] == 'rate_limit'
     assert calls == [calls[0]]
     assert 'SECRET' not in str(error.value)
@@ -306,3 +308,107 @@ def test_output_cap_counts_utf8_bytes():
 def test_execution_guard_blocks_dispatch():
     with pytest.raises(i.InferenceError, match='disabled'):
         i.deny_tool_execution('terminal', {'command': 'false'})
+
+
+def test_each_route_pins_its_own_model_and_provider():
+    for route, pinned in i.ROUTES.items():
+        seen = []
+        def factory(**kwargs):
+            seen.append(Agent(**kwargs))
+            return seen[-1]
+        i.infer_json({}, agent_factory=factory, route=route)
+        assert (seen[0].kwargs['model'], seen[0].kwargs['provider']) == pinned
+        assert seen[0].kwargs['enabled_toolsets'] == []
+
+
+def test_unknown_route_is_refused_before_any_agent_starts():
+    def factory(**kwargs):
+        raise AssertionError('agent must not start')
+    with pytest.raises(i.InferenceError):
+        i.infer_json({}, agent_factory=factory, route='codex')
+
+
+def test_broker_refuses_unapproved_or_duplicate_routes():
+    for routes in ((), ('codex',), ('claude', 'claude')):
+        with pytest.raises(ValueError):
+            i.HermesBroker(python='/p', hermes_source='/h', routes=routes)
+
+
+def _route_runner(outcomes, calls):
+    import subprocess
+    def run(command, **kwargs):
+        route = command[-1]
+        calls.append(route)
+        outcome = outcomes[route]
+        if outcome == 'timeout':
+            raise subprocess.TimeoutExpired(command, kwargs['timeout'])
+        if outcome == 'ok':
+            return subprocess.CompletedProcess(command, 0, json.dumps({'by': route}).encode(), b'')
+        wire = json.dumps({'version': 1, 'category': outcome, 'json_location': None}).encode()
+        return subprocess.CompletedProcess(command, 1, wire, b'SECRET provider body')
+    return run
+
+
+def test_broker_alternates_routes_between_calls():
+    calls = []
+    broker = i.HermesBroker(python='/p', hermes_source='/h',
+                            runner=_route_runner({'claude': 'ok', 'grok': 'ok'}, calls))
+    results = [broker({'n': n})['by'] for n in range(4)]
+    assert results == ['claude', 'grok', 'claude', 'grok']
+    assert calls == results
+
+
+@pytest.mark.parametrize('failure', ['rate_limit', 'upstream_rate_limit', 'timeout'])
+def test_broker_fails_over_to_the_next_route_without_waiting(failure):
+    calls = []
+    broker = i.HermesBroker(python='/p', hermes_source='/h',
+                            runner=_route_runner({'claude': failure, 'grok': 'ok'}, calls))
+    assert broker({'same': 'request'}) == {'by': 'grok'}
+    assert calls == ['claude', 'grok']
+    assert broker.last_route == 'grok'
+
+
+def test_broker_raises_when_every_route_is_limited():
+    calls = []
+    broker = i.HermesBroker(python='/p', hermes_source='/h',
+                            runner=_route_runner({'claude': 'rate_limit', 'grok': 'timeout'}, calls))
+    with pytest.raises(i.InferenceError) as error:
+        broker({})
+    assert calls == ['claude', 'grok']
+    assert error.value.diagnostic['category'] == 'deadline'
+    assert 'SECRET' not in str(error.value)
+
+
+@pytest.mark.parametrize('failure', ['invalid_json', 'unexpected_tool_call', 'failed_completion'])
+def test_broker_does_not_fail_over_on_answer_failures(failure):
+    calls = []
+    broker = i.HermesBroker(python='/p', hermes_source='/h',
+                            runner=_route_runner({'claude': failure, 'grok': 'ok'}, calls))
+    with pytest.raises(i.InferenceError) as error:
+        broker({})
+    assert calls == ['claude']
+    assert error.value.diagnostic['category'] == failure
+
+
+def test_broker_child_refuses_unapproved_route():
+    import subprocess
+    result = subprocess.run([sys.executable, i.__file__, '--broker', '/nonexistent', 'codex'],
+                            input=b'{}', capture_output=True, timeout=30)
+    assert result.returncode != 0
+    assert result.stdout == b''
+
+
+def test_claude_route_pins_binary_without_widening_path():
+    import subprocess
+    seen = {}
+    def run(command, **kwargs):
+        seen[command[-1]] = kwargs['env']
+        return subprocess.CompletedProcess(command, 0, b'{"ok":true}', b'')
+    broker = i.HermesBroker(python='/p', hermes_source='/h', runner=run,
+                            claude_command='/opt/claude')
+    broker({}); broker({})
+    assert seen['claude']['CLAUDE_SUBSCRIPTION_DIRECTSDK_COMMAND'] == '/opt/claude'
+    assert 'CLAUDE_SUBSCRIPTION_DIRECTSDK_COMMAND' not in seen['grok']
+    assert all(env['PATH'] == '/usr/bin:/bin' for env in seen.values())
+    with pytest.raises(ValueError):
+        i.HermesBroker(python='/p', hermes_source='/h', claude_command='claude')
