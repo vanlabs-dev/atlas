@@ -18,7 +18,7 @@ Atlas updates itself when the live chain moves to a new runtime spec.
      corpus, `hashes.json`, and the live-chain entry in `decisions.md`;
   5. fixes Atlas code that uses changed names;
   6. runs the knowledge, livedata and telegram tests (plus any edited module)
-     with `~/.cache/atlas-maintenance-venv/bin/python -m unittest discover`;
+     with `python3 -m unittest discover -s .` from each tests dir;
   7. ingests and activates the corpus;
   8. commits as vaNlabs and pushes to `main` with the Atlas deploy key.
 - **Report.** The agent posts a short summary to Telegram. If tests fail,
