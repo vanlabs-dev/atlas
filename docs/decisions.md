@@ -13,6 +13,30 @@ is superseded. `maintenance/`, its OpenSpec change, the retired spec publisher,
 and the Telegram `maintenance-status` class are removed. See
 [runtime-upgrade.md](runtime-upgrade.md).
 
+**2026-09-24, change `runtime-upgrade-pipeline`:** the Hermes cron job is
+replaced by a coded orchestrator (`upgrade/atlas_upgrade.py`) with one
+`claude -p` edit session per attempt and every gate in code. Operator
+decisions are in `docs/greenfield/runtime-upgrade-pipeline/`. Choices made
+during apply:
+
+- The model runs `claude -p --restricted` with Read, Grep, Glob, Edit, and
+  Write only. It has no Bash, so the job supplies the spec-bump log, the
+  full diff file, the `read-knobs` output, and the probe result. Flags
+  verified on the Pi (Claude Code 2.1.280) on 2026-09-24.
+- The upgrade unit uses `TimeoutStartSec=45min`, not `RuntimeMaxSec`:
+  systemd ignores `RuntimeMaxSec` for `Type=oneshot`.
+- A failure after the push has landed (read-back, pull, or activation)
+  blocks at once. Another attempt cannot fix it, because `main` already
+  carries the grounded corpus.
+- "Rejected units" means duplicate unit ids and secret-scan findings, the
+  two report items an operator would refuse.
+- The metadata fixture (spec 469, finalized block 9133662) was recorded
+  from the workstation over the same keyless RPC, not on the Pi.
+- **First probe finding, 2026-09-24:** `RootWeightSettingEnabled` and
+  `RootWeightsCap` are absent from the spec-469 runtime metadata. Atlas
+  still reads both, and reads them as unset defaults. The probe and the
+  hourly watch fail on them until a reader fix lands.
+
 ## Live chain (2026-09-23)
 
 Finney `spec_version` **469** (TaoStats chain head, block 9125797,

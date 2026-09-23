@@ -22,10 +22,18 @@ discovery_common.py    shared probe/report machinery (ATLAS-API-003/004/005)
 atlas_live.py          store, quota ledger, HTTP, pinned-schema validation,
                        per-operation adapters, the fail-closed pipeline;
                        also the `poll-chain-head` CLI (scheduled live-spec
-                       poll), live `spec_version` upgrade recording, and
+                       poll, keyless RPC first), `read-knobs` (read-only
+                       live knob read at one block), `CHAIN_READS` (every
+                       storage item read), live `spec_version` upgrade
+                       recording, and
                        the `poll-gate` / `status` CLIs (emission-gate
                        state + crossing events, change: gate-crossing-signal)
 atlas_live_server.py   `atlas-live` stdio MCP server (six tools)
+atlas_probe.py         chain-read probe: `check` (upgrade merge gate) and
+                       `watch` (hourly, pages probe-drift) against live
+                       runtime metadata
+scale_meta.py          stdlib SCALE decoder for runtime metadata V14/V15
+systemd/               atlas-poll-chain-head and atlas-probe user units
 schemas/               pinned per-endpoint schemas (drift = missing or
                        mistyped required field; extras tolerated)
 config.json            operator-approved contract: endpoints, freshness
@@ -79,9 +87,12 @@ calls).
 A validated `chain_head` response also persists the last-seen live
 `spec_version` and writes a durable `spec_upgrades` event on any change
 (from validated data only, idempotent across restarts). The
-`poll-chain-head` CLI runs one such read on a schedule — piggybacked on the
-hourly repotrack service, *before* the Telegram scan — so a live runtime
-upgrade is detected promptly rather than only when Hermes happens to query.
+`poll-chain-head` CLI runs one live spec read on its own hourly timer
+(`atlas-poll-chain-head`): keyless `state_getRuntimeVersion` at the
+finalized head, with this TaoStats read as fallback only when every RPC
+endpoint fails. Each upgrade event records its source. A live runtime
+upgrade is detected promptly rather than only when Hermes happens to query,
+and a failing repo update no longer silences it.
 The Telegram `chain-runtime-upgrade` alert class reads that event store
 read-only; no extra TaoStats quota is spent by the notifier.
 

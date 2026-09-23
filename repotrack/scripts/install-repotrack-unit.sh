@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Reinstall atlas-repotrack-update.service from the repo (includes poll-chain-head).
+# Reinstall atlas-repotrack-update.service from the repo. --poll-now also
+# runs one live spec poll (it has its own timer, atlas-poll-chain-head).
 # Run: sudo ./repotrack/scripts/install-repotrack-unit.sh [--poll-now]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

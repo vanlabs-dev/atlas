@@ -167,10 +167,9 @@ whole backlog as new. Re-run `init` after an upgrade to seed only new classes
 (it never rolls a seeded watermark back); the pre-tiering SHA-valued
 repository watermark migrates itself to a `change_ranges.id` on the first
 scan (no history replay). **Schedule (decided 2026-07-12; gate poll added 2026-07-28):** the hourly
-`atlas-repotrack-update.service` runs three best-effort `ExecStartPost=-…`
-steps after the repo update — `livedata/atlas_live.py poll-chain-head`
-(one non-interactive TaoStats call so a live upgrade is detected promptly),
-then `livedata/atlas_live.py poll-gate` (the emission-gate pass; inert
+`atlas-repotrack-update.service` runs two best-effort `ExecStartPost=-…`
+steps after the repo update: `livedata/atlas_live.py poll-gate` (the
+emission-gate pass; inert
 unless `gate_signal.enabled`), then `atlas_telegram.py scan`. The ordering
 matters: each poll records fresh events *before* the scan reads them, so
 they alert in the same run. All are best-effort — a notifier or provider

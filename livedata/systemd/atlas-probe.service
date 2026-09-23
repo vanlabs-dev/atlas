@@ -1,0 +1,18 @@
+# Atlas chain-read probe watch (change: runtime-upgrade-pipeline). Checks
+# every CHAIN_READS item against live runtime metadata and pages
+# probe-drift once per new failing set, whether or not the spec moved.
+# Install (user-level, as pi):
+#   cp ~/atlas/livedata/systemd/atlas-probe.{service,timer} \
+#     ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now atlas-probe.timer
+[Unit]
+Description=Atlas chain-read probe (user-level; no root)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/pi/atlas
+ExecStart=/usr/bin/python3 /home/pi/atlas/livedata/atlas_probe.py watch
+TimeoutStartSec=5min
