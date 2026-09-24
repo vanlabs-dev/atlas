@@ -38,7 +38,8 @@ Session 4, 2026-09-24. Verify PASS (`08-verify.md`). Change archived to
   `python3 knowledge/atlas_kb.py ingest`, read the report, then
   `python3 knowledge/atlas_kb.py activate --run <id>`. Confirm with
   `python3 knowledge/atlas_kb.py status`.
-- Re-run the retrieval battery on the Pi against the new corpus run. The
-  last accepted run predates `KB-CF-6`.
+- Retrieval battery re-run: accepted 2026-09-24, run
+  `20260924T070006Z-265dfc08` (0.92, `KB-CF-6` passed). See
+  `docs/decisions.md`.
 - The `runtime-upgrade-pipeline` dry run passed on 2026-09-24.
 - A `swap_basket` rotation signal is a separate change if wanted.
