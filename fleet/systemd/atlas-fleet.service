@@ -1,8 +1,9 @@
 # Atlas subnet-repo-fleet reconcile pass (subnet-repo-fleet §6.1).
-# Independent of the hourly repotrack timer. Install (operator, needs sudo):
-#   sudo cp ~/atlas/fleet/systemd/atlas-fleet.{service,timer} /etc/systemd/system/
-#   sudo systemctl daemon-reload
-#   sudo systemctl enable --now atlas-fleet.timer
+# Independent of the hourly repotrack timer. Install (user-level, as pi;
+# linger is on):
+#   cp ~/atlas/fleet/systemd/atlas-fleet.{service,timer} ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now atlas-fleet.timer
 #
 # The bare `reconcile` command auto-fetches the subnet-identity map once the
 # live-data discovery gate (§1) is complete. Until then this unit fails closed
@@ -16,7 +17,6 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-User=pi
 WorkingDirectory=/home/pi/atlas
 ExecStart=/usr/bin/python3 /home/pi/atlas/fleet/atlas_fleet.py reconcile
 Nice=10
