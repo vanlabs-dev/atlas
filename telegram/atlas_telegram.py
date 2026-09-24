@@ -1903,7 +1903,7 @@ def fleet_signal_events(source_db: str, watermark: Optional[str],
 # Chain-parameter change (change: network-drift-443) — a root-settable knob
 # that governs network economics moved. Rare and unconditionally material,
 # so: instant tier, NO cooldown, no digest. Suppressing the second flip of a
-# switch like the Root Reborn curation gate would be the wrong failure.
+# switch like `BasketTradingEnabled` would be the wrong failure.
 # ---------------------------------------------------------------------------
 
 _PARAM_MODE_WORDS = {
@@ -1985,9 +1985,9 @@ def _render_param_event(item: str, prev_value: str, new_value: str,
                      "that pass by design")
         next_action = ("next: review your subnet positions against "
                        "the new gate terms")
-    elif base_item == "RootWeightSettingEnabled":
+    elif base_item == "BasketConcentrationCap":
         next_action = ("next: review root basket positions · the "
-                       "curation switch changed")
+                       "swap_basket concentration cap moved")
     elif base_item == "SubnetEmissionEnabled":
         next_action = ("next: review subnet positions · the pool-side "
                        "emission switch moved")
@@ -2180,80 +2180,6 @@ def subnet_registry_events(source_db: str, watermark: Optional[str],
         conn.close()
 
 
-def root_rotation_events(source_db: str, watermark: Optional[str],
-                         ctx: Optional[Dict[str, Any]] = None
-                         ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    """Shifts in where curated root dividends point (change:
-    rotation-signal-gate). Root stake is the largest pool on the network
-    and since spec 449 its dividends follow per-validator
-    `set_root_weights` vectors, so a move in the aggregate destination map
-    is capital actually being redirected.
-
-    Every figure is rendered from the recorded event. Nothing is computed
-    here: an aggregate share is only a share of dividend flow when the map
-    was stake-weighted, and an unweighted map counts validators instead, so
-    the body states which it is rather than letting the reader assume."""
-    conn = open_source_ro(source_db)
-    if conn is None:
-        return [], watermark
-    try:
-        present = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND "
-            "name = 'rotation_events'").fetchone()
-        if present is None:
-            return [], watermark  # root watch not deployed yet
-        last_id = int(watermark) if watermark else 0
-        rows = conn.execute(
-            "SELECT id, observed_at, netuid, direction, prev_share, "
-            "new_share, validator_count, weighting_basis, block_number "
-            "FROM rotation_events WHERE id > ? ORDER BY id ASC LIMIT 50",
-            (last_id,)).fetchall()
-    finally:
-        conn.close()
-
-    config = (ctx or {}).get("config") or {}
-    max_chars = int(config.get("message_max_chars", 3500))
-    _lexicon, glosses = voice_maps(config)
-    events: List[Dict[str, Any]] = []
-    high = last_id
-    for (row_id, observed_at, netuid, direction, prev_share, new_share,
-         validator_count, basis, block_number) in rows:
-        high = max(high, int(row_id))
-        weighted = basis == "stake-weighted"
-        verdict = {"entered": "a new destination for curated root dividends",
-                   "left": "no longer a destination for curated root "
-                           "dividends",
-                   "share-rose": "taking more of the curated root flow",
-                   "share-fell": "taking less of the curated root flow"}.get(
-                       direction, "changed its share of the curated root flow")
-        headline = "Atlas · subnet %d %s · %s" % (
-            netuid, direction.replace("-", " "), verdict)
-        lines = [
-            "subnet %d · destination share %s to %s"
-            % (netuid,
-               "n/a" if prev_share is None else "%.2f%%" % (prev_share * 100),
-               "n/a" if new_share is None else "%.2f%%" % (new_share * 100)),
-            "root weight vectors read: %d validators · block %s"
-            % (validator_count,
-               block_number if block_number is not None else "n/a"),
-            "weighting: %s" % (
-                "by validator root stake, so the share is a share of "
-                "dividend flow" if weighted else
-                "unweighted · this counts validators, not TAO, and is not a "
-                "share of dividend flow"),
-            "observed: %s" % observed_at,
-        ]
-        plain = render_plain(headline, lines, "", None, max_chars,
-                             glosses=glosses)
-        html = render_html(headline, lines, "", None, max_chars,
-                           glosses=glosses)
-        events.append({
-            "event_id": "root-rotation:%d:%d" % (netuid, row_id),
-            "event_class": "root-rotation",
-            "created_at": observed_at, "text": plain, "html": html})
-    return events, (str(high) if high != last_id else watermark)
-
-
 _FAIL_CLOSED_COMPONENTS = (
     # (component label, table with good observations, provider filter)
     ("gate poll", "gate_state", "finney-rpc"),
@@ -2329,7 +2255,6 @@ _ADAPTERS: Dict[str, Callable[..., Tuple[List[Dict[str, Any]],
     "chain-runtime-upgrade": chain_runtime_upgrade_events,
     "chain-parameter-change": chain_parameter_change_events,
     "subnet-registry": subnet_registry_events,
-    "root-rotation": root_rotation_events,
     "fail-closed": fail_closed_events,
     "gate-crossing": gate_crossing_events,
     "fleet-signal": fleet_signal_events,

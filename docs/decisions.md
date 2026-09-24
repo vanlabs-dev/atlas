@@ -36,17 +36,30 @@ during apply:
   `RootWeightsCap` are absent from the spec-469 runtime metadata. Atlas
   still reads both, and reads them as unset defaults. The probe and the
   hourly watch fail on them until a reader fix lands.
+- **Resolved 2026-09-24, change `root-weight-drift`:** upstream migration
+  `migrate_remove_root_weights` retired `set_root_weights`, cleared
+  `Weights[ROOT]`, and moved the cap to `BasketConcentrationCap` (plain
+  `u16`, 4096 = 1/16 of fund NAV, `swap_basket` buys only). Atlas no longer
+  reads either retired item. The watch dropped them **silently**: it has no
+  removal event, and a one-off retirement does not justify one. Their stored
+  observations and transitions stay. The cap is watched and seeds silently.
+  The root weight vector read, the destination map, `rotation_events`
+  recording, the Telegram `root-rotation` class and its fleet ledger
+  ingestion are **removed**, not disabled. Their tables and rows stay. The
+  `root-rotation` promotion item due 2026-11-04 is void.
 
-## Live chain (2026-09-23)
+## Live chain (2026-09-24)
 
 Finney `spec_version` **469** (TaoStats chain head, block 9125797,
 request completed 2026-09-22T21:21:18Z; knob read at finalized block
 9125891). `SubnetEmissionEnabled` off netuids **29, 35, 36, 108**
 (finalized block 9125893). Emission bar is rank-pinned (N unset, default
 32; q 0.75 explicit and inert; h unset, default 3).
-`RootWeightSettingEnabled` is **false** (unset). `BasketTradingEnabled`
-is **true** (explicit). Basket curation is off. Basket trading is on and
-is not curation.
+`set_root_weights` is retired at spec 469 (`Weights[ROOT]` cleared, the
+curation switch removed). `BasketTradingEnabled` is **true** (explicit).
+`BasketConcentrationCap` is **4096** (explicit; finalized block 9133830,
+re-read at 9133918). Root dividends accumulate in place, and fund
+composition changes only through `swap_basket`.
 
 Runtime upgrades are automated; see the runtime-upgrade entry above.
 Web leads stay out of the confirmed knowledge base (ATLAS-WEB-003).
@@ -258,6 +271,7 @@ and a median beating the fleet baseline. A majority-pending horizon cannot
 justify a promotion whatever its median shows.
 
 **Dated open item — `root-rotation` promotion decision, due 2026-11-04.**
+(Void 2026-09-24: the class was removed by `root-weight-drift`.)
 The earliest date a 7-day horizon could hold 30 filled outcomes, given
 rotation events only begin at deploy. Read `effectiveness` then and either
 promote with the numbers recorded here, or leave it in shadow with the reason.

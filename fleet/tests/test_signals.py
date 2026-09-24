@@ -1124,10 +1124,12 @@ class TestLedgerSourceTriple(SignalsBase):
         entered = sig.ingest_livedata_events(self.conn, CFG, db_path=path)
         self.conn.commit()
         self.assertEqual(entered.get("gate-crossing"), 1)
-        self.assertEqual(entered.get("root-rotation"), 1)
+        # Spec 469 retired root-rotation (change: root-weight-drift): its
+        # stored rows stay in livedata but are no longer ingested.
+        self.assertNotIn("root-rotation", entered)
         rows = sorted(self.conn.execute(
             "SELECT source_class, netuid FROM signal_entries"))
-        self.assertEqual(rows, [("gate-crossing", 10), ("root-rotation", 20)])
+        self.assertEqual(rows, [("gate-crossing", 10)])
 
     def test_pending_crossing_holds_the_ingest_mark(self):
         path = self._livedata_db()
@@ -1200,7 +1202,7 @@ class TestLedgerSourceTriple(SignalsBase):
 
     def test_report_names_tier_and_marks_unreadable(self):
         sig.enter_measured_event(self.conn, CFG, sig.SOURCE_LIVEDATA,
-                                 1, 10, "root-rotation", _iso())
+                                 1, 10, "gate-crossing", _iso())
         self.conn.execute(
             "UPDATE signal_outcomes SET status = 'recorded', "
             "return_pct = 5.0, baseline_return_pct = 1.0 "
@@ -1208,7 +1210,7 @@ class TestLedgerSourceTriple(SignalsBase):
         self.conn.commit()
         report = sig.effectiveness(self.conn, self.config)["report"]
         by_horizon = {row["horizon_days"]: row for row in report
-                      if row["class"] == "root-rotation"}
+                      if row["class"] == "gate-crossing"}
         self.assertTrue(by_horizon[1]["readable"])
         self.assertFalse(by_horizon[7]["readable"])
         self.assertFalse(by_horizon[7]["meets_promotion_sample"])

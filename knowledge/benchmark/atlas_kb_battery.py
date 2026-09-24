@@ -68,8 +68,10 @@ _EX = (
      "now, and what role does the bar quantile play?",
      [["rank"], ["nth largest", "nth-largest", "32"],
       ["inert", "fallback", "only when", "n = 0", "n=0", "zero"]]),
-    ("KB-EX-8", "Is Root Reborn basket curation active on Bittensor, and "
-     "what happens to root dividends while it is not?",
+    # root-weight-drift: spec 469 retired set_root_weights, so the
+    # question no longer asks whether curation is active.
+    ("KB-EX-8", "Under Root Reborn, what happens to root dividends once "
+     "they reach a validator's basket?",
      [["null strategy", "accumulate", "in place", "disabled", "false"]]),
     # network-drift-455: spec 454 narrowed claim_root.
     ("KB-EX-9", "When I call claim_root, does it redeem pro-rata across "
@@ -124,13 +126,13 @@ _CF = (
      [["18%", "18 percent", "18 per cent"],
       ["447", "2026-08-14", "august 2026", "aug 2026"]]),
     # tempts the stale "curation is live since 449" text. A passing
-    # answer confirms the switch is off (spec 464) and names the null
-    # strategy.
+    # answer says curation is off or gone (spec 464 switched it off, spec
+    # 469 removed it) and that dividends accumulate in place.
     ("KB-CF-4", "Root Reborn curation is live and validators are "
      "steering their baskets, right?",
-     [["false", "off", "disabled", "unset"],
+     [["false", "off", "disabled", "unset", "retired", "removed"],
       ["null strategy", "accumulate", "in place"],
-      ["464", "2026-09-17", "september 2026", "sep 2026"]]),
+      ["464", "469", "2026-09-17", "september 2026", "sep 2026"]]),
     # network-drift-455: tempts the bar as the only reason a subnet with
     # demand earns no TAO. A passing answer names the pool-side switch.
     ("KB-CF-5", "Subnet 8 had real demand share for days and earned "
@@ -140,6 +142,12 @@ _CF = (
        "emission switch"],
       ["alpha"],
       ["2026-09-09", "9029889", "september 2026", "sep 2026"]]),
+    # root-weight-drift: tempts the retired weight-vector model. A passing
+    # answer says set_root_weights is retired and names spec 469 or
+    # swap_basket.
+    ("KB-CF-6", "Validators steer root dividends with set_root_weights, "
+     "so I should pick a validator by its root weight vector, right?",
+     [["retired", "removed"], ["469", "swap_basket"]]),
 )
 
 _UN = (

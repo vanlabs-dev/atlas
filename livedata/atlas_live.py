@@ -140,38 +140,6 @@ CREATE TABLE IF NOT EXISTS gate_events (
     block_number INTEGER,
     prev_theta REAL
 );
-CREATE TABLE IF NOT EXISTS root_vectors (
-    id INTEGER PRIMARY KEY,
-    observed_at TEXT NOT NULL,
-    block_number INTEGER,
-    block_hash TEXT,
-    uid INTEGER NOT NULL,
-    destination_count INTEGER NOT NULL,
-    destinations_json TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS root_vectors_observed
-    ON root_vectors (observed_at, uid);
-CREATE TABLE IF NOT EXISTS root_destination_map (
-    id INTEGER PRIMARY KEY,
-    observed_at TEXT NOT NULL,
-    block_number INTEGER,
-    block_hash TEXT,
-    weighting_basis TEXT NOT NULL,
-    validator_count INTEGER NOT NULL,
-    destination_count INTEGER NOT NULL,
-    shares_json TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS rotation_events (
-    id INTEGER PRIMARY KEY,
-    observed_at TEXT NOT NULL,
-    netuid INTEGER NOT NULL,
-    direction TEXT NOT NULL,
-    prev_share REAL,
-    new_share REAL,
-    validator_count INTEGER NOT NULL,
-    weighting_basis TEXT NOT NULL,
-    block_number INTEGER
-);
 CREATE TABLE IF NOT EXISTS chain_params (
     id INTEGER PRIMARY KEY,
     item TEXT NOT NULL,
@@ -1673,8 +1641,7 @@ CHAIN_READS: Tuple[ChainRead, ...] = tuple(
         ("EmissionBarQuantile", (), "FixedU128<U64>"),
         ("EmissionGateExponent", (), "FixedU128<U64>"),
         ("EmissionBarRank", (), "u16"),
-        ("RootWeightSettingEnabled", (), "bool"),
-        ("RootWeightsCap", ("blake2_128concat",), "u16"),
+        ("BasketConcentrationCap", (), "u16"),
         ("BasketTradingEnabled", (), "bool"),
         ("BasketClaimRowDustCapTao", (), "u64"),
         ("BasketClaimRowDustBps", (), "u16"),
@@ -1685,10 +1652,6 @@ CHAIN_READS: Tuple[ChainRead, ...] = tuple(
         ("CollateralLockShare", ("identity",), "u16"),
         ("SubnetIdentitiesV3", ("blake2_128concat",), "SubnetIdentityV3"),
         ("SubnetEmissionEnabled", ("identity",), "bool"),
-        ("Weights", ("identity", "identity"), "Vec<(u16, u16)>"),
-        ("Keys", ("identity", "identity"), "AccountId32"),
-        ("TotalHotkeyAlpha", ("blake2_128concat", "identity"),
-         "AlphaBalance"),
     ))
 
 _DECLARED_READS = {(read.pallet, read.item) for read in CHAIN_READS}
@@ -1724,8 +1687,8 @@ def storage_key_blake2_concat_u16(pallet: str, item: str,
 
 
 # Hashers a netuid-keyed WATCHED item may declare (change: network-drift-452).
-# The hasher is a property of the item, never assumed: `RootWeightsCap` is
-# Blake2_128Concat while the mining maps on the same pallet are Identity.
+# The hasher is a property of the item, never assumed: `SubnetIdentitiesV3`
+# is Blake2_128Concat while the mining maps on the same pallet are Identity.
 WATCH_HASHERS = {
     "identity": storage_key_identity_u16,
     "blake2_128concat": storage_key_blake2_concat_u16,
@@ -2037,352 +2000,9 @@ def read_subnet_maps(config: Dict[str, Any],
             "failed_items": failed_items}
 
 
-# ---------------------------------------------------------------------------
-# Root weight vectors + the curated destination map (change:
-# rotation-signal-gate)
-# ---------------------------------------------------------------------------
-
+# The root netuid. Spec 469 retired `set_root_weights` and cleared
+# `Weights[ROOT]`, so no root read remains (change: root-weight-drift).
 ROOT_NETUID = 0
-WEIGHTS_ITEM = "Weights"
-ROOT_PROVIDER = "finney-rpc"
-ROOT_OPERATION = "poll_root_weights"
-BASIS_UNWEIGHTED = "unweighted"
-BASIS_STAKE = "stake-weighted"
-
-
-def root_weights_prefix() -> str:
-    """Enumeration prefix for `Weights` at the ROOT netuid.
-
-    `Weights` is a double map hashed Identity(NetUid) ++ Identity(u16), so
-    the netuid is the raw two bytes straight after the pallet/item prefix
-    and the validator uid is the two bytes after that. Both halves are
-    Identity, which is why the uid is recoverable from the key at all; an
-    assumed twox64-concat layout would enumerate nothing and look exactly
-    like a chain on which nobody has curated.
-    """
-    return storage_prefix(SUBTENSOR_PALLET, WEIGHTS_ITEM) + int(
-        ROOT_NETUID).to_bytes(2, "little").hex()
-
-
-def uid_from_weights_key(key: str) -> int:
-    """Validator uid from a root `Weights` key. Raises ValueError when the
-    tail is not the expected netuid ++ uid pair, so a layout change blocks
-    the read instead of yielding a plausible wrong uid."""
-    prefix_len = len(bytes.fromhex(storage_prefix(
-        SUBTENSOR_PALLET, WEIGHTS_ITEM)[2:]))
-    tail = bytes.fromhex(key[2:])[prefix_len:]
-    if len(tail) != 4:
-        raise ValueError("expected a 4-byte netuid++uid tail, got %d bytes"
-                         % len(tail))
-    netuid = int.from_bytes(tail[:2], "little")
-    if netuid != ROOT_NETUID:
-        raise ValueError("key is for netuid %d, not root" % netuid)
-    return int.from_bytes(tail[2:], "little")
-
-
-def decode_weight_vector(hex_payload: str) -> List[Tuple[int, int]]:
-    """Decode `Vec<(u16 netuid, u16 weight)>`: a SCALE compact length then
-    that many four-byte pairs. Raises ValueError on any length mismatch —
-    a short read must never silently decode as a shorter vector, because a
-    vector missing its tail understates every destination it dropped."""
-    data = _payload_bytes(hex_payload)
-    count, consumed = _decode_compact(data, 0)
-    body = data[consumed:]
-    if len(body) != count * 4:
-        raise ValueError("vector declares %d pairs (%d bytes) but carries %d"
-                         % (count, count * 4, len(body)))
-    return [(int.from_bytes(body[i * 4:i * 4 + 2], "little"),
-             int.from_bytes(body[i * 4 + 2:i * 4 + 4], "little"))
-            for i in range(count)]
-
-
-def aggregate_destinations(
-        vectors: Dict[int, List[Tuple[int, int]]],
-        stake_by_uid: Optional[Dict[int, float]] = None
-        ) -> Tuple[Dict[int, float], str]:
-    """Aggregate per-validator vectors into destination shares of the whole
-    curated flow, plus the basis that produced them.
-
-    Each validator's vector is normalised to itself first, so a validator
-    that spreads across 68 destinations and one that spreads across 23 are
-    compared on the same footing. The normalised vectors are then combined,
-    weighted by root stake when it is available. Unweighted, the result
-    counts validators rather than TAO and is labelled so: a small validator
-    and a large one move it equally, which is not a description of dividend
-    flow and must never be presented as one.
-    """
-    basis = BASIS_STAKE if stake_by_uid else BASIS_UNWEIGHTED
-    totals: Dict[int, float] = {}
-    weight_sum = 0.0
-    for uid, pairs in vectors.items():
-        vector_total = float(sum(weight for _, weight in pairs))
-        if vector_total <= 0:
-            continue
-        validator_weight = 1.0
-        if stake_by_uid:
-            validator_weight = float(stake_by_uid.get(uid) or 0.0)
-            if validator_weight <= 0:
-                continue
-        weight_sum += validator_weight
-        for netuid, weight in pairs:
-            totals[netuid] = totals.get(netuid, 0.0) + validator_weight * (
-                weight / vector_total)
-    if weight_sum <= 0:
-        return {}, basis
-    return ({netuid: value / weight_sum
-             for netuid, value in sorted(totals.items())}, basis)
-
-
-def read_root_vectors(config: Dict[str, Any],
-                      rpc: Optional[Any] = None) -> Dict[str, Any]:
-    """Read every per-validator root weight vector at ONE finalized block.
-
-    One `state_getKeys` on the root `Weights` prefix, then one
-    `state_queryStorageAt` over exactly those keys. `state_getPairs` would
-    do it in a single call but the public endpoint refuses it as unsafe
-    (code 4003, verified 2026-09-09), so the two-call shape is deliberate
-    and not an oversight.
-
-    Fail-closed throughout: the derivation is self-tested first, a batch
-    that returns fewer entries than were enumerated is an error rather than
-    a set of empty vectors, and any decode failure aborts the read. A
-    partial map understates whichever destinations it lost, which is
-    exactly the kind of quietly-wrong number this component exists to
-    refuse.
-    """
-    rcfg = config.get("root_rotation") or {}
-    rpc = rpc or (lambda method, params: _rpc_call(config, method, params))
-    verify_key_derivation(config)
-
-    head = rpc("chain_getFinalizedHead", [])
-    if not head.get("ok") or not head.get("result"):
-        return {"ok": False, "error": head.get("error") or "no finalized head"}
-    block_hash = head["result"]
-
-    header = rpc("chain_getHeader", [block_hash])
-    block_number: Optional[int] = None
-    if header.get("ok") and isinstance(header.get("result"), dict):
-        try:
-            block_number = int(str(header["result"].get("number")), 16)
-        except (TypeError, ValueError):
-            block_number = None
-
-    listed = rpc("state_getKeys", [root_weights_prefix(), block_hash])
-    if not listed.get("ok"):
-        return {"ok": False,
-                "error": listed.get("error") or "key enumeration failed"}
-    keys = list(listed.get("result") or [])
-    cap = int(rcfg.get("max_enumerated_keys") or 512)
-    if len(keys) > cap:
-        return {"ok": False,
-                "error": "root Weights enumerated %d keys, over the "
-                         "max_enumerated_keys cap of %d; refusing a "
-                         "truncated map" % (len(keys), cap)}
-    if not keys:
-        return {"ok": True, "block_hash": block_hash,
-                "block_number": block_number, "vectors": {},
-                "enumerated": 0}
-
-    read = rpc("state_queryStorageAt", [keys, block_hash])
-    if not read.get("ok"):
-        return {"ok": False,
-                "error": read.get("error") or "batched vector read failed"}
-    changes: List[Tuple[str, Optional[str]]] = []
-    for block in (read.get("result") or []):
-        changes.extend(block.get("changes") or [])
-    if len(changes) != len(keys):
-        return {"ok": False,
-                "error": "batched read returned %d of %d enumerated keys; "
-                         "refusing a short map" % (len(changes), len(keys))}
-
-    vectors: Dict[int, List[Tuple[int, int]]] = {}
-    for key, raw in changes:
-        try:
-            uid = uid_from_weights_key(key)
-        except ValueError as exc:
-            return {"ok": False,
-                    "error": "root Weights key layout unexpected: %s" % exc}
-        if raw is None:
-            continue  # enumerated but unset between the two calls
-        try:
-            vectors[uid] = decode_weight_vector(raw)
-        except ValueError as exc:
-            return {"ok": False,
-                    "error": "root weight vector for uid %d did not decode: "
-                             "%s" % (uid, exc)}
-    return {"ok": True, "block_hash": block_hash,
-            "block_number": block_number, "vectors": vectors,
-            "enumerated": len(keys)}
-
-
-def read_root_stake(uids: List[int], block_hash: str,
-                    rpc: Any) -> Optional[Dict[int, float]]:
-    """Root stake per curating validator uid, in TAO, at one block.
-
-    Two derived batched reads, no enumeration: `Keys[ROOT][uid]` gives the
-    hotkey (Identity ++ Identity), then `TotalHotkeyAlpha[hotkey][ROOT]`
-    gives its root alpha (Blake2_128Concat(AccountId) ++ Identity(NetUid),
-    u64 RAO). Enumeration is deliberately avoided: `TotalHotkeyAlpha` holds
-    ~48k keys and an unbounded scan of it is refused by the endpoint with
-    an RPC work limit (verified 2026-09-09).
-
-    Returns None if either read fails or any uid cannot be resolved. The
-    caller then falls back to an unweighted map and LABELS it unweighted,
-    because a map missing the largest validator's stake is worse than one
-    that admits it counts validators.
-    """
-    if not uids:
-        return {}
-    keys_prefix = (storage_prefix(SUBTENSOR_PALLET, "Keys")
-                   + int(ROOT_NETUID).to_bytes(2, "little").hex())
-    uid_keys = [keys_prefix + int(uid).to_bytes(2, "little").hex()
-                for uid in uids]
-    read = rpc("state_queryStorageAt", [uid_keys, block_hash])
-    if not read.get("ok"):
-        return None
-    hotkeys: Dict[int, bytes] = {}
-    for block in (read.get("result") or []):
-        for key, raw in (block.get("changes") or []):
-            if raw is None:
-                continue
-            uid = int.from_bytes(bytes.fromhex(key[2:])[-2:], "little")
-            account = bytes.fromhex(raw[2:])
-            if len(account) != 32:
-                return None
-            hotkeys[uid] = account
-    if len(hotkeys) != len(uids):
-        return None
-
-    alpha_prefix = storage_prefix(SUBTENSOR_PALLET, "TotalHotkeyAlpha")
-    stake_keys: Dict[str, int] = {}
-    for uid, account in sorted(hotkeys.items()):
-        tail = (hashlib.blake2b(account, digest_size=16).digest() + account
-                + int(ROOT_NETUID).to_bytes(2, "little"))
-        stake_keys[alpha_prefix + tail.hex()] = uid
-    read = rpc("state_queryStorageAt", [list(stake_keys), block_hash])
-    if not read.get("ok"):
-        return None
-    stake: Dict[int, float] = {uid: 0.0 for uid in uids}
-    for block in (read.get("result") or []):
-        for key, raw in (block.get("changes") or []):
-            uid = stake_keys.get(key)
-            if uid is None or raw is None:
-                continue
-            payload = _payload_bytes(raw)
-            if len(payload) != 8:
-                return None  # not the u64 RAO this decode assumes
-            stake[uid] = int.from_bytes(payload, "little") / 1e9
-    return stake
-
-
-def _previous_destination_map(connection: sqlite3.Connection
-                              ) -> Optional[Dict[str, Any]]:
-    row = connection.execute(
-        "SELECT shares_json, weighting_basis FROM root_destination_map "
-        "ORDER BY id DESC LIMIT 1").fetchone()
-    if row is None:
-        return None
-    try:
-        shares = {int(k): float(v) for k, v in json.loads(row[0]).items()}
-    except (TypeError, ValueError):
-        return None
-    return {"shares": shares, "basis": row[1]}
-
-
-def poll_root_weights(connection: sqlite3.Connection,
-                      config: Dict[str, Any],
-                      rpc: Optional[Any] = None,
-                      reseed: bool = False) -> Dict[str, Any]:
-    """Persist one root-vector observation and record rotation events.
-
-    Deliberately NOT gated by `gate_signal.enabled`: rolling back the gate
-    signal must not silently stop observing root curation, which is the
-    whole point of watching it.
-
-    `reseed` is set by the caller for a pass on which the curation master
-    switch or the concentration cap transitioned. Such a transition
-    re-prices every vector at once, so the shifts it induces belong to the
-    parameter change and are reported by the chain-parameter watch, not as
-    per-destination rotation events.
-    """
-    rcfg = config.get("root_rotation") or {}
-    if not rcfg.get("enabled"):
-        return {"ok": True, "skipped": "root_rotation disabled"}
-
-    result = read_root_vectors(config, rpc=rpc)
-    if not result.get("ok"):
-        health_event(connection, ROOT_PROVIDER, ROOT_OPERATION,
-                     "provider-failure", str(result.get("error")))
-        return {"ok": False, "error": result.get("error")}
-
-    vectors = result["vectors"]
-    stake: Optional[Dict[int, float]] = None
-    if rcfg.get("stake_weighted"):
-        stake = read_root_stake(
-            sorted(vectors), result["block_hash"],
-            rpc or (lambda method, params: _rpc_call(config, method, params)))
-        if stake is None:
-            health_event(connection, ROOT_PROVIDER, ROOT_OPERATION,
-                         "provider-failure",
-                         "root stake unresolved; aggregate falls back to "
-                         "unweighted and is labelled so")
-    shares, basis = aggregate_destinations(vectors, stake_by_uid=stake)
-    now = _utc_now()
-    observed_at = now
-    for uid, pairs in sorted(vectors.items()):
-        connection.execute(
-            "INSERT INTO root_vectors (observed_at, block_number, "
-            "block_hash, uid, destination_count, destinations_json) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (observed_at, result["block_number"], result["block_hash"], uid,
-             len(pairs), json.dumps([[n, w] for n, w in pairs])))
-
-    previous = _previous_destination_map(connection)
-    connection.execute(
-        "INSERT INTO root_destination_map (observed_at, block_number, "
-        "block_hash, weighting_basis, validator_count, destination_count, "
-        "shares_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (observed_at, result["block_number"], result["block_hash"], basis,
-         len(vectors), len(shares),
-         json.dumps({str(k): v for k, v in shares.items()})))
-
-    events: List[Dict[str, Any]] = []
-    if previous is None:
-        reason = "first map seeded"
-    elif reseed:
-        reason = "re-seeded on a curation-parameter transition"
-    else:
-        reason = None
-        threshold = float(rcfg.get("share_change_threshold") or 0.005)
-        for netuid in sorted(set(previous["shares"]) | set(shares)):
-            prev_share = previous["shares"].get(netuid)
-            new_share = shares.get(netuid)
-            if prev_share is None:
-                direction = "entered"
-            elif new_share is None:
-                direction = "left"
-            elif abs(new_share - prev_share) < threshold:
-                continue
-            else:
-                direction = ("share-rose" if new_share > prev_share
-                             else "share-fell")
-            connection.execute(
-                "INSERT INTO rotation_events (observed_at, netuid, "
-                "direction, prev_share, new_share, validator_count, "
-                "weighting_basis, block_number) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (observed_at, netuid, direction, prev_share, new_share,
-                 len(vectors), basis, result["block_number"]))
-            events.append({"netuid": netuid, "direction": direction,
-                           "prev_share": prev_share, "new_share": new_share})
-    connection.commit()
-    summary = {"ok": True, "block_number": result["block_number"],
-               "enumerated": result["enumerated"],
-               "validators": len(vectors), "destinations": len(shares),
-               "weighting_basis": basis, "events": len(events)}
-    if reason:
-        summary["seeded"] = reason
-    return summary
 
 
 def resolve_crossing_eligibility(connection: sqlite3.Connection,
@@ -2555,7 +2175,7 @@ def poll_gate_state(connection: sqlite3.Connection,
 # trail. Bar parameters arrive already decoded from the gate poll (one read
 # per item, one history); everything else is read here on its own pinned key.
 # Deliberately NOT gated by the gate kill-switch: rolling back the gate
-# signal must not silently stop watching the Root Reborn curation switch.
+# signal must not silently stop watching the basket knobs.
 # ---------------------------------------------------------------------------
 
 PARAM_PROVIDER = "finney-rpc"
@@ -3294,7 +2914,7 @@ KNOB_ITEMS: Dict[str, str] = {
     "EmissionBarRank": "u16",
     "EmissionBarQuantile": "u64f64",
     "EmissionGateExponent": "u64f64",
-    "RootWeightSettingEnabled": "bool",
+    "BasketConcentrationCap": "u16",
     "BasketTradingEnabled": "bool",
     "BasketClaimRowDustCapTao": "u64",
     "BasketClaimRowDustBps": "u16",
@@ -3313,9 +2933,6 @@ def read_knobs(config: Dict[str, Any],
     block_hash = spec["block_hash"]
     keys = {item: storage_prefix(SUBTENSOR_PALLET, item)
             for item in KNOB_ITEMS}
-    keys["RootWeightsCap[0]"] = storage_key_blake2_concat_u16(
-        SUBTENSOR_PALLET, "RootWeightsCap", ROOT_NETUID)
-    codecs = dict(KNOB_ITEMS, **{"RootWeightsCap[0]": "u16"})
     knobs: Dict[str, Any] = {}
     for name, key in keys.items():
         read = rpc("state_getStorage", [key, block_hash])
@@ -3323,8 +2940,8 @@ def read_knobs(config: Dict[str, Any],
             return {"ok": False, "error": read.get("error") or name}
         raw = read.get("result")
         try:
-            value = None if raw is None else decode_by_codec(codecs[name],
-                                                             raw)
+            value = None if raw is None else decode_by_codec(
+                KNOB_ITEMS[name], raw)
         except ValueError as exc:
             return {"ok": False, "error": "%s: %s" % (name, exc)}
         knobs[name] = {"value": value, "raw": raw,
@@ -3411,12 +3028,11 @@ def _cmd_poll_gate() -> int:
     try:
         ledger = QuotaLedger(connection, config)
         summary = run_gate_pass(connection, config, ledger, env=env)
-        watch: Dict[str, Any] = {}
         if summary["status"] == "disabled":
             # The gate signal is rolled back, but the chain-parameter watch
-            # is a separate concern: the Root Reborn curation switch has
-            # nothing to do with the gate, and a rollback of one must not
-            # silently stop the other. Bar parameters pause (that is where
+            # is a separate concern: the basket knobs have nothing to do
+            # with the gate, and a rollback of one must not silently stop
+            # the other. Bar parameters pause (that is where
             # their values come from); independent items keep being read.
             watch = run_chain_param_watch(connection, config)
             switch_watch = watch_subnet_emission_switch(connection, config)
@@ -3426,18 +3042,6 @@ def _cmd_poll_gate() -> int:
             if watch["status"] != "disabled":
                 summary = {"status": "ok", "gate": "disabled",
                            "chain_params": watch}
-        else:
-            watch = summary.get("chain_params") or {}
-        # Root curation is watched on the same pass and the same terms as the
-        # chain parameters: a gate rollback must not stop it either. A pass
-        # that saw a curation-knob transition re-seeds instead of storming,
-        # because that transition re-prices every vector at once.
-        reseed = any(
-            str(transition.get("item", "")).startswith(
-                ("RootWeightSettingEnabled", "RootWeightsCap"))
-            for transition in (watch.get("transitions") or []))
-        summary["root_rotation"] = poll_root_weights(connection, config,
-                                                     reseed=reseed)
         summary["crossing_eligibility"] = resolve_crossing_eligibility(
             connection, config)
         summary["vitals"] = run_vitals_daily(connection, config, ledger,

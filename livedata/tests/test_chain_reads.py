@@ -33,7 +33,7 @@ def fixture_bytes():
 
 def read_sites():
     """Item names at every key-builder call in atlas_live.py, resolving a
-    module constant (WEIGHTS_ITEM) to its value. A call with an item that is
+    module constant to its value. A call with an item that is
     not a literal or a module constant is returned as '<dynamic>' so the
     test can check the table it came from."""
     with open(al.__file__, "r", encoding="utf-8") as handle:
@@ -65,9 +65,27 @@ class ChainReadCoverageTest(unittest.TestCase):
         self.declared = {read.item for read in al.CHAIN_READS}
 
     def test_every_literal_read_site_is_declared(self):
-        items = read_sites() - {"<dynamic>"}
-        self.assertTrue(items, "found no read sites; the scan is broken")
-        self.assertEqual(sorted(items - self.declared), [])
+        # Every read is table-driven since spec 469 (change:
+        # root-weight-drift), so the scan may find only dynamic sites.
+        sites = read_sites()
+        self.assertTrue(sites, "found no read sites; the scan is broken")
+        self.assertEqual(sorted(sites - {"<dynamic>"} - self.declared), [])
+
+    def test_retired_root_items_are_not_declared(self):
+        # Spec 469 retired these (change: root-weight-drift).
+        for item in ("RootWeightSettingEnabled", "RootWeightsCap",
+                     "Weights", "Keys", "TotalHotkeyAlpha"):
+            self.assertNotIn(item, self.declared)
+
+    def test_basket_cap_pinned_key_is_the_plain_derivation(self):
+        items = {spec["item"]: spec
+                 for spec in al.load_config()["chain_params"]["items"]}
+        expected = "0x" + (al.twox128("SubtensorModule")
+                           + al.twox128("BasketConcentrationCap")).hex()
+        self.assertEqual(items["BasketConcentrationCap"]["key"], expected)
+        self.assertIn(al.ChainRead(al.SUBTENSOR_PALLET,
+                                   "BasketConcentrationCap", (), "u16"),
+                      al.CHAIN_READS)
 
     def test_every_table_driven_read_is_declared(self):
         # Dynamic call sites take their items from these tables.
@@ -201,12 +219,13 @@ class ProbeTest(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("error", result)
 
-    def test_live_fixture_flags_removed_root_weight_items(self):
-        # Spec 469 dropped both items; Atlas still reads them. Recorded
-        # 2026-09-24 as the first drift the probe found.
+    def test_live_fixture_passes_every_declared_read(self):
+        # The first drift the probe found (2026-09-24) was the two root
+        # weight items spec 469 retired. With them gone, every declared
+        # read matches the recorded spec 469 metadata.
         result = self.check(al.CHAIN_READS)
-        self.assertEqual(sorted(f["item"] for f in result["failures"]),
-                         ["RootWeightSettingEnabled", "RootWeightsCap"])
+        self.assertEqual(result["failures"], [])
+        self.assertTrue(result["ok"])
 
     def test_check_exit_code(self):
         with redirect_stdout(io.StringIO()) as out:

@@ -148,10 +148,13 @@ them read-only by row id. Kill-switch: `gate_signal.enabled` in
 Discrete root-settable knobs whose flip changes network economics with no
 AdminUtils extrinsic trail. The three bar parameters are handed over
 already decoded by the gate poll — one storage read per item, one durable
-history — while `RootWeightSettingEnabled` (the Root Reborn basket
-curation master switch, currently `false` since spec 464, so dividends
-accumulate in place) is read on its own pinned key at the same finalized
-block. `SubnetEmissionEnabled` is a netuid-keyed map on the same watch:
+history, while `BasketTradingEnabled` (the `swap_basket` switch) and
+`BasketConcentrationCap` (the largest share of a fund's NAV one holding
+may reach through a `swap_basket` buy, plain `u16`, default 4096 = 1/16)
+are read on their own pinned keys at the same finalized block. Spec 469
+retired `RootWeightSettingEnabled` and `RootWeightsCap`; the watch dropped
+them without a transition and their stored history stays (change:
+root-weight-drift). `SubnetEmissionEnabled` is a netuid-keyed map on the same watch:
 live off set is 29, 35, 36. Each
 pass persists one observation per item with `explicit` or
 `assumed-default` provenance; a differing value records a durable
@@ -160,7 +163,7 @@ without emitting one, and a provenance-only change at an unchanged value
 is recorded but never paged. Independent items fail in isolation — one
 unreadable knob does not blind the rest. The watch is deliberately **not**
 gated by `gate_signal.enabled`: rolling back the gate signal must not
-silently stop watching the curation switch. Transitions feed the Telegram
+silently stop watching the basket knobs. Transitions feed the Telegram
 `chain-parameter-change` class. Kill-switch: `chain_params.enabled` in
 [config.json](config.json).
 
@@ -196,50 +199,14 @@ absence threshold. A subnet recording more than
 record, carry a `hovering` annotation, and the flag clears only after a
 full quiet window.
 
-## Root weight vectors and crossing durability (change: rotation-signal-gate)
+## Crossing durability (change: rotation-signal-gate)
 
-The same hourly pass reads every per-validator root weight vector at the
-gate poll's finalized block, over the same keyless RPC, in **two calls**:
-one `state_getKeys` on `Weights` at the root netuid, then one
-`state_queryStorageAt` over exactly the keys that returned.
-`state_getPairs` would do it in one, but the public endpoint refuses it as
-unsafe (code 4003, verified 2026-09-09). `Weights` is Identity-hashed on
-both halves, so the validator uid is the two bytes after the netuid in the
-key tail; each value decodes as compact-length-prefixed
-`Vec<(u16 netuid, u16 weight)>`.
-
-The read **fails closed and persists nothing for the pass** on any of: a
-batch shorter than the enumeration, a vector that does not decode, a key
-tail that is not `netuid ++ uid`, or an enumeration over
-`root_rotation.max_enumerated_keys`. A partial map understates whichever
-destinations it lost, which is exactly the kind of quietly-wrong number
-this component refuses to produce.
-
-Each validator's vector is normalised to itself, then the vectors are
-combined into an aggregate destination map. When
-`root_rotation.stake_weighted` is set, the combination is weighted by each
-validator's root stake, resolved with two further **derived** batched reads
-at the same block: `Keys[ROOT][uid]` for the hotkey, then
-`TotalHotkeyAlpha[hotkey][ROOT]` (u64 RAO). Neither is enumerated:
-`TotalHotkeyAlpha` holds ~48k keys and unbounded scans of it are refused
-with an RPC work limit. If the stake read fails, the map falls back to
-unweighted, records a health event, and is **labelled unweighted** in the
-store and in every rendering. That label matters: an unweighted map counts
-validators rather than TAO, so it is not a share of dividend flow and must
-never be presented as one.
-
-A destination whose share moves past `root_rotation.share_change_threshold`
-(absolute, not relative), or that enters or leaves the map, records a
-`rotation_events` row carrying both shares, the contributing validator
-count, the weighting basis and the block. The first map seeds silently, and
-a pass on which the curation master switch or the concentration cap
-transitioned re-seeds silently: that transition re-prices every vector at
-once and is already reported by the chain-parameter watch.
-
-The read is independently disableable (`root_rotation.enabled`) and is
-deliberately **not** gated by `gate_signal.enabled`, on the same reasoning
-as the chain-parameter watch: rolling back the gate signal must not
-silently stop observing root curation.
+This change also shipped a root weight vector read, a stake-weighted
+destination map, and `rotation_events` recording. Change
+`root-weight-drift` (2026-09-24) removed them: spec 469 retired
+`set_root_weights` and cleared `Weights[ROOT]`, so the map would always be
+empty. The `root_vectors`, `root_destination_map` and `rotation_events`
+tables are no longer created or written. Existing rows stay as history.
 
 **Crossing durability.** A gate-crossing event now carries a persisted
 `eligibility`. A confirmed crossing starts `pending` and becomes `eligible`

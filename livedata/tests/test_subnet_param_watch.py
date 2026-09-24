@@ -38,8 +38,8 @@ class SubnetParamWatch(unittest.TestCase):
         self.assertEqual(al.netuid_item(ITEM, 19), "CollateralLockShare[19]")
         self.assertEqual(al.parse_netuid_item("CollateralLockShare[19]"),
                          (ITEM, 19))
-        self.assertEqual(al.parse_netuid_item("RootWeightSettingEnabled"),
-                         ("RootWeightSettingEnabled", None))
+        self.assertEqual(al.parse_netuid_item("BasketTradingEnabled"),
+                         ("BasketTradingEnabled", None))
 
     def test_dormant_map_seeds_every_subnet_without_transitions(self):
         out = self.watch({})

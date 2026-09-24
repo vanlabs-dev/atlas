@@ -89,10 +89,10 @@ Pattern: "subnet X's demand rose above the bar" when what actually happened is t
 
 Fix: a rank-pinned bar IS a demand share, so it moves on its own as the distribution shifts, and a subnet can change side with a completely stationary share. Compare the bar to its previous value before attributing a crossing to the subnet. Worked example: the spec-441 bar reset on 2026-08-03 dropped theta about 14.5% in one poll and pushed subnets 49, 67, 79 and 81 above the bar without their shares moving.
 
-### 7f. Root Reborn curation described as live, or a validator described as curating
-Pattern: "curation is on/live/enabled", "`RootWeightSettingEnabled` is true", "validators set root weights", or "validator X is deploying basket capital".
+### 7f. Root Reborn curation described as live, or a validator described as setting root weights
+Pattern: "curation is on/live/enabled", "`RootWeightSettingEnabled` is true", "validators set root weights", "validator X steers root dividends with `set_root_weights`", or "the cap is `RootWeightsCap`".
 
-Fix: Curation is OFF. `RootWeightSettingEnabled` is false (unset) since spec 464 (2026-09-17, block 9088729), and was still unset at finalized block 9125891 (2026-09-23). Every fund runs the null strategy: root dividends accumulate in place. Do not describe a validator as curating. Basket trading is a different switch: `BasketTradingEnabled` is true (explicit) at that same block, and it gates `swap_basket` only. Do not treat trading-on as curation-on. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
+Fix: Spec 469 retired `set_root_weights`, cleared `Weights[ROOT]`, and removed the `RootWeightSettingEnabled` switch (upstream migration `migrate_remove_root_weights`). Root dividends accumulate in place, and a fund's composition changes only through `swap_basket`, which `BasketTradingEnabled` gates (explicit true). The cap is `BasketConcentrationCap` (4096 = 1/16 of fund NAV, explicit at finalized block 9133830) and it checks `swap_basket` buys only. Do not describe a validator as curating with a weight vector. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
 
 ## WARNINGS (verify but don't block)
 

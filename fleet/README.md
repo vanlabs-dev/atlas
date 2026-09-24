@@ -206,8 +206,9 @@ audited (`signals-failed`) and never counts as a reconcile process error.
 - **The ledger measures ANY netuid-scoped class** (change:
   rotation-signal-gate). Entries are keyed by a source triple
   (source store, source row id, netuid), so livedata's gate
-  crossings and root-rotation events are entered on the same terms
-  as fleet signals; the hourly pass reads those stores strictly
+  crossings are entered on the same terms as fleet signals
+  (root-rotation events were too, until spec 469 retired root
+  weights; change root-weight-drift); the hourly pass reads those stores strictly
   read-only. Measurement never reads the delivery tier, so a class
   demoted to `briefing` keeps filling — that is the only way a
   demotion can ever be reversed on evidence. `effectiveness` names
