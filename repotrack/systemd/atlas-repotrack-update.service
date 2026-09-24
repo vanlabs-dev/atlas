@@ -1,8 +1,9 @@
 # Atlas subtensor repository update (PRD §21 Q20: hourly, decided 2026-07-12)
-# Install (operator, needs sudo):
-#   sudo cp ~/atlas/repotrack/systemd/atlas-repotrack-update.{service,timer} /etc/systemd/system/
-#   sudo systemctl daemon-reload
-#   sudo systemctl enable --now atlas-repotrack-update.timer
+# Install (user-level, as pi; linger is on):
+#   cp ~/atlas/repotrack/systemd/atlas-repotrack-update.{service,timer} \
+#     ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now atlas-repotrack-update.timer
 #
 # Phase 5: after each successful update, run the outbound Telegram notifier
 # scan (piggyback schedule, decided 2026-07-12). The leading `-` makes the
@@ -24,7 +25,6 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-User=pi
 ExecStart=/usr/bin/python3 /home/pi/atlas/repotrack/atlas_repo.py update
 ExecStartPost=-/usr/bin/python3 /home/pi/atlas/livedata/atlas_live.py poll-gate
 ExecStartPost=-/usr/bin/python3 /home/pi/atlas/telegram/atlas_telegram.py scan

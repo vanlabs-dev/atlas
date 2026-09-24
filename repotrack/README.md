@@ -82,15 +82,16 @@ atlas-repo:
 `config.json` pins `update_interval_hours: 1`, `stale_multiplier: 3`
 (status reports `stale` after 3h without a successful fetch — tolerates
 one missed cycle without flapping). Unit files live in
-[systemd/](systemd/); installation needs sudo, so the operator runs:
+[systemd/](systemd/). They are user-level units, installed as `pi`
+(linger is on):
 
 ```
-sudo cp ~/atlas/repotrack/systemd/atlas-repotrack-update.{service,timer} /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now atlas-repotrack-update.timer
+cp ~/atlas/repotrack/systemd/atlas-repotrack-update.{service,timer} ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now atlas-repotrack-update.timer
 ```
 
-Verify with `systemctl list-timers atlas-repotrack-update.timer` and
+Verify with `systemctl --user list-timers atlas-repotrack-update.timer` and
 `python3 repotrack/atlas_repo.py status` after the first firing.
 
 **Phase 5 (+ gate-crossing-signal, 2026-07-28):** the service also runs two

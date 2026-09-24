@@ -312,15 +312,16 @@ emission / freshness / abandonment alone, honestly showing `n/a` momentum.
 
 ## Scheduling — every 6h, independent of repotrack
 
-Unit files in [systemd/](systemd/); installation needs sudo:
+Unit files in [systemd/](systemd/). They are user-level units, installed
+as `pi` (linger is on):
 
 ```
-sudo cp ~/atlas/fleet/systemd/atlas-fleet.{service,timer} /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now atlas-fleet.timer
+cp ~/atlas/fleet/systemd/atlas-fleet.{service,timer} ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now atlas-fleet.timer
 ```
 
-Verify with `systemctl list-timers atlas-fleet.timer` and
+Verify with `systemctl --user list-timers atlas-fleet.timer` and
 `python3 fleet/atlas_fleet.py status`.
 
 ## Status (2026-08-31)

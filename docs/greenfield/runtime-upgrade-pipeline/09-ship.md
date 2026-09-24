@@ -61,6 +61,9 @@ Run these as `pi` on the Pi. Units are user-level.
    passes. See `docs/greenfield/root-weight-drift/09-ship.md`.
 2. The Pi's existing units are user-level, but the repotrack and subnt
    install comments still say `sudo cp` to `/etc/systemd/system/`.
+   **Fixed 2026-09-24:** the repotrack, fleet, and subnt units and READMEs
+   now give the user-level install and drop `User=pi`. The dashboard stays
+   a system unit.
 
 ## Still planned (separate changes)
 
