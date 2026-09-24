@@ -48,18 +48,19 @@ during apply:
   ingestion are **removed**, not disabled. Their tables and rows stay. The
   `root-rotation` promotion item due 2026-11-04 is void.
 
-## Live chain (2026-09-24)
+## Live chain (2026-09-25)
 
-Finney `spec_version` **469** (TaoStats chain head, block 9125797,
-request completed 2026-09-22T21:21:18Z; knob read at finalized block
-9125891). `SubnetEmissionEnabled` off netuids **29, 35, 36, 108**
-(finalized block 9125893). Emission bar is rank-pinned (N unset, default
-32; q 0.75 explicit and inert; h unset, default 3).
-`set_root_weights` is retired at spec 469 (`Weights[ROOT]` cleared, the
+Finney `spec_version` **470** (knob and emission-switch read at finalized
+block 9139046; chain-read probe clean at finalized block 9139048).
+`SubnetEmissionEnabled` off netuids **29, 35, 36, 108**. Emission bar is
+rank-pinned (N unset, default 32; q 0.75 explicit and inert; h unset,
+default 3). `set_root_weights` is retired (`Weights[ROOT]` cleared, the
 curation switch removed). `BasketTradingEnabled` is **true** (explicit).
-`BasketConcentrationCap` is **4096** (explicit; finalized block 9133830,
-re-read at 9133918). Root dividends accumulate in place, and fund
-composition changes only through `swap_basket`.
+`BasketConcentrationCap` is **4096** (explicit). Claim dust floors are
+unset. Root dividends accumulate in place, and fund composition changes
+only through `swap_basket` or, since spec 470, the atomic multi-leg
+`swap_basket_many` (up to 128 legs). Spec 470 changed no storage item
+Atlas reads.
 
 Runtime upgrades are automated; see the runtime-upgrade entry above.
 Web leads stay out of the confirmed knowledge base (ATLAS-WEB-003).
