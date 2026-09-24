@@ -41,7 +41,7 @@ KEYS = {
     "EmissionBarRank": "0xrank",
 }
 
-ROOT_SWITCH_KEY = "0xrootswitch"
+SWITCH_KEY = "0xtradingswitch"
 
 
 def watch_items():
@@ -52,9 +52,9 @@ def watch_items():
          "codec": "u64f64", "default": 0.61, "governs": "q-mass threshold"},
         {"item": "EmissionGateExponent", "source": "gate-poll",
          "codec": "u64f64", "default": 3.0, "governs": "gate sharpness"},
-        {"item": "RootWeightSettingEnabled", "source": "independent",
-         "key": ROOT_SWITCH_KEY, "codec": "bool", "default": False,
-         "governs": "Root Reborn basket curation master switch"},
+        {"item": "BasketTradingEnabled", "source": "independent",
+         "key": SWITCH_KEY, "codec": "bool", "default": False,
+         "governs": "network switch for swap_basket"},
     ]
 
 
@@ -474,35 +474,35 @@ class ChainParamWatchTests(unittest.TestCase):
             "SELECT COUNT(*) FROM chain_params").fetchone()[0], 0)
 
     def test_first_observation_seeds_without_transition(self):
-        result = self.watch({ROOT_SWITCH_KEY: None},
+        result = self.watch({SWITCH_KEY: None},
                             bar_params={"EmissionBarRank":
                                         (32, "assumed-default")})
         self.assertIn("EmissionBarRank", result["observed"])
-        self.assertIn("RootWeightSettingEnabled", result["observed"])
+        self.assertIn("BasketTradingEnabled", result["observed"])
         self.assertEqual(result["transitions"], [])
         self.assertEqual(self.transitions(), [])
 
     def test_value_change_records_a_transition(self):
-        self.watch({ROOT_SWITCH_KEY: None})
-        result = self.watch({ROOT_SWITCH_KEY: BOOL_TRUE_HEX})
+        self.watch({SWITCH_KEY: None})
+        result = self.watch({SWITCH_KEY: BOOL_TRUE_HEX})
         self.assertEqual(
             [(t["item"], t["prev_value"], t["new_value"])
              for t in result["transitions"]],
-            [("RootWeightSettingEnabled", "false", "true")])
+            [("BasketTradingEnabled", "false", "true")])
         self.assertEqual(
             self.transitions(),
-            [("RootWeightSettingEnabled", "false", "true")])
+            [("BasketTradingEnabled", "false", "true")])
 
     def test_provenance_only_change_is_not_a_transition(self):
         # Governance pinning the switch to the value it already had by
         # default changes nothing economically.
-        self.watch({ROOT_SWITCH_KEY: None})            # assumed-default
-        result = self.watch({ROOT_SWITCH_KEY: BOOL_FALSE_HEX})  # explicit
+        self.watch({SWITCH_KEY: None})            # assumed-default
+        result = self.watch({SWITCH_KEY: BOOL_FALSE_HEX})  # explicit
         self.assertEqual(result["transitions"], [])
         self.assertEqual(self.transitions(), [])
         provenances = [r[0] for r in self.conn.execute(
             "SELECT provenance FROM chain_params "
-            "WHERE item = 'RootWeightSettingEnabled' ORDER BY id")]
+            "WHERE item = 'BasketTradingEnabled' ORDER BY id")]
         self.assertEqual(provenances, ["assumed-default", "explicit"])
 
     def test_bar_params_recorded_without_a_second_read(self):
@@ -524,44 +524,44 @@ class ChainParamWatchTests(unittest.TestCase):
                         "EmissionGateExponent": (3.0, "assumed-default")},
             block_hash="0xhead", block_number=7)
         # Only the independent item is read from storage.
-        self.assertEqual(reads, [ROOT_SWITCH_KEY])
+        self.assertEqual(reads, [SWITCH_KEY])
         self.assertEqual(self.values("EmissionBarRank"), ["32"])
 
     def test_gate_params_skipped_when_gate_poll_did_not_run(self):
-        result = self.watch({ROOT_SWITCH_KEY: None}, bar_params=None)
-        self.assertEqual(result["observed"], ["RootWeightSettingEnabled"])
+        result = self.watch({SWITCH_KEY: None}, bar_params=None)
+        self.assertEqual(result["observed"], ["BasketTradingEnabled"])
         self.assertIn("EmissionBarRank", result["skipped"])
 
     def test_watch_runs_without_a_supplied_block(self):
         # Gate kill-switch path: the watch obtains its own head.
-        result = self.watch({ROOT_SWITCH_KEY: BOOL_TRUE_HEX})
-        self.assertEqual(result["observed"], ["RootWeightSettingEnabled"])
-        self.assertEqual(self.values("RootWeightSettingEnabled"), ["true"])
+        result = self.watch({SWITCH_KEY: BOOL_TRUE_HEX})
+        self.assertEqual(result["observed"], ["BasketTradingEnabled"])
+        self.assertEqual(self.values("BasketTradingEnabled"), ["true"])
 
     def test_one_unreadable_item_does_not_blind_the_rest(self):
         result = self.watch({}, bar_params={"EmissionBarRank":
                                             (32, "explicit")},
                             fail="state_getStorage")
         self.assertEqual(result["observed"], ["EmissionBarRank"])
-        self.assertIn("RootWeightSettingEnabled", result["skipped"])
+        self.assertIn("BasketTradingEnabled", result["skipped"])
         self.assertIn("provider-failure",
                       [r[0] for r in health_rows(self.conn)])
 
     def test_malformed_independent_item_is_isolated(self):
-        result = self.watch({ROOT_SWITCH_KEY: "0x02"},
+        result = self.watch({SWITCH_KEY: "0x02"},
                             bar_params={"EmissionBarRank":
                                         (32, "explicit")})
         self.assertEqual(result["observed"], ["EmissionBarRank"])
-        self.assertIn("RootWeightSettingEnabled", result["skipped"])
+        self.assertIn("BasketTradingEnabled", result["skipped"])
         self.assertIn("validation-failure",
                       [r[0] for r in health_rows(self.conn)])
 
     def test_no_re_emission_across_restart(self):
-        self.watch({ROOT_SWITCH_KEY: None})
-        self.watch({ROOT_SWITCH_KEY: BOOL_TRUE_HEX})     # one transition
+        self.watch({SWITCH_KEY: None})
+        self.watch({SWITCH_KEY: BOOL_TRUE_HEX})     # one transition
         self.conn.close()
         self.conn = al.open_store(os.path.join(self.tmp.name, "live.db"))
-        result = self.watch({ROOT_SWITCH_KEY: BOOL_TRUE_HEX})
+        result = self.watch({SWITCH_KEY: BOOL_TRUE_HEX})
         self.assertEqual(result["transitions"], [])
         self.assertEqual(len(self.transitions()), 1)
 
@@ -688,8 +688,9 @@ class RankInvariantTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# network-drift-452: a netuid-keyed watched item (RootWeightsCap at the root
-# entry) and the boundary-tolerant rank cross-check
+# network-drift-452: the netuid-keyed watch mechanism, and the boundary-
+# tolerant rank cross-check. No netuid-keyed item is configured at spec 469,
+# so the mechanism is exercised with a fixture item.
 # ---------------------------------------------------------------------------
 
 # The four gate keys as pinned in the shipped config (verified against live
@@ -704,17 +705,17 @@ REAL_GATE_KEYS = {
     "EmissionBarRank":
         "0x658faa385070e074c85bf6b568cf0555d33bd686290d014475513443305882be",
 }
-CAP_KEY = al.storage_key_blake2_concat_u16("SubtensorModule",
-                                           "RootWeightsCap", 0)
+KEYED_ITEM = "CollateralLockShare"
+KEYED_KEY = al.storage_key_identity_u16("SubtensorModule", KEYED_ITEM, 1)
 
 
-def cap_item(key=CAP_KEY):
-    return {"item": "RootWeightsCap", "source": "independent", "key": key,
-            "hasher": "blake2_128concat", "netuid": 0, "codec": "u16",
-            "default": 4096, "governs": "root basket concentration cap"}
+def keyed_item(key=KEYED_KEY):
+    return {"item": KEYED_ITEM, "source": "independent", "key": key,
+            "hasher": "identity", "netuid": 1, "codec": "u16",
+            "default": 0, "governs": "fixture netuid-keyed item"}
 
 
-class RootWeightsCapWatchTests(unittest.TestCase):
+class WatchFixtureMixin:
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -722,7 +723,6 @@ class RootWeightsCapWatchTests(unittest.TestCase):
         self.addCleanup(lambda: self.conn.close())
         self.config = make_config(watch_enabled=True,
                                   storage_keys=dict(REAL_GATE_KEYS))
-        self.config["chain_params"]["items"].append(cap_item())
 
     def watch(self, storage):
         return al.run_chain_param_watch(self.conn, self.config,
@@ -741,62 +741,159 @@ class RootWeightsCapWatchTests(unittest.TestCase):
     def categories(self):
         return [r[0] for r in health_rows(self.conn)]
 
-    def test_derived_key_matches_the_declared_hasher(self):
-        # blake2_128concat: 16-byte digest of the LE u16, then the raw u16.
-        prefix = al.storage_prefix("SubtensorModule", "RootWeightsCap")
-        self.assertTrue(CAP_KEY.startswith(prefix))
-        self.assertEqual(len(CAP_KEY), len(prefix) + 32 + 4)
-        self.assertTrue(CAP_KEY.endswith("0000"))
 
-    def test_null_read_seeds_the_runtime_default(self):
-        result = self.watch({ROOT_SWITCH_KEY: None, CAP_KEY: None})
-        self.assertIn("RootWeightsCap", result["observed"])
-        self.assertEqual(self.rows("RootWeightsCap"),
-                         [("4096", "assumed-default")])
-        self.assertEqual(result["transitions"], [])
-        self.assertNotIn("validation-failure", self.categories())
+class NetuidKeyedWatchTests(WatchFixtureMixin, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self.config["chain_params"]["items"].append(keyed_item())
+
+    def test_derived_key_matches_the_declared_hasher(self):
+        # identity: the raw LE u16 straight after the prefix.
+        prefix = al.storage_prefix("SubtensorModule", KEYED_ITEM)
+        self.assertEqual(KEYED_KEY, prefix + "0100")
+        self.assertEqual(al.derived_watch_key(keyed_item()), KEYED_KEY)
 
     def test_explicit_read_and_value_transition(self):
-        self.watch({ROOT_SWITCH_KEY: None, CAP_KEY: "0x0010"})   # 4096
-        self.assertEqual(self.rows("RootWeightsCap"), [("4096", "explicit")])
-        result = self.watch({ROOT_SWITCH_KEY: None, CAP_KEY: "0x0008"})
+        self.watch({SWITCH_KEY: None, KEYED_KEY: "0x0010"})
+        self.assertEqual(self.rows(KEYED_ITEM), [("4096", "explicit")])
+        result = self.watch({SWITCH_KEY: None, KEYED_KEY: "0x0008"})
         self.assertEqual(
             [(t["item"], t["prev_value"], t["new_value"])
              for t in result["transitions"]],
-            [("RootWeightsCap", "4096", "2048")])
-        self.assertEqual(self.transitions(),
-                         [("RootWeightsCap", "4096", "2048")])
+            [(KEYED_ITEM, "4096", "2048")])
 
     def test_pinned_key_that_does_not_derive_blocks_the_read(self):
-        wrong = al.storage_key_identity_u16("SubtensorModule",
-                                            "RootWeightsCap", 0)
-        self.config["chain_params"]["items"][-1] = cap_item(key=wrong)
+        wrong = al.storage_key_blake2_concat_u16("SubtensorModule",
+                                                 KEYED_ITEM, 1)
+        self.config["chain_params"]["items"][-1] = keyed_item(key=wrong)
         reads = []
 
         def rpc(method, params):
             reads.append((method, params[0] if params else None))
-            return fake_rpc({ROOT_SWITCH_KEY: None, wrong: "0x0010"})(
+            return fake_rpc({SWITCH_KEY: None, wrong: "0x0010"})(
                 method, params)
 
         result = al.run_chain_param_watch(self.conn, self.config, rpc=rpc)
-        self.assertIn("RootWeightsCap", result["skipped"])
-        self.assertIn("RootWeightSettingEnabled", result["observed"])
+        self.assertIn(KEYED_ITEM, result["skipped"])
+        self.assertIn("BasketTradingEnabled", result["observed"])
         self.assertIn("validation-failure", self.categories())
         self.assertNotIn(("state_getStorage", wrong), reads)
-        self.assertEqual(self.rows("RootWeightsCap"), [])
+        self.assertEqual(self.rows(KEYED_ITEM), [])
 
     def test_failed_prefix_self_test_blinds_only_derived_items(self):
         self.config["gate_signal"]["storage_keys"] = dict(KEYS)  # fakes
-        result = self.watch({ROOT_SWITCH_KEY: None, CAP_KEY: "0x0010"})
-        self.assertIn("RootWeightsCap", result["skipped"])
-        self.assertIn("RootWeightSettingEnabled", result["observed"])
+        result = self.watch({SWITCH_KEY: None, KEYED_KEY: "0x0010"})
+        self.assertIn(KEYED_ITEM, result["skipped"])
+        self.assertIn("BasketTradingEnabled", result["observed"])
         self.assertIn("validation-failure", self.categories())
 
     def test_unknown_hasher_is_fatal(self):
-        item = cap_item()
+        item = keyed_item()
         item["hasher"] = "twox64concat"
         with self.assertRaises(al.FatalLiveError):
             al.derived_watch_key(item)
+
+
+# change: root-weight-drift. The cap as shipped: a plain u16 on its own
+# pinned key, replacing RootWeightsCap[ROOT] at spec 469.
+SHIPPED_ITEMS = {spec["item"]: spec
+                 for spec in al.load_config()["chain_params"]["items"]}
+BASKET_CAP_KEY = SHIPPED_ITEMS["BasketConcentrationCap"]["key"]
+RETIRED_ITEMS = ("RootWeightSettingEnabled", "RootWeightsCap")
+
+
+class BasketConcentrationCapWatchTests(WatchFixtureMixin, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self.config["chain_params"]["items"].append(
+            dict(SHIPPED_ITEMS["BasketConcentrationCap"]))
+
+    def test_shipped_item_is_plain_u16_with_default_4096(self):
+        spec = SHIPPED_ITEMS["BasketConcentrationCap"]
+        self.assertEqual(spec["source"], "independent")
+        self.assertEqual(spec["codec"], "u16")
+        self.assertEqual(spec["default"], 4096)
+        self.assertNotIn("hasher", spec)
+
+    def test_plain_key_read_decodes_u16(self):
+        reads = []
+
+        def rpc(method, params):
+            if method == "state_getStorage":
+                reads.append(params[0])
+            return fake_rpc({SWITCH_KEY: None, BASKET_CAP_KEY: "0x0010"})(
+                method, params)
+
+        al.run_chain_param_watch(self.conn, self.config, rpc=rpc)
+        self.assertIn(BASKET_CAP_KEY, reads)
+        self.assertEqual(self.rows("BasketConcentrationCap"),
+                         [("4096", "explicit")])
+
+    def test_null_read_is_assumed_default_4096(self):
+        result = self.watch({SWITCH_KEY: None, BASKET_CAP_KEY: None})
+        self.assertEqual(self.rows("BasketConcentrationCap"),
+                         [("4096", "assumed-default")])
+        self.assertEqual(result["transitions"], [])
+
+    def test_first_observation_seeds_silently(self):
+        result = self.watch({SWITCH_KEY: None, BASKET_CAP_KEY: "0x0008"})
+        self.assertIn("BasketConcentrationCap", result["observed"])
+        self.assertEqual(result["transitions"], [])
+        self.assertEqual(self.transitions(), [])
+
+    def test_value_change_records_a_transition(self):
+        self.watch({SWITCH_KEY: None, BASKET_CAP_KEY: "0x0010"})
+        result = self.watch({SWITCH_KEY: None, BASKET_CAP_KEY: "0x0008"})
+        self.assertEqual(
+            [(t["item"], t["prev_value"], t["new_value"])
+             for t in result["transitions"]],
+            [("BasketConcentrationCap", "4096", "2048")])
+
+
+class RetiredRootItemTests(unittest.TestCase):
+    """Spec 469 retired both items. The watch drops them silently and
+    leaves their stored history alone (change: root-weight-drift)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.conn = al.open_store(os.path.join(self.tmp.name, "live.db"))
+        self.addCleanup(lambda: self.conn.close())
+
+    def test_shipped_watch_has_no_retired_item(self):
+        for item in RETIRED_ITEMS:
+            self.assertNotIn(item, SHIPPED_ITEMS)
+            self.assertNotIn(item, al.KNOB_ITEMS)
+
+    def test_watch_reads_no_retired_key_and_keeps_history(self):
+        self.conn.execute(
+            "INSERT INTO chain_params (item, value, provenance, observed_at, "
+            "block_number) VALUES ('RootWeightsCap', '4096', 'explicit', "
+            "'2026-09-01T00:00:00Z', 1)")
+        self.conn.commit()
+        config = al.load_config()
+        config["chain_params"]["enabled"] = True
+        retired_prefixes = [
+            "0x" + (al.twox128("SubtensorModule") + al.twox128(item)).hex()
+            for item in RETIRED_ITEMS]
+        reads = []
+
+        def rpc(method, params):
+            if method == "state_getStorage":
+                reads.append(params[0])
+            return fake_rpc({})(method, params)
+
+        result = al.run_chain_param_watch(self.conn, config, rpc=rpc)
+        self.assertTrue(reads)
+        for key in reads:
+            self.assertFalse(key.startswith(tuple(retired_prefixes)), key)
+        for item in RETIRED_ITEMS:
+            self.assertNotIn(item, result.get("observed", []))
+        self.assertEqual(self.conn.execute(
+            "SELECT item, value FROM chain_params WHERE item IN (?, ?)",
+            RETIRED_ITEMS).fetchall(), [("RootWeightsCap", "4096")])
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM chain_param_events").fetchone()[0], 0)
 
 
 class RankInvariantToleranceTests(RankInvariantTests):
@@ -1020,251 +1117,8 @@ class HoveringTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Root weight vectors, the destination map, rotation events, and the
-# gate-crossing durability guard (change: rotation-signal-gate)
+# The gate-crossing durability guard (change: rotation-signal-gate)
 # ---------------------------------------------------------------------------
-
-def weight_vector_hex(pairs):
-    """SCALE Vec<(u16, u16)>: compact length then four-byte pairs."""
-    count = len(pairs)
-    prefix = (bytes([count << 2]) if count < 64
-              else ((count << 2) | 0b01).to_bytes(2, "little"))
-    body = b"".join(int(n).to_bytes(2, "little") + int(w).to_bytes(2, "little")
-                    for n, w in pairs)
-    return "0x" + (prefix + body).hex()
-
-
-def root_key(uid):
-    return al.root_weights_prefix() + int(uid).to_bytes(2, "little").hex()
-
-
-def root_rpc(vectors, head="0x" + "cd" * 32, number="0x89c069",
-             fail=None, keys_override=None, drop_from_batch=0):
-    """vectors: {uid: [(netuid, weight)] or a raw hex payload or None}."""
-    def rpc(method, params):
-        if method == fail:
-            return {"ok": False, "error": "boom"}
-        if method == "chain_getFinalizedHead":
-            return {"ok": True, "result": head, "endpoint": "fake"}
-        if method == "chain_getHeader":
-            return {"ok": True, "result": {"number": number},
-                    "endpoint": "fake"}
-        if method == "state_getKeys":
-            if keys_override is not None:
-                return {"ok": True, "result": list(keys_override)}
-            return {"ok": True,
-                    "result": [root_key(uid) for uid in sorted(vectors)]}
-        if method == "state_queryStorageAt":
-            changes = []
-            for key in params[0]:
-                try:
-                    uid = al.uid_from_weights_key(key)
-                except ValueError:
-                    changes.append([key, None])  # let the caller judge it
-                    continue
-                value = vectors.get(uid)
-                if isinstance(value, list):
-                    value = weight_vector_hex(value)
-                changes.append([key, value])
-            if drop_from_batch:
-                changes = changes[:-drop_from_batch]
-            return {"ok": True, "result": [{"changes": changes}]}
-        raise AssertionError("unexpected method %s" % method)
-    return rpc
-
-
-def root_config(**over):
-    """The root read runs the derived-key self-test before it touches the
-    chain, so this fixture pins REAL derived prefixes rather than the
-    placeholder keys the gate fixtures use."""
-    cfg = make_config()
-    cfg["gate_signal"]["storage_keys"] = {
-        item: al.storage_prefix("SubtensorModule", item) for item in KEYS}
-    root = {"enabled": True, "max_enumerated_keys": 512,
-            "share_change_threshold": 0.005, "stake_weighted": False}
-    root.update(over)
-    cfg["root_rotation"] = root
-    return cfg
-
-
-class RootVectorReadTests(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.mkdtemp()
-        self.conn = al.open_store(os.path.join(self.tmp, "live.db"))
-        self.addCleanup(self.conn.close)
-
-    def test_prefix_and_uid_round_trip(self):
-        for uid in (0, 1, 3, 255, 4096):
-            self.assertEqual(al.uid_from_weights_key(root_key(uid)), uid)
-
-    def test_uid_rejects_a_foreign_netuid(self):
-        wrong = (al.storage_prefix("SubtensorModule", "Weights")
-                 + (7).to_bytes(2, "little").hex()
-                 + (1).to_bytes(2, "little").hex())
-        with self.assertRaises(ValueError):
-            al.uid_from_weights_key(wrong)
-
-    def test_uid_rejects_an_unexpected_tail_length(self):
-        with self.assertRaises(ValueError):
-            al.uid_from_weights_key(al.root_weights_prefix() + "00")
-
-    def test_decode_known_vector(self):
-        self.assertEqual(
-            al.decode_weight_vector(weight_vector_hex([(1, 10), (2, 20)])),
-            [(1, 10), (2, 20)])
-
-    def test_decode_two_byte_compact_length(self):
-        pairs = [(n, n + 1) for n in range(100)]
-        self.assertEqual(al.decode_weight_vector(weight_vector_hex(pairs)),
-                         pairs)
-
-    def test_decode_rejects_a_truncated_vector(self):
-        good = weight_vector_hex([(1, 10), (2, 20)])
-        with self.assertRaises(ValueError):
-            al.decode_weight_vector(good[:-8])
-
-    def test_read_returns_vectors_at_one_block(self):
-        result = al.read_root_vectors(
-            root_config(), rpc=root_rpc({0: [(1, 10)], 3: [(2, 20)]}))
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["enumerated"], 2)
-        self.assertEqual(result["vectors"], {0: [(1, 10)], 3: [(2, 20)]})
-        self.assertEqual(result["block_number"], 0x89c069)
-
-    def test_short_batch_fails_closed(self):
-        result = al.read_root_vectors(
-            root_config(),
-            rpc=root_rpc({0: [(1, 10)], 3: [(2, 20)]}, drop_from_batch=1))
-        self.assertFalse(result["ok"])
-        self.assertIn("short map", result["error"])
-
-    def test_undecodable_vector_fails_closed(self):
-        result = al.read_root_vectors(
-            root_config(), rpc=root_rpc({0: "0x08" + "0100ffff"}))
-        self.assertFalse(result["ok"])
-        self.assertIn("did not decode", result["error"])
-
-    def test_cap_exceeded_fails_closed(self):
-        result = al.read_root_vectors(
-            root_config(max_enumerated_keys=1),
-            rpc=root_rpc({0: [(1, 10)], 3: [(2, 20)]}))
-        self.assertFalse(result["ok"])
-        self.assertIn("max_enumerated_keys", result["error"])
-
-    def test_unexpected_key_layout_fails_closed(self):
-        stray = al.storage_prefix("SubtensorModule", "Weights") + "00"
-        result = al.read_root_vectors(
-            root_config(), rpc=root_rpc({0: [(1, 10)]},
-                                        keys_override=[stray]))
-        self.assertFalse(result["ok"])
-        self.assertIn("key layout", result["error"])
-
-    def test_enumeration_failure_fails_closed(self):
-        result = al.read_root_vectors(
-            root_config(), rpc=root_rpc({0: [(1, 10)]}, fail="state_getKeys"))
-        self.assertFalse(result["ok"])
-
-    def test_aggregate_normalises_each_validator_first(self):
-        shares, basis = al.aggregate_destinations(
-            {1: [(1, 100), (2, 100)], 2: [(1, 300), (3, 100)]})
-        self.assertEqual(basis, "unweighted")
-        self.assertAlmostEqual(shares[1], 0.625)
-        self.assertAlmostEqual(sum(shares.values()), 1.0)
-
-    def test_aggregate_stake_weighting_changes_the_picture(self):
-        shares, basis = al.aggregate_destinations(
-            {1: [(1, 100), (2, 100)], 2: [(1, 300), (3, 100)]},
-            stake_by_uid={1: 1.0, 2: 9.0})
-        self.assertEqual(basis, "stake-weighted")
-        self.assertAlmostEqual(shares[1], 0.725)
-        self.assertAlmostEqual(sum(shares.values()), 1.0)
-
-    def test_failed_read_records_health_and_persists_nothing(self):
-        result = al.poll_root_weights(
-            self.conn, root_config(),
-            rpc=root_rpc({0: [(1, 10)]}, drop_from_batch=1))
-        self.assertFalse(result["ok"])
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(*) FROM root_destination_map").fetchone()[0], 0)
-        self.assertTrue(any(cat == "provider-failure"
-                            for cat, _ in health_rows(self.conn)))
-
-    def test_disabled_read_is_inert(self):
-        result = al.poll_root_weights(self.conn, root_config(enabled=False),
-                                      rpc=root_rpc({0: [(1, 10)]}))
-        self.assertIn("skipped", result)
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(*) FROM root_vectors").fetchone()[0], 0)
-
-    def test_basis_is_persisted_with_the_map(self):
-        al.poll_root_weights(self.conn, root_config(),
-                             rpc=root_rpc({0: [(1, 10)]}))
-        self.assertEqual(self.conn.execute(
-            "SELECT weighting_basis FROM root_destination_map"
-        ).fetchone()[0], "unweighted")
-
-
-class RotationEventTests(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.mkdtemp()
-        self.conn = al.open_store(os.path.join(self.tmp, "live.db"))
-        self.addCleanup(self.conn.close)
-        self.cfg = root_config()
-
-    def poll(self, vectors, reseed=False):
-        return al.poll_root_weights(self.conn, self.cfg,
-                                    rpc=root_rpc(vectors), reseed=reseed)
-
-    def events(self):
-        return self.conn.execute(
-            "SELECT netuid, direction, prev_share, new_share "
-            "FROM rotation_events ORDER BY id").fetchall()
-
-    def test_first_map_seeds_silently(self):
-        result = self.poll({0: [(1, 50), (2, 50)]})
-        self.assertIn("seeded", result)
-        self.assertEqual(self.events(), [])
-
-    def test_share_move_past_threshold_records_once(self):
-        self.poll({0: [(1, 50), (2, 50)]})
-        self.poll({0: [(1, 90), (2, 10)]})
-        rows = self.events()
-        self.assertEqual(len(rows), 2)
-        directions = {netuid: direction for netuid, direction, _, _ in rows}
-        self.assertEqual(directions[1], "share-rose")
-        self.assertEqual(directions[2], "share-fell")
-
-    def test_sub_threshold_move_records_nothing(self):
-        self.poll({0: [(1, 5000), (2, 5000)]})
-        self.poll({0: [(1, 5010), (2, 4990)]})
-        self.assertEqual(self.events(), [])
-
-    def test_entry_and_exit_are_events(self):
-        self.poll({0: [(1, 50), (2, 50)]})
-        self.poll({0: [(1, 50), (3, 50)]})
-        rows = {netuid: direction for netuid, direction, _, _ in self.events()}
-        self.assertEqual(rows[3], "entered")
-        self.assertEqual(rows[2], "left")
-
-    def test_curation_parameter_transition_reseeds_without_storming(self):
-        self.poll({0: [(1, 50), (2, 50)]})
-        result = self.poll({0: [(1, 95), (2, 5)]}, reseed=True)
-        self.assertIn("re-seeded", result["seeded"])
-        self.assertEqual(self.events(), [])
-        # the re-seeded map is the new baseline, so the next quiet pass is
-        # quiet rather than replaying the suppressed move
-        self.poll({0: [(1, 95), (2, 5)]})
-        self.assertEqual(self.events(), [])
-
-    def test_validator_count_and_basis_travel_with_the_event(self):
-        self.poll({0: [(1, 50), (2, 50)]})
-        self.poll({0: [(1, 90), (2, 10)]})
-        count, basis = self.conn.execute(
-            "SELECT validator_count, weighting_basis FROM rotation_events "
-            "LIMIT 1").fetchone()
-        self.assertEqual(count, 1)
-        self.assertEqual(basis, "unweighted")
-
 
 class CrossingDurabilityTests(unittest.TestCase):
     def setUp(self):

@@ -616,16 +616,15 @@ SHALL skip polling and event production entirely.
 - **THEN** the recorded crossing is not re-emitted and the seeded sides are
   preserved
 
-### Requirement: Root-settable chain parameters are watched for transitions
+### Requirement: Root-settable chain parameters are watched against the spec 469 runtime
 
 The live-data component SHALL maintain a configured watch set of discrete
 root-settable chain storage items whose value governs network economics. The
 set SHALL cover the emission-gate bar parameters (`EmissionBarRank`,
 `EmissionBarQuantile`, `EmissionGateExponent`), whose values are supplied by
 the gate poll of the same pass, and additionally read items not covered by
-the gate poll: `RootWeightSettingEnabled`, the Root Reborn basket-curation
-master switch, and `RootWeightsCap`, the per-destination concentration cap
-on a root weight vector, observed at the root netuid entry. Each
+the gate poll, including `BasketConcentrationCap`, the largest share of a
+fund's value one holding may reach through a `swap_basket` buy. Each
 independently read item SHALL be configured with its pinned pre-verified
 storage key, its decoder (unsigned integer or boolean), its documented
 per-runtime default, and a short description of what the parameter governs.
@@ -635,6 +634,11 @@ SHALL be self-tested in the same way as the other derived keys. A boolean
 decoder SHALL reject a payload that is the correct length but is neither the
 encoded true nor the encoded false value.
 
+The watch set SHALL NOT contain an item that is absent from the live runtime
+metadata. `RootWeightSettingEnabled` and `RootWeightsCap`, retired at spec
+469, SHALL NOT be read. Their stored observation and transition history SHALL
+be kept unchanged, and their removal SHALL NOT record a transition.
+
 This watch SHALL be the single durable record of bar-parameter change; a
 transient in-memory change flag SHALL NOT be relied on as the record of a
 parameter transition.
@@ -643,7 +647,7 @@ Independently read items SHALL be read against the same finalized block hash
 as the gate poll when the gate poll runs in that pass. The watch SHALL NOT be
 gated by the emission-gate kill-switch: when the gate signal is disabled, the
 watch SHALL still run over its independently read items, obtaining its own
-finalized block hash, so a curation-switch flip is not missed while the gate
+finalized block hash, so a basket-parameter flip is not missed while the gate
 signal is rolled back.
 
 Each pass SHALL persist one observation per watched item carrying the decoded
@@ -678,13 +682,24 @@ restarts, and SHALL never be written from an unvalidated read.
 - **THEN** every independently read watched item is read at that same block
   hash and persisted with that reference block
 
-#### Scenario: Root weights cap is observed at the root entry
+#### Scenario: Basket concentration cap is observed as a plain value
 
 - **WHEN** a pass runs the watch
-- **THEN** `RootWeightsCap` is read at the root netuid entry through its
-  derived key, decoded as an unsigned 16-bit integer, and persisted with its
-  provenance; a null read persists the documented default as
-  `assumed-default`
+- **THEN** `BasketConcentrationCap` is read at its pinned plain storage key,
+  decoded as an unsigned 16-bit integer, and persisted with its provenance;
+  a null read persists the documented default 4096 as `assumed-default`
+
+#### Scenario: First cap observation seeds silently
+
+- **WHEN** `BasketConcentrationCap` is observed for the first time
+- **THEN** its observation is persisted and no transition is recorded
+
+#### Scenario: Retired items are not read
+
+- **WHEN** a pass runs the watch
+- **THEN** no read of `RootWeightSettingEnabled` or `RootWeightsCap` is made,
+  no observation or transition is written for them, and their earlier rows
+  are unchanged
 
 #### Scenario: Derived key for a netuid-keyed watch item is self-tested
 
@@ -1012,104 +1027,3 @@ nothing for that day.
 
 - **WHEN** the vitals response fails validation
 - **THEN** a health event is recorded and no vitals row is written
-
-### Requirement: Root weight vectors are read at the gate-poll block and aggregated into a destination map
-
-The live-data component SHALL read every per-validator root weight vector at
-the same finalized block as the emission-gate poll, over the existing keyless
-JSON-RPC path, using the established storage-key derivation self-test and the
-established batched multi-key read. The read SHALL enumerate the weight map's
-entries at the root netuid and SHALL fetch every returned key in one batched
-request at that block. A storage-enumeration or batch method that the endpoint
-refuses SHALL NOT be used; the requirement is one enumeration call plus one
-batched value read.
-
-Each vector SHALL be decoded as a length-prefixed sequence of
-(destination netuid, weight) pairs. A vector that fails to decode, a key whose
-derivation does not match the observed key layout, or a batch that returns
-fewer entries than were enumerated SHALL fail the read closed for that pass,
-recording a health event and persisting no partial map, rather than storing a
-map that understates a destination.
-
-Each pass SHALL persist every validator's vector and an aggregate destination
-map covering all destinations. The aggregate SHALL be stake-weighted by each
-validator's root stake when that figure is available from the same pass, and
-SHALL be recorded as unweighted and labelled unweighted when it is not.
-The weighting basis SHALL be persisted with the map, so a consumer never has
-to infer it.
-
-The read SHALL be independently disableable, and SHALL NOT be gated by the
-emission-gate kill switch, so disabling the gate signal cannot silently stop
-observing root curation.
-
-#### Scenario: One enumeration and one batched read at one block
-
-- **WHEN** a pass reads root weight vectors
-- **THEN** the map's entries at the root netuid are enumerated once, every
-  returned key is read in one batched request at the gate poll's finalized
-  block, and the block reference is persisted with the result
-
-#### Scenario: Undecodable vector fails the pass closed
-
-- **WHEN** any returned vector does not decode as a sequence of
-  (netuid, weight) pairs
-- **THEN** the pass records a health event, persists no vectors and no
-  aggregate map for that pass, and the previous stored map is left intact
-
-#### Scenario: Short batch is not treated as an empty vector
-
-- **WHEN** the batched read returns fewer entries than were enumerated
-- **THEN** the pass fails closed rather than recording the missing validators
-  as having no destinations
-
-#### Scenario: Weighting basis is always stated
-
-- **WHEN** an aggregate destination map is persisted
-- **THEN** it carries whether it is stake-weighted or unweighted, and an
-  unweighted map is labelled unweighted wherever it is presented
-
-#### Scenario: Root read survives a gate-signal rollback
-
-- **WHEN** the emission-gate signal is disabled
-- **THEN** the root weight vector read continues on the hourly pass
-
-### Requirement: A material shift in the aggregate root destination map is recorded as an event
-
-The component SHALL compare each pass's aggregate destination map against the
-previously persisted map and SHALL record a durable root-rotation event when a
-destination's share of the aggregate changes by more than a configured
-threshold, or when a destination enters or leaves the map. Each event SHALL
-persist the destination netuid, the previous and new shares, the number of
-validators contributing to the change, the weighting basis, the block
-reference, and the observation time.
-
-The first persisted map SHALL seed silently without recording events. A pass
-in which the curation master switch or the concentration cap transitions SHALL
-re-seed the map silently and record no rotation events, because such a
-transition re-prices every vector at once and is already reported by the
-chain-parameter watch.
-
-#### Scenario: Destination share moves past the threshold
-
-- **WHEN** a destination's aggregate share changes by more than the configured
-  threshold between two persisted maps
-- **THEN** one root-rotation event is recorded carrying both shares, the
-  contributing validator count, the weighting basis, and the block reference
-
-#### Scenario: First map seeds silently
-
-- **WHEN** the first aggregate destination map is persisted
-- **THEN** it is stored and no rotation events are recorded
-
-#### Scenario: Curation parameter transition re-seeds instead of storming
-
-- **WHEN** a pass records a transition in the curation master switch or the
-  concentration cap
-- **THEN** the aggregate map is re-seeded, no rotation events are recorded for
-  that pass, and the chain-parameter transition alone reports the change
-
-#### Scenario: New destination is an event
-
-- **WHEN** a destination netuid appears in the aggregate map that was absent
-  from the previous map
-- **THEN** one root-rotation event is recorded for its entry

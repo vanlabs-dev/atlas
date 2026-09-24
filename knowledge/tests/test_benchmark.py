@@ -43,8 +43,8 @@ class ScoringTests(unittest.TestCase):
         self.assertLess(metrics["correct-with-evidence"], 1.0)
 
     def test_wrong_answers_fail_threshold_by_name(self):
-        # two misses is 22/24 = 0.917, which still MEETS the floor; three
-        # misses (21/24 = 0.875) is the first count that breaches it.
+        # two misses is 23/25 = 0.92, which still MEETS the floor; three
+        # misses (22/25 = 0.88) is the first count that breaches it.
         bundle = make_bundle(self.tmp.name, overrides={
             "KB-EX-1": "The split is fifty-fifty.",
             "KB-EX-2": "There is no cap on subnet slots.",
@@ -52,7 +52,7 @@ class ScoringTests(unittest.TestCase):
         results, metrics, _cls = run_all(bundle)
         by_check = results_by_check(results)
         self.assertAlmostEqual(metrics["correct-with-evidence"],
-                               21 / 24, places=3)
+                               22 / 25, places=3)
         self.assertEqual(by_check["thresholds"].status,
                          ahv.CHECK_FINDING)
         self.assertIn("correct-with-evidence",

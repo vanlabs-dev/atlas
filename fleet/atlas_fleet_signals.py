@@ -66,7 +66,6 @@ SOURCE_LIVEDATA = "livedata"
 # fleet pass. Each maps to (table, netuid column, timestamp column).
 LIVEDATA_MEASURED = {
     "gate-crossing": ("gate_events", "netuid", "observed_at"),
-    "root-rotation": ("rotation_events", "netuid", "observed_at"),
 }
 
 # Term kinds.

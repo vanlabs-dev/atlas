@@ -33,8 +33,11 @@ Run these as `pi` on the Pi. Units are user-level.
 
 1. `git -C ~/atlas pull --ff-only`, then run
    `ATLAS_CLAUDE_BIN=~/.local/bin/claude python3 ~/atlas/upgrade/atlas_upgrade.py run --dry-run`.
-   The job creates the `~/atlas-upgrade` worktree itself. Expect the dry
-   run to fail at the probe gate until finding 1 is fixed.
+   The job creates the `~/atlas-upgrade` worktree itself. The first dry
+   run (2026-09-24) passed preflight, prepare, and every suite, and failed
+   only at the probe on finding 1. After pulling the fix, clear the dry-run
+   state (`rm ~/atlas/var/upgrade/dry-run-state.json`) and run it again.
+   Expect it to pass every gate.
 2. Copy `livedata/systemd/atlas-{poll-chain-head,probe}.*` to
    `~/.config/systemd/user/`, `daemon-reload`, enable both timers. Copy the
    repotrack unit the same way and reload it.
@@ -51,6 +54,8 @@ Run these as `pi` on the Pi. Units are user-level.
    live facts. The probe fails on them, so the hourly watch will page as
    soon as it is enabled, and every upgrade attempt fails the probe gate
    unless the model fixes the reads. Needs a small reader and corpus fix.
+   **Fixed 2026-09-24** by change `root-weight-drift` (archived); the probe
+   passes. See `docs/greenfield/root-weight-drift/09-ship.md`.
 2. The Pi's existing units are user-level, but the repotrack and subnt
    install comments still say `sudo cp` to `/etc/systemd/system/`.
 

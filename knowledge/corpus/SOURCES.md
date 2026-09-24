@@ -6,8 +6,8 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | field | value |
 |---|---|
 | Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
-| Sync date | 2026-09-23 |
-| Coverage date | 2026-09-23 |
+| Sync date | 2026-09-24 |
+| Coverage date | 2026-09-24 |
 | Grounded at | Finney `spec_version` **469** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
@@ -22,10 +22,14 @@ Verified 2026-09-23 against Finney RPC (`https://entrypoint-finney.opentensor.ai
   `EmissionBarQuantile` 0.75 explicit and inert, `EmissionGateExponent`
   unset (default 3).
 - `SubnetEmissionEnabled` is live. 128 keys; **29, 35, 36, 108 off**; SN1 on.
-- `RootWeightSettingEnabled` is **false** (unset). Basket curation is off.
-  `RootWeightsCap` unset (default 4096), inert while the switch is off.
-- `BasketTradingEnabled` is **true** (explicit). It gates `swap_basket`.
-  It is not the curation switch. A hotkey can still be frozen.
+- `set_root_weights` is **retired** at spec 469
+  (`migrate_remove_root_weights`): `Weights[ROOT]` cleared,
+  `RootWeightSettingEnabled` and `RootWeightsCap` removed. Dividends
+  accumulate in place. Verified 2026-09-24 at finalized block 9133830.
+- `BasketConcentrationCap` is **4096** (explicit, 1/16 of fund NAV) at
+  finalized block 9133830, re-read at 9133918. It caps `swap_basket` buys.
+- `BasketTradingEnabled` is **true** (explicit). It gates `swap_basket`,
+  the only way fund composition changes. A hotkey can still be frozen.
 - Claim dust floors are unset on chain. Code defaults apply: row floor
   min(1 TAO, 10 bps of anchored NAV); slice floor 0.0001 TAO. Cash-first
   claims are not live.

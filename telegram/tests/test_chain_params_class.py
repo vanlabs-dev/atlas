@@ -194,7 +194,7 @@ class ChainParameterClassTests(_Base):
         self.spec = {
             "enabled": True, "source_db": self.live_db,
             "governs": {
-                "RootWeightSettingEnabled": "Root Reborn curation switch",
+                "BasketConcentrationCap": "swap_basket concentration cap",
                 "EmissionBarRank": "bar selection <rank & mode>",
                 "SubnetEmissionEnabled":
                     "per-subnet root switch over TAO injection",
@@ -215,9 +215,9 @@ class ChainParameterClassTests(_Base):
         events, wm = tg.chain_parameter_change_events(bare, None, self.ctx())
         self.assertEqual((events, wm), ([], None))
 
-    def test_curation_flip_pages_once(self):
-        row_id = add_param_event(self.live_db, "RootWeightSettingEnabled",
-                                 "false", "true")
+    def test_basket_cap_change_pages_once(self):
+        row_id = add_param_event(self.live_db, "BasketConcentrationCap",
+                                 "4096", "2048")
         events, wm = self.events()
         self.assertEqual(len(events), 1)
         self.assertEqual(wm, str(row_id))
@@ -226,20 +226,32 @@ class ChainParameterClassTests(_Base):
         self.assertEqual(event["event_id"],
                          "chain-parameter-change:%d" % row_id)
         text = event["text"]
-        self.assertIn("RootWeightSettingEnabled: false to true", text)
+        self.assertIn("BasketConcentrationCap: 4096 to 2048", text)
         self.assertIn("source: assumed-default to explicit", text)
         self.assertIn("reference block: 8766216", text)
-        self.assertIn("Root Reborn curation switch", text)
+        self.assertIn("swap_basket concentration cap", text)
         self.assertIn("next: review root basket positions", text)
+        self.assertIn("concentration cap moved", text)
         self.assertNotIn("re-priced", text)   # not a bar parameter
         self.assertNotIn(EM_DASH, text)
         self.assertIn("<b>", event["html"])
 
+    def test_shipped_config_matches_spec_469(self):
+        # change: root-weight-drift. The retired root items lose their
+        # glosses, the cap gains one, and the root-rotation class is gone.
+        shipped = tg.load_config()
+        governs = shipped["classes"]["chain-parameter-change"]["governs"]
+        self.assertIn("1/16", governs["BasketConcentrationCap"])
+        for item in ("RootWeightSettingEnabled", "RootWeightsCap"):
+            self.assertNotIn(item, governs)
+        self.assertNotIn("root-rotation", shipped["classes"])
+        self.assertNotIn("root-rotation", tg._ADAPTERS)
+
     def test_no_cooldown_between_successive_flips(self):
-        add_param_event(self.live_db, "RootWeightSettingEnabled",
-                        "false", "true")
-        add_param_event(self.live_db, "RootWeightSettingEnabled",
-                        "true", "false")
+        add_param_event(self.live_db, "BasketConcentrationCap",
+                        "4096", "2048")
+        add_param_event(self.live_db, "BasketConcentrationCap",
+                        "2048", "4096")
         events, _wm = self.events()
         self.assertEqual(len(events), 2)
 
@@ -351,10 +363,10 @@ class ChainParameterClassTests(_Base):
         self.assertEqual({r[0] for r in rows}, expected)
 
     def test_global_items_stay_one_page_each(self):
-        add_param_event(self.live_db, "RootWeightSettingEnabled",
-                        "false", "true", block=100)
-        add_param_event(self.live_db, "RootWeightSettingEnabled",
-                        "true", "false", block=100)
+        add_param_event(self.live_db, "BasketConcentrationCap",
+                        "4096", "2048", block=100)
+        add_param_event(self.live_db, "BasketConcentrationCap",
+                        "2048", "4096", block=100)
         events, _wm = self.events()
         self.assertEqual(len(events), 2)
         self.assertNotIn("member_ids", events[0])

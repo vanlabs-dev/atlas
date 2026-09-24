@@ -54,7 +54,7 @@ def seed_live(path):
         "above_count) VALUES (?, 1, 0.0083, 32, 32)", (_iso(1),))
     conn.execute(
         "INSERT INTO chain_param_events (item, prev_value, new_value, "
-        "observed_at) VALUES ('RootWeightSettingEnabled', 'false', 'true', "
+        "observed_at) VALUES ('BasketConcentrationCap', '4096', '2048', "
         "?)", (_iso(3),))
     conn.execute(
         "INSERT INTO network_vitals VALUES ('2026-08-30', ?, 7417081.7, "
@@ -153,7 +153,7 @@ class CompositionTests(BriefingBase):
                          list(ab.SECTION_ORDER))
         net = "\n".join(edition["sections"]["network"])
         self.assertIn("runtime spec 452", net)
-        self.assertIn("rule change: RootWeightSettingEnabled false to true",
+        self.assertIn("rule change: BasketConcentrationCap 4096 to 2048",
                       net)
         self.assertIn("bar 0.00830", net)
         self.assertIn("TAO 198.59 USD", net)
