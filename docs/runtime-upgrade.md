@@ -98,5 +98,6 @@ Only the live spec drives an update. The repo spec moves ahead when a
 release merges before enactment. Never force-push. A fix that needs a path
 outside the scope blocks the attempt and waits for the operator.
 
-Rollback: disable `atlas-upgrade.timer`, and re-enable Hermes cron job
-`fb98152a3fa1` while it still exists. The spec poll and probe timers stay.
+Rollback: disable `atlas-upgrade.timer`. Hermes cron job `fb98152a3fa1`
+was removed on 2026-09-24, so no fallback job exists: upgrades are then
+manual. The spec poll and probe timers stay.

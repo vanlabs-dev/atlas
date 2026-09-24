@@ -17,7 +17,8 @@ the result (goal, edit scope, every test suite, a live chain-read probe)
 before it pushes to `main` and activates the corpus. An hourly probe
 (`livedata/atlas_probe.py`) pages when any storage item Atlas reads drifts
 from live runtime metadata. See [docs/runtime-upgrade.md](docs/runtime-upgrade.md).
-It replaces the Hermes cron job "Atlas runtime upgrade".
+It replaced the Hermes cron job "Atlas runtime upgrade", removed
+2026-09-24.
 
 ## Current status (2026-09-23, Finney spec 469)
 
@@ -170,18 +171,14 @@ var/                        # gitignored: device-sensitive inventory/assessment 
 **No change is active.** `openspec/changes/` holds only `archive/`.
 `https://subnt.dev` is the only public surface; everything else is LAN-only.
 
-Operator steps on the Pi, in order:
+The runtime upgrade rollout finished on the Pi on 2026-09-24: corpus run
+`20260924T034531Z-66329b35` active, dry run passed every gate, timers
+enabled, Hermes cron job removed. Operator steps still open:
 
-1. **Pull and re-ingest** (change `root-weight-drift`, archived
-   2026-09-24): `git pull` in `~/atlas`, then
-   `python3 knowledge/atlas_kb.py ingest`, read the report, then
-   `python3 knowledge/atlas_kb.py activate --run <id>`. Until then the
-   knowledge tools serve the old allocation facts. See
-   `docs/greenfield/root-weight-drift/09-ship.md`.
-2. **Runtime upgrade rollout** (change archived 2026-09-24): run the dry
-   run, enable the new timers, and retire the Hermes job. The probe now
-   passes, so the dry run is unblocked. Steps are in
-   `docs/greenfield/runtime-upgrade-pipeline/09-ship.md`.
+1. **Battery re-run.** Run the retrieval battery against the new corpus
+   run. The last accepted run predates `KB-CF-6`.
+2. **Hermes script cleanup.** After the first real upgrade, delete
+   `~/.hermes/scripts/atlas_live_spec.py` (task 7.4).
 
 Before any new proposal:
 

@@ -32,7 +32,7 @@ probe. Only then does the job push to `main` with the Atlas deploy key,
 activate the corpus, and report on Telegram. It never force-pushes. See
 `docs/runtime-upgrade.md`. The job may not edit tests, the probe, itself,
 docs other than `docs/decisions.md`, this file, systemd units, or secrets.
-It replaces Hermes cron job `fb98152a3fa1`.
+It replaced Hermes cron job `fb98152a3fa1`, removed 2026-09-24.
 
 Supply the personal identity explicitly for automated commits, even when
 repo-local Git identity is configured. Do not rely on global configuration.

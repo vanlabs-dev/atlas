@@ -33,11 +33,12 @@ Session 4, 2026-09-24. Verify PASS (`08-verify.md`). Change archived to
 
 ## Follow-ups
 
-- **Operator, task 6.5 (open):** on the Pi, after `git pull`, run
+- **Operator, task 6.5 (done 2026-09-24, run
+  `20260924T034531Z-66329b35`):** on the Pi, after `git pull`, run
   `python3 knowledge/atlas_kb.py ingest`, read the report, then
   `python3 knowledge/atlas_kb.py activate --run <id>`. Confirm with
   `python3 knowledge/atlas_kb.py status`.
 - Re-run the retrieval battery on the Pi against the new corpus run. The
   last accepted run predates `KB-CF-6`.
-- The `runtime-upgrade-pipeline` dry run (tasks 7.1 to 7.4) is unblocked.
+- The `runtime-upgrade-pipeline` dry run passed on 2026-09-24.
 - A `swap_basket` rotation signal is a separate change if wanted.
