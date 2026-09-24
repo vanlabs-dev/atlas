@@ -29,6 +29,9 @@ recorded from the workstation.
 
 ## Operator follow-ups (tasks 7.1 to 7.4, open at archive)
 
+Done 2026-09-24 except the script deletion in step 4: dry run passed every
+gate, timers enabled, Hermes cron `fb98152a3fa1` removed.
+
 Run these as `pi` on the Pi. Units are user-level.
 
 1. `git -C ~/atlas pull --ff-only`, then run
