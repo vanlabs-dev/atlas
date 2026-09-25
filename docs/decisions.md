@@ -332,7 +332,8 @@ Verified on the Pi against live Finney and the TaoSwap panel. Recorded here
 because each one corrects a belief that looked right and was not.
 
 - **`alpha_out_emission` is the miner-facing quantity, and it is a
-  constant.** 1.0 on all 127 non-root subnets. `alpha_in_emission` is the
+  constant.** (Superseded 2026-09-25: it is not a constant; see the
+  mining-board-accuracy findings below.) 1.0 on all 127 non-root subnets. `alpha_in_emission` is the
   capped TAO-side pool injection, not income. Consequence: emission quantity
   carries no ranking information; price, owner capture and concentration do.
 - **`MinerBurned` is measured, not set.** `run_coinbase.rs` computes it as
@@ -421,6 +422,56 @@ because each one corrects a belief that looked right and was not.
   while 3 to 15 UIDs earn anything and the top ten take substantially all
   of it. `active_miners` in the panel is the earner count less the owner's
   earning hotkey (verified exactly across eight subnets).
+
+## Mining board accuracy: chain findings (2026-09-25, change: mining-board-accuracy)
+
+Checked against subtensor source (`RaoFoundation/subtensor` `c004ceb`,
+spec 471), live Finney (blocks 9142678, 9142723 and 9142874, spec 470) and
+the board's own store. Each finding changed the screen.
+
+- **Supersedes "alpha_out is a constant" (above, 2026-08-07).** The alpha
+  distributed per block is `get_block_emission_for_issuance` over each
+  subnet's OWN alpha issuance (`run_coinbase.rs:226-238`), so it halves per
+  subnet. It reads 1.0 on the 125 emitting subnets today only because the
+  largest issuance is 6.62M against a 10.5M first step. The screen now
+  reads chain `SubnetAlphaOutEmission` every pass. A subnet reading 0
+  (59, 86, 108 at block 9142874) is unrated, never ranked on 0.
+- **Miner share is 0.5 x (1 - owner cut), from chain.** `SubnetOwnerCut`
+  is unset, so the runtime default 11796/65535 applies, and the share is
+  **0.410002** (the proposal's 0.41002 was a rounding slip). The cut
+  applies only where `OwnerCutEnabled` (unset everywhere, default true).
+  The hand-set `miner_share` config and its knowledge-base citation are
+  gone; the 0.5 is cited to `run_coinbase.rs:326-329` in code.
+- **Mechanisms.** `Incentive` is keyed by mecid x 4096 + netuid. Six
+  subnets run two mechanisms (44, 68, 87, 89, 93, 113), with splits
+  [0, 65535] (44, 87), [1311, 64224] (93), [46812, 18723] (68),
+  [52428, 13107] (89) and [64879, 656] (113). SN93's mechanism 0 gets 2%:
+  its entrant figure is 8.23 TAO/mo, not the 410.92 the whole-pool model
+  showed. SN44's mechanism 0 gets nothing; it now ranks on mechanism 1.
+- **Owner UIDs are removed and reconciled.** The owner set resolved as
+  `get_owner_hotkeys` does (owner coldkey's `OwnedHotkeys` plus
+  `SubnetOwnerHotkey`, looked up in `Uids`) reproduces `MinerBurned`
+  within 0.01 on all 125 emitting subnets at block 9142874. The three
+  mismatches (59, 86, 108) emit nothing, so no `MinerBurned` is written.
+  SN9's owner UID 209 holds 49.77%; on the independent field UID 171 holds
+  99.56%, so SN9 is now cut winner-take-all.
+- **Balancer weights are near, not exactly, 0.5.** `SwapBalancer` reads
+  between 0.4999998 and 0.5 on all 128 subnets. Price and haircut use the
+  weighted formulas, which reduce to x*y=k at 0.5.
+- **The subnet-template `min_compute.yml` is fingerprinted from upstream.**
+  `opentensor/bittensor-subnet-template` main at `539b77c`. SN60
+  (`Bitsec-AI/sandbox`) ships it byte for byte. SN33's current main does
+  NOT: it adds a real `miner-cpu` profile, so it counts as an edited
+  declaration. The design expected SN33 to match; its Pi clone may predate
+  the edit.
+- **Feasibility cuts only on positive evidence.** No entrypoint is
+  `unknown`, never `closed`. `SCAN_VERSION` is 3, so the first pass wipes
+  and rescans every verdict.
+- **Off-device model run** over the live snapshot at block 9142874, before
+  feasibility joins: 128 observed, 63 ranked, 65 cut (27 winner-take-all,
+  24 owner-capture, 10 identity-placeholder, 4 pool-side-switch-off),
+  0 unrated. Head SN4 Targon. On-device verification is pending the first
+  post-deploy pass.
 
 ## subnt renderer decisions (2026-09-09, change: subnt-renderer)
 

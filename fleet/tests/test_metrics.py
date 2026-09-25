@@ -38,7 +38,9 @@ class MetricsBase(unittest.TestCase):
         met.ensure_schema(self.conn)
         self.clone_root = os.path.join(self.tmp, "clones")
         self.config = {"db": self.db, "clone_root": self.clone_root,
-                       "metrics": {}}
+                       "metrics": {},
+                       "dashboard": {"www_dir": os.path.join(self.tmp,
+                                                             "www")}}
 
     def make_slot(self, netuid, files, epoch=1, status="active",
                   repo=None):

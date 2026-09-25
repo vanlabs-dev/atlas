@@ -12,8 +12,11 @@ import unittest
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(_HERE))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(_HERE)),
+                                "fleet", "tests"))
 
 import atlas_briefing as ab  # noqa: E402
+import mining_fixtures as mf  # noqa: E402
 import atlas_telegram as tg  # noqa: E402
 from test_notifier import make_config, ok_poster_factory  # noqa: E402
 
@@ -87,9 +90,6 @@ def seed_fleet(path):
         term TEXT, created_at TEXT);
     CREATE TABLE epochs (id INTEGER PRIMARY KEY, netuid INTEGER,
         epoch INTEGER, opened_at TEXT);
-    CREATE TABLE mine_econ (ts TEXT, netuid INTEGER, subnet_name TEXT,
-        cut_reason TEXT, net_tao_month REAL, gross_tao_month REAL,
-        rent_band TEXT);
     """)
     now = _iso(0)
     conn.executemany(
@@ -109,13 +109,20 @@ def seed_fleet(path):
     conn.execute(
         "INSERT INTO epochs (netuid, epoch, opened_at) VALUES (5, 3, ?)",
         (_iso(4),))
-    conn.executemany(
-        "INSERT INTO mine_econ VALUES (?, ?, ?, ?, ?, ?, NULL)",
-        [(now, 107, "Minos", None, None, 258.7),
-         (now, 64, "Chutes", None, None, 332.1),
-         (now, 3, "dead", "identity-placeholder", None, None)])
     conn.commit()
+    # Mining rows come from the real writer (econ, then classify).
+    mf.seed_board(conn, {"mining": {"enabled": True}}, BOARD_SNAPSHOT())
     conn.close()
+
+
+def BOARD_SNAPSHOT():
+    """SN64 Chutes heads the board, SN107 Minos second, SN3 cut at the
+    identity rung, SN12 unrated (owner set unread)."""
+    return mf.synthetic([
+        mf.subnet(64, [10, 9, 8], name="Chutes", tao_pool=90_000.0),
+        mf.subnet(107, [10, 9, 8], name="Minos", tao_pool=60_000.0),
+        mf.subnet(3, [10, 9, 8], name="deprecated"),
+        mf.subnet(12, [10, 9, 8], name="Twelve", owner_uids=None)])
 
 
 class BriefingBase(unittest.TestCase):
@@ -175,7 +182,8 @@ class CompositionTests(BriefingBase):
         self.assertNotIn("numpy", narrative)
         mining = "\n".join(edition["sections"]["mining"])
         self.assertIn("board head: SN64 Chutes", mining)
-        self.assertIn("2 ranked · 1 cut · 3 observed", mining)
+        self.assertIn("2 ranked · 1 cut · 1 unrated · 4 observed", mining)
+        self.assertIn("unrated: SN12 (owner-set-unread)", mining)
         self.assertIn("budget band unset", mining)
         self.assertTrue(edition["first_edition"])
         self.assertIn("next: pick mining.budget_band", edition["closing"])
@@ -189,10 +197,39 @@ class CompositionTests(BriefingBase):
         self.assertEqual(edition["sections"]["mining"],
                          ["mining screen: unavailable"])
 
+    def test_top_ten_delta_is_suppressed_across_a_model_change(self):
+        # A previous edition recorded before the model version existed.
+        ab._meta_set(self.store, "briefing:figures:daily",
+                     json.dumps({"mining_top10": [120, 93, 9]}))
+        edition = ab.compose(self.config, self.store, "daily")
+        mining = "\n".join(edition["sections"]["mining"])
+        self.assertIn("top-ten deltas suppressed: the mining model changed "
+                      "(v1 to v2)", mining)
+        self.assertNotIn("entered top ten", mining)
+        self.assertNotIn("left top ten", mining)
+        self.assertEqual(edition["figures"]["mining_model_version"], "2")
+
+    def test_a_cut_subnet_is_never_the_head(self):
+        # SN9-style: the highest raw figure, cut winner-take-all.
+        snapshot = BOARD_SNAPSHOT()
+        wta = mf.synthetic([mf.subnet(9, [100, 0, 0], name="iota",
+                                      tao_pool=900_000.0)])
+        for item, values in wta["values"].items():
+            snapshot["values"][item].update(values)
+        snapshot["owners"].update(wta["owners"])
+        conn = sqlite3.connect(self.config["briefing"]["fleet_db"])
+        mf.seed_board(conn, {"mining": {"enabled": True}}, snapshot)
+        conn.close()
+        edition = ab.compose(self.config, self.store, "daily")
+        mining = edition["sections"]["mining"]
+        self.assertEqual(mining[0], "board head: SN64 Chutes")
+        self.assertIn("2 ranked · 2 cut", mining[1])
+
     def test_delta_against_previous_edition(self):
         ab._meta_set(self.store, "briefing:figures:daily",
                      json.dumps({"theta": 0.0080, "tao_usd": 190.0,
-                                 "mining_top10": [107, 64]}))
+                                 "mining_top10": [64, 107],
+                                 "mining_model_version": "2"}))
         edition = ab.compose(self.config, self.store, "daily")
         self.assertFalse(edition["first_edition"])
         net = "\n".join(edition["sections"]["network"])

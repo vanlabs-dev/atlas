@@ -22,7 +22,9 @@ def write_config(tmp, **overrides):
               "clone_root": os.path.join(tmp, "fleet"),
               "max_new_clones_per_pass": 8,
               "caps": {"max_bytes": 1073741824, "max_files": 50000},
-              "min_free_bytes": 2147483648}
+              "min_free_bytes": 2147483648,
+              # Render into the temp dir, never the repo's real board.
+              "dashboard": {"www_dir": os.path.join(tmp, "www")}}
     config.update(overrides)
     path = os.path.join(tmp, "config.json")
     with open(path, "w", encoding="utf-8") as handle:

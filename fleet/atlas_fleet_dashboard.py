@@ -672,6 +672,8 @@ def render_html(board: Dict[str, Any], theme: str = "dark") -> str:
         'wrap;padding:10px 18px;border-bottom:1px solid var(--line)">'
         '<div class="mono" style="font-weight:700;font-size:13px;letter-'
         'spacing:.12em">SUBNET ATTENTION</div>'
+        '<a class="mono" href="mining.html" style="font-size:11px;color:'
+        'var(--tx2)">MINING TRIAGE</a>'
         '<div class="mono" style="font-size:11px;color:var(--tx2)">%s</div>'
         '<div style="flex:1"></div><div style="display:flex;gap:6px">%s</div>'
         '<button id="themebtn" class="mono" style="font:500 10px monospace;'

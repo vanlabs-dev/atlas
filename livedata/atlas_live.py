@@ -399,7 +399,8 @@ def audit_call(connection: sqlite3.Connection, provider: str,
                finished: str, status_code: Optional[int],
                schema_version: Optional[str], validation_result: str,
                response_sha256: Optional[str],
-               error_category: Optional[str]) -> None:
+               error_category: Optional[str],
+               params_cap: int = 400) -> None:
     """One Q29/ATLAS-LIVE-009 audit record per provider call."""
     connection.execute(
         "INSERT INTO audit (timestamp, provider, operation, params, "
@@ -407,7 +408,7 @@ def audit_call(connection: sqlite3.Connection, provider: str,
         "validation_result, response_sha256, error_category) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (_utc_now(), provider, operation,
-         redact(json.dumps(params, sort_keys=True))[:400],
+         redact(json.dumps(params, sort_keys=True))[:params_cap],
          started, finished, status_code, schema_version,
          validation_result, response_sha256, error_category))
     connection.commit()
@@ -1652,9 +1653,35 @@ CHAIN_READS: Tuple[ChainRead, ...] = tuple(
         ("CollateralLockShare", ("identity",), "u16"),
         ("SubnetIdentitiesV3", ("blake2_128concat",), "SubnetIdentityV3"),
         ("SubnetEmissionEnabled", ("identity",), "bool"),
-    ))
+        # Mining screen chain snapshot (change: mining-board-accuracy).
+        # Hashers and value types confirmed against live metadata at spec
+        # 470, block 9142816. Balances are raw u64 in rao (1e9 per unit).
+        ("SubnetAlphaOutEmission", ("identity",), "AlphaBalance"),
+        ("SubnetOwnerCut", (), "u16"),
+        ("OwnerCutEnabled", ("identity",), "bool"),
+        ("MechanismCountCurrent", ("twox64concat",), "MechId"),
+        ("MechanismEmissionSplit", ("twox64concat",), "Vec<u16>"),
+        ("SubnetOwner", ("identity",), "AccountId32"),
+        ("SubnetOwnerHotkey", ("identity",), "AccountId32"),
+        ("OwnedHotkeys", ("blake2_128concat",), "Vec<AccountId32>"),
+        ("Uids", ("identity", "blake2_128concat"), "u16"),
+        ("SubnetTAO", ("identity",), "TaoBalance"),
+        ("SubnetAlphaIn", ("identity",), "AlphaBalance"),
+        ("SubnetAlphaOut", ("identity",), "AlphaBalance"),
+        ("SubnetProtocolAlpha", ("identity",), "AlphaBalance"),
+        ("Burn", ("identity",), "TaoBalance"),
+        ("ImmunityPeriod", ("identity",), "u16"),
+        ("MaxAllowedUids", ("identity",), "u16"),
+    )) + (
+        # Balancer is a struct with one Perquintill field, the quote weight.
+        ChainRead("Swap", "SwapBalancer", ("twox64concat",), "Balancer"),
+    )
 
 _DECLARED_READS = {(read.pallet, read.item) for read in CHAIN_READS}
+_READ_BY_ITEM = {(read.pallet, read.item): read for read in CHAIN_READS}
+# Item names are unique across the declared pallets, so the map reader can
+# find an item's pallet from its name alone.
+_ITEM_PALLET = {read.item: read.pallet for read in CHAIN_READS}
 
 
 def storage_prefix(pallet: str, item: str) -> str:
@@ -1693,6 +1720,31 @@ WATCH_HASHERS = {
     "identity": storage_key_identity_u16,
     "blake2_128concat": storage_key_blake2_concat_u16,
 }
+
+
+_KEY_HASHERS = {
+    "identity": lambda raw: raw,
+    "blake2_128concat": lambda raw: (
+        hashlib.blake2b(raw, digest_size=16).digest() + raw),
+    "twox64concat": lambda raw: xxh64(raw, 0).to_bytes(8, "little") + raw,
+}
+
+
+def storage_key(pallet: str, item: str, *keys: bytes) -> str:
+    """Full storage key of one map entry, built from the item's DECLARED
+    hashers in CHAIN_READS. Each element of `keys` is one SCALE-encoded key
+    (a u16 netuid, a 32-byte account). A key count that does not match the
+    declared hashers is refused rather than guessed at."""
+    read = _READ_BY_ITEM.get((pallet, item))
+    if read is None:
+        raise FatalLiveError("storage item %s.%s is not declared in "
+                             "CHAIN_READS" % (pallet, item))
+    if len(keys) != len(read.hashers):
+        raise FatalLiveError("%s.%s takes %d key(s), got %d"
+                             % (pallet, item, len(read.hashers), len(keys)))
+    return storage_prefix(pallet, item) + "".join(
+        _KEY_HASHERS[hasher](key).hex()
+        for hasher, key in zip(read.hashers, keys))
 
 
 def derived_watch_key(spec: Dict[str, Any]) -> Optional[str]:
@@ -1800,9 +1852,58 @@ def decode_identity_name(hex_payload: str) -> str:
     return data[offset:offset + count].decode("utf-8", "replace")
 
 
+def decode_u8(hex_payload: str) -> int:
+    """Decode a SCALE u8 (`MechId`)."""
+    data = _payload_bytes(hex_payload)
+    if len(data) != 1:
+        raise ValueError("expected 1 byte, got %d" % len(data))
+    return data[0]
+
+
+def decode_account_id(hex_payload: str) -> str:
+    """Decode an AccountId32 to its 0x hex form. Kept as hex, not SS58: it
+    is a key for further reads, never shown as an address."""
+    data = _payload_bytes(hex_payload)
+    if len(data) != 32:
+        raise ValueError("expected 32 bytes, got %d" % len(data))
+    return "0x" + data.hex()
+
+
+def decode_vec_account_id(hex_payload: str) -> List[str]:
+    """Decode a SCALE Vec<AccountId32>: compact length, then 32 bytes each."""
+    data = _payload_bytes(hex_payload)
+    count, offset = _decode_compact(data, 0)
+    expected = offset + 32 * count
+    if len(data) != expected:
+        raise ValueError("Vec<AccountId32> length mismatch: prefix says %d "
+                         "accounts (%d bytes) but payload is %d bytes"
+                         % (count, expected, len(data)))
+    return ["0x" + data[offset + 32 * i:offset + 32 * (i + 1)].hex()
+            for i in range(count)]
+
+
+PERQUINTILL_ONE = 10 ** 18
+
+
+def decode_perquintill(hex_payload: str) -> float:
+    """Decode a Perquintill (u64 over 1e18) to a 0..1 fraction. Also the
+    whole of a swap `Balancer`, whose only field is its quote weight."""
+    data = _payload_bytes(hex_payload)
+    if len(data) != 8:
+        raise ValueError("expected 8 bytes, got %d" % len(data))
+    raw = int.from_bytes(data, "little")
+    if raw > PERQUINTILL_ONE:
+        raise ValueError("Perquintill %d exceeds one" % raw)
+    return raw / float(PERQUINTILL_ONE)
+
+
 _CODECS["u96f32"] = decode_u96f32
 _CODECS["vec_u16"] = decode_vec_u16
 _CODECS["identity_name"] = decode_identity_name
+_CODECS["u8"] = decode_u8
+_CODECS["account_id"] = decode_account_id
+_CODECS["vec_account_id"] = decode_vec_account_id
+_CODECS["perquintill"] = decode_perquintill
 
 
 # Netuid-keyed maps the mining screen reads. Codec is a property of the item
@@ -1821,6 +1922,22 @@ SUBNET_MAP_ITEMS: Dict[str, str] = {
     # the runtime ValueQuery default is false. Empty or short batches of
     # THIS item fail the item closed (see SUBNET_MAP_FAIL_EMPTY).
     "SubnetEmissionEnabled": "bool",
+    # Mining chain snapshot (change: mining-board-accuracy). Every figure
+    # the screen uses is read here at the same block.
+    "SubnetAlphaOutEmission": "u64",
+    "OwnerCutEnabled": "bool",
+    "MechanismCountCurrent": "u8",
+    "MechanismEmissionSplit": "vec_u16",
+    "SubnetOwner": "account_id",
+    "SubnetOwnerHotkey": "account_id",
+    "SubnetTAO": "u64",
+    "SubnetAlphaIn": "u64",
+    "SubnetAlphaOut": "u64",
+    "SubnetProtocolAlpha": "u64",
+    "Burn": "u64",
+    "ImmunityPeriod": "u16",
+    "MaxAllowedUids": "u16",
+    "SwapBalancer": "perquintill",
 }
 
 # A map known to be written every tempo. If the control comes back empty the
@@ -1832,8 +1949,18 @@ SUBNET_MAP_CONTROL = "MinerBurned"
 # all-absent state. An empty SubnetEmissionEnabled key set is
 # indistinguishable from every subnet being off, so it must not seed 128
 # "off" rows. CollateralLockShare is the opposite: it is dormant
-# network-wide and an empty map is the documented default.
-SUBNET_MAP_FAIL_EMPTY = frozenset({"SubnetEmissionEnabled"})
+# network-wide and an empty map is the documented default. The emission and
+# pool reserves are written for every live subnet, so an empty batch of
+# those would read as 128 subnets not emitting and unpriced.
+SUBNET_MAP_FAIL_EMPTY = frozenset({"SubnetEmissionEnabled",
+                                   "SubnetAlphaOutEmission", "SubnetTAO",
+                                   "SubnetAlphaIn"})
+
+# Maps keyed by NetUidStorageIndex = mecid * 4096 + netuid
+# (`subnets/mechanism.rs:21-40`). Their values are returned keyed by
+# (netuid, mecid), so a mechanism-1 vector is never mistaken for a netuid.
+MECHANISM_INDEXED_ITEMS = frozenset({"Incentive"})
+GLOBAL_MAX_SUBNET_COUNT = 4096
 
 _KEYS_PAGE = 400
 _QUERY_CHUNK = 256
@@ -1898,71 +2025,152 @@ def _enumerate_map_keys(rpc: Any, prefix: str,
     return keys, netuids
 
 
+CHAIN_PROVIDER = "finney-rpc"
+CHAIN_AUDIT_OPERATION = "chain_storage"
+_CHAIN_AUDIT_PARAMS_CAP = 4000
+
+
+class _RpcRecorder:
+    """Wraps an rpc callable to note the endpoint that answered and the
+    methods used, for the audit record. Values are never kept."""
+
+    def __init__(self, rpc: Any) -> None:
+        self.rpc = rpc
+        self.endpoint: Optional[str] = None
+        self.methods: List[str] = []
+
+    def __call__(self, method: str, params: List[Any]) -> Dict[str, Any]:
+        result = self.rpc(method, params)
+        if method not in self.methods:
+            self.methods.append(method)
+        if isinstance(result, dict) and result.get("endpoint"):
+            self.endpoint = result["endpoint"]
+        return result
+
+
+def _recorder(config: Dict[str, Any], rpc: Optional[Any]) -> _RpcRecorder:
+    if isinstance(rpc, _RpcRecorder):
+        return rpc
+    return _RpcRecorder(rpc or (lambda method, params: _rpc_call(
+        config, method, params)))
+
+
+def audit_chain_read(connection: Optional[sqlite3.Connection],
+                     recorder: _RpcRecorder, items: List[str],
+                     requested: Dict[str, int], returned: Dict[str, int],
+                     block_number: Optional[int], block_hash: Optional[str],
+                     started: str, error: Optional[str] = None,
+                     category: Optional[str] = None) -> None:
+    """One audit record per chain read made for another component: the
+    endpoint, methods, items, key counts and block. No storage value is
+    retained. A read with no store to write to (the hourly switch watch) is
+    live-data's own and is not audited here."""
+    if connection is None:
+        return
+    audit_call(connection, CHAIN_PROVIDER, CHAIN_AUDIT_OPERATION,
+               {"endpoint": recorder.endpoint, "methods": recorder.methods,
+                "items": sorted(items), "keys_requested": requested,
+                "keys_returned": returned, "block_number": block_number,
+                "block_hash": block_hash},
+               started, _utc_now(), None, None,
+               "ok" if error is None else "failed", None,
+               None if error is None else (category or "chain-read"),
+               params_cap=_CHAIN_AUDIT_PARAMS_CAP)
+
+
+def _map_slot(item: str, index: int) -> Any:
+    """Netuid for a netuid-keyed map; (netuid, mecid) for a map keyed by
+    NetUidStorageIndex."""
+    if item in MECHANISM_INDEXED_ITEMS:
+        return (index % GLOBAL_MAX_SUBNET_COUNT,
+                index // GLOBAL_MAX_SUBNET_COUNT)
+    return index
+
+
 def read_subnet_maps(config: Dict[str, Any],
                      items: Optional[Dict[str, str]] = None,
-                     rpc: Optional[Any] = None) -> Dict[str, Any]:
+                     rpc: Optional[Any] = None,
+                     block: Optional[Tuple[str, Optional[int]]] = None,
+                     connection: Optional[sqlite3.Connection] = None
+                     ) -> Dict[str, Any]:
     """Read netuid-keyed subnet maps at ONE finalized block.
 
     Batched through `state_queryStorageAt` so a whole-network view is
     internally consistent: assembling it from per-key reads spread over a
     couple of minutes smears a moving chain across one reported snapshot.
 
+    `block` pins the read to a (hash, number) the caller already holds, so
+    several reads share one block. Maps keyed by mechanism index return
+    values keyed by (netuid, mecid).
+
     Fail-closed: the key derivation is self-tested first, an empty control map
     invalidates the whole read, and a per-netuid decode failure is recorded
-    against that netuid only.
+    against that netuid only. With a `connection`, every outcome, failures
+    included, leaves one audit record.
     """
     items = items or SUBNET_MAP_ITEMS
-    rpc = rpc or (lambda method, params: _rpc_call(config, method, params))
-    verify_key_derivation(config)
+    rpc = _recorder(config, rpc)
+    started = _utc_now()
+    requested: Dict[str, int] = {item: 0 for item in items}
+    returned: Dict[str, int] = {item: 0 for item in items}
+    block_hash: Optional[str] = block[0] if block else None
+    block_number: Optional[int] = block[1] if block else None
 
-    head = rpc("chain_getFinalizedHead", [])
-    if not head.get("ok") or not head.get("result"):
-        return {"ok": False,
-                "error": head.get("error") or "no finalized head"}
-    block_hash = head["result"]
+    def failed(error: str, category: str) -> Dict[str, Any]:
+        audit_chain_read(connection, rpc, list(items), requested, returned,
+                         block_number, block_hash, started, error, category)
+        return {"ok": False, "error": error}
 
-    header = rpc("chain_getHeader", [block_hash])
-    block_number: Optional[int] = None
-    if header.get("ok") and isinstance(header.get("result"), dict):
-        try:
-            block_number = int(str(header["result"].get("number")), 16)
-        except (TypeError, ValueError):
-            block_number = None
+    try:
+        verify_key_derivation(config)
+    except FatalLiveError as exc:
+        return failed(redact(str(exc)), "key-derivation")
 
-    key_to_slot: Dict[str, Tuple[str, int]] = {}
+    if block_hash is None:
+        head = rpc("chain_getFinalizedHead", [])
+        if not head.get("ok") or not head.get("result"):
+            return failed(head.get("error") or "no finalized head",
+                          "transport")
+        block_hash = head["result"]
+        header = rpc("chain_getHeader", [block_hash])
+        if header.get("ok") and isinstance(header.get("result"), dict):
+            try:
+                block_number = int(str(header["result"].get("number")), 16)
+            except (TypeError, ValueError):
+                block_number = None
+
+    key_to_slot: Dict[str, Tuple[str, Any]] = {}
     all_keys: List[str] = []
     empty_items: List[str] = []
-    enumerated: Dict[str, int] = {item: 0 for item in items}
     try:
         for item in items:
-            prefix = storage_prefix(SUBTENSOR_PALLET, item)
+            prefix = storage_prefix(_ITEM_PALLET.get(item, SUBTENSOR_PALLET),
+                                    item)
             keys, netuids = _enumerate_map_keys(rpc, prefix, block_hash)
-            enumerated[item] = len(keys)
+            requested[item] = len(keys)
             if not keys:
                 empty_items.append(item)
-            for key, netuid in zip(keys, netuids):
-                key_to_slot[key] = (item, netuid)
+            for key, index in zip(keys, netuids):
+                key_to_slot[key] = (item, _map_slot(item, index))
                 all_keys.append(key)
     except FatalLiveError as exc:
-        return {"ok": False, "error": redact(str(exc))}
+        return failed(redact(str(exc)), "key-layout")
 
     if SUBNET_MAP_CONTROL in items and SUBNET_MAP_CONTROL in empty_items:
-        return {"ok": False,
-                "error": "control map %s enumerated empty; treating the read "
-                         "as a derivation or endpoint fault rather than an "
-                         "empty chain" % SUBNET_MAP_CONTROL}
+        return failed("control map %s enumerated empty; treating the read "
+                      "as a derivation or endpoint fault rather than an "
+                      "empty chain" % SUBNET_MAP_CONTROL, "control-empty")
 
-    values: Dict[str, Dict[int, Any]] = {item: {} for item in items}
-    failures: Dict[str, Dict[int, str]] = {item: {} for item in items}
-    returned: Dict[str, int] = {item: 0 for item in items}
+    values: Dict[str, Dict[Any, Any]] = {item: {} for item in items}
+    failures: Dict[str, Dict[Any, str]] = {item: {} for item in items}
     for start in range(0, len(all_keys), _QUERY_CHUNK):
         chunk = all_keys[start:start + _QUERY_CHUNK]
         read = rpc("state_queryStorageAt", [chunk, block_hash])
         if not read.get("ok"):
-            return {"ok": False,
-                    "error": read.get("error") or "batched read failed"}
-        for block in (read.get("result") or []):
-            for key, raw in (block.get("changes") or []):
+            return failed(read.get("error") or "batched read failed",
+                          "transport")
+        for block_changes in (read.get("result") or []):
+            for key, raw in (block_changes.get("changes") or []):
                 slot = key_to_slot.get(key)
                 if slot is None:
                     continue
@@ -1982,14 +2190,16 @@ def read_subnet_maps(config: Dict[str, Any],
     for item in items:
         if item not in SUBNET_MAP_FAIL_EMPTY:
             continue
-        if enumerated.get(item, 0) == 0:
+        if requested.get(item, 0) == 0:
             failed_items[item] = "empty batch"
-        elif returned.get(item, 0) < enumerated.get(item, 0):
+        elif returned.get(item, 0) < requested.get(item, 0):
             failed_items[item] = "short batch"
         if item in failed_items:
             values[item] = {}
             failures[item] = {}
 
+    audit_chain_read(connection, rpc, list(items), requested, returned,
+                     block_number, block_hash, started)
     return {"ok": True,
             "block_hash": block_hash,
             "block_number": block_number,
@@ -1998,6 +2208,200 @@ def read_subnet_maps(config: Dict[str, Any],
                          for item, fails in failures.items() if fails},
             "empty_items": empty_items,
             "failed_items": failed_items}
+
+
+def read_point_values(config: Dict[str, Any], item: str, codec: str,
+                      keys: Dict[Any, str], block: Tuple[str, Optional[int]],
+                      rpc: Optional[Any] = None,
+                      connection: Optional[sqlite3.Connection] = None,
+                      pallet: str = SUBTENSOR_PALLET) -> Dict[str, Any]:
+    """Batched point reads of one item at a pinned block. `keys` maps a
+    caller label to a full storage key (see `storage_key`). Returns
+    {ok, values, failures, absent} keyed by label, or {ok: False, error}.
+    One audit record per call, failures included."""
+    rpc = _recorder(config, rpc)
+    started = _utc_now()
+    block_hash, block_number = block
+    by_key = {key: label for label, key in keys.items()}
+    returned = 0
+    values: Dict[Any, Any] = {}
+    failures: Dict[Any, str] = {}
+    ordered = list(by_key)
+    for start in range(0, len(ordered), _QUERY_CHUNK):
+        chunk = ordered[start:start + _QUERY_CHUNK]
+        read = rpc("state_queryStorageAt", [chunk, block_hash])
+        if not read.get("ok"):
+            error = read.get("error") or "batched point read failed"
+            audit_chain_read(connection, rpc, [item], {item: len(keys)},
+                             {item: returned}, block_number, block_hash,
+                             started, error, "transport")
+            return {"ok": False, "error": error}
+        for block_changes in (read.get("result") or []):
+            for key, raw in (block_changes.get("changes") or []):
+                label = by_key.get(key)
+                if label is None:
+                    continue
+                returned += 1
+                if raw is None:
+                    continue
+                try:
+                    values[label] = decode_by_codec(codec, raw)
+                except ValueError as exc:
+                    failures[label] = str(exc)
+    audit_chain_read(connection, rpc, ["%s.%s" % (pallet, item)]
+                     if pallet != SUBTENSOR_PALLET else [item],
+                     {item: len(keys)}, {item: returned}, block_number,
+                     block_hash, started)
+    absent = [label for label in keys
+              if label not in values and label not in failures]
+    return {"ok": True, "values": values, "failures": failures,
+            "absent": absent}
+
+
+# Runtime default for an unset `SubnetOwner` (`DefaultSubnetOwner`,
+# `ps/lib.rs:1038-1042`): the all-zero account. The runtime resolves owner
+# hotkeys from it like any other coldkey, so this does too.
+ZERO_ACCOUNT = "0x" + "00" * 32
+# Per-coldkey cap on owned hotkeys. Observed maximum 25 at block 9142723.
+OWNED_HOTKEYS_CAP = 256
+
+
+def resolve_owner_uids(config: Dict[str, Any], values: Dict[str, Any],
+                       failures: Dict[str, Any], netuids: List[int],
+                       block: Tuple[str, Optional[int]],
+                       rpc: Optional[Any] = None,
+                       connection: Optional[sqlite3.Connection] = None,
+                       cap: int = OWNED_HOTKEYS_CAP) -> Dict[str, Any]:
+    """Owner-controlled UIDs per subnet, resolved as the runtime does in
+    `get_owner_hotkeys` (`run_coinbase.rs:659-689`): every hotkey owned by
+    the subnet owner's coldkey that holds a UID, plus the owner hotkey when
+    it holds one. All reads at the snapshot block.
+
+    Returns {ok, owners: {netuid: {state, uids | reason}}} or
+    {ok: False, error}. A coldkey over `cap` hotkeys, or any undecodable
+    input, leaves that subnet's owner set `unread`: it is never truncated.
+    """
+    owner_values = values.get("SubnetOwner") or {}
+    hotkey_values = values.get("SubnetOwnerHotkey") or {}
+    owner_fail = failures.get("SubnetOwner") or {}
+    hotkey_fail = failures.get("SubnetOwnerHotkey") or {}
+    owners: Dict[int, Dict[str, Any]] = {}
+
+    coldkey_of: Dict[int, str] = {}
+    for netuid in netuids:
+        if netuid in owner_fail:
+            owners[netuid] = {"state": "unread",
+                              "reason": "SubnetOwner undecodable"}
+        elif netuid in hotkey_fail:
+            owners[netuid] = {"state": "unread",
+                              "reason": "SubnetOwnerHotkey undecodable"}
+        else:
+            coldkey_of[netuid] = owner_values.get(netuid, ZERO_ACCOUNT)
+
+    coldkeys = sorted(set(coldkey_of.values()))
+    owned = read_point_values(
+        config, "OwnedHotkeys", "vec_account_id",
+        {ck: storage_key(SUBTENSOR_PALLET, "OwnedHotkeys",
+                         bytes.fromhex(ck[2:])) for ck in coldkeys},
+        block, rpc=rpc, connection=connection)
+    if not owned["ok"]:
+        return {"ok": False, "error": owned["error"]}
+
+    candidates: Dict[Tuple[int, str], str] = {}
+    for netuid, coldkey in coldkey_of.items():
+        if coldkey in owned["failures"]:
+            owners[netuid] = {"state": "unread",
+                              "reason": "OwnedHotkeys undecodable"}
+            continue
+        hotkeys = list(owned["values"].get(coldkey) or [])
+        if len(hotkeys) > cap:
+            owners[netuid] = {"state": "unread",
+                              "reason": "owner coldkey owns %d hotkeys, over "
+                                        "the cap of %d" % (len(hotkeys), cap)}
+            continue
+        owner_hotkey = hotkey_values.get(netuid)
+        if owner_hotkey and owner_hotkey not in hotkeys:
+            hotkeys.append(owner_hotkey)
+        owners[netuid] = {"state": "ok", "uids": [],
+                          "hotkeys": len(hotkeys)}
+        for hotkey in hotkeys:
+            candidates[(netuid, hotkey)] = storage_key(
+                SUBTENSOR_PALLET, "Uids", int(netuid).to_bytes(2, "little"),
+                bytes.fromhex(hotkey[2:]))
+
+    uids = read_point_values(config, "Uids", "u16", candidates, block,
+                             rpc=rpc, connection=connection)
+    if not uids["ok"]:
+        return {"ok": False, "error": uids["error"]}
+    for (netuid, _hotkey), uid in uids["values"].items():
+        if owners[netuid]["state"] == "ok":
+            owners[netuid]["uids"].append(int(uid))
+    for (netuid, _hotkey) in uids["failures"]:
+        owners[netuid] = {"state": "unread", "reason": "Uids undecodable"}
+    for entry in owners.values():
+        if entry["state"] == "ok":
+            entry["uids"] = sorted(set(entry["uids"]))
+    return {"ok": True, "owners": owners}
+
+
+# Default of the global `SubnetOwnerCut` when unset (`DefaultSubnetOwnerCut`,
+# `ps/lib.rs:980`, the runtime's `InitialSubnetOwnerCut`), as a u16 fraction
+# of 65535. The chain leaves it unset on Finney, so this value is live.
+SUBNET_OWNER_CUT_DEFAULT = 11796
+
+
+def read_mining_snapshot(config: Dict[str, Any], rpc: Optional[Any] = None,
+                         connection: Optional[sqlite3.Connection] = None
+                         ) -> Dict[str, Any]:
+    """Every chain input of the mining screen at ONE finalized block: the
+    subnet maps, the global owner cut, and the owner UID sets. Each read is
+    audited against `connection`. Any read failing as a whole fails the
+    snapshot, so no economics are built from a partial chain view."""
+    rpc = _recorder(config, rpc)
+    started = _utc_now()
+    try:
+        verify_key_derivation(config)
+    except FatalLiveError as exc:
+        error = redact(str(exc))
+        audit_chain_read(connection, rpc, list(SUBNET_MAP_ITEMS), {}, {},
+                         None, None, started, error, "key-derivation")
+        return {"ok": False, "error": error}
+    block_hash, block_number, error = _finalized_block(rpc)
+    if error:
+        audit_chain_read(connection, rpc, list(SUBNET_MAP_ITEMS), {}, {},
+                         None, None, started, error, "transport")
+        return {"ok": False, "error": error}
+    block = (block_hash, block_number)
+
+    maps = read_subnet_maps(config, rpc=rpc, block=block,
+                            connection=connection)
+    if not maps.get("ok"):
+        return maps
+
+    cut = read_point_values(
+        config, "SubnetOwnerCut", "u16",
+        {"cut": storage_key(SUBTENSOR_PALLET, "SubnetOwnerCut")}, block,
+        rpc=rpc, connection=connection)
+    if not cut["ok"]:
+        return {"ok": False, "error": cut["error"]}
+    if cut["failures"]:
+        return {"ok": False,
+                "error": "SubnetOwnerCut undecodable: %s"
+                         % cut["failures"]["cut"]}
+
+    netuids = sorted(n for n in maps["values"].get("SubnetworkN", {})
+                     if n != ROOT_NETUID)
+    owners = resolve_owner_uids(config, maps["values"],
+                                maps.get("failures") or {}, netuids, block,
+                                rpc=rpc, connection=connection)
+    if not owners["ok"]:
+        return {"ok": False, "error": owners["error"]}
+
+    return dict(maps,
+                owner_cut=cut["values"].get("cut", SUBNET_OWNER_CUT_DEFAULT),
+                owner_cut_state="set" if "cut" in cut["values"]
+                else "runtime-default",
+                owners=owners["owners"])
 
 
 # The root netuid. Spec 469 retired `set_root_weights` and cleared

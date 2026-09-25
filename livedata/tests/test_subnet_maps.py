@@ -230,17 +230,13 @@ class KeyLayout(unittest.TestCase):
 
 
 # The hasher is a property of the item, not of the pallet: the mining maps
-# are Identity while SubnetIdentitiesV3 is Blake2_128Concat. The fake serves
-# each in its real layout, because serving them all as Identity is exactly
-# the assumption that broke the live read on 2026-08-12.
-_CONCAT_ITEMS = {"SubnetIdentitiesV3"}
-
-
+# are Identity while SubnetIdentitiesV3 is Blake2_128Concat and the
+# mechanism maps are Twox64Concat. The fake serves each in its declared
+# layout, because serving them all as Identity is exactly the assumption
+# that broke the live read on 2026-08-12.
 def _key_for(item, netuid):
-    if item in _CONCAT_ITEMS:
-        return al.storage_key_blake2_concat_u16(
-            al.SUBTENSOR_PALLET, item, netuid)
-    return al.storage_key_identity_u16(al.SUBTENSOR_PALLET, item, netuid)
+    return al.storage_key(al._ITEM_PALLET[item], item,
+                          int(netuid).to_bytes(2, "little"))
 
 
 def bool_hex(value):
@@ -252,17 +248,24 @@ class FakeChain:
     derivation rather than a hand-written key table."""
 
     def __init__(self, tables, block="0xabc", number=8789861,
-                 fail_method=None, drop_query_item=None):
+                 fail_method=None, drop_query_item=None, points=None,
+                 fail_after=None):
         self.tables = tables
         self.block = block
         self.number = number
         self.fail_method = fail_method
         self.drop_query_item = drop_query_item
+        # Point-read entries served by full key: {key: payload}.
+        self.points = points or {}
+        # Fail `fail_method` only after this many successful calls to it.
+        self.fail_after = fail_after
         self.calls = []
 
     def __call__(self, method, params):
         self.calls.append(method)
-        if method == self.fail_method:
+        if method == self.fail_method and (
+                self.fail_after is None
+                or self.calls.count(method) > self.fail_after):
             return {"ok": False, "error": "stubbed %s failure" % method}
         if method == "chain_getFinalizedHead":
             return {"ok": True, "result": self.block}
@@ -272,7 +275,7 @@ class FakeChain:
             prefix = params[0]
             keys = []
             for item, rows in self.tables.items():
-                item_prefix = al.storage_prefix(al.SUBTENSOR_PALLET, item)
+                item_prefix = al.storage_prefix(al._ITEM_PALLET[item], item)
                 if item_prefix != prefix:
                     continue
                 for netuid in sorted(rows):
@@ -288,14 +291,30 @@ class FakeChain:
                     key = _key_for(item, netuid)
                     if key in wanted:
                         changes.append([key, payload])
+            for key in wanted:
+                if key in self.points:
+                    changes.append([key, self.points[key]])
             return {"ok": True,
                     "result": [{"block": self.block, "changes": changes}]}
         return {"ok": False, "error": "unexpected method %s" % method}
 
 
+def u64_hex(value):
+    return "0x" + int(value).to_bytes(8, "little").hex()
+
+
 def tables(burn=None, network_n=None, incentive=None, collateral=None,
-           identity=None, emission=None):
-    return {
+           identity=None, emission=None, extra=None):
+    base = {
+        # Written for every live subnet; an empty batch fails the item.
+        "SubnetAlphaOutEmission": {1: u64_hex(10 ** 9), 8: u64_hex(10 ** 9)},
+        "SubnetTAO": {1: u64_hex(25_000 * 10 ** 9),
+                      8: u64_hex(9_000 * 10 ** 9)},
+        "SubnetAlphaIn": {1: u64_hex(3_000_000 * 10 ** 9),
+                          8: u64_hex(1_000_000 * 10 ** 9)},
+    }
+    base.update(extra or {})
+    return dict(base, **{
         "MinerBurned": burn if burn is not None else {
             1: u96f32_hex(0.3456), 8: u96f32_hex(0.0)},
         "SubnetworkN": network_n if network_n is not None else {
@@ -308,7 +327,7 @@ def tables(burn=None, network_n=None, incentive=None, collateral=None,
             8: identity_hex("deprecated", "")},
         "SubnetEmissionEnabled": emission if emission is not None else {
             1: bool_hex(True), 8: bool_hex(True)},
-    }
+    })
 
 
 class ReadSubnetMaps(unittest.TestCase):
@@ -322,7 +341,7 @@ class ReadSubnetMaps(unittest.TestCase):
         self.assertAlmostEqual(out["values"]["MinerBurned"][1], 0.3456,
                                places=6)
         self.assertEqual(out["values"]["SubnetworkN"][1], 256)
-        self.assertEqual(out["values"]["Incentive"][1], [100, 0, 50, 0])
+        self.assertEqual(out["values"]["Incentive"][(1, 0)], [100, 0, 50, 0])
         self.assertEqual(out["values"]["SubnetIdentitiesV3"][1], "Apex")
         self.assertEqual(out["values"]["SubnetIdentitiesV3"][8], "deprecated")
         self.assertIs(out["values"]["SubnetEmissionEnabled"][1], True)
@@ -393,10 +412,13 @@ class ReadSubnetMaps(unittest.TestCase):
         self.assertFalse(out["ok"])
 
     def test_derivation_fault_blocks_before_any_network_call(self):
+        # Returned as a failed read (and audited), never raised past the
+        # caller (change: mining-board-accuracy).
         rpc = FakeChain(tables())
         bad = {"gate_signal": {"storage_keys": {"EmissionGateBar": "0xno"}}}
-        with self.assertRaises(al.FatalLiveError):
-            al.read_subnet_maps(bad, rpc=rpc)
+        out = al.read_subnet_maps(bad, rpc=rpc)
+        self.assertFalse(out["ok"])
+        self.assertIn("self-test", out["error"])
         self.assertEqual(rpc.calls, [])
 
     def test_absent_switch_entry_is_missing_not_failed(self):
