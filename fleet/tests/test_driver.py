@@ -45,7 +45,10 @@ class DriverTestBase(unittest.TestCase):
         self.url_map = {"https://github.com/test/a": self.origin_a,
                         "https://github.com/test/b": self.origin_b}
         self.config = {"clone_root": self.clone_root,
-                       "max_new_clones_per_pass": None, "caps": None}
+                       "max_new_clones_per_pass": None, "caps": None,
+                       # Render into the temp dir, never the real board.
+                       "dashboard": {"www_dir": os.path.join(self.tmp,
+                                                             "www")}}
 
     def _setup(self, clone_dir, url, token=None, caps=None):
         return fleet.setup_clone(clone_dir, self.url_map[url], token=token,

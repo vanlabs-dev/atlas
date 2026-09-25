@@ -435,56 +435,58 @@ def mover_facts(src: Any, cfg: Dict[str, Any], start: str
 
 def mining_facts(src: Any, cfg: Dict[str, Any], prev: Dict[str, Any]
                  ) -> Tuple[List[Tuple[str, str]], Dict[str, Any]]:
+    """The ranking the last complete mining pass stored, read through the
+    briefing's shared reader so the page and the pulse report identical
+    counts and head. Rent, the budget band and the hardware rung are
+    operator material and stay off the page."""
     brief = _brief()
     items: List[Tuple[str, str]] = []
     figures: Dict[str, Any] = {}
     fleet = src.fleet
     if fleet is None or not brief._table(fleet, "mine_econ"):
         return [_gap("Missing the mining screen.")], figures
-    latest = brief._one(fleet, "SELECT MAX(ts) FROM mine_econ")
-    if not latest:
-        return [_gap("Missing a mining pass: no economics recorded yet.")], \
+    board = brief.stored_mining(fleet)
+    if board is None:
+        return [_gap("Missing a mining pass: no classified pass yet.")], \
             figures
 
-    # rent_band is deliberately not selected: rent, the budget band and the
-    # hardware rung are operator material and stay off the page.
-    rows = fleet.execute(
-        "SELECT netuid, subnet_name, cut_reason, net_tao_month, "
-        "gross_tao_month FROM mine_econ WHERE ts = ?", (latest,)).fetchall()
-    ranked = [r for r in rows if r[2] is None]
-    ranked.sort(key=lambda r: (0, -(r[3] if r[3] is not None else
-                                    (r[4] or 0.0)))
-                if (r[3] is not None or r[4] is not None) else (1, 0.0))
-    top = [int(r[0]) for r in ranked[:10]]
+    top = [netuid for netuid, _ in board["ranked"][:10]]
     figures["mining_top10"] = top
-
-    figures["mining_observed"] = len(rows)
-    figures["mining_ranked"] = len(ranked)
-    if not ranked:
-        items.append(_gap("Missing a ranked mining head: every observed "
-                          "subnet was cut."))
+    figures["mining_model_version"] = board["model_version"]
+    figures["mining_observed"] = board["observed"]
+    figures["mining_ranked"] = len(board["ranked"])
+    figures["mining_cut"] = board["cut"]
+    figures["mining_unrated"] = len(board["unrated"])
+    if not board["ranked"]:
+        items.append(_gap("Missing a ranked mining head: no observed subnet "
+                          "was ranked."))
     else:
-        head = ranked[0]
-        name = head[1]
-        figures["mining_head"] = int(head[0])
+        netuid, name = board["ranked"][0]
+        figures["mining_head"] = netuid
         figures["mining_head_name"] = name
         items.append(_fact(
-            "Board head: SN%d, %s." % (head[0], name if name else
+            "Board head: SN%d, %s." % (netuid, name if name else
                                        "name not recorded")))
-    items.append(_fact("%d ranked, %d cut, %d observed."
-                       % (len(ranked), len(rows) - len(ranked), len(rows))))
+    items.append(_fact("%d ranked, %d cut, %d unrated, %d observed."
+                       % (len(board["ranked"]), board["cut"],
+                          len(board["unrated"]), board["observed"])))
+    if board["unrated"]:
+        items.append(_gap("Unrated, no figure: %s."
+                          % _sn_list([n for n, _ in board["unrated"]])))
 
-    prev_top = prev.get("mining_top10") or []
-    if prev_top:
-        entered = [n for n in top if n not in prev_top]
-        left = [n for n in prev_top if n not in top]
+    state, entered, left = brief.mining_top_delta(prev, top,
+                                                  board["model_version"])
+    if state == "model-changed":
+        items.append(_fact("Top-ten changes are not compared: the mining "
+                           "model changed since the last publish."))
+    elif state == "changed":
         if entered:
             items.append(_fact("Entered the top ten: %s." % _sn_list(entered)))
         if left:
             items.append(_fact("Left the top ten: %s." % _sn_list(left)))
-        if not entered and not left:
-            items.append(_fact("The top ten is unchanged since the last "
-                               "publish."))
+    elif state == "unchanged":
+        items.append(_fact("The top ten is unchanged since the last "
+                           "publish."))
     return items, figures
 
 
@@ -1271,7 +1273,9 @@ def render(edition: Dict[str, Any]) -> str:
             '%s</div></div></div>'
             % (_esc(ranked), _esc(observed),
                meter(ranked / float(observed), "%s ranked" % _esc(ranked),
-                     "%s cut" % _esc(observed - ranked)),
+                     "%s cut, %s unrated" % (
+                         _esc(figures.get("mining_cut")),
+                         _esc(figures.get("mining_unrated")))),
                "SN%s" % _esc(head) if head is not None else "not recorded",
                _esc(figures.get("mining_head_name") or "name not recorded")))
     else:

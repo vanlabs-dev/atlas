@@ -23,7 +23,7 @@ PINNED = {item: al.storage_prefix(al.SUBTENSOR_PALLET, item)
           for item in al._GATE_ITEMS}
 FIXTURE = os.path.join(_HERE, "fixtures", "metadata-469-9133662.scale.gz")
 KEY_BUILDERS = {"storage_prefix", "storage_key_identity_u16",
-                "storage_key_blake2_concat_u16"}
+                "storage_key_blake2_concat_u16", "storage_key"}
 
 
 def fixture_bytes():

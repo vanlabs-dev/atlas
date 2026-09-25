@@ -1,7 +1,9 @@
-"""Mining tools on the atlas-fleet MCP server (change: mining-triage):
-read-only posture over a mode=ro connection, structured fail-closed errors,
-insufficient-history honesty, unscanned distinct from infeasible, bounded
-payloads, and dual timestamps on every response."""
+"""Mining tools on the atlas-fleet MCP server (changes: mining-triage,
+mining-board-accuracy): read-only posture over a mode=ro connection,
+structured fail-closed errors, the stored cut and rank on every view,
+per-row observation times, the parity model with every entrant figure,
+insufficient-history honesty, unscanned distinct from infeasible, and
+bounded payloads. Fixtures come from the real writer."""
 
 import datetime
 import json
@@ -19,7 +21,12 @@ sys.path.insert(0, _FLEET_DIR)
 from _helpers import fleet  # noqa: E402
 import atlas_fleet_mining as mine  # noqa: E402
 import atlas_fleet_server as srv  # noqa: E402
-from test_mining import inputs, panel_subnet  # noqa: E402
+import mining_fixtures as mf  # noqa: E402
+from mining_fixtures import subnet, synthetic  # noqa: E402
+
+BOARD = [subnet(1, [10, 5], tao_pool=125_000.0),
+         subnet(4, [10, 5], burn=0.999),
+         subnet(8, [10, 5, 5])]
 
 
 class MiningServerBase(unittest.TestCase):
@@ -36,20 +43,13 @@ class MiningServerBase(unittest.TestCase):
         self.store = srv.FleetStore(self.config_path)
         self.audit = None
 
-    def seed(self, subnets=None, when=None, **kwargs):
+    def seed(self, subnets=None, when=None):
         conn = fleet.open_store(self.db)
         try:
-            mine.ensure_schema(conn)
             config = {"db": self.db, "clone_root": self.clone_root,
                       "mining": {"enabled": True}}
-            mine.run_econ(conn, config, now=when, inputs=inputs(
-                subnets or [panel_subnet(1, price=0.05),
-                            panel_subnet(4, burn=99.9),
-                            panel_subnet(8, price=0.01)],
-                incentive=kwargs.get("incentive",
-                                     {1: [10, 5], 4: [2], 8: [1, 1]}),
-                network_n=kwargs.get("network_n",
-                                     {1: 256, 4: 256, 8: 256})))
+            mf.seed_board(conn, config, synthetic(subnets or BOARD),
+                          now=when)
         finally:
             conn.close()
 
@@ -88,6 +88,7 @@ class TestBoard(MiningServerBase):
         self.seed()
         out = self.store.mining_board(10, False)
         self.assertIsNotNone(out["econ_observed_at"])
+        self.assertEqual(out["econ_block"], 8789861)
         self.assertIn("feasibility_scanned_at", out)
 
     def test_include_cut_returns_reasons(self):
@@ -95,6 +96,24 @@ class TestBoard(MiningServerBase):
         out = self.store.mining_board(10, True)
         self.assertTrue(any("99.90" in (r.get("cut_detail") or "")
                             for r in out["cut"]))
+        self.assertEqual(out["cut_omitted"], 0)
+
+    def test_include_cut_is_bounded_with_an_omitted_count(self):
+        self.seed([subnet(n, [10, 5], burn=0.999) for n in range(1, 41)])
+        out = self.store.mining_board(10, True)
+        self.assertEqual(len(out["cut"]), srv.MAX_CUT_ROWS)
+        self.assertEqual(out["cut_omitted"], 40 - srv.MAX_CUT_ROWS)
+
+    def test_board_states_the_parity_model(self):
+        self.seed()
+        out = self.store.mining_board(10, False)
+        self.assertIn("MODEL", out["parity_model"])
+
+    def test_board_names_the_ranking_mechanism(self):
+        self.seed()
+        out = self.store.mining_board(10, False)
+        self.assertEqual(out["ranked"][0]["rank_mecid"], 0)
+        self.assertTrue(out["ranked"][0]["mechanisms"])
 
     def test_limit_bounds_the_payload(self):
         self.seed()
@@ -134,7 +153,33 @@ class TestSubnetDetail(MiningServerBase):
         self.seed()
         out = self.store.mining_subnet(1)
         self.assertIsNotNone(out["econ_observed_at"])
+        self.assertEqual(out["econ_block"], 8789861)
         self.assertIn("feasibility_scanned_at", out)
+
+    def test_detail_carries_the_stored_cut_identical_to_the_board(self):
+        self.seed()
+        board = {r["netuid"]: r for r in
+                 self.store.mining_board(10, True)["cut"]}
+        out = self.store.mining_subnet(4)
+        self.assertEqual(out["outcome"],
+                         {"cut_reason": board[4]["cut_reason"],
+                          "cut_detail": board[4]["cut_detail"]})
+
+    def test_detail_carries_rank_and_mechanism(self):
+        self.seed()
+        out = self.store.mining_subnet(1)
+        self.assertEqual(out["outcome"], {"rank": 1, "rank_mecid": 0})
+        self.assertEqual(len(out["mechanisms"]), 1)
+        self.assertIn("MODEL", out["parity_model"])
+
+    def test_an_old_row_is_stamped_with_its_own_time(self):
+        old = (datetime.datetime.now(tz=datetime.timezone.utc)
+               - datetime.timedelta(days=2)).isoformat()
+        self.seed([subnet(1, [10, 5]), subnet(2, [10, 5])], when=old)
+        self.seed([subnet(1, [10, 5])])
+        out = self.store.mining_subnet(2)
+        self.assertEqual(out["econ_observed_at"], old)
+        self.assertEqual(out["economics"]["ts"], old)
 
     def test_negative_netuid_is_rejected_by_dispatch(self):
         self.seed()
@@ -165,13 +210,23 @@ class TestHistory(MiningServerBase):
                            out["observations"][1]["ts"])
 
     def test_history_shows_a_real_change(self):
-        self.seed(subnets=[panel_subnet(1, price=0.01)], when=self.older(2),
-                  incentive={1: [5]}, network_n={1: 256})
-        self.seed(subnets=[panel_subnet(1, price=0.09)],
-                  incentive={1: [5]}, network_n={1: 256})
+        self.seed(subnets=[subnet(1, [5, 5], tao_pool=30_000.0)],
+                  when=self.older(2))
+        self.seed(subnets=[subnet(1, [5, 5], tao_pool=270_000.0)])
         out = self.store.mining_history(1, "price_tao", 20)
-        prices = [o["price_tao"] for o in out["observations"]]
+        prices = [round(o["price_tao"], 4) for o in out["observations"]]
         self.assertEqual(prices, [0.09, 0.01])
+
+    def test_history_carries_the_stored_outcome_and_mechanisms(self):
+        self.seed(subnets=[subnet(1, [5, 5])], when=self.older(2))
+        self.seed(subnets=[subnet(1, [5, 5], burn=0.999)])
+        out = self.store.mining_history(1, None, 20)
+        newest, oldest = out["observations"]
+        self.assertEqual(newest["cut_reason"], mine.CUT_BURN)
+        self.assertEqual(oldest["rank"], 1)
+        self.assertEqual(oldest["rank_mecid"], 0)
+        self.assertEqual(len(oldest["mechanisms"]), 1)
+        self.assertIn("MODEL", out["parity_model"])
 
     def test_unknown_field_is_rejected(self):
         self.seed()

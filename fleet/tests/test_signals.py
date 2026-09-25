@@ -61,7 +61,9 @@ class SignalsBase(unittest.TestCase):
         sig.ensure_schema(self.conn)
         self.clone_root = os.path.join(self.tmp, "clones")
         self.config = {"db": self.db, "clone_root": self.clone_root,
-                       "signals": {}}
+                       "signals": {},
+                       "dashboard": {"www_dir": os.path.join(self.tmp,
+                                                             "www")}}
 
     def make_slot(self, netuid, files, epoch=1, opened_at=None,
                   status="active"):
@@ -815,7 +817,8 @@ class TestRunPass(SignalsBase):
             identity = {"status": "ok", "freshness_status": "fresh",
                         "values": {"subnets": [], "complete": True}}
             summary = fleet.reconcile(self.conn, identity,
-                                      {"clone_root": self.clone_root})
+                                      {"clone_root": self.clone_root,
+                                       "dashboard": self.config["dashboard"]})
         finally:
             fleet._fleet_signals().run_pass = original
         self.assertIn("error", summary["signals"])
@@ -830,7 +833,8 @@ class TestRunPass(SignalsBase):
                     "values": {"subnets": [], "complete": True}}
         summary = fleet.reconcile(self.conn, identity,
                                   {"clone_root": self.clone_root,
-                                   "signals": {}})
+                                   "signals": {},
+                                   "dashboard": self.config["dashboard"]})
         self.assertIn("extract", summary["signals"])
 
 

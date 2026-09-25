@@ -73,6 +73,7 @@ DEFAULT_BOARD_LIMIT = 10
 MAX_BOARD_LIMIT = 30
 DEFAULT_HISTORY_ROWS = 20
 MAX_HISTORY_ROWS = 100
+MAX_CUT_ROWS = 30
 MINING_UNAVAILABLE = "mining-screen-unavailable"
 
 TOOLS: List[Dict[str, Any]] = [
@@ -137,14 +138,20 @@ TOOLS: List[Dict[str, Any]] = [
         "name": "mining_board",
         "description": (
             "Ranked mining triage: which subnets a NEW INDEPENDENT MINER "
-            "could earn on, with the reason every excluded subnet was cut. "
-            "Each row carries net/gross TAO per month, alpha price, owner "
-            "capture (miner burn), earner count and top-10 concentration, "
-            "the declared hardware floor with the file it came from, and a "
-            "confidence marker. Alpha DISTRIBUTED per block is a protocol "
-            "constant, so ranking is driven by price, burn, and "
-            "concentration — never by emission quantity. Always report both "
-            "the economics and feasibility timestamps."),
+            "could earn on, exactly as the last complete pass stored it. "
+            "Every figure is chain state at one block: the alpha a subnet "
+            "distributes (it halves per subnet), the miner share after the "
+            "owner cut, each mechanism's emission split, owner-coldkey UIDs "
+            "removed from the field and reconciled against MinerBurned, and "
+            "the Balancer pool price. Each ranked row names the mechanism "
+            "it is ranked on and carries the entrant TAO per month (a "
+            "PARITY MODEL, stated in the response), independent earner "
+            "count and top-1 share, owner share, entry context, and the "
+            "declared hardware floor with its file. Unrated subnets (no "
+            "figure) are listed apart, never ranked last. With include_cut, "
+            "a bounded list of excluded subnets with the stored rung and "
+            "reason. Always report the economics time and block and the "
+            "feasibility scan time."),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -160,10 +167,14 @@ TOOLS: List[Dict[str, Any]] = [
     {
         "name": "mining_subnet",
         "description": (
-            "One subnet's full mining picture: every recorded economics "
-            "field with its chain reference block, and every feasibility "
-            "finding with its evidence path and the commit it was scanned "
-            "at. Reports `unscanned` distinctly from infeasible."),
+            "One subnet's full mining picture from its latest classified "
+            "observation, stamped with that observation's own time and "
+            "block: every economics field, the per-mechanism figures, the "
+            "stored outcome (cut rung and reason, or rank and the mechanism "
+            "it is based on, or the unrated reason), and every current "
+            "feasibility finding with its evidence path and the commit it "
+            "was scanned at. Reports `unscanned` distinctly from infeasible, "
+            "and states the parity model behind the entrant figure."),
         "inputSchema": {
             "type": "object",
             "properties": {"netuid": {"type": "integer", "minimum": 0}},
@@ -174,11 +185,13 @@ TOOLS: List[Dict[str, Any]] = [
     {
         "name": "mining_history",
         "description": (
-            "Recorded mining observations for one subnet over time, so "
-            "'what changed' is answered from stored passes rather than "
-            "inferred. Reports insufficient-history until at least two "
-            "observations exist; never presents a single observation as a "
-            "trend."),
+            "Recorded mining observations for one subnet over time, each "
+            "with its stored outcome (cut rung and reason, or rank and "
+            "ranking mechanism, or unrated reason) and its per-mechanism "
+            "figures, so 'what changed' is answered from stored passes "
+            "rather than inferred. Reports insufficient-history until at "
+            "least two observations exist; never presents a single "
+            "observation as a trend."),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -304,19 +317,23 @@ class FleetStore:
         return context
 
     @staticmethod
-    def _stamps(connection: sqlite3.Connection) -> Dict[str, Any]:
-        """Both clocks travel with every answer: economics move each pass,
-        feasibility only when a clone moves."""
-        econ = connection.execute(
-            "SELECT MAX(ts) FROM mine_econ").fetchone()[0]
-        try:
-            feas = connection.execute(
-                "SELECT value FROM mine_state WHERE key = "
-                "'last_feasibility_ts'").fetchone()
-        except sqlite3.Error:
-            feas = None
-        return {"econ_observed_at": econ,
-                "feasibility_scanned_at": feas[0] if feas else None}
+    def _stamps(econ_ts: Optional[str], block: Optional[int],
+                feasibility_ts: Optional[str]) -> Dict[str, Any]:
+        """Both clocks travel with every answer, each describing the rows
+        actually returned: economics move each pass, feasibility only when
+        a clone moves."""
+        return {"econ_observed_at": econ_ts, "econ_block": block,
+                "feasibility_scanned_at": feasibility_ts}
+
+    @staticmethod
+    def _outcome(row: Dict[str, Any]) -> Dict[str, Any]:
+        """The stored ladder result: exactly one of cut, rank or unrated."""
+        if row.get("cut_reason"):
+            return {"cut_reason": row["cut_reason"],
+                    "cut_detail": row.get("cut_detail")}
+        if row.get("rank") is not None:
+            return {"rank": row["rank"], "rank_mecid": row.get("rank_mecid")}
+        return {"unrated_reason": row.get("unrated_reason")}
 
     def mining_board(self, limit: Optional[int],
                      include_cut: bool) -> Dict[str, Any]:
@@ -326,46 +343,49 @@ class FleetStore:
         connection = context["connection"]
         try:
             view = _mining().report(connection, context["config"],
-                                    limit=limit, include_cut=include_cut)
+                                    limit=limit, include_cut=include_cut,
+                                    cut_limit=MAX_CUT_ROWS)
         except sqlite3.Error as exc:
             return structured_error(MINING_UNAVAILABLE, str(exc),
                                     retry_safe=True)
         finally:
             connection.close()
-        view.update(self._stamps_from_view(view))
+        view.update(self._stamps(view.get("econ_ts"), view.get("econ_block"),
+                                 view.get("feasibility_ts")))
         return view
-
-    @staticmethod
-    def _stamps_from_view(view: Dict[str, Any]) -> Dict[str, Any]:
-        return {"econ_observed_at": view.get("econ_ts"),
-                "feasibility_scanned_at": view.get("feasibility_ts")}
 
     def mining_subnet(self, netuid: int) -> Dict[str, Any]:
         context = self._mining_guarded()
         if "connection" not in context:
             return context
         connection = context["connection"]
+        mining = _mining()
         try:
+            classified = mining.classified_ts(connection) or ""
             cursor = connection.execute(
-                "SELECT * FROM mine_econ WHERE netuid = ? "
-                "ORDER BY ts DESC LIMIT 1", (netuid,))
+                "SELECT * FROM mine_econ WHERE netuid = ? AND ts <= ? "
+                "ORDER BY ts DESC LIMIT 1", (netuid, classified))
             columns = [d[0] for d in cursor.description]
             row = cursor.fetchone()
             if row is None:
                 return dict(structured_error(
                     "no-mining-evidence",
-                    "no mining observation recorded for netuid %s" % netuid,
-                    retry_safe=False), **self._stamps(connection))
+                    "no classified mining observation recorded for netuid "
+                    "%s" % netuid, retry_safe=False),
+                    **self._stamps(None, None, None))
             econ = dict(zip(columns, row))
-            feature = _mining().latest_feasibility(connection).get(
-                int(netuid))
-            stamps = self._stamps(connection)
+            mechanisms = mining._mechanism_rows(
+                connection, econ["ts"], netuid).get(netuid, [])
+            feature = mining.latest_feasibility(connection).get(int(netuid))
         finally:
             connection.close()
         return {"status": "ok", "netuid": netuid, "economics": econ,
+                "outcome": self._outcome(econ), "mechanisms": mechanisms,
+                "parity_model": mining.PARITY_MODEL,
                 "feasibility": feature or {"verdict": "unknown",
                                            "unscanned": True},
-                **stamps}
+                **self._stamps(econ["ts"], econ.get("block_ref"),
+                               (feature or {}).get("scanned_at"))}
 
     def mining_history(self, netuid: int, field: Optional[str],
                        limit: int) -> Dict[str, Any]:
@@ -373,6 +393,7 @@ class FleetStore:
         if "connection" not in context:
             return context
         connection = context["connection"]
+        mining = _mining()
         try:
             columns = [d[1] for d in connection.execute(
                 "PRAGMA table_info(mine_econ)")]
@@ -380,19 +401,26 @@ class FleetStore:
                 return dict(structured_error(
                     "invalid", "unknown field %r (available: %s)"
                     % (field, ", ".join(sorted(columns))), retry_safe=False),
-                    **self._stamps(connection))
-            wanted = ["ts", "block_ref", "confidence"]
+                    **self._stamps(None, None, None))
+            wanted = ["ts", "block_ref", "confidence", "cut_reason",
+                      "cut_detail", "rank", "rank_mecid", "unrated_reason"]
             if field and field not in wanted:
                 wanted.append(field)
             elif not field:
-                wanted += ["net_tao_month", "gross_tao_month", "price_tao",
-                           "miner_burn_pct", "earner_count",
-                           "top10_share_pct"]
+                wanted += ["entrant_alpha_day", "net_tao_month",
+                           "gross_tao_month", "price_tao", "miner_burn_pct",
+                           "owner_share_pct", "earner_count",
+                           "top1_share_pct"]
+            classified = mining.classified_ts(connection) or ""
             rows = connection.execute(
-                "SELECT %s FROM mine_econ WHERE netuid = ? "
+                "SELECT %s FROM mine_econ WHERE netuid = ? AND ts <= ? "
                 "ORDER BY ts DESC LIMIT ?" % ", ".join(wanted),
-                (netuid, limit)).fetchall()
-            stamps = self._stamps(connection)
+                (netuid, classified, limit)).fetchall()
+            observations = [dict(zip(wanted, row)) for row in rows]
+            for observation in observations:
+                observation["mechanisms"] = mining._mechanism_rows(
+                    connection, observation["ts"], netuid).get(netuid, [])
+            feature = mining.latest_feasibility(connection).get(int(netuid))
         except sqlite3.Error as exc:
             connection.close()
             return structured_error(MINING_UNAVAILABLE, str(exc),
@@ -402,16 +430,21 @@ class FleetStore:
                 connection.close()
             except sqlite3.Error:
                 pass
-        observations = [dict(zip(wanted, row)) for row in rows]
+        stamps = self._stamps(
+            observations[0]["ts"] if observations else None,
+            observations[0]["block_ref"] if observations else None,
+            (feature or {}).get("scanned_at"))
         if len(observations) < 2:
             return dict(structured_error(
                 "insufficient-history",
                 "netuid %s has %d recorded observation(s); at least two are "
                 "needed before any change can be reported"
                 % (netuid, len(observations)), retry_safe=True),
-                observations=observations, **stamps)
+                observations=observations,
+                parity_model=mining.PARITY_MODEL, **stamps)
         return {"status": "ok", "netuid": netuid,
-                "observations": observations, **stamps}
+                "observations": observations,
+                "parity_model": mining.PARITY_MODEL, **stamps}
 
     def _repos_for(self, connection: sqlite3.Connection,
                    netuids: List[int]) -> Dict[int, Optional[str]]:

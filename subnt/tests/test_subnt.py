@@ -21,6 +21,7 @@ _REPO_ROOT = os.path.dirname(_MODULE_DIR)
 sys.path.insert(0, _MODULE_DIR)
 sys.path.insert(0, os.path.join(_REPO_ROOT, "livedata"))
 sys.path.insert(0, os.path.join(_REPO_ROOT, "fleet"))
+sys.path.insert(0, os.path.join(_REPO_ROOT, "fleet", "tests"))
 
 import atlas_subnt as sh  # noqa: E402
 
@@ -113,14 +114,6 @@ def build_fleet(path, verdict_text="reward split moved to the owner",
             "INSERT INTO metric_branch_tips (netuid, epoch, pass_ts, "
             "tips_json, tips_count, changed_tips) VALUES (?, 1, ?, '[]', "
             "4, ?)", (netuid, pass_ts, 2 if netuid == 12 else 0))
-        conn.execute(
-            "INSERT INTO mine_econ (ts, netuid, subnet_name, cut_reason, "
-            "net_tao_month, gross_tao_month, rent_band, confidence) VALUES "
-            "(?, ?, ?, ?, ?, ?, 'unknown', 'measured')",
-            (pass_ts, netuid, "Subnet %d" % netuid,
-             None if netuid != 67 else "winner-take-all",
-             None if netuid == 67 else (40.0 - netuid * 0.1),
-             None if netuid == 67 else 50.0))
     conn.execute(
         "INSERT INTO signal_econ_verdicts (content_hash, netuid, "
         "matched_files, significance, direction, what_changed, outcome, "
@@ -143,6 +136,13 @@ def build_fleet(path, verdict_text="reward split moved to the owner",
         "payload_json, created_at) VALUES ('narrative-cluster', 'briefing', "
         "NULL, 'agentic-rl', 'k1', '{}', ?)", (_iso(1.0, anchor),))
     conn.commit()
+    # Mining rows come from the real writer: SN12 heads, SN44 second, SN67
+    # is cut winner-take-all.
+    import mining_fixtures as mf
+    mf.seed_board(conn, {"mining": {"enabled": True}}, mf.synthetic([
+        mf.subnet(12, [10, 9, 8], tao_pool=60_000.0),
+        mf.subnet(44, [10, 9, 8], tao_pool=40_000.0),
+        mf.subnet(67, [10, 0, 0])]), now=pass_ts)
     conn.close()
 
 

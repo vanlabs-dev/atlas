@@ -207,12 +207,11 @@
     "fresh_hours": 2
   },
   "mining": {
-    "_comment": "Mining triage (change: mining-triage). Ranks subnets by what a NEW INDEPENDENT MINER could earn. DEFAULTS OFF in code; this block is the opt-in and flipping `enabled` back to false is the whole rollback. It is the only part of the fleet pass that reaches a provider, and it does so ONLY through livedata (one keyless TaoSwap panel call plus batched keyless finney storage reads at one finalized block; zero TaoStats quota). alpha_out_emission is a protocol constant of 1 alpha per block on every subnet, so miner-accessible QUANTITY is identical everywhere and cannot rank: price, owner capture (MinerBurned) and incentive concentration do. `miner_share_source` is required — the screen refuses to compute any miner figure without a recorded citation. `budget_band` is null until the operator picks one (D2), which leaves rent unknown and the hardware rung inert rather than assuming a free box. `top1_ceiling_pct` drives the winner-take-all rung: at or above this top-1 share of the incentive vector the field has one earner in economic terms and entry means displacing them. Measured on SHARE, not earner count — a subnet can pay ten UIDs and still round to 100% for the top one. `identity_placeholders` drives the identity rung: a subnet whose on-chain SubnetIdentitiesV3 subnet_name reduces to one of these first tokens, or which has no identity entry at all, is cut as not a going concern. Matched against the name's normalised first token, so `pending...`, `Parked` and `wait (reproduce paper)` all resolve. Owner-written free text, so expect to extend the list; an unreadable identity map leaves the rung inert rather than cutting every subnet.",
+    "_comment": "Mining triage (changes: mining-triage, mining-board-accuracy). Ranks subnets by what a NEW INDEPENDENT MINER could earn. DEFAULTS OFF in code; this block is the opt-in and flipping `enabled` back to false is the whole rollback. Every economics input is chain state read at ONE finalized block through livedata (batched keyless finney storage reads, each audited; zero TaoStats quota, no provider panel). Alpha distributed per block is SubnetAlphaOutEmission, which halves per subnet on its own issuance. The miner share is 0.5 x (1 - SubnetOwnerCut/65535), the cut applying only where OwnerCutEnabled; the 0.5 carries its subtensor citation in code, so there is no hand-set share here. Each mechanism gets its MechanismEmissionSplit of the pool; owner-coldkey UIDs are removed from each field and the removed share must match chain MinerBurned within `owner_reconcile_tolerance` (0-1 fraction) or the subnet is unrated. `budget_band` is null until the operator picks one (D2), which leaves rent unknown and the hardware rung inert rather than assuming a free box. `top1_ceiling_pct` drives the winner-take-all rung on the INDEPENDENT field of each mechanism. `identity_placeholders` drives the identity rung against the on-chain SubnetIdentitiesV3 name's first token; an unreadable identity map leaves the rung inert. `stale_after_hours` is when the board warns that its last complete pass is old.",
     "enabled": true,
-    "miner_share": 0.41,
-    "miner_share_source": "atlas-kb ground-truth.md::Emissions and Halving lines 58-65 (confirmed, coverage 2026-08-06): 18% owner / 41% miners / 41% validators, fixed at protocol level; corroborated on 2026-08-07 by the live panel's conviction.owner_emission_share of 0.18 on all 84 reporting subnets",
     "burn_ceiling_pct": 99.0,
     "top1_ceiling_pct": 95.0,
+    "owner_reconcile_tolerance": 0.01,
     "identity_placeholders": [
       "deprecated",
       "unknown",
@@ -226,6 +225,7 @@
     ],
     "budget_band": null,
     "retention_days": 90,
-    "board_limit": 10
+    "board_limit": 10,
+    "stale_after_hours": 18
   }
 }

@@ -11,6 +11,34 @@ _REPO_ROOT = os.path.dirname(_FLEET_DIR)
 sys.path.insert(0, _FLEET_DIR)
 
 import atlas_fleet as fleet  # noqa: E402
+import atlas_fleet_dashboard as _dashboard  # noqa: E402
+import atlas_fleet_mining as _mining  # noqa: E402
+
+# Test isolation guard (change: mining-board-accuracy). Every fleet test
+# imports this module, so every render path is wrapped here: a test that
+# writes a page under the repo's own var/ fails instead of overwriting the
+# real board.
+REPO_VAR = os.path.join(_REPO_ROOT, "var") + os.sep
+
+
+class RepoVarWrite(BaseException):
+    """BaseException, so a pass's own `except Exception` isolation cannot
+    swallow it and let the test pass."""
+
+
+def _guarded(write):
+    def guarded(path, text):
+        if os.path.abspath(path).startswith(REPO_VAR):
+            raise RepoVarWrite("a test wrote under the repo var/: %s"
+                               % path)
+        return write(path, text)
+    guarded.guarded = True
+    return guarded
+
+
+for _module in (_dashboard, _mining):
+    if not getattr(_module._atomic_write, "guarded", False):
+        _module._atomic_write = _guarded(_module._atomic_write)
 
 
 def git(cwd, *args):

@@ -53,7 +53,7 @@ Verified constants:
 | Quantity | Value | How verified |
 |---|---|---|
 | Blocks per day | 7200 | `owner_emission_share × 7200` reproduces `owner_emission_per_day` exactly |
-| Alpha emitted per subnet | 1 α/block = **7200 α/day** | `alpha_out_emission` = 1.0 on all 129 subnets |
+| Alpha emitted per subnet | 1 α/block = **7200 α/day** today, **not a constant**: each subnet follows the halving curve on its own alpha issuance (`run_coinbase.rs:226-238`) | Chain `SubnetAlphaOutEmission` = 1.0 α on the 125 emitting subnets at block 9142874 (2026-09-25); largest issuance 6.62M against a 10.5M first step, so none has halved yet. Corrected 2026-09-25 (change `mining-board-accuracy`); the earlier "1.0 on all 129 subnets" read was the TaoSwap panel |
 | Network TAO emission | **0.5 TAO/block** | `sum(emission_value)` = 0.49999994; `sum(emission_percent)` = 100.000 |
 | Owner share | **18%** = 1296 α/day | `owner_emission_share` = 0.179995 on every subnet |
 | **Miner pool** | **41%** = **2952 α/day** | a pure miner's `daily_rewards_alpha ÷ incentive` = **2952.07** |

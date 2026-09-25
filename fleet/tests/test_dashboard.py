@@ -173,6 +173,11 @@ class TestRender(DashboardBase):
         self.assertIn("No subnets cross the attention threshold", page)
         self.assertEqual(result["head"], 0)
 
+    def test_render_links_the_mining_board(self):
+        result = dash.render(self.conn, self.config)
+        page = open(result["path"], encoding="utf-8").read()
+        self.assertIn('href="mining.html"', page)
+
     def test_render_escapes_and_atomic(self):
         # A hostile org name must be escaped, and the write is atomic.
         self.slot(1, {"reward.py": "BURN_FRACTION = 0.5\n"},

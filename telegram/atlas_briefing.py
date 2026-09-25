@@ -330,6 +330,58 @@ def _narrative_section(src: _Sources, bcfg: Dict[str, Any], start: str,
     return lines or ["no model-id adoptions this window"], {}
 
 
+# Mining model version assumed for an edition recorded before the version
+# was stored (change: mining-board-accuracy shipped version 2).
+MINING_MODEL_UNRECORDED = "1"
+
+
+def stored_mining(fleet: sqlite3.Connection) -> Optional[Dict[str, Any]]:
+    """The ranking the last complete mining pass stored, read as stored:
+    rank order, cut and unrated counts, and the model version. Nothing is
+    re-derived or re-sorted from raw figures. None when no pass has been
+    classified. Shared with the subnt publisher."""
+    if not _table(fleet, "mine_econ") or not _table(fleet, "mine_state"):
+        return None
+    ts = _one(fleet, "SELECT value FROM mine_state WHERE key = "
+                     "'last_classified_ts'")
+    if not ts:
+        return None
+    rows = fleet.execute(
+        "SELECT netuid, subnet_name, rank, cut_reason, unrated_reason, "
+        "rent_band FROM mine_econ WHERE ts = ?", (ts,)).fetchall()
+    ranked = sorted((r for r in rows if r[2] is not None),
+                    key=lambda r: r[2])
+    return {
+        "ts": ts,
+        "model_version": _one(fleet, "SELECT value FROM mine_state WHERE "
+                                     "key = 'model_version'"),
+        "observed": len(rows),
+        "ranked": [(int(r[0]), r[1]) for r in ranked],
+        "cut": sum(1 for r in rows if r[3] is not None),
+        "unrated": sorted((int(r[0]), r[4]) for r in rows
+                          if r[2] is None and r[3] is None),
+        "rent_unknown": bool(ranked) and all(r[5] is None for r in ranked),
+    }
+
+
+def mining_top_delta(prev: Dict[str, Any], top: List[int],
+                     model_version: Optional[str]
+                     ) -> Tuple[str, List[int], List[int]]:
+    """Compare this edition's top ten with the previous edition's.
+    Returns (state, entered, left): state is `first`, `model-changed`,
+    `changed` or `unchanged`. Across a model version change the lists
+    describe two different models, so no delta is reported."""
+    prev_top = prev.get("mining_top10") or []
+    if not prev_top:
+        return "first", [], []
+    prev_model = prev.get("mining_model_version") or MINING_MODEL_UNRECORDED
+    if prev_model != model_version:
+        return "model-changed", [], []
+    entered = [n for n in top if n not in prev_top]
+    left = [n for n in prev_top if n not in top]
+    return ("changed" if entered or left else "unchanged"), entered, left
+
+
 def _mining_section(src: _Sources, bcfg: Dict[str, Any], start: str,
                     prev: Dict[str, Any]) -> Tuple[List[str],
                                                    Dict[str, Any]]:
@@ -338,38 +390,43 @@ def _mining_section(src: _Sources, bcfg: Dict[str, Any], start: str,
     fleet = src.fleet
     if fleet is None or not _table(fleet, "mine_econ"):
         return ["mining screen: unavailable"], figures
-    latest = _one(fleet, "SELECT MAX(ts) FROM mine_econ")
-    if not latest:
-        return ["mining screen: no economics recorded yet"], figures
-    rows = fleet.execute(
-        "SELECT netuid, subnet_name, cut_reason, net_tao_month, "
-        "gross_tao_month, rent_band FROM mine_econ WHERE ts = ?",
-        (latest,)).fetchall()
-    ranked = [r for r in rows if r[2] is None]
-    ranked.sort(key=lambda r: (0, -(r[3] if r[3] is not None else
-                                    (r[4] or 0.0))) if (r[3] is not None or
-                                                        r[4] is not None)
-                else (1, 0.0))
-    top = [int(r[0]) for r in ranked[:10]]
+    board = stored_mining(fleet)
+    if board is None:
+        return ["mining screen: no classified pass yet"], figures
+    top = [netuid for netuid, _ in board["ranked"][:10]]
     figures["mining_top10"] = top
-    if ranked:
-        head = ranked[0]
-        lines.append("board head: SN%d %s" % (head[0], head[1] or ""))
-    lines.append("%d ranked · %d cut · %d observed"
-                 % (len(ranked), len(rows) - len(ranked), len(rows)))
-    prev_top = prev.get("mining_top10") or []
-    entered = [n for n in top if n not in prev_top]
-    left = [n for n in prev_top if n not in top]
-    if prev_top and (entered or left):
+    figures["mining_model_version"] = board["model_version"]
+    if board["ranked"]:
+        netuid, name = board["ranked"][0]
+        lines.append("board head: SN%d %s" % (netuid, name or ""))
+    lines.append("%d ranked · %d cut · %d unrated · %d observed"
+                 % (len(board["ranked"]), board["cut"],
+                    len(board["unrated"]), board["observed"]))
+    if board["unrated"]:
+        shown = board["unrated"][:10]
+        lines.append("unrated: %s%s" % (
+            ", ".join("SN%d (%s)" % (n, (reason or "no figure")
+                                     .split(":")[0])
+                      for n, reason in shown),
+            " +%d more" % (len(board["unrated"]) - len(shown))
+            if len(board["unrated"]) > len(shown) else ""))
+    state, entered, left = mining_top_delta(prev, top,
+                                            board["model_version"])
+    if state == "model-changed":
+        lines.append("top-ten deltas suppressed: the mining model changed "
+                     "(v%s to v%s)" % (prev.get("mining_model_version")
+                                       or MINING_MODEL_UNRECORDED,
+                                       board["model_version"]))
+    elif state == "changed":
         if entered:
             lines.append("entered top ten: SN%s"
                          % ", SN".join(str(n) for n in entered))
         if left:
             lines.append("left top ten: SN%s"
                          % ", SN".join(str(n) for n in left))
-    elif prev_top:
+    elif state == "unchanged":
         lines.append("top ten unchanged")
-    if ranked and all(r[5] is None for r in ranked):
+    if board["rent_unknown"]:
         lines.append("budget band unset · rent unknown · hardware rung "
                      "inert")
     return lines, figures

@@ -350,79 +350,120 @@ token-safe, per-slot fail-closed all verified against real data).
   6h. At block 8823306: 128 observed / 36 ranked / 92 cut. `budget_band`
   is still null; the hardware rung is inert until the operator picks one.
 
-## Mining triage — ranking subnets by what an entrant could earn (change: mining-triage)
+## Mining triage: ranking subnets by what an entrant could earn (changes: mining-triage, mining-board-accuracy)
 
-Runs inline after metrics in each pass (`atlas_fleet_mining.run_pass`),
-read-only, additive tables, fail-isolated per stage. **Defaults OFF in
-code**; the `mining` block in `config.json` is the opt-in and flipping
-`enabled` back to false is the whole rollback. It is the only part of the
-fleet pass that reaches a provider, and it does so only through livedata.
+Runs inline after metrics in each pass (`atlas_fleet_mining.run_pass`), in
+the order economics, feasibility, classify, render. Read-only, additive
+tables, fail-isolated per stage. **Defaults OFF in code**; the `mining`
+block in `config.json` is the opt-in and flipping `enabled` back to false
+is the whole rollback. It reaches the chain only through livedata.
 
-What the economics turn on, all verified on-device 2026-08-07:
+**One chain snapshot is the only economics input.** Every figure is read at
+one finalized block by `livedata.read_mining_snapshot`; no provider panel
+feeds the screen. Each read (the subnet maps, `SubnetOwnerCut`,
+`OwnedHotkeys`, `Uids`) writes a `chain_storage` audit row in the livedata
+store, failures included. A failed read writes nothing, and the board keeps
+the last complete pass and shows its age (warning past
+`stale_after_hours`, default 18).
 
-- **`alpha_out_emission` is the base, not `alpha_in_emission`.** `alpha_out`
-  is the alpha distributed to participants (`run_coinbase.rs`: "Total alpha
-  emission per block remaining"); `alpha_in` is the capped TAO-side pool
-  injection, with the remainder appearing as `excess_tao_emission`.
-- **Quantity cannot rank.** `alpha_out` is 1.0 on all 127 non-root subnets,
-  so miner-accessible alpha is identical everywhere. Price, owner capture
-  and concentration are what separate subnets.
-- **`MinerBurned` is owner self-mining, measured not set.** `run_coinbase.rs`
-  computes it as the proportion of each tempo's miner incentive that landed
-  on owner or owner-associated immune hotkeys and was burned or recycled.
-  It withholds from the miner leg AND penalises the subnet's price share
-  next block; the share penalty is already inside the observed emission, so
-  the burn factor is applied exactly once. Verified against chain
-  `MinerBurned` (U96F32, **divide by 2^32**) on 127 of 128 subnets.
-- **Reward is winner-take-most.** `SubnetworkN` is 256 nearly everywhere
-  while 3 to 15 UIDs earn anything and the top ten take substantially all
-  of it. The headline is an **entrant** figure under a stated parity
-  assumption (pool shared among earners + 1), never incumbent income —
-  ranking on incumbent income puts the least enterable subnets on top.
-- **Most fields have one earner in economic terms.** Cut at a top-1 share
-  of 95% or above (`top1_ceiling_pct`), measured on the incentive **share**
-  rather than the earner count: netuid 63 pays ten UIDs and the top one
-  still rounds to 100%, and netuid 101 keeps 90% on one UID across a
-  249-earner field. An `earner_count == 1` test misses both. This is also
-  the answer to the parity assumption's known weakness — the model flatters
-  exactly the subnets this rung removes.
-- **Gate-disabled subnets still pay alpha.** They lose the TAO inflow
-  backing it, so the price decays. Cut for that, not for absent payment.
-- **Collateral is dormant.** `CollateralLockShare` has zero keys chain-wide,
-  so registration is fully burned today. Watched for a transition, not
-  modelled as a cost.
-- **Some owners have marked their own slot dead.** The on-chain
-  `SubnetIdentitiesV3.subnet_name` reads `deprecated` (3, 39, 81),
-  `unknown` (16, 42), `pending...` (94), `Parked` (73) or
-  `wait (reproduce paper)` (47), and four subnets (57, 84, 86, 103) have no
-  identity entry at all. Those are cut regardless of what they still pay.
-  Note this is the **chain's** name: curated registries can carry a
-  friendlier one for the same netuid, and where they disagree the chain
-  wins. The whole map failing leaves the rung inert rather than cutting
-  all 128 subnets at once.
+The model, grounded at subtensor `c004ceb` (spec 471) and Finney blocks
+9142678 and 9142723 (`ps/` is `pallets/subtensor/src/`):
 
-Chain reads live in `livedata/atlas_live.py` (`twox128`, `read_subnet_maps`),
-batched through `state_queryStorageAt` at one finalized block. These maps use
-the **Identity** hasher: the key is `twox128(pallet) ++ twox128(item) ++
-netuid_u16_le`, no twox64 concat. The derivation is self-tested against the
-three pinned gate keys already verified against live Finney; a mismatch
-blocks every derived read, because a wrong prefix returns an empty key set
-indistinguishable from an empty map.
+- **The base is the participant distribution, read per subnet.**
+  `SubnetAlphaOutEmission` follows the halving curve on each subnet's own
+  alpha issuance (`run_coinbase.rs:226-238`). Today it is 1.0 alpha per
+  block on the 125 emitting subnets (largest issuance 6.62M against a 10.5M
+  first step), but it is read, never assumed. A subnet reading 0 is
+  unrated `not-emitting`, never ranked on 0.
+- **Miner share = 0.5 x (1 - owner cut).** The cut is `SubnetOwnerCut` over
+  65535 (unset on chain, so the runtime default 11796 applies), applied
+  only where `OwnerCutEnabled`. The 0.5 is the incentive half
+  (`run_coinbase.rs:326-329`), cited in code and stored in `mine_state`.
+  Today the share is 0.410002. There is no hand-set share in config.
+- **Per mechanism.** `Incentive` is keyed by mecid x 4096 + netuid, and
+  `MechanismEmissionSplit` (over 65535, even when unset or malformed)
+  divides the miner pool. Six subnets run two mechanisms (44, 68, 87, 89,
+  93, 113). SN93 sends 2% to mechanism 0, so its mechanism-0 entrant figure
+  is about 8 TAO/mo, not the whole pool. Per-mechanism rows live in
+  `mine_mechanism`.
+- **Owner UIDs are removed from the field, and reconciled.** The owner set
+  is resolved as the runtime does (`get_owner_hotkeys`): every hotkey of
+  the owner coldkey (`OwnedHotkeys`, capped at 256; over the cap the set is
+  unread) plus the owner hotkey, looked up in `Uids` at the same block.
+  Those UIDs leave the earner count, top-1, parity divisor and incumbent
+  figure. The removed share weighted by split must match chain
+  `MinerBurned` within `owner_reconcile_tolerance` (0.01), or the subnet is
+  unrated `owner-reconcile-failed`. No `(1 - burn)` factor is applied on
+  top.
+- **Price and haircut from the Balancer pool.** Price is
+  (1 - q) / q x `SubnetTAO` / `SubnetAlphaIn`, q the `SwapBalancer` quote
+  weight (about 0.5 on all 128 today). The haircut uses the weighted sell
+  formula, which is x*y=k at q = 0.5. A missing reserve or weight blocks
+  the figure; it is never read as zero.
+- **Entrant figure (a stated model).** A new miner joins one mechanism and
+  matches its independent earners: the independent pool shared among
+  independent earners + 1. Undefined with no independent earner. A subnet
+  ranks on its best surviving mechanism, and the board names it.
+
+The ladder runs **once per pass**, after feasibility, and its result is
+stored on each `mine_econ` row: exactly one of a cut rung and detail, a
+rank and `rank_mecid`, or an `unrated_reason`. Rungs, in order:
+
+1. `pool-side-switch-off`: chain `SubnetEmissionEnabled` false at the
+   snapshot block (alpha still paid, but unbacked, so its price decays).
+2. `identity-placeholder`: on-chain `SubnetIdentitiesV3` name is a
+   placeholder, or absent. An unreadable map or entry cuts nothing.
+3. `owner-capture`: `MinerBurned` at or above 99%.
+4. `no-independent-earner`: no UID outside the owner set earns in any
+   mechanism.
+5. `winner-take-all`: every mechanism with a nonzero split has an
+   independent top-1 share at or above 95%, or no independent earner. An
+   unread vector does not cut.
+6. `not-minable`: positive cited evidence only. No scanner rule produces
+   it yet.
+7. `above-budget-band`: inert while `budget_band` is null.
+
+Unrated subnets are listed apart and never ranked last. The board, the MCP
+tools, the Telegram pulse and subnt all read this stored result; none
+re-derives it. Consumers suppress top-ten deltas once when
+`model_version` changes (now 2).
+
+**Feasibility never cuts on absence.** Entrypoints are recognised across
+layouts (`neurons/miner*.py`, `miner/{__main__,main,cli,run*}.py`,
+`cmd/miner/main.go`, `*/miner/*.go`, `src/bin/miner*.rs`,
+`*/miner/src/main.rs`, a `miner*/` package or TS entry), never under
+validator, api, routes, migrations, test, scripts, docs, examples or
+vendored paths. No entrypoint gives `unknown`, shown as unverified. The
+unedited subnet-template `min_compute.yml` (fingerprinted from upstream,
+SN60 ships it verbatim) is recorded as `template` evidence and declares
+nothing. VRAM is read from the miner section only. Scans are keyed on the
+index's `indexed_sha`; a slot whose index is behind its clone waits, and a
+verdict applies only while it matches the slot's current epoch, indexed
+commit and active status. A superseded verdict is deleted.
+
+Off-device model run over the live snapshot at block 9142874
+(2026-09-25, before feasibility joins): 128 observed, 63 ranked, 65 cut
+(27 `winner-take-all`, 24 `owner-capture`, 10 `identity-placeholder`,
+4 `pool-side-switch-off`), 0 unrated. Head SN4 Targon. SN9, SN93 and
+SN120 are cut `winner-take-all`; SN44 ranks on mechanism 1. The Pi pass is
+acceptance.
 
 ```
 python3 fleet/atlas_fleet_mining.py status
-python3 fleet/atlas_fleet_mining.py econ         # Stage A economics
+python3 fleet/atlas_fleet_mining.py econ         # Stage A chain economics
 python3 fleet/atlas_fleet_mining.py feasibility  # Stage B sha-gated scan
-python3 fleet/atlas_fleet_mining.py report       # Stage C ranked JSON
+python3 fleet/atlas_fleet_mining.py classify     # Stage C over the last econ pass
+python3 fleet/atlas_fleet_mining.py report       # stored ranking as JSON
 python3 fleet/atlas_fleet_mining.py render       # var/fleet/www/mining.html
-python3 fleet/atlas_fleet_mining.py pass         # all three (inline on reconcile)
+python3 fleet/atlas_fleet_mining.py pass         # all four (inline on reconcile)
 ```
 
-Board at `http://<pi-lan-ip>:8480/mining.html`, served by the existing
-`atlas-dashboard.service`. Query surface: `mining_board`, `mining_subnet`,
-`mining_history` on the existing `atlas-fleet` MCP server, read-only,
-`mode=ro`, dual timestamps on every response (economics move each pass;
-feasibility only when a clone moves).
+Board at `http://<pi-lan-ip>:8480/mining.html`, linked from the attention
+board and served by the existing `atlas-dashboard.service`. Query surface:
+`mining_board`, `mining_subnet`, `mining_history` on the existing
+`atlas-fleet` MCP server, read-only, `mode=ro`. Every response carries the
+economics time and block of the rows it returns, the scan time of the
+verdicts it joins, the stored outcome, and the parity model.
 
 Ranks evidence, recommends nothing. Holds no keys, submits no transaction,
 registers on nothing, runs no miner.
@@ -438,6 +479,9 @@ discovery gate approved, tracking policy confirmed (both recorded in
 ```
 cd fleet/tests && python3 -m unittest discover -s .
 ```
+
+Tests render into a temp `dashboard.www_dir`. `_helpers` wraps every render
+path, so a test that writes under the repo's own `var/` fails.
 
 Fixture git origins exercise the full pipeline: URL normalization and
 fingerprinting, the reconcile plan + mass-discard guard + bounding, the
