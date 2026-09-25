@@ -87,15 +87,19 @@ class TestAgreement(unittest.TestCase):
                          [e["netuid"] for e in self.board["ranked"]])
 
     def test_subnt_matches_the_board(self):
-        items, figures = sh.mining_facts(_Src(self.ro), {}, {})
+        section, figures = sh.mining_facts(_Src(self.ro), {}, {})
         self.assertEqual(figures["mining_head"], 4)
         self.assertEqual(figures["mining_ranked"], 2)
         self.assertEqual(figures["mining_cut"], 3)
         self.assertEqual(figures["mining_unrated"], 1)
         self.assertEqual(figures["mining_observed"], 6)
-        text = " ".join(item[1] for item in items)
-        self.assertIn("2 ranked, 3 cut, 1 unrated, 6 observed", text)
-        self.assertNotIn("SN9,", text.split("Board head")[1][:12])
+        block = section["blocks"][0]
+        facts = {f["id"]: f for f in block["facts"]}
+        self.assertEqual(facts["ranked"]["text"], "2 / 6")
+        self.assertEqual(facts["ranked"]["freshness"], "3 cut, 1 unrated")
+        self.assertEqual(facts["head"]["text"], "SN4")
+        self.assertEqual([r["netuid"] for r in block["rows"]["items"]],
+                         [e["netuid"] for e in self.board["ranked"]])
 
     def test_board_page_matches_the_store(self):
         with open(os.path.join(self.tmp, "www", "mining.html"),
@@ -104,9 +108,9 @@ class TestAgreement(unittest.TestCase):
         self.assertIn("6 observed, 2 ranked, 1 unrated, 3 cut", page)
 
     def test_subnt_suppresses_deltas_across_a_model_change(self):
-        items, _ = sh.mining_facts(_Src(self.ro), {},
-                                   {"mining_top10": [120, 93]})
-        text = " ".join(item[1] for item in items)
+        section, _ = sh.mining_facts(_Src(self.ro), {},
+                                     {"mining_top10": [120, 93]})
+        text = " ".join(section["blocks"][0]["notes"])
         self.assertIn("mining model changed", text)
         self.assertNotIn("Entered the top ten", text)
 

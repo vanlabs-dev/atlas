@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://subnt.dev/schema/subnt-1.0.json",
+  "title": "subnt data file, schema 1.x",
+  "description": "Contract between Atlas (writer) and the subnt page (reader). Atlas owns every figure, lead, delta, stale decision and gap wording; the page only lays out what it is given. Minor versions add optional fields. A major bump fails the build until the page supports it.",
+  "oneOf": [
+    { "$ref": "#/$defs/edition" },
+    { "$ref": "#/$defs/section" }
+  ],
+  "$defs": {
+    "schema": { "type": "string", "pattern": "^subnt/1\\.[0-9]+$" },
+    "composed_at": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$" },
+    "block": { "type": ["integer", "null"], "minimum": 0 },
+    "access": { "enum": ["public", "subscriber"] },
+    "text": { "type": "string", "minLength": 1, "not": { "pattern": "\u2014" } },
+
+    "edition": {
+      "type": "object",
+      "required": ["schema", "kind", "composed_at", "block", "first_edition", "previous_composed_at"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "$ref": "#/$defs/schema" },
+        "kind": { "const": "edition" },
+        "composed_at": { "$ref": "#/$defs/composed_at" },
+        "block": { "$ref": "#/$defs/block" },
+        "first_edition": { "type": "boolean" },
+        "previous_composed_at": { "oneOf": [{ "$ref": "#/$defs/composed_at" }, { "type": "null" }] },
+        "headline": { "$ref": "#/$defs/text" }
+      }
+    },
+
+    "section": {
+      "type": "object",
+      "required": ["schema", "kind", "composed_at", "block", "section", "question", "lead", "access", "blocks"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "$ref": "#/$defs/schema" },
+        "kind": { "const": "section" },
+        "composed_at": { "$ref": "#/$defs/composed_at" },
+        "block": { "$ref": "#/$defs/block" },
+        "section": { "enum": ["network", "movers", "mining", "attention", "code-narrative"] },
+        "question": { "$ref": "#/$defs/text" },
+        "lead": { "$ref": "#/$defs/text" },
+        "access": { "$ref": "#/$defs/access" },
+        "blocks": { "type": "array", "items": { "$ref": "#/$defs/block_item" } }
+      }
+    },
+
+    "block_item": {
+      "oneOf": [{ "$ref": "#/$defs/public_block" }, { "$ref": "#/$defs/subscriber_block" }]
+    },
+
+    "public_block": {
+      "type": "object",
+      "required": ["id", "access", "facts", "gaps"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "access": { "const": "public" },
+        "title": { "$ref": "#/$defs/text" },
+        "facts": { "type": "array", "items": { "$ref": "#/$defs/fact" } },
+        "notes": { "type": "array", "items": { "$ref": "#/$defs/text" } },
+        "gaps": { "type": "array", "items": { "$ref": "#/$defs/text" } },
+        "series": { "type": "array", "items": { "$ref": "#/$defs/series" } },
+        "rows": { "$ref": "#/$defs/rows" },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["label", "rows"],
+            "additionalProperties": false,
+            "properties": {
+              "label": { "$ref": "#/$defs/text" },
+              "rows": { "type": "array", "items": { "$ref": "#/$defs/row" } }
+            }
+          }
+        }
+      }
+    },
+
+    "subscriber_block": {
+      "description": "Shape only. A subscriber block never carries a recorded figure, lead, note, gap or row text: the page fills it with placeholder text generated in the subnt repo.",
+      "type": "object",
+      "required": ["id", "access", "shape"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "access": { "const": "subscriber" },
+        "title": { "$ref": "#/$defs/text" },
+        "shape": {
+          "type": "object",
+          "required": ["facts", "rows", "series"],
+          "additionalProperties": false,
+          "properties": {
+            "facts": { "type": "integer", "minimum": 0, "maximum": 8 },
+            "rows": { "type": "integer", "minimum": 0, "maximum": 20 },
+            "series": { "type": "integer", "minimum": 0, "maximum": 3 }
+          }
+        }
+      }
+    },
+
+    "fact": {
+      "type": "object",
+      "required": ["id", "label", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "label": { "$ref": "#/$defs/text" },
+        "text": { "$ref": "#/$defs/text", "description": "Display value, formatted by Atlas." },
+        "value": { "type": ["number", "string", "null"] },
+        "unit": { "type": ["string", "null"] },
+        "headline": { "type": "boolean", "description": "Show at large size near the lead." },
+        "ref_block": { "type": ["integer", "null"] },
+        "observed": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "freshness": { "$ref": "#/$defs/text", "description": "Freshness label written by Atlas, e.g. observed date." },
+        "stale": { "type": "boolean" },
+        "delta": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["text", "direction"],
+              "additionalProperties": false,
+              "properties": {
+                "text": { "$ref": "#/$defs/text" },
+                "direction": { "enum": ["up", "down", "flat"] }
+              }
+            }
+          ]
+        }
+      }
+    },
+
+    "rows": {
+      "type": "object",
+      "required": ["label", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "$ref": "#/$defs/text" },
+        "sortable": { "type": "boolean" },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/row" } }
+      }
+    },
+
+    "row": {
+      "type": "object",
+      "required": ["netuid", "name", "summary"],
+      "additionalProperties": false,
+      "properties": {
+        "netuid": { "type": "integer", "minimum": 0 },
+        "name": { "type": ["string", "null"] },
+        "summary": { "$ref": "#/$defs/text" },
+        "figure": { "type": "string" },
+        "sort": { "type": "number", "description": "Sort key for the optional client-side reorder. Never displayed." },
+        "detail": { "type": "array", "items": { "$ref": "#/$defs/fact" } }
+      }
+    },
+
+    "series": {
+      "type": "object",
+      "required": ["id", "kind", "label", "caption", "points"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "kind": { "enum": ["line", "strip"] },
+        "label": { "$ref": "#/$defs/text" },
+        "caption": { "$ref": "#/$defs/text", "description": "States the figures the chart shows." },
+        "log": { "type": "boolean" },
+        "mark": { "type": ["integer", "null"], "minimum": 0, "description": "Strip: index of the ranked bar position." },
+        "highlight": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+        "points": { "type": "array", "items": { "type": "number" } }
+      }
+    }
+  }
+}

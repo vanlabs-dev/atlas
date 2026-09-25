@@ -1,39 +1,41 @@
 #!/usr/bin/env python3
-"""Atlas subnt renderer (change: subnt-renderer).
+"""Atlas subnt publisher (changes: subnt-renderer, subnt-json-export).
 
 Composes the public subnt.dev edition from rows already persisted in the
-livedata and fleet stores, all opened read-only, and publishes it into a
-second checkout when the content hash changes. Composing makes no chain
-call, no provider call and no model call: every figure traces to a stored
-row with its reference block or observation date, and an input that is
-missing or past its own stale bound is named instead of estimated.
+livedata and fleet stores, all opened read-only, as six data files that
+the subnt page builds from: `edition.json` and one file per section. The
+files follow schema `subnt/1.x`; a copy of the subnt schema lives at
+`subnt/schema/subnt-1.0.json` and every file is validated against it
+before anything is written. Composing makes no chain call, no provider
+call and no model call: every figure traces to a stored row with its
+reference block or observation date, and an input that is missing or past
+its own stale bound is named instead of estimated.
 
 This module is a second reader over those stores, not a wrapper around the
 Telegram briefing. `telegram/atlas_briefing.py` returns operator lines and
-closes with the LAN board URL or a next action; dressing those in HTML
-would publish the board address, the provider quota and the budget-band
-prompt to the open internet. `_Sources`, `_movers`, `_delta_pct` and
+closes with the LAN board URL or a next action; carrying those over would
+publish the board address, the provider quota and the budget-band prompt
+to the open internet. `_Sources`, `_movers`, `_delta_pct` and
 `_release_for_upgrade` are imported and reused; nothing formatted for
-Telegram crosses into the page.
+Telegram crosses into the data.
 
 Stale bounds are per input. The emission-gate bar uses the briefing bound
 of 26 hours. Network vitals carry their observation date and are never
 called stale for age alone. Movers use the window since the previous
 subnt publish, or `window_hours` before compose on a first edition.
 
-The publish path is one direction only: Atlas writes subnt, and no file
-in the subnt checkout is read as an input to an edition. Before any
-write the rendered document is scanned for operator material and for the
-self-contained rules the page contract fixes; a hit fails the pass closed.
+The publish path is one direction only: Atlas writes subnt's `data/`, and
+no file in the subnt checkout is read as an input to an edition. Before
+any write every file is scanned for operator material and validated
+against the schema; a hit fails the pass closed. Atlas renders no HTML:
+layout belongs to the subnt repo.
 """
 from __future__ import annotations
 
 import argparse
 import datetime
 import hashlib
-import html
 import json
-import math
 import os
 import re
 import sqlite3
@@ -44,19 +46,33 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_MODULE_DIR)
 CONFIG_FILE = os.path.join(_MODULE_DIR, "config.json")
+SCHEMA_FILE = os.path.join(_MODULE_DIR, "schema", "subnt-1.0.json")
 
-TAGLINE = "A lean read on Bittensor subnets"
-FOOTER = "subnt.dev · public read-only · data from Atlas"
+SCHEMA_VERSION = "subnt/1.0"
 
-# Contract order. Every landmark is present on every edition, including one
-# whose every input is missing.
-SECTION_ORDER = (("network", "Network"), ("movers", "Subnet movers"),
-                 ("mining", "Mining"), ("attention", "Attention"),
-                 ("code-narrative", "Code / narrative"))
+# Contract order: (section id, file name, question). The questions match
+# the subnt page's own section list.
+SECTIONS: Tuple[Tuple[str, str, str], ...] = (
+    ("network", "network",
+     "What changed on the network since the last edition?"),
+    ("movers", "movers", "Which subnets moved, and which crossed the bar?"),
+    ("mining", "mining", "Where is mining worth a look now?"),
+    ("attention", "attention",
+     "Which subnets deserve a closer read, and why?"),
+    ("code-narrative", "code",
+     "Where is code shipping, and what is being adopted?"),
+)
 
-# The reason token alone is not enough to render. On the real fleet 93 of
+# Every file an edition consists of. The subnt build rejects any other name.
+FILES: Tuple[str, ...] = ("edition",) + tuple(f for _s, f, _q in SECTIONS)
+
+# Top-level fields that move on every pass or every publish without any
+# fact moving. The publish gate ignores them.
+_VOLATILE = ("composed_at", "block", "previous_composed_at")
+
+# The reason token alone is not enough to publish. On the real fleet 93 of
 # 106 public rows score `divergence`, so mapping the six tokens to six
-# fixed phrases produces a page of near-identical lines that says nothing.
+# fixed phrases produces a list of near-identical lines that says nothing.
 # `score_subnet` also returns div_signed, cold, econ_fresh and pulse_spike;
 # the contract bans direction-cue *glyphs*, the numeric score and the board
 # thesis, not direction stated in words. So the phrase is derived.
@@ -173,7 +189,7 @@ CREATE TABLE IF NOT EXISTS meta (
 
 
 def open_state(db_path: str) -> sqlite3.Connection:
-    """The renderer's own store. Subnt deltas compare against the last
+    """The publisher's own store. Subnt deltas compare against the last
     subnt publish on a six-hour clock, which is a different series from
     the notifier's daily and weekly `briefing:figures`; keeping them apart
     also keeps compose read-only against every Atlas store."""
@@ -197,20 +213,90 @@ def state_set(connection: sqlite3.Connection, key: str, value: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Items. A section is a list of (kind, text): "fact" renders in the list,
-# "gap" names a missing or stale input and renders as its own line.
+# Data shapes. Each helper builds one object of the subnt schema. Keys that
+# carry nothing are left out rather than written as null, except `delta`,
+# which a comparable figure always carries so that "did not move" is stated.
 # ---------------------------------------------------------------------------
 
-def _fact(text: str) -> Tuple[str, str]:
-    return ("fact", text)
+_NO_DELTA = object()
 
 
-def _gap(text: str) -> Tuple[str, str]:
-    return ("gap", text)
+def _clean(text: Any) -> Optional[str]:
+    """A stored string made fit for the public files. Recorded text can
+    carry an em dash (a verdict line, a subnet name), which the schema and
+    the house style both refuse; a comma says the same thing. Empty is
+    None, so the caller names the gap instead of publishing a blank."""
+    if text is None:
+        return None
+    out = re.sub(r"\s*\u2014\s*", ", ", str(text)).strip()
+    return out or None
+
+
+def _fact(fid: str, label: str, text: str, *, value: Any = None,
+          unit: Optional[str] = None, headline: bool = False,
+          ref_block: Optional[int] = None, observed: Optional[str] = None,
+          freshness: Optional[str] = None,
+          delta: Any = _NO_DELTA) -> Dict[str, Any]:
+    fact: Dict[str, Any] = {"id": fid, "label": label, "text": text}
+    if value is not None:
+        fact["value"] = value
+    if unit is not None:
+        fact["unit"] = unit
+    if headline:
+        fact["headline"] = True
+    if ref_block is not None:
+        fact["ref_block"] = int(ref_block)
+    if observed is not None:
+        fact["observed"] = observed
+    if freshness:
+        fact["freshness"] = freshness
+    if delta is not _NO_DELTA:
+        fact["delta"] = delta
+    return fact
+
+
+def _block(bid: str, *, title: Optional[str] = None,
+           facts: Optional[List[Dict[str, Any]]] = None,
+           notes: Optional[List[str]] = None,
+           gaps: Optional[List[str]] = None,
+           **extra: Any) -> Dict[str, Any]:
+    block: Dict[str, Any] = {"id": bid, "access": "public"}
+    if title:
+        block["title"] = title
+    block["facts"] = facts or []
+    block["notes"] = notes or []
+    block["gaps"] = gaps or []
+    for key in ("series", "rows", "groups"):
+        if extra.get(key):
+            block[key] = extra[key]
+    return block
+
+
+def _section(lead: str, blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
+    return {"lead": lead, "blocks": blocks}
+
+
+def _series(sid: str, kind: str, label: str, caption: str,
+            points: Sequence[float], **extra: Any) -> Optional[Dict[str, Any]]:
+    """A recorded series, or None. Two points is the minimum that means
+    anything; fewer yields no series rather than a misleading flat line."""
+    if len(points) < 2:
+        return None
+    series: Dict[str, Any] = {"id": sid, "kind": kind, "label": label,
+                              "caption": caption,
+                              "points": [float(p) for p in points]}
+    series.update({k: v for k, v in extra.items() if v is not None})
+    return series
 
 
 def _utc(now: Optional[datetime.datetime] = None) -> datetime.datetime:
     return now or datetime.datetime.now(datetime.timezone.utc)
+
+
+def _stamp(moment: datetime.datetime) -> str:
+    """The schema's `composed_at` form: UTC, to the second, `Z`."""
+    return moment.astimezone(datetime.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
 
 
 def _num(value: Any, digits: int = 2) -> str:
@@ -248,100 +334,82 @@ def _delta_value(new: Any, old: Any) -> Optional[str]:
     return pct
 
 
-def _delta(new: Any, old: Any) -> str:
+def _delta(new: Any, old: Any) -> Optional[Dict[str, str]]:
+    """The schema delta object, or None when the figure did not move or
+    has no prior value."""
     pct = _delta_value(new, old)
-    return " (%s since last publish)" % pct if pct else ""
+    if pct is None:
+        return None
+    return {"text": "%s since last publish" % pct,
+            "direction": "down" if pct.startswith("-") else "up"}
 
 
 # ---------------------------------------------------------------------------
 # Fact layer. Each function re-derives its section from stored rows with the
-# same SQL semantics the briefing uses, and returns public items plus the
-# figures a later edition compares against. An absent store, an absent table
-# or an empty result is a named gap, never an exception.
+# same SQL semantics the briefing uses, and returns the section (a lead and
+# its blocks) plus the figures a later edition compares against. An absent
+# store, an absent table or an empty result is a named gap, never an
+# exception.
 # ---------------------------------------------------------------------------
 
 def network_facts(src: Any, cfg: Dict[str, Any], start: str,
                   prev: Dict[str, Any], now: datetime.datetime
-                  ) -> Tuple[List[Tuple[str, str]], Dict[str, Any]]:
+                  ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     brief = _brief()
-    items: List[Tuple[str, str]] = []
+    facts: List[Dict[str, Any]] = []
+    notes: List[str] = []
+    gaps: List[str] = []
+    series: List[Dict[str, Any]] = []
     figures: Dict[str, Any] = {}
     live = src.live
     if live is None:
-        return [_gap("Missing the live store: no network facts recorded.")], \
-            figures
+        return _section(
+            "No network facts are recorded for this edition.",
+            [_block("vitals", gaps=["Missing the live store: no network "
+                                    "facts recorded."])]), figures
 
-    spec = brief._one(live,
-                      "SELECT value FROM meta WHERE key = 'last_live_spec'")
-    if spec is None:
-        items.append(_gap("Missing the runtime spec."))
-    else:
-        line = "Runtime spec %s" % spec
-        release = None
-        try:
-            release = _tg()._release_for_upgrade(
-                cfg.get("repo_db", "var/repotrack/repotrack.db"), int(spec))
-        except (ValueError, sqlite3.Error):
-            release = None
-        if release is not None:
-            line += ", released as %s" % release["subject"]
-            figures["release"] = release["subject"]
-        items.append(_fact(line + "."))
-        figures["spec"] = int(spec)
-
-    if brief._table(live, "chain_param_events"):
-        changes = live.execute(
-            "SELECT item, prev_value, new_value FROM chain_param_events "
-            "WHERE observed_at > ? ORDER BY id", (start,)).fetchall()
-        for item, prev_v, new_v in changes:
-            items.append(_fact("Rule change: %s moved from %s to %s."
-                               % (item, prev_v, new_v)))
-
+    bar_fresh = False
     row = live.execute(
         "SELECT theta, rank, above_count, observed_at FROM gate_state "
         "WHERE gate_active = 1 ORDER BY id DESC LIMIT 1").fetchone() \
         if brief._table(live, "gate_state") else None
     if row is None:
-        items.append(_gap("Missing the emission-gate bar."))
+        gaps.append("Missing the emission-gate bar.")
     else:
         theta, rank, above, observed_at = row
         stale_hours = float(cfg.get("stale_hours", 26))
         cutoff = (now - datetime.timedelta(hours=stale_hours)).isoformat()
         if observed_at < cutoff:
-            items.append(_gap(
+            gaps.append(
                 "The emission-gate bar is stale: last observed %s, past its "
-                "%g hour bound." % (observed_at[:16], stale_hours)))
+                "%g hour bound." % (observed_at[:16], stale_hours))
         else:
+            bar_fresh = True
             figures["theta"] = theta
             figures["rank"] = rank
             figures["above"] = above
             # rank and above_count are recorded per poll and either can be
-            # NULL. Build the line from what is present and name what is
-            # not, rather than letting "not recorded" stand in mid-sentence.
-            bits = ["Emission-gate bar at %s%s"
-                    % (_num(theta, 5), _delta(theta, prev.get("theta")))]
+            # NULL. State what is present and name what is not.
+            bits = []
             if rank is not None:
                 bits.append("rank %s" % _num(rank))
             if above is not None:
-                bits.append("%s above it"
-                            % _plural(int(above), "subnet", "subnets"))
-            items.append(_fact(", ".join(bits) + "."))
+                bits.append("%s above" % _num(above))
+            facts.append(_fact(
+                "bar", "Emission-gate bar", _num(theta, 5), value=theta,
+                headline=True, observed=observed_at[:10],
+                freshness=", ".join(bits) or None,
+                delta=_delta(theta, prev.get("theta"))))
             absent = [label for label, value in (("its rank", rank),
                                                  ("the above-bar count",
                                                   above))
                       if value is None]
             if absent:
-                items.append(_gap("The bar is recorded without %s."
-                                  % " and ".join(absent)))
-        if brief._table(live, "gate_events"):
-            moves = brief._one(live, "SELECT COUNT(*) FROM gate_events "
-                                     "WHERE observed_at > ?", (start,))
-            figures["side_changes"] = moves
-            items.append(_fact(
-                "%s at the bar in the window."
-                % (_plural(moves, "side change", "side changes")
-                   if isinstance(moves, int) else
-                   "%s side changes" % _num(moves))))
+                gaps.append("The bar is recorded without %s."
+                            % " and ".join(absent))
+            series.append(_series(
+                "bar-trend", "line", "Emission-gate bar",
+                "", theta_series(src)))
 
     vit = live.execute(
         "SELECT date, tao_usd, total_staked_tao, subnets_share_pct, "
@@ -349,7 +417,7 @@ def network_facts(src: Any, cfg: Dict[str, Any], start: str,
         "ORDER BY date DESC LIMIT 1").fetchone() \
         if brief._table(live, "network_vitals") else None
     if vit is None:
-        items.append(_gap("Missing network vitals."))
+        gaps.append("Missing network vitals.")
     else:
         date, usd, staked, share, accounts = vit
         figures["tao_usd"] = usd
@@ -359,67 +427,178 @@ def network_facts(src: Any, cfg: Dict[str, Any], start: str,
         figures["vitals_date"] = date
         # Vitals are a daily observation. They carry their date and are not
         # stale for age alone.
-        items.append(_fact(
-            "TAO at %s USD%s, %s TAO staked, subnets hold %s%% of stake, "
-            "%s new accounts, observed %s."
-            % (_num(usd, 2), _delta(usd, prev.get("tao_usd")),
-               _grouped(staked), _num(share, 2), _grouped(accounts), date)))
-    return items, figures
+        dated = "observed %s" % date
+        if usd is None:
+            gaps.append("TAO price is not recorded in the newest vitals.")
+        else:
+            facts.append(_fact(
+                "tao", "TAO", "$%s" % _num(usd, 2), value=usd, unit="USD",
+                headline=True, observed=date, freshness=dated,
+                delta=_delta(usd, prev.get("tao_usd"))))
+        if staked is None:
+            gaps.append("Stake is not recorded in the newest vitals.")
+        else:
+            facts.append(_fact(
+                "staked", "Staked", "%s TAO" % _grouped(staked),
+                value=staked, unit="TAO", headline=True, observed=date,
+                freshness=("%s%% held by subnets" % _num(share, 2)
+                           if share is not None else dated)))
+        if accounts is not None:
+            facts.append(_fact(
+                "accounts", "New accounts", _grouped(accounts),
+                value=accounts, observed=date, freshness=dated))
+        tao = vitals_series(src, "tao_usd")
+        series.append(_series(
+            "tao-trend", "line", "TAO in USD", "", [v for _d, v in tao]))
+
+    spec = brief._one(live,
+                      "SELECT value FROM meta WHERE key = 'last_live_spec'")
+    if spec is None:
+        gaps.append("Missing the runtime spec.")
+    else:
+        release = None
+        try:
+            release = _tg()._release_for_upgrade(
+                cfg.get("repo_db", "var/repotrack/repotrack.db"), int(spec))
+        except (ValueError, sqlite3.Error):
+            release = None
+        figures["spec"] = int(spec)
+        facts.append(_fact("spec", "Runtime spec", str(spec),
+                           value=int(spec), headline=True))
+        subject = _clean(release["subject"]) if release is not None else None
+        if subject:
+            figures["release"] = subject
+            notes.append("Runtime spec %s, released as %s." % (spec, subject))
+
+    moves = None
+    if brief._table(live, "gate_events"):
+        moves = brief._one(live, "SELECT COUNT(*) FROM gate_events "
+                                 "WHERE observed_at > ?", (start,))
+        figures["side_changes"] = moves
+        facts.append(_fact("side-changes", "Side changes at the bar",
+                           _num(moves), value=moves,
+                           freshness="in this window"))
+
+    if brief._table(live, "chain_param_events"):
+        for item, prev_v, new_v in live.execute(
+                "SELECT item, prev_value, new_value FROM chain_param_events "
+                "WHERE observed_at > ? ORDER BY id", (start,)).fetchall():
+            notes.append("Rule change: %s moved from %s to %s."
+                         % (_clean(item), _clean(prev_v), _clean(new_v)))
+
+    if bar_fresh:
+        shares = share_distribution(src)
+        rank = figures.get("rank")
+        zero = sum(1 for _n, v in shares if not v)
+        caption = "%s sorted by demand share, log scale" % _plural(
+            len(shares), "subnet", "subnets")
+        if rank is not None and 0 < rank <= len(shares):
+            caption += "; the bar sits at rank %d" % rank
+        if zero:
+            caption += "; %d at zero share" % zero
+        series.append(_series(
+            "share-strip", "strip", "Demand share across the bar universe",
+            caption + ".", [v for _n, v in shares], log=True,
+            mark=(rank - 1) if rank is not None and 0 < rank <= len(shares)
+            else None))
+
+    for item in series:
+        if item is not None and not item["caption"]:
+            item["caption"] = _trend_caption(item)
+
+    if bar_fresh:
+        lead = "The bar is at %s" % _num(figures["theta"], 5)
+        if figures.get("above") is not None:
+            lead += " with %s above it" % _plural(
+                int(figures["above"]), "subnet", "subnets")
+        if moves == 0:
+            lead += "; no subnet crossed it"
+        elif isinstance(moves, int):
+            lead += "; %s at the bar in this window" % _plural(
+                moves, "side change", "side changes")
+        lead += "."
+    elif figures.get("tao_usd") is not None:
+        lead = ("The bar is not current; TAO is at $%s, observed %s."
+                % (_num(figures["tao_usd"], 2), figures["vitals_date"]))
+    else:
+        lead = "The network facts for this edition are missing."
+    return _section(lead, [_block(
+        "vitals", facts=facts, notes=notes, gaps=gaps,
+        series=[s for s in series if s is not None])]), figures
+
+
+def _trend_caption(series: Dict[str, Any]) -> str:
+    """States the figures a trend shows: how many readings, first and last."""
+    points = series["points"]
+    if series["id"] == "bar-trend":
+        return ("Emission-gate bar over the last %d readings, from %s to %s."
+                % (len(points), _num(points[0], 5), _num(points[-1], 5)))
+    return ("TAO over the last %d daily readings, from $%s to $%s."
+            % (len(points), _num(points[0], 2), _num(points[-1], 2)))
+
+
+_MOVER_KINDS = (
+    # (panel column, public label, threshold key, default, limit)
+    ("moving_price_tao", "alpha price", "price_move_threshold_pct", 15, 6),
+    ("share", "demand share", "share_move_threshold_pct", 25, 4),
+)
+
+
+def _mover_reading(column: str, value: float) -> str:
+    if column == "share":
+        return "%.4f%%" % (value * 100)
+    return "%.5f TAO" % value
 
 
 def mover_facts(src: Any, cfg: Dict[str, Any], start: str
-                ) -> Tuple[List[Tuple[str, str]], Optional[Dict[str, Any]]]:
-    """(items, lead). The largest mover is returned alongside the items so
-    compose can chart it without a second pass over the panel."""
+                ) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+    """(section, lead). The largest mover is returned alongside the section
+    so compose can name it in the edition headline."""
     brief = _brief()
-    items: List[Tuple[str, str]] = []
     live = src.live
     if live is None or not brief._table(live, "panel_snapshot"):
-        return [_gap("Missing panel snapshots: no movers can be "
-                     "ranked.")], None
+        return _section(
+            "Movers cannot be ranked for this edition.",
+            [_block("board", gaps=["Missing panel snapshots: no movers can "
+                                   "be ranked."])]), None
 
+    names = recorded_names(src)
+    rows: List[Dict[str, Any]] = []
     lead: Optional[Dict[str, Any]] = None
-    for netuid, old, new, ob, nb, pct in brief._movers(
-            live, start, "moving_price_tao",
-            float(cfg.get("price_move_threshold_pct", 15)), 6):
-        items.append(_fact(
-            "SN%d alpha price %+.1f%%, from %.5f TAO at block %s to %.5f TAO "
-            "at block %s." % (netuid, pct, old, ob, new, nb)))
-        if lead is None or abs(pct) > abs(lead["raw"]):
-            lead = {"netuid": netuid, "kind": "alpha price",
-                    "pct": "%+.1f%%" % pct, "raw": pct, "column": "share",
-                    "detail": "%.5f TAO at block %s to %.5f TAO at block %s"
-                              % (old, ob, new, nb)}
-    for netuid, old, new, ob, nb, pct in brief._movers(
-            live, start, "share",
-            float(cfg.get("share_move_threshold_pct", 25)), 4):
-        items.append(_fact(
-            "SN%d demand share %+.1f%%, from %.4f%% at block %s to %.4f%% at "
-            "block %s." % (netuid, pct, old * 100, ob, new * 100, nb)))
-        if lead is None or abs(pct) > abs(lead["raw"]):
-            lead = {"netuid": netuid, "kind": "demand share",
-                    "pct": "%+.1f%%" % pct, "raw": pct, "column": "share",
-                    "detail": "%.4f%% at block %s to %.4f%% at block %s"
-                              % (old * 100, ob, new * 100, nb)}
-    if not items:
-        items.append(_fact("No subnet crossed a mover threshold in this "
-                           "window."))
+    for column, kind, key, default, limit in _MOVER_KINDS:
+        for netuid, old, new, ob, nb, pct in brief._movers(
+                live, start, column, float(cfg.get(key, default)), limit):
+            detail = ("%s at block %s to %s at block %s"
+                      % (_mover_reading(column, old), ob,
+                         _mover_reading(column, new), nb))
+            figure = "%+.1f%%" % pct
+            rows.append({
+                "netuid": int(netuid),
+                "name": _clean(names.get(int(netuid))),
+                "summary": kind, "figure": figure, "sort": round(pct, 1),
+                "detail": [_fact("move", "Reading", "SN%d %s %s, from %s."
+                                 % (netuid, kind, figure, detail))]})
+            if lead is None or abs(pct) > abs(lead["raw"]):
+                lead = {"netuid": int(netuid), "kind": kind, "pct": figure,
+                        "raw": pct, "column": column, "detail": detail}
 
+    notes: List[str] = []
+    if not rows:
+        notes.append("No subnet crossed a mover threshold in this window.")
     risk = [r[0] for r in live.execute(
         "SELECT DISTINCT netuid FROM panel_snapshot WHERE id IN "
         "(SELECT MAX(id) FROM panel_snapshot GROUP BY netuid) "
         "AND dereg_risk_level = 'high' ORDER BY netuid")]
     if risk:
-        items.append(_fact("High deregistration risk: %s."
-                           % _sn_list(risk[:8])))
+        notes.append("High deregistration risk: %s." % _sn_list(risk[:8]))
     contested = [r[0] for r in live.execute(
         "SELECT DISTINCT netuid FROM panel_snapshot WHERE id IN "
         "(SELECT MAX(id) FROM panel_snapshot GROUP BY netuid) "
         "AND (conviction_is_contested = 1 OR takeover_eligible = 1) "
         "ORDER BY netuid")]
     if contested:
-        items.append(_fact("Ownership contested or takeover-eligible: %s."
-                           % _sn_list(contested[:8])))
+        notes.append("Ownership contested or takeover-eligible: %s."
+                     % _sn_list(contested[:8]))
     if brief._table(live, "gate_sides"):
         try:
             hover = [r[0] for r in live.execute(
@@ -428,66 +607,117 @@ def mover_facts(src: Any, cfg: Dict[str, Any], start: str
         except sqlite3.Error:
             hover = []
         if hover:
-            items.append(_fact("Hovering at the bar (%d): %s."
-                               % (len(hover), _sn_list(hover))))
-    return items, lead
+            notes.append("Hovering at the bar (%d): %s."
+                         % (len(hover), _sn_list(hover)))
+
+    blocks: List[Dict[str, Any]] = []
+    if lead is not None:
+        label = "SN%d %s" % (lead["netuid"], lead["kind"])
+        points = netuid_series(src, lead["netuid"], lead["column"])
+        trend = None
+        if len(points) >= 2:
+            trend = _series(
+                "lead-mover-trend", "line", label,
+                "%s over the last %d readings, from %s to %s."
+                % (label, len(points),
+                   _mover_reading(lead["column"], points[0]),
+                   _mover_reading(lead["column"], points[-1])), points)
+        blocks.append(_block(
+            "lead", facts=[_fact("lead-mover", label, lead["pct"],
+                                 value=round(lead["raw"], 1), unit="%",
+                                 headline=True, freshness=lead["detail"])],
+            series=[trend] if trend else []))
+        text = ("SN%d moved %s on %s in this window."
+                % (lead["netuid"], lead["pct"], lead["kind"]))
+    else:
+        text = "No subnet crossed a mover threshold in this window."
+    blocks.append(_block(
+        "board", notes=notes,
+        rows={"label": "Movers this window", "sortable": True,
+              "items": rows} if rows else None))
+    return _section(text, blocks), lead
 
 
 def mining_facts(src: Any, cfg: Dict[str, Any], prev: Dict[str, Any]
-                 ) -> Tuple[List[Tuple[str, str]], Dict[str, Any]]:
+                 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """The ranking the last complete mining pass stored, read through the
     briefing's shared reader so the page and the pulse report identical
     counts and head. Rent, the budget band and the hardware rung are
     operator material and stay off the page."""
     brief = _brief()
-    items: List[Tuple[str, str]] = []
     figures: Dict[str, Any] = {}
     fleet = src.fleet
     if fleet is None or not brief._table(fleet, "mine_econ"):
-        return [_gap("Missing the mining screen.")], figures
+        return _section("No mining pass is recorded for this edition.",
+                        [_block("board", gaps=["Missing the mining "
+                                               "screen."])]), figures
     board = brief.stored_mining(fleet)
     if board is None:
-        return [_gap("Missing a mining pass: no classified pass yet.")], \
+        return _section("No mining pass is recorded for this edition.",
+                        [_block("board", gaps=["Missing a mining pass: no "
+                                               "classified pass yet."])]), \
             figures
 
-    top = [netuid for netuid, _ in board["ranked"][:10]]
+    facts: List[Dict[str, Any]] = []
+    notes: List[str] = []
+    gaps: List[str] = []
+    ranked = board["ranked"]
+    top = [netuid for netuid, _ in ranked[:10]]
     figures["mining_top10"] = top
     figures["mining_model_version"] = board["model_version"]
     figures["mining_observed"] = board["observed"]
-    figures["mining_ranked"] = len(board["ranked"])
+    figures["mining_ranked"] = len(ranked)
     figures["mining_cut"] = board["cut"]
     figures["mining_unrated"] = len(board["unrated"])
-    if not board["ranked"]:
-        items.append(_gap("Missing a ranked mining head: no observed subnet "
-                          "was ranked."))
+
+    facts.append(_fact(
+        "ranked", "Ranked of observed",
+        "%d / %d" % (len(ranked), board["observed"]), headline=True,
+        freshness="%d cut, %d unrated" % (board["cut"],
+                                          len(board["unrated"]))))
+    head_name = None
+    if not ranked:
+        gaps.append("Missing a ranked mining head: no observed subnet was "
+                    "ranked.")
     else:
-        netuid, name = board["ranked"][0]
+        netuid, name = ranked[0]
+        head_name = _clean(name)
         figures["mining_head"] = netuid
-        figures["mining_head_name"] = name
-        items.append(_fact(
-            "Board head: SN%d, %s." % (netuid, name if name else
-                                       "name not recorded")))
-    items.append(_fact("%d ranked, %d cut, %d unrated, %d observed."
-                       % (len(board["ranked"]), board["cut"],
-                          len(board["unrated"]), board["observed"])))
+        figures["mining_head_name"] = head_name
+        facts.append(_fact("head", "Board head", "SN%d" % netuid,
+                           value=netuid, headline=True,
+                           freshness=head_name or "name not recorded"))
     if board["unrated"]:
-        items.append(_gap("Unrated, no figure: %s."
-                          % _sn_list([n for n, _ in board["unrated"]])))
+        gaps.append("Unrated, no figure: %s."
+                    % _sn_list([n for n, _ in board["unrated"]]))
 
     state, entered, left = brief.mining_top_delta(prev, top,
                                                   board["model_version"])
     if state == "model-changed":
-        items.append(_fact("Top-ten changes are not compared: the mining "
-                           "model changed since the last publish."))
+        notes.append("Top-ten changes are not compared: the mining model "
+                     "changed since the last publish.")
     elif state == "changed":
         if entered:
-            items.append(_fact("Entered the top ten: %s." % _sn_list(entered)))
+            notes.append("Entered the top ten: %s." % _sn_list(entered))
         if left:
-            items.append(_fact("Left the top ten: %s." % _sn_list(left)))
+            notes.append("Left the top ten: %s." % _sn_list(left))
     elif state == "unchanged":
-        items.append(_fact("The top ten is unchanged since the last "
-                           "publish."))
-    return items, figures
+        notes.append("The top ten is unchanged since the last publish.")
+
+    items = [{"netuid": int(n), "name": _clean(nm),
+              "summary": "top ten, position %d" % (i + 1), "sort": i + 1}
+             for i, (n, nm) in enumerate(ranked[:10])]
+    if ranked:
+        netuid = ranked[0][0]
+        lead = ("SN%d%s heads the mining board; %d of %d observed subnets "
+                "rank." % (netuid, ", %s," % head_name if head_name else "",
+                           len(ranked), board["observed"]))
+    else:
+        lead = "No observed subnet ranks on the mining board."
+    return _section(lead, [_block(
+        "board", facts=facts, notes=notes, gaps=gaps,
+        rows={"label": "Top ten on the mining board", "sortable": False,
+              "items": items} if items else None)]), figures
 
 
 def recorded_names(src: Any) -> Dict[int, str]:
@@ -509,7 +739,7 @@ def recorded_names(src: Any) -> Dict[int, str]:
 
 def attention_rows(src: Any, cfg: Dict[str, Any], fleet_config: Dict[str, Any]
                    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    """Rows for the attention strip, or a gap. `build_board` already runs
+    """Rows for the attention section, or a gap. `build_board` already runs
     the metrics report, scores every active subnet through `score_subnet`
     and sorts descending; this takes its order, its netuids, its `why` and
     its `pure_opaque` flag and discards the thesis, cue, badges and score.
@@ -531,7 +761,7 @@ def attention_rows(src: Any, cfg: Dict[str, Any], fleet_config: Dict[str, Any]
         if item["sc"]["pure_opaque"]:
             continue
         netuid = item["row"]["netuid"]
-        rows.append({"netuid": netuid, "name": names.get(int(netuid)),
+        rows.append({"netuid": netuid, "name": _clean(names.get(int(netuid))),
                      "why": why_phrase(item["sc"])})
     if not rows:
         return [], "Missing attention rows: no subnet carries a public " \
@@ -539,72 +769,129 @@ def attention_rows(src: Any, cfg: Dict[str, Any], fleet_config: Dict[str, Any]
     return rows, None
 
 
+def group_attention(rows: List[Dict[str, Any]]
+                    ) -> List[Tuple[str, List[Dict[str, Any]]]]:
+    """Collapse rows that share a reason. Ten rows carrying one phrase is
+    the failure this exists to prevent: grouped, the repetition is stated
+    once and the exceptions become visible."""
+    groups: List[Tuple[str, List[Dict[str, Any]]]] = []
+    index: Dict[str, int] = {}
+    for row in rows:
+        key = row.get("why") or "reason not recorded"
+        if key not in index:
+            index[key] = len(groups)
+            groups.append((key, []))
+        groups[index[key]][1].append(row)
+    return groups
+
+
+def attention_section(rows: List[Dict[str, Any]], gap: Optional[str]
+                      ) -> Dict[str, Any]:
+    """One block of groups. Each group states its reason once with its
+    membership count; rows carry netuid, recorded name and reason only."""
+    if not rows:
+        return _section("No subnet carries a public attention signal in "
+                        "this edition.",
+                        [_block("groups", gaps=[gap or "Missing fleet "
+                                                "attention facts."])])
+    groups = group_attention(rows)
+    out = []
+    for reason, members in groups:
+        out.append({
+            "label": "%s: %s" % (reason, _plural(len(members), "subnet",
+                                                  "subnets")),
+            "rows": [{"netuid": int(r["netuid"]), "name": r.get("name"),
+                      "summary": reason} for r in members]})
+    unnamed = [r["netuid"] for r in rows if not r.get("name")]
+    gaps = (["Name not recorded for %s." % _sn_list(unnamed)]
+            if unnamed else [])
+    lead = "%s deserve a closer read" % _plural(len(rows), "subnet",
+                                                "subnets")
+    largest = max(groups, key=lambda g: len(g[1]))
+    if len(groups) > 1 and len(largest[1]) > 1:
+        lead += "; %d share one reason: %s" % (len(largest[1]), largest[0])
+    elif len(groups) == 1 and len(rows) > 1:
+        lead += "; all share one reason: %s" % largest[0]
+    return _section(lead + ".", [_block("groups", gaps=gaps, groups=out)])
+
+
 def code_facts(src: Any, cfg: Dict[str, Any], start: str,
                prev: Dict[str, Any]
-               ) -> Tuple[List[Tuple[str, str]], Dict[str, Any]]:
+               ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """The `code` block, and the lead of the code-narrative section."""
     brief = _brief()
-    items: List[Tuple[str, str]] = []
+    facts: List[Dict[str, Any]] = []
+    notes: List[str] = []
+    gaps: List[str] = []
     figures: Dict[str, Any] = {}
     fleet = src.fleet
     if fleet is None:
-        return [_gap("Missing the fleet store: no code facts.")], figures
+        return _section("Code activity is missing for this edition.",
+                        [_block("code", title="Code",
+                                gaps=["Missing the fleet store: no code "
+                                      "facts."])]), figures
 
-    if not brief._table(fleet, "metric_activity"):
-        items.append(_gap("Missing the seven-day push count."))
+    lead = "The seven-day push count is missing for this edition."
+    latest = brief._one(fleet, "SELECT MAX(pass_ts) FROM metric_activity") \
+        if brief._table(fleet, "metric_activity") else None
+    if not latest:
+        gaps.append("Missing the seven-day push count.")
     else:
-        latest = brief._one(fleet, "SELECT MAX(pass_ts) FROM metric_activity")
-        if not latest:
-            items.append(_gap("Missing the seven-day push count."))
-        else:
-            # The stored seven-day fact, not a count over the publish window.
-            pushed, total = fleet.execute(
-                "SELECT SUM(c7 > 0), COUNT(*) FROM metric_activity "
-                "WHERE pass_ts = ?", (latest,)).fetchone()
-            figures["pushed_7d"] = pushed
-            figures["tracked"] = total
-            items.append(_fact(
-                "%s of %s tracked subnets pushed in the last seven days%s."
-                % (_num(pushed), _num(total),
-                   _delta(pushed, prev.get("pushed_7d")))))
+        # The stored seven-day fact, not a count over the publish window.
+        pushed, total = fleet.execute(
+            "SELECT SUM(c7 > 0), COUNT(*) FROM metric_activity "
+            "WHERE pass_ts = ?", (latest,)).fetchone()
+        figures["pushed_7d"] = pushed
+        figures["tracked"] = total
+        facts.append(_fact(
+            "pushed", "Pushed in 7 days", "%s / %s" % (_num(pushed),
+                                                       _num(total)),
+            value=pushed, headline=True, freshness="tracked subnets",
+            delta=_delta(pushed, prev.get("pushed_7d"))))
+        lead = ("%s of %s tracked subnets pushed code in the last seven "
+                "days." % (_num(pushed), _num(total)))
 
     if not brief._table(fleet, "signal_econ_verdicts"):
-        items.append(_gap("Missing incentive-code verdicts."))
+        gaps.append("Missing incentive-code verdicts.")
     else:
         highs = fleet.execute(
             "SELECT netuid, what_changed, new_sha FROM signal_econ_verdicts "
             "WHERE created_at > ? AND significance = 'high' "
             "ORDER BY created_at DESC LIMIT 5", (start,)).fetchall()
         for netuid, what, sha in highs:
-            items.append(_fact(
+            notes.append(
                 "SN%d, %s, at commit %s."
-                % (netuid, (what or "no verdict line")[:90],
-                   sha[:12] if sha else "not recorded")))
+                % (netuid, (_clean(what) or "no verdict line")[:90],
+                   sha[:12] if sha else "not recorded"))
         med = brief._one(fleet, "SELECT COUNT(*) FROM signal_econ_verdicts "
                                 "WHERE created_at > ? AND significance = "
                                 "'med'", (start,))
         figures["high_count"] = len(highs)
         figures["med_count"] = med
-        items.append(_fact(
+        notes.append(
             "%s and %s of middling significance in the window."
             % (_plural(len(highs), "material incentive-code change",
-                       "material incentive-code changes"), _num(med))))
+                       "material incentive-code changes"), _num(med)))
 
     if brief._table(fleet, "epochs"):
         for netuid, epoch in fleet.execute(
                 "SELECT netuid, epoch FROM epochs WHERE opened_at > ? "
                 "AND epoch > 1 ORDER BY opened_at DESC LIMIT 5",
                 (start,)).fetchall():
-            items.append(_fact("SN%d re-pointed its repository (epoch %d)."
-                               % (netuid, epoch)))
-    return items, figures
+            notes.append("SN%d re-pointed its repository (epoch %d)."
+                         % (netuid, epoch))
+    return _section(lead, [_block("code", title="Code", facts=facts,
+                                  notes=notes, gaps=gaps)]), figures
 
 
-def narrative_facts(src: Any, start: str) -> List[Tuple[str, str]]:
+def narrative_facts(src: Any, start: str) -> Dict[str, Any]:
+    """The `narrative` block of the code-narrative section."""
     brief = _brief()
-    items: List[Tuple[str, str]] = []
     fleet = src.fleet
     if fleet is None or not brief._table(fleet, "signal_adoptions"):
-        return [_gap("Missing the adoption ledger.")]
+        return _block("narrative", title="Narrative",
+                      gaps=["Missing the adoption ledger."])
+    notes: List[str] = []
     # Model identifiers only. Dependency-kind terms say nothing about a
     # subnet's direction and the contract excludes them.
     for term, netuids in fleet.execute(
@@ -612,20 +899,21 @@ def narrative_facts(src: Any, start: str) -> List[Tuple[str, str]]:
             "signal_adoptions WHERE kind = 'model-id' AND seeded = 0 "
             "AND adopted_at > ? GROUP BY term ORDER BY COUNT(*) DESC "
             "LIMIT 6", (start,)).fetchall():
-        items.append(_fact("Model %s adopted by %s."
-                           % (term, _sn_list((netuids or "").split(",")))))
+        notes.append("Model %s adopted by %s."
+                     % (_clean(term), _sn_list((netuids or "").split(","))))
     if brief._table(fleet, "signal_events"):
         for (term,) in fleet.execute(
                 "SELECT term FROM signal_events WHERE class = "
                 "'narrative-cluster' AND created_at > ?", (start,)).fetchall():
-            items.append(_fact("A cluster formed around %s." % term))
-    return items or [_fact("No model-identifier adoption and no cluster "
-                           "formed in this window.")]
+            notes.append("A cluster formed around %s." % _clean(term))
+    return _block("narrative", title="Narrative", notes=notes or [
+        "No model-identifier adoption and no cluster formed in this "
+        "window."])
 
 
 # ---------------------------------------------------------------------------
-# Series. The charts are drawn from recorded rows like every other figure:
-# a series that is not recorded yields None and its chart is simply absent.
+# Series. Drawn from recorded rows like every other figure: a series that is
+# not recorded yields an empty list and no series is emitted.
 # ---------------------------------------------------------------------------
 
 def theta_series(src: Any, limit: int = 48) -> List[float]:
@@ -649,7 +937,7 @@ def vitals_series(src: Any, column: str, limit: int = 30
         return []
     if column not in ("tao_usd", "total_staked_tao", "subnets_share_pct"):
         raise SubntError("refusing an unrecognised vitals column %r"
-                           % column)
+                         % column)
     rows = live.execute(
         "SELECT date, %s FROM network_vitals WHERE %s IS NOT NULL "
         "ORDER BY date DESC LIMIT ?" % (column, column),
@@ -680,28 +968,12 @@ def netuid_series(src: Any, netuid: int, column: str, limit: int = 14
         return []
     if column not in ("share", "moving_price_tao", "alpha_price_tao"):
         raise SubntError("refusing an unrecognised panel column %r"
-                           % column)
+                         % column)
     rows = live.execute(
         "SELECT %s FROM panel_snapshot WHERE netuid = ? AND %s IS NOT NULL "
         "ORDER BY id DESC LIMIT ?" % (column, column),
         (int(netuid), int(limit))).fetchall()
     return [r[0] for r in rows][::-1]
-
-
-def group_attention(rows: List[Dict[str, Any]]
-                    ) -> List[Tuple[str, List[Dict[str, Any]]]]:
-    """Collapse rows that share a reason. Ten rows carrying one phrase is
-    the failure this exists to prevent: grouped, the repetition is stated
-    once and the exceptions become visible."""
-    groups: List[Tuple[str, List[Dict[str, Any]]]] = []
-    index: Dict[str, int] = {}
-    for row in rows:
-        key = row.get("why") or "reason not recorded"
-        if key not in index:
-            index[key] = len(groups)
-            groups.append((key, []))
-        groups[index[key]][1].append(row)
-    return groups
 
 
 def asof_block(src: Any) -> Optional[int]:
@@ -715,206 +987,116 @@ def asof_block(src: Any) -> Optional[int]:
 
 
 # ---------------------------------------------------------------------------
-# Charts. Inline SVG drawn from the recorded series. No library, no script,
-# no external asset: the geometry is computed here and the marks ship in the
-# document, so the page still reads with scripting off.
-# ---------------------------------------------------------------------------
-
-def _points(values: Sequence[float], width: float, height: float,
-            pad: float = 1.0) -> List[Tuple[float, float]]:
-    lo, hi = min(values), max(values)
-    span = (hi - lo) or 1.0
-    last = len(values) - 1 or 1
-    return [(pad + (width - 2 * pad) * (i / last),
-             height - pad - (height - 2 * pad) * ((v - lo) / span))
-            for i, v in enumerate(values)]
-
-
-def sparkline(values: Sequence[float], width: float = 160.0,
-              height: float = 40.0, stroke: str = "#c9b98d",
-              fill_id: Optional[str] = None, label: str = "") -> str:
-    """A single-series trend. Two points is the minimum that means
-    anything; fewer renders nothing rather than a misleading flat line."""
-    if len(values) < 2:
-        return ""
-    pts = _points(values, width, height)
-    line = "M " + " L ".join("%.2f %.2f" % p for p in pts)
-    area = ("%s L %.2f %.2f L %.2f %.2f Z"
-            % (line, pts[-1][0], height, pts[0][0], height))
-    out = ['<svg class="spark" width="%g" height="%g" viewBox="0 0 %g %g" '
-           'role="img" aria-label="%s">' % (width, height, width, height,
-                                            _esc(label))]
-    if fill_id:
-        out.append(
-            '<defs><linearGradient id="%s" x1="0" y1="0" x2="0" y2="1">'
-            '<stop offset="0%%" stop-color="%s" stop-opacity=".30"/>'
-            '<stop offset="100%%" stop-color="%s" stop-opacity="0"/>'
-            '</linearGradient></defs>' % (fill_id, stroke, stroke))
-        out.append('<path d="%s" fill="url(#%s)"/>' % (area, fill_id))
-    out.append('<path d="%s" fill="none" stroke="%s" stroke-width="1.6" '
-               'stroke-linejoin="round" stroke-linecap="round"/>'
-               % (line, stroke))
-    out.append('<circle cx="%.2f" cy="%.2f" r="2.7" fill="%s"/>'
-               % (pts[-1][0], pts[-1][1], stroke))
-    out.append("</svg>")
-    return "".join(out)
-
-
-# The distribution stretches to any viewport, so its geometry is authored
-# in a fixed user space and the browser scales x. Bars are square-ended:
-# a corner radius would distort under the non-uniform scale.
-_DIST_W = 1600.0
-_DIST_H = 210.0
-
-
-def distribution_svg(shares: Sequence[Tuple[int, float]], rank: Optional[int],
-                     highlight: Sequence[int] = (),
-                     falling: Sequence[int] = ()) -> str:
-    """Every subnet's demand share, sorted, on a log scale so the tail stays
-    visible. The emission-gate rank indexes straight into this order, which
-    is why the threshold line lands where it does."""
-    if len(shares) < 2:
-        return ""
-    values = [max(v * 100.0, 0.0) for _n, v in shares]
-    floor = 0.01
-    top = max(values)
-    lo, hi = math.log10(floor), math.log10(top + floor)
-    span = (hi - lo) or 1.0
-    slot = _DIST_W / len(shares)
-    bar = slot * 0.72
-    out = ['<svg class="dist" viewBox="0 0 %g %g" preserveAspectRatio="none" '
-           'role="img" aria-label="Demand share for %d subnets, sorted, '
-           'with the emission-gate bar marked">'
-           % (_DIST_W, _DIST_H, len(shares))]
-    for i, (netuid, share) in enumerate(shares):
-        value = max(share * 100.0, 0.0)
-        height = max(1.5, _DIST_H * (math.log10(value + floor) - lo) / span)
-        if netuid in falling:
-            cls = "b fall"
-        elif netuid in highlight:
-            cls = "b hi"
-        elif rank is not None and i < rank:
-            cls = "b above"
-        else:
-            cls = "b below"
-        out.append(
-            '<rect class="%s" x="%.2f" y="%.2f" width="%.2f" height="%.2f">'
-            '<title>SN%d  %.3f%% demand share  rank %d</title></rect>'
-            % (cls, i * slot + (slot - bar) / 2, _DIST_H - height, bar,
-               height, netuid, value, i + 1))
-    if rank is not None and 0 < rank <= len(shares):
-        out.append('<line class="thresh" x1="%.1f" y1="0" x2="%.1f" y2="%g"/>'
-                   % (rank * slot, rank * slot, _DIST_H))
-    out.append("</svg>")
-    return "".join(out)
-
-
-def meter(fraction: float, left: str, right: str) -> str:
-    pct = max(0.0, min(1.0, fraction)) * 100.0
-    return ('<div class="meter"><div class="mtrack">'
-            '<div class="mfill" style="width:%.2f%%"></div></div>'
-            '<div class="mlab"><span>%s</span><span>%s</span></div></div>'
-            % (pct, _esc(left), _esc(right)))
-
-
-# ---------------------------------------------------------------------------
 # Compose. Pure read: resolves the window, assembles the sections, and
-# returns the edition and its new figure set. Persisting figures belongs to
-# publish, so a composed but unpublished edition does not consume the
-# comparison point.
+# returns the six documents and the new figure set. Persisting figures
+# belongs to publish, so a composed but unpublished edition does not consume
+# the comparison point.
 # ---------------------------------------------------------------------------
+
+def _unreadable(name: str, exc: Exception) -> str:
+    return ("Missing %s facts: the store is not readable (%s)."
+            % (name, type(exc).__name__))
+
 
 def compose(config: Dict[str, Any], state: Optional[sqlite3.Connection],
             now: Optional[datetime.datetime] = None) -> Dict[str, Any]:
     now = _utc(now)
     prev_raw = state_get(state, "figures") if state is not None else None
     prev_at = state_get(state, "published_at") if state is not None else None
-    prev: Dict[str, Any] = json.loads(prev_raw) if prev_raw else {}
     first_edition = prev_at is None
+    # A first edition shows no deltas, whatever a stray figure set says.
+    prev: Dict[str, Any] = (json.loads(prev_raw)
+                            if prev_raw and not first_edition else {})
     if first_edition:
         start = (now - datetime.timedelta(
             hours=float(config.get("window_hours", 6)))).isoformat()
+        previous_composed_at = None
     else:
         start = prev_at
+        previous_composed_at = _stamp(
+            datetime.datetime.fromisoformat(prev_at))
 
     src = _brief()._Sources(config)
-    sections: Dict[str, Any] = {}
+    sections: Dict[str, Dict[str, Any]] = {}
     figures: Dict[str, Any] = {}
+    lead: Optional[Dict[str, Any]] = None
     try:
         try:
             fleet_config = _fleet().load_config()
         except Exception:
             fleet_config = {}
 
-        for name, builder in (
-                ("network", lambda: network_facts(src, config, start, prev,
-                                                  now)),
-                ("mining", lambda: mining_facts(src, config, prev)),
-                ("code", lambda: code_facts(src, config, start, prev))):
-            try:
-                items, figs = builder()
-            except sqlite3.Error as exc:
-                items, figs = [_gap("Missing %s facts: the store is not "
-                                    "readable (%s)."
-                                    % (name, type(exc).__name__))], {}
-            sections[name] = items
+        try:
+            sections["network"], figs = network_facts(src, config, start,
+                                                      prev, now)
             figures.update(figs)
-
-        lead: Optional[Dict[str, Any]] = None
+        except sqlite3.Error as exc:
+            sections["network"] = _section(
+                "The network facts for this edition are missing.",
+                [_block("vitals", gaps=[_unreadable("network", exc)])])
         try:
             sections["movers"], lead = mover_facts(src, config, start)
         except sqlite3.Error as exc:
-            sections["movers"] = [_gap("Missing movers facts: the store is "
-                                       "not readable (%s)."
-                                       % type(exc).__name__)]
+            sections["movers"] = _section(
+                "Movers cannot be ranked for this edition.",
+                [_block("board", gaps=[_unreadable("movers", exc)])])
         try:
-            sections["narrative"] = narrative_facts(src, start)
+            sections["mining"], figs = mining_facts(src, config, prev)
+            figures.update(figs)
         except sqlite3.Error as exc:
-            sections["narrative"] = [_gap("Missing narrative facts: the "
-                                          "store is not readable (%s)."
-                                          % type(exc).__name__)]
-
+            sections["mining"] = _section(
+                "No mining pass is recorded for this edition.",
+                [_block("board", gaps=[_unreadable("mining", exc)])])
         try:
             rows, gap = attention_rows(src, config, fleet_config)
         except sqlite3.Error as exc:
-            rows, gap = [], ("Missing fleet attention facts: the store is "
-                             "not readable (%s)." % type(exc).__name__)
-        sections["attention"] = rows
-        sections["attention_gap"] = gap
-
+            rows, gap = [], _unreadable("fleet attention", exc)
+        sections["attention"] = attention_section(rows, gap)
+        try:
+            code, figs = code_facts(src, config, start, prev)
+            figures.update(figs)
+        except sqlite3.Error as exc:
+            code = _section("Code activity is missing for this edition.",
+                            [_block("code", title="Code",
+                                    gaps=[_unreadable("code", exc)])])
+        try:
+            narrative = narrative_facts(src, start)
+        except sqlite3.Error as exc:
+            narrative = _block("narrative", title="Narrative",
+                               gaps=[_unreadable("narrative", exc)])
+        code["blocks"].append(narrative)
+        sections["code-narrative"] = code
         block = asof_block(src)
-        charts = {
-            "theta": theta_series(src),
-            "tao": [v for _d, v in vitals_series(src, "tao_usd")],
-            "shares": share_distribution(src),
-        }
-        if lead:
-            charts["mover"] = dict(
-                lead, series=netuid_series(src, lead["netuid"],
-                                           lead["column"]))
     finally:
         src.close()
 
-    sections["attention_groups"] = group_attention(
-        sections.get("attention") or [])
-    return {"asof_time": now.strftime("%Y-%m-%d %H:%M UTC"),
-            "asof_iso": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "asof_block": block, "first_edition": first_edition,
-            "window_start": start, "sections": sections, "figures": figures,
-            "charts": charts, "lede": _lede(sections, figures, charts),
-            "prev_theta": prev.get("theta")}
+    composed_at = _stamp(now)
+    edition: Dict[str, Any] = {
+        "schema": SCHEMA_VERSION, "kind": "edition",
+        "composed_at": composed_at, "block": block,
+        "first_edition": first_edition,
+        "previous_composed_at": previous_composed_at,
+        "headline": _lede(lead, figures)}
+    docs: Dict[str, Dict[str, Any]] = {"edition": edition}
+    for sid, fname, question in SECTIONS:
+        body = sections[sid]
+        docs[fname] = {
+            "schema": SCHEMA_VERSION, "kind": "section",
+            "composed_at": composed_at, "block": block, "section": sid,
+            "question": question, "lead": body["lead"], "access": "public",
+            "blocks": body["blocks"]}
+    return {"docs": docs, "figures": figures, "first_edition": first_edition,
+            "window_start": start, "composed_at": composed_at,
+            "block": block}
 
 
-def _lede(sections: Dict[str, Any], figures: Dict[str, Any],
-          charts: Dict[str, Any]) -> str:
+def _lede(lead: Optional[Dict[str, Any]], figures: Dict[str, Any]) -> str:
     """One sentence naming the largest recorded movement in this edition.
-    Derived from the facts already assembled; it states nothing the page
-    does not also show, and falls back to the quiet case rather than
-    reaching for something to say."""
-    mover = charts.get("mover")
-    if mover:
+    It states nothing the files do not also carry, and falls back to the
+    quiet case rather than reaching for something to say."""
+    if lead:
         return ("SN%d moved %s on %s in this window."
-                % (mover["netuid"], mover["pct"], mover["kind"]))
+                % (lead["netuid"], lead["pct"], lead["kind"]))
     theta = figures.get("theta")
     if theta is not None and figures.get("rank") is not None:
         return ("The bar held at %s and no subnet crossed it."
@@ -922,400 +1104,10 @@ def _lede(sections: Dict[str, Any], figures: Dict[str, Any],
     return "No recorded figure moved in this window."
 
 
-# ---------------------------------------------------------------------------
-# Render. The shell's exact shape and CSS, with the section bodies filled.
-# Every interpolated value is escaped.
-# ---------------------------------------------------------------------------
-
-_FONTS = (
-    '<link rel="preconnect" href="https://fonts.googleapis.com">'
-    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-    '<link href="https://fonts.googleapis.com/css2?'
-    'family=Inter:wght@400;500;600;700&'
-    'family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">'
-)
-
-_CSS = """
-:root{
-  --bg:#0b0d10; --s1:#111419; --s2:#161a20; --line:#232830; --hair:#1a1f26;
-  --fg:#eceef1; --fg2:#9aa3ad; --fg3:#646d78;
-  --accent:#c9b98d; --accent-dim:#7a7057; --dn:#e2806c; --up:#74b98a;
-  --r:14px; --pad:40px;
-}
-*{box-sizing:border-box}
-body{
-  margin:0;background:var(--bg);color:var(--fg);min-width:1100px;
-  font:400 15.5px/1.6 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;
-  background-image:radial-gradient(1600px 620px at 8% -10%, rgba(201,185,141,.07), transparent 60%);
-}
-.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
-.bar{
-  position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:18px;
-  padding:0 var(--pad);height:58px;background:rgba(11,13,16,.82);
-  backdrop-filter:blur(14px);border-bottom:1px solid var(--line);
-}
-h1{margin:0;font-size:13.5px;font-weight:700;letter-spacing:.28em}
-.tagline{color:var(--fg2);font-size:13.5px;margin-right:auto}
-.asof{
-  font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;
-  display:flex;align-items:center;gap:9px;font-size:12.5px;
-  color:var(--fg2);background:var(--s1);border:1px solid var(--line);
-  padding:6px 13px;border-radius:999px;
-}
-.pulse{width:6px;height:6px;border-radius:50%;background:var(--up);box-shadow:0 0 0 3px rgba(116,185,138,.14)}
-.ago{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--fg2)}
-.hero{
-  display:grid;grid-template-columns:minmax(30ch,0.9fr) 2.1fr;gap:56px;
-  align-items:center;padding:52px var(--pad) 46px;border-bottom:1px solid var(--hair);
-}
-.eyebrow{font-size:11px;letter-spacing:.22em;color:var(--accent-dim);font-weight:600;margin:0 0 14px}
-.lede{margin:0;font-size:clamp(28px,2.5vw,44px);line-height:1.2;font-weight:600;letter-spacing:-.024em}
-.lede em{font-style:normal;color:var(--accent)}
-.edition{margin:16px 0 0;font-size:13px;color:var(--fg3)}
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-.kpi{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);padding:17px 19px 15px}
-.kpi .k{font-size:11.5px;color:var(--fg2);letter-spacing:.04em;text-transform:uppercase}
-.kpi .v{font-size:27px;font-weight:600;letter-spacing:-.022em;margin-top:7px;line-height:1.1}
-.kpi .v small{font-size:14px;color:var(--fg3);font-weight:500}
-.kpi .m{display:flex;gap:7px;align-items:baseline;font-size:12px;color:var(--fg3);margin-top:3px;flex-wrap:wrap}
-.kpi .gap{font-size:13px;color:var(--fg3);margin-top:9px;line-height:1.4}
-.spark{margin-top:11px;display:block}
-.d{font-weight:600} .d.up{color:var(--up)} .d.dn{color:var(--dn)}
-section{padding:44px var(--pad);border-bottom:1px solid var(--hair)}
-section:last-of-type{border-bottom:0}
-.sh{display:flex;align-items:center;gap:10px;margin:0 0 8px}
-.sh svg{flex:none;color:var(--accent)}
-h2{margin:0;font-size:12px;font-weight:600;letter-spacing:.18em;color:var(--fg2);text-transform:uppercase}
-h3{margin:0 0 12px;font-size:11px;font-weight:600;letter-spacing:.2em;color:var(--fg3);text-transform:uppercase}
-.take{margin:0 0 24px;font-size:20px;line-height:1.4;font-weight:500;letter-spacing:-.012em;max-width:78ch}
-.panel{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px}
-.cap{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:16px}
-.cap .t{font-size:13px;font-weight:500}
-.cap .n{font-size:12px;color:var(--fg3)}
-.dist{width:100%;height:210px;display:block}
-.dist .below{fill:#2a313a} .dist .above{fill:#49535f}
-.dist .hi{fill:var(--accent)} .dist .fall{fill:var(--dn)}
-.dist:hover rect{opacity:.4} .dist rect:hover{opacity:1}
-.thresh{stroke:var(--fg2);stroke-width:1}
-.grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;align-items:start}
-.stack{display:flex;flex-direction:column;gap:16px}
-.rows{display:flex;flex-direction:column}
-.r{display:grid;grid-template-columns:9em 1fr auto;gap:20px;align-items:center;
-   padding:13px 0;border-top:1px solid var(--hair)}
-.r:first-child{border-top:0}
-.id{display:flex;flex-direction:column;gap:1px}
-.uid{font-size:14px;font-weight:600}
-.nm{font-size:12px;color:var(--fg2)}
-.why{font-size:14.5px;line-height:1.45}
-.why .q{color:var(--fg3);font-size:12.5px;display:block;margin-top:3px}
-.fig{text-align:right;font-size:20px;font-weight:600;letter-spacing:-.015em}
-.fig .q{display:block;font-size:11px;color:var(--fg3);font-weight:400;margin-top:2px}
-.facts{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}
-.facts li{padding:11px 0;border-top:1px solid var(--hair);font-size:14.5px;line-height:1.5}
-.facts li:first-child{border-top:0}
-.gap{color:var(--fg3);font-size:14px;line-height:1.5;margin:0 0 8px}
-.chips{display:flex;flex-wrap:wrap;gap:7px}
-.chip{font-size:12px;padding:3px 9px;border-radius:7px;background:var(--s2);
-      border:1px solid var(--line);color:var(--fg2)}
-.chip b{color:var(--fg);font-weight:600}
-.grouphd{font-size:11px;letter-spacing:.14em;color:var(--fg3);margin:0 0 4px;
-         padding-top:4px;text-transform:uppercase}
-.meter{margin-top:14px}
-.mtrack{height:7px;border-radius:99px;background:#232a33;overflow:hidden}
-.mfill{height:100%;background:var(--accent);border-radius:99px}
-.mlab{display:flex;justify-content:space-between;font-size:12px;color:var(--fg3);margin-top:9px}
-footer{padding:34px var(--pad) 54px;color:var(--fg3);font-size:12.5px;display:flex;gap:13px;flex-wrap:wrap}
-.dot{color:var(--line)}
-"""
-
-_ICON = {
-    "network": '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" '
-               'stroke="currentColor" stroke-width="1.8" stroke-linecap="round">'
-               '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 '
-               '0 18a14 14 0 0 1 0-18"/></svg>',
-    "movers": '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" '
-              'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" '
-              'stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/>'
-              '<path d="M21 7v5h-5"/></svg>',
-    "mining": '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" '
-              'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" '
-              'stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/>'
-              '<path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>',
-    "attention": '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" '
-                 'stroke="currentColor" stroke-width="1.8" stroke-linecap="round">'
-                 '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1'
-                 'M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>'
-                 '<circle cx="12" cy="12" r="3.2"/></svg>',
-    "code-narrative": '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" '
-                      'stroke="currentColor" stroke-width="1.8" '
-                      'stroke-linecap="round" stroke-linejoin="round">'
-                      '<path d="M8 6l-5 6 5 6M16 6l5 6-5 6"/></svg>',
-}
-
-
-def _esc(value: Any) -> str:
-    return html.escape("" if value is None else str(value), quote=True)
-
-
-def _facts_list(items: Sequence[Tuple[str, str]]) -> str:
-    """Facts as a list, each gap as its own line. A section with neither
-    still says so, because an empty landmark is not allowed to be silent."""
-    facts = [t for kind, t in items if kind == "fact"]
-    gaps = [t for kind, t in items if kind == "gap"]
-    out = []
-    if facts:
-        out.append('<ul class="facts">')
-        out.extend("<li>%s</li>" % _esc(t) for t in facts)
-        out.append("</ul>")
-    out.extend('<p class="gap">%s</p>' % _esc(t) for t in gaps)
-    if not out:
-        out.append('<p class="gap">Missing every input for this section.</p>')
-    return "".join(out)
-
-
-def _kpi(label: str, value: Optional[str], meta: str = "",
-         extra: str = "", gap: str = "") -> str:
-    """One stat tile. A figure the fact layer withheld (absent, or past its
-    own stale bound) renders the gap by name and no number."""
-    out = ['<div class="kpi"><div class="k">%s</div>' % _esc(label)]
-    if value is None:
-        out.append('<p class="gap">%s</p>' % _esc(gap or "not recorded"))
-    else:
-        out.append('<div class="v mono">%s</div>' % value)
-        if meta:
-            out.append('<div class="m">%s</div>' % meta)
-        out.append(extra)
-    out.append("</div>")
-    return "".join(out)
-
-
-def _section(sid: str, heading: str, take: str, body: str) -> List[str]:
-    return ['<section id="%s">' % sid,
-            '<div class="sh">%s<h2>%s</h2></div>'
-            % (_ICON.get(sid, ""), _esc(heading)),
-            '<p class="take">%s</p>' % _esc(take) if take else "",
-            body, "</section>"]
-
-
-def _hero(edition: Dict[str, Any]) -> str:
-    figures = edition["figures"]
-    charts = edition["charts"]
-    theta = figures.get("theta")
-    usd = figures.get("tao_usd")
-
-    bar_meta = ""
-    delta = _delta_value(theta, edition.get("prev_theta"))
-    if delta:
-        cls = "up" if delta.startswith("+") else "dn"
-        bar_meta = ('<span class="d %s">%s</span><span>since last publish'
-                    '</span>' % (cls, _esc(delta)))
-    elif figures.get("rank") is not None:
-        bar_meta = '<span>rank %s</span>' % _esc(figures["rank"])
-
-    tiles = [
-        _kpi("Emission-gate bar",
-             None if theta is None else _esc(_num(theta, 5)),
-             bar_meta,
-             sparkline(charts.get("theta") or [], fill_id="sparkBar",
-                       label="Emission-gate bar over recent observations"),
-             gap="The bar is not recorded, or is past its stale bound."),
-        _kpi("TAO", None if usd is None else "$" + _esc(_num(usd, 2)),
-             '<span>observed %s</span>' % _esc(figures.get("vitals_date", "")),
-             sparkline(charts.get("tao") or [], stroke="#9aa3ad",
-                       fill_id="sparkTao",
-                       label="TAO in USD over recorded days"),
-             gap="Network vitals are not recorded."),
-        _kpi("Staked",
-             None if figures.get("staked") is None
-             else "%s <small>TAO</small>" % _esc(_grouped(figures["staked"])),
-             '<span class="d">%s%%</span><span>held by subnets</span>'
-             % _esc(_num(figures.get("share_pct"), 2)),
-             meter((figures.get("share_pct") or 0) / 100.0,
-                   "subnets", "root and free"),
-             gap="Stake is not recorded."),
-        _kpi("Runtime spec",
-             None if figures.get("spec") is None else _esc(figures["spec"]),
-             '<span>%s</span>' % _esc(figures.get("release", "release not "
-                                                  "recorded")),
-             '<div class="chips" style="margin-top:18px">%s%s</div>'
-             % ('<span class="chip"><b>%s</b> above the bar</span>'
-                % _esc(figures["above"])
-                if figures.get("above") is not None else "",
-                '<span class="chip"><b>%s</b> side changes</span>'
-                % _esc(figures["side_changes"])
-                if figures.get("side_changes") is not None else ""),
-             gap="The runtime spec is not recorded."),
-    ]
-    edition_note = ('<p class="edition">First edition. No previous publish '
-                    'to compare against, so no figure shows a change.</p>'
-                    if edition["first_edition"] else "")
-    return ('<div class="hero"><div><p class="eyebrow">THIS EDITION</p>'
-            '<p class="lede">%s</p>%s</div><div class="kpis">%s</div></div>'
-            % (_esc(edition["lede"]), edition_note, "".join(tiles)))
-
-
-def _attention_body(edition: Dict[str, Any]) -> str:
-    groups = edition["sections"].get("attention_groups") or []
-    if not groups:
-        return ('<p class="gap">%s</p>'
-                % _esc(edition["sections"].get("attention_gap")
-                       or "Missing fleet attention facts."))
-    panels = []
-    for reason, rows in groups:
-        body = []
-        for row in rows:
-            name = row.get("name")
-            body.append(
-                '<div class="r" style="grid-template-columns:9em 1fr">'
-                '<div class="id"><span class="uid mono">SN%s</span>'
-                '<span class="nm">%s</span></div><div class="why">%s</div>'
-                '</div>'
-                % (_esc(row["netuid"]),
-                   _esc(name) if name else "name not recorded",
-                   _esc(reason)))
-        panels.append('<div class="panel"><p class="grouphd">%s &#183; %d</p>'
-                      '<div class="rows">%s</div></div>'
-                      % (_esc(reason), len(rows), "".join(body)))
-    if len(panels) == 1:
-        return panels[0]
-    return ('<div class="grid">%s<div class="stack">%s</div></div>'
-            % (panels[0], "".join(panels[1:])))
-
-
-def _movers_body(edition: Dict[str, Any]) -> str:
-    charts = edition["charts"]
-    mover = charts.get("mover")
-    items = edition["sections"].get("movers") or []
-    if not mover:
-        return '<div class="panel">%s</div>' % _facts_list(items)
-    cls = "dn" if mover["raw"] < 0 else "up"
-    lead = ('<div class="panel"><div class="r">'
-            '<div class="id"><span class="uid mono">SN%s</span>'
-            '<span class="nm">%s</span></div>'
-            '<div class="why">%s<span class="q mono">%s</span></div>'
-            '<div class="fig mono" style="color:var(--%s)">%s</div></div></div>'
-            % (_esc(mover["netuid"]), _esc(mover["kind"]),
-               sparkline(mover.get("series") or [], width=260, height=58,
-                         stroke="#e2806c" if mover["raw"] < 0 else "#74b98a",
-                         label="SN%s recent readings" % mover["netuid"]),
-               _esc(mover["detail"]), cls, _esc(mover["pct"])))
-    rest = [t for kind, t in items if kind == "fact"
-            and not t.startswith("SN%d " % mover["netuid"])]
-    side = "".join('<div class="panel">%s</div>' % _esc(t) for t in rest)
-    gaps = "".join('<p class="gap">%s</p>' % _esc(t)
-                   for kind, t in items if kind == "gap")
-    return ('<div class="grid">%s<div class="stack">%s</div></div>%s'
-            % (lead, side or '<div class="panel">Nothing else crossed a '
-                             'threshold.</div>', gaps))
-
-
-# Presentation only. The contract allows a script that cannot pull a figure,
-# and the reader's own clock is the one fact the composer does not have: the
-# page states UTC, the reader may not be in it, and an edition sits until a
-# fact moves. Computing the gap in the browser keeps it true for as long as
-# the page is served; a string baked in at compose would be wrong by the
-# second view. The absolute line stays the fallback with scripting off.
-_AGO_JS = (
-    '<script>(function(){'
-    'var el=document.getElementById("ago");if(!el){return}'
-    'var t=Date.parse(el.getAttribute("datetime"));if(isNaN(t)){return}'
-    'function u(n,w){return n+" "+w+(n===1?"":"s")+" ago"}'
-    'function tick(){var s=(Date.now()-t)/1000;'
-    'el.textContent=s<90?"just now":'
-    's<3600?u(Math.floor(s/60),"minute"):'
-    's<86400?u(Math.floor(s/3600),"hour"):'
-    'u(Math.floor(s/86400),"day")}'
-    'tick();try{el.title=new Date(t).toString()}catch(e){}'
-    'el.hidden=false;setInterval(tick,30000);'
-    '})();</script>')
-
-
-def render(edition: Dict[str, Any]) -> str:
-    sections = edition["sections"]
-    figures = edition["figures"]
-    block = edition["asof_block"]
-    asof = "as of %s \u00b7 block %s" % (
-        edition["asof_time"], block if block is not None else "not recorded")
-    # The contract pins the as-of text exactly and its parser reads any
-    # element inside that div as nesting, so the reader's own clock is an
-    # empty sibling the presentation script fills. With scripting off it
-    # renders nothing rather than a stale "4 hours ago" baked in at compose.
-    ago = ('<time class="ago" id="ago" datetime="%s" hidden></time>'
-           % _esc(edition["asof_iso"])) if edition.get("asof_iso") else ""
-
-    dist = distribution_svg(
-        edition["charts"].get("shares") or [], figures.get("rank"),
-        falling=[edition["charts"]["mover"]["netuid"]]
-        if edition["charts"].get("mover") else [])
-    network_body = _facts_list(sections.get("network") or [])
-    if dist:
-        network_body = (
-            '<div class="panel"><div class="cap">'
-            '<div class="t">Demand share across the bar universe</div>'
-            '<div class="n mono">%d subnets &#183; sorted &#183; log scale'
-            '</div></div>%s</div>'
-            '<div style="margin-top:16px">%s</div>'
-            % (len(edition["charts"]["shares"]), dist, network_body))
-
-    ranked = figures.get("mining_ranked")
-    observed = figures.get("mining_observed")
-    if ranked is not None and observed:
-        head = figures.get("mining_head")
-        mining_body = (
-            '<div class="grid"><div class="panel"><div class="cap" '
-            'style="margin:0"><div class="t">Ranked of observed</div>'
-            '<div class="n mono">%s / %s</div></div>%s</div>'
-            '<div class="panel"><div class="k" style="font-size:11.5px;'
-            'color:var(--fg2);letter-spacing:.04em;text-transform:uppercase">'
-            'Board head</div><div class="v mono" style="font-size:27px;'
-            'font-weight:600;margin-top:7px">%s</div>'
-            '<div style="font-size:13px;color:var(--accent);margin-top:2px">'
-            '%s</div></div></div>'
-            % (_esc(ranked), _esc(observed),
-               meter(ranked / float(observed), "%s ranked" % _esc(ranked),
-                     "%s cut, %s unrated" % (
-                         _esc(figures.get("mining_cut")),
-                         _esc(figures.get("mining_unrated")))),
-               "SN%s" % _esc(head) if head is not None else "not recorded",
-               _esc(figures.get("mining_head_name") or "name not recorded")))
-    else:
-        mining_body = '<div class="panel">%s</div>' % _facts_list(
-            sections.get("mining") or [])
-
-    out: List[str] = [
-        "<!DOCTYPE html>", '<html lang="en">', "<head>",
-        '<meta charset="utf-8">',
-        '<meta name="viewport" content="width=device-width, initial-scale=1">',
-        "<title>subnt</title>",
-        '<meta name="description" content="A lean read on Bittensor subnets.">',
-        _FONTS,
-        "<style>" + _CSS + "</style>",
-        "</head>", "<body>",
-        '<div class="bar"><h1>SUBNT</h1>'
-        '<div class="tagline">%s</div>%s'
-        '<div class="asof"><span class="pulse"></span>%s</div></div>'
-        % (_esc(TAGLINE), ago, _esc(asof)),
-        _hero(edition),
-    ]
-    out += _section("network", "Network", "", network_body)
-    out += _section("movers", "Subnet movers", "", _movers_body(edition))
-    out += _section("mining", "Mining", "", mining_body)
-    out += _section("attention", "Attention", "", _attention_body(edition))
-    out += ['<section id="code-narrative">',
-            '<div class="sh">%s<h2>Code / narrative</h2></div>'
-            % _ICON["code-narrative"],
-            '<div class="grid"><div><h3>Code</h3>'
-            '<div class="panel">%s</div></div>'
-            '<div><h3>Narrative</h3><div class="panel">%s</div></div></div>'
-            % (_facts_list(sections.get("code") or []),
-               _facts_list(sections.get("narrative") or [])),
-            "</section>"]
-    out += ["<footer><span>subnt.dev</span><span class=\"dot\">&#183;</span>"
-            "<span>public read-only</span><span class=\"dot\">&#183;</span>"
-            "<span>data from Atlas</span><span class=\"dot\">&#183;</span>"
-            "<span>every figure traces to a recorded row</span></footer>",
-            _AGO_JS, "</body>", "</html>", ""]
-    return "\n".join(x for x in out if x)
+def serialise(doc: Dict[str, Any]) -> str:
+    """The exact text written. Not ASCII-escaped, so the scan reads what the
+    subnt build reads: a token or an em dash cannot hide behind `\\u`."""
+    return json.dumps(doc, ensure_ascii=False, indent=1) + "\n"
 
 
 # ---------------------------------------------------------------------------
@@ -1325,22 +1117,23 @@ def render(edition: Dict[str, Any]) -> str:
 # in advance; the scan can.
 # ---------------------------------------------------------------------------
 
-# The exact strings subnt/tests/test_page_contract.py bans, first.
+# The exact strings the subnt build bans (src/lib/leak.mjs), first.
 OPERATOR_TOKENS: Tuple[str, ...] = (
     "mining.budget_band",
+    "budget_band",
     "TaoStats quota",
+    "TAOSTATS_API_KEY",
     "192.168.0.150",
     "t.me/",
     "api.telegram.org",
     "next: pick mining.budget_band",
-    # The wider off-page list from the page contract.
-    "budget_band",
-    "budget band",
     "rent_band",
+    "watermark",
+    # The wider off-page list from the page contract.
+    "budget band",
     "rent band",
     "hardware rung",
     "taostats",
-    "watermark",
     "seed phrase",
     "mnemonic",
     "private key",
@@ -1355,65 +1148,112 @@ OPERATOR_TOKENS: Tuple[str, ...] = (
     ":8480",
 )
 
+# The subnt build's patterns, then the house rule on em dashes.
 _LEAK_PATTERNS: Tuple[Tuple[str, str], ...] = (
-    ("LAN address", r"\b(?:192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01]))"
-                    r"\.\d{1,3}\.\d{1,3}\b"),
     ("SS58 address", r"\b5[1-9A-HJ-NP-Za-km-z]{46,47}\b"),
-    ("key material", r"\b0x[0-9a-fA-F]{64}\b"),
+    ("private IPv4", r"\b(?:10|127)\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"),
+    ("private IPv4", r"\b192\.168\.\d{1,3}\.\d{1,3}\b"),
+    ("private IPv4", r"\b172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}\b"),
+    ("private key", r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    ("32-byte hex secret", r"\b0x[0-9a-fA-F]{64}\b"),
+    ("Telegram bot token", r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b"),
+    ("operator next-action line", r"(?m)^next: "),
+    ("em dash", "\u2014"),
 )
 
-# The page contract's self-contained rules.
-# What must never reach the page. Presentation may load a typeface and run
-# script; pulling a reported figure in the browser may not, because Atlas is
-# the only writer and the page must read with scripting off.
-_DATA_FETCH_TOKENS: Tuple[str, ...] = (
-    "XMLHttpRequest", "fetch(", "EventSource", "new WebSocket",
-    "navigator.sendBeacon", "@import",
-)
 
-_FONT_HOSTS: Tuple[str, ...] = ("fonts.googleapis.com", "fonts.gstatic.com")
+def _strings(value: Any) -> List[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [s for v in value.values() for s in _strings(v)]
+    if isinstance(value, list):
+        return [s for v in value for s in _strings(v)]
+    return []
 
 
-def scan(document: str) -> List[str]:
-    """Every reason this document must not be published. Empty means clean."""
+def scan(text: str) -> List[str]:
+    """Every reason this text must not be published. Empty means clean.
+
+    The raw file text is scanned together with each string value on its own
+    line, so a line-anchored pattern such as `^next: ` still fires on a
+    value that sits mid-line in the serialised JSON."""
+    try:
+        values = _strings(json.loads(text))
+    except ValueError:
+        values = []
+    body = "\n".join([text] + values)
     found: List[str] = []
-    lowered = document.lower()
+    lowered = body.lower()
     for token in OPERATOR_TOKENS:
         if token.lower() in lowered:
             found.append("operator token %r" % token)
     for label, pattern in _LEAK_PATTERNS:
-        match = re.search(pattern, document)
+        match = re.search(pattern, body)
         if match is not None:
             found.append("%s %r" % (label, match.group(0)))
-    for token in _DATA_FETCH_TOKENS:
-        if token.lower() in lowered:
-            found.append("browser data fetch %r" % token)
-    for url in re.findall(r'(?:href|src)="(https?://[^"]+)"', document):
-        if not any(host in url for host in _FONT_HOSTS):
-            found.append("external asset that is not a typeface %r" % url)
-    if re.search(r'<script[^>]*\ssrc=', document, re.I):
-        found.append("external script")
-    for tag in re.findall(r'<link[^>]*>', document, re.I):
-        if "stylesheet" not in tag.lower():
+    return found
+
+
+def scan_files(files: Dict[str, str]) -> List[str]:
+    """`scan` over every file, each hit prefixed with its file name."""
+    return ["%s: %s" % (name, hit) for name, text in files.items()
+            for hit in scan(text)]
+
+
+# ---------------------------------------------------------------------------
+# Schema validation. The copy at subnt/schema/subnt-1.0.json is the subnt
+# repo's file byte for byte; a test fails when the two drift.
+# ---------------------------------------------------------------------------
+
+_VALIDATOR: Any = None
+
+
+def _validator() -> Any:
+    global _VALIDATOR
+    if _VALIDATOR is None:
+        try:
+            import jsonschema  # noqa: E402
+        except ImportError:
+            raise SubntError("cannot validate: the jsonschema library is "
+                             "not installed")
+        try:
+            with open(SCHEMA_FILE, "r", encoding="utf-8") as handle:
+                schema = json.load(handle)
+        except (OSError, ValueError) as exc:
+            raise SubntError("cannot load schema %s: %s" % (SCHEMA_FILE, exc))
+        _VALIDATOR = jsonschema.Draft202012Validator(schema)
+    return _VALIDATOR
+
+
+def validate(files: Dict[str, str]) -> List[str]:
+    """Every schema failure, as `file: /path message`. Empty means valid."""
+    validator = _validator()
+    found: List[str] = []
+    for name, text in files.items():
+        try:
+            doc = json.loads(text)
+        except ValueError as exc:
+            found.append("%s: not JSON (%s)" % (name, exc))
             continue
-        href = re.search(r'href="([^"]*)"', tag)
-        target = href.group(1) if href else ""
-        if not any(host in target for host in _FONT_HOSTS):
-            found.append("stylesheet that is not a typeface source %r"
-                         % target)
+        for error in sorted(validator.iter_errors(doc),
+                            key=lambda e: list(e.absolute_path)):
+            path = "/" + "/".join(str(p) for p in error.absolute_path)
+            found.append("%s: schema check failed at %s: %s"
+                         % (name, path, error.message))
     return found
 
 
 # ---------------------------------------------------------------------------
-# Publish. Hash-gated and one direction only: no file in the checkout other
-# than the published document is read, and never as an input to an edition.
+# Publish. Fact-gated and one direction only: no file in the checkout is read
+# as an input to an edition. The committed data files are read only to decide
+# whether any fact moved.
 # ---------------------------------------------------------------------------
 
 # The pass runs from a timer with no terminal. Git must never sit waiting
-# for a credential prompt: the Pi reaches GitHub over HTTPS anonymously and
-# holds no key, so a push has nothing to authenticate with. Without these,
-# an interactive run would block on "Username for https://github.com" and a
-# oneshot unit would hang instead of failing.
+# for a credential prompt: without these, an interactive run would block on
+# "Username for https://github.com" and a oneshot unit would hang instead of
+# failing.
 _GIT_ENV = {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "/bin/true",
             "SSH_ASKPASS": "/bin/true", "GIT_SSH_COMMAND":
             "ssh -o BatchMode=yes"}
@@ -1431,7 +1271,7 @@ def _git(cwd: str, *args: str) -> Tuple[int, str, str]:
                               timeout=_GIT_TIMEOUT)
     except subprocess.TimeoutExpired:
         raise SubntError("git %s did not finish in %ds"
-                           % (args[0] if args else "", _GIT_TIMEOUT))
+                         % (args[0] if args else "", _GIT_TIMEOUT))
     return proc.returncode, proc.stdout, proc.stderr
 
 
@@ -1439,26 +1279,37 @@ def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-_ASOF_RE = re.compile(r'(<div class="asof">).*?(</div>)', re.S)
-_AGO_RE = re.compile(r'<time class="ago"[^>]*>')
+def file_names() -> List[str]:
+    return ["%s.json" % name for name in FILES]
 
 
-def fact_digest(document: str) -> str:
-    """The content hash with the as-of line normalised out.
+def fact_digest(files: Dict[str, str]) -> Optional[str]:
+    """The content digest of an edition with its clock fields removed.
 
-    The as-of line carries the compose time, which moves on every pass. A
-    plain document hash would therefore differ every six hours and the
-    gate would never hold, committing a new timestamp over unchanged facts
-    about 124 times a month. Gating on the facts means an edition is
-    republished only when something it reports actually moved, and a page
-    left in place keeps the compose time of the edition that is published,
-    which is the time the contract asks it to state.
+    `composed_at` moves every pass, `block` every hourly panel poll, and
+    `previous_composed_at` every publish. A plain hash would therefore
+    differ every pass and the gate would never hold, committing new
+    timestamps over unchanged facts. Gating on the facts means an edition
+    is republished only when something it reports moved, and the files
+    left in place keep the compose time of the edition that is published.
 
-    The relative-time element carries the same instant as a machine-readable
-    attribute and sits outside that div, so it is normalised out too. Miss it
-    and the gate never holds."""
-    return _sha256(_AGO_RE.sub('<time class="ago">',
-                               _ASOF_RE.sub(r"\1\2", document)))
+    None when any file is missing or unreadable: that always counts as a
+    change."""
+    parts = []
+    for name in file_names():
+        text = files.get(name)
+        if text is None:
+            return None
+        try:
+            doc = json.loads(text)
+        except ValueError:
+            return None
+        if not isinstance(doc, dict):
+            return None
+        for key in _VOLATILE:
+            doc.pop(key, None)
+        parts.append(json.dumps(doc, sort_keys=True, ensure_ascii=False))
+    return _sha256("\n".join(parts))
 
 
 def _atomic_write(path: str, text: str) -> None:
@@ -1468,30 +1319,35 @@ def _atomic_write(path: str, text: str) -> None:
     os.replace(tmp, path)
 
 
-def publish(config: Dict[str, Any], document: str) -> Dict[str, Any]:
-    """Write, hash-gate, commit and push. Fails closed and leaves the
+def data_dir(config: Dict[str, Any]) -> str:
+    return os.path.join(os.path.expanduser(config["checkout_dir"]),
+                        config.get("data_dir", "data"))
+
+
+def publish(config: Dict[str, Any], files: Dict[str, str]) -> Dict[str, Any]:
+    """Write, fact-gate, commit and push. Fails closed and leaves the
     checkout unchanged on any precondition failure. Creates and moves no
-    credential."""
+    credential, and touches no file outside the data directory."""
     checkout = os.path.expanduser(config["checkout_dir"])
-    page = config.get("page_file", "index.html")
-    target = os.path.join(checkout, page)
-    digest = _sha256(document)
+    rel = config.get("data_dir", "data")
+    target = data_dir(config)
+    digest = fact_digest(files)
 
     if not os.path.isdir(checkout):
         raise SubntError("subnt checkout %s does not exist" % checkout)
     if not os.path.isdir(os.path.join(checkout, ".git")):
         raise SubntError("subnt checkout %s is not a git repository"
-                           % checkout)
+                         % checkout)
     code, out, err = _git(checkout, "status", "--porcelain")
     if code != 0:
         raise SubntError("cannot read the checkout state: %s"
-                           % (err.strip() or out.strip()))
+                         % (err.strip() or out.strip()))
     if out.strip():
         raise SubntError("subnt checkout %s is dirty; refusing to write "
-                           "over uncommitted work" % checkout)
+                         "over uncommitted work" % checkout)
 
-    # Anyone may commit to the subnt repo directly (the contract and its
-    # test live there). A checkout left behind origin would have its push
+    # Anyone may commit to the subnt repo directly (the page and its tests
+    # live there). A checkout left behind origin would have its push
     # rejected, and an unattended timer cannot resolve that, so sync first.
     # Fast-forward only: a diverged checkout is an operator problem, not
     # something this pass may paper over with a merge.
@@ -1499,7 +1355,7 @@ def publish(config: Dict[str, Any], document: str) -> Dict[str, Any]:
     code, out, err = _git(checkout, "fetch", "--quiet", "origin", branch)
     if code != 0:
         raise SubntError("cannot reach origin/%s: %s"
-                           % (branch, err.strip() or out.strip()))
+                         % (branch, err.strip() or out.strip()))
     code, counts, _err = _git(checkout, "rev-list", "--left-right",
                               "--count", "HEAD...FETCH_HEAD")
     if code == 0 and counts.split():
@@ -1514,22 +1370,31 @@ def publish(config: Dict[str, Any], document: str) -> Dict[str, Any]:
                                   "FETCH_HEAD")
             if code != 0:
                 raise SubntError("cannot fast-forward to origin/%s: %s"
-                                   % (branch, err.strip() or out.strip()))
+                                 % (branch, err.strip() or out.strip()))
 
-    code, committed, _err = _git(checkout, "show", "HEAD:%s" % page)
-    if code == 0 and fact_digest(committed) == fact_digest(document):
-        return {"changed": False, "sha256": digest, "path": target,
+    committed: Dict[str, str] = {}
+    for name in file_names():
+        code, text, _err = _git(checkout, "show",
+                                "HEAD:%s/%s" % (rel, name))
+        if code == 0:
+            committed[name] = text
+    if digest is not None and fact_digest(committed) == digest:
+        return {"changed": False, "digest": digest, "path": target,
                 "pushed": False}
 
-    _atomic_write(target, document)
-    code, out, err = _git(checkout, "add", page)
+    os.makedirs(target, exist_ok=True)
+    paths = []
+    for name in file_names():
+        _atomic_write(os.path.join(target, name), files[name])
+        paths.append("%s/%s" % (rel, name))
+    code, out, err = _git(checkout, "add", "--", *paths)
     if code != 0:
-        raise SubntError("cannot stage %s: %s" % (page, err.strip()))
+        raise SubntError("cannot stage %s: %s" % (rel, err.strip()))
     code, out, err = _git(
         checkout,
         "-c", "user.name=%s" % config.get("commit_name", "vaNlabs"),
         "-c", "user.email=%s" % config.get("commit_email", "vanlabs@pm.me"),
-        "commit", "-m", "Publish edition")
+        "commit", "-m", "Publish edition", "--", *paths)
     if code != 0:
         raise SubntError("cannot commit: %s" % (err.strip() or out.strip()))
 
@@ -1541,7 +1406,8 @@ def publish(config: Dict[str, Any], document: str) -> Dict[str, Any]:
             "cannot push to origin/%s: %s. The commit is local and "
             "recoverable; nothing was reset."
             % (branch, err.strip() or out.strip()))
-    return {"changed": True, "sha256": digest, "path": target, "pushed": True}
+    return {"changed": True, "digest": digest, "path": target,
+            "pushed": True}
 
 
 # ---------------------------------------------------------------------------
@@ -1550,41 +1416,42 @@ def publish(config: Dict[str, Any], document: str) -> Dict[str, Any]:
 
 def build(config: Dict[str, Any], state: Optional[sqlite3.Connection],
           now: Optional[datetime.datetime] = None
-          ) -> Tuple[Dict[str, Any], str, List[str]]:
-    """Compose, render and scan. Writes nothing anywhere."""
+          ) -> Tuple[Dict[str, Any], Dict[str, str], List[str]]:
+    """Compose, serialise, scan and validate. Writes nothing anywhere.
+    Returns (edition, files by file name, every problem found)."""
     edition = compose(config, state, now=now)
-    document = render(edition)
-    return edition, document, scan(document)
+    files = {"%s.json" % name: serialise(edition["docs"][name])
+             for name in FILES}
+    return edition, files, scan_files(files) + validate(files)
 
 
 def run(config: Dict[str, Any], now: Optional[datetime.datetime] = None
         ) -> Dict[str, Any]:
-    """The full pass. Composes, scans, and publishes when the content hash
+    """The full pass. Composes, scans, validates, and publishes when a fact
     has moved. Persists the figure set only after a successful publish, so
     an unpublished edition does not consume the comparison point."""
     if not config.get("enabled"):
         return {"status": "disabled"}
     state = open_state(_tg().resolve(config["state_db"]))
     try:
-        edition, document, leaks = build(config, state, now=now)
-        if leaks:
-            raise SubntError("refusing to publish: %s" % "; ".join(leaks))
-        checkout = os.path.expanduser(config["checkout_dir"])
-        target = os.path.join(checkout, config.get("page_file", "index.html"))
+        edition, files, problems = build(config, state, now=now)
+        if problems:
+            raise SubntError("refusing to publish: %s" % "; ".join(problems))
+        size = sum(len(t.encode("utf-8")) for t in files.values())
         if not config.get("publish"):
             return {"status": "composed", "published": False,
-                    "would_write": target, "bytes": len(document),
-                    "sha256": _sha256(document),
+                    "would_write": data_dir(config), "bytes": size,
+                    "digest": fact_digest(files),
                     "first_edition": edition["first_edition"]}
-        result = publish(config, document)
+        result = publish(config, files)
         if result["changed"]:
             state_set(state, "figures", json.dumps(edition["figures"],
                                                    sort_keys=True))
             state_set(state, "published_at", _utc(now).isoformat())
-            state_set(state, "content_sha256", result["sha256"])
+            state_set(state, "content_sha256", result["digest"] or "")
         return {"status": "published" if result["changed"] else "unchanged",
                 "published": result["changed"], "path": result["path"],
-                "bytes": len(document), "sha256": result["sha256"],
+                "bytes": size, "digest": result["digest"],
                 "first_edition": edition["first_edition"]}
     finally:
         state.close()
@@ -1593,17 +1460,17 @@ def run(config: Dict[str, Any], now: Optional[datetime.datetime] = None
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="atlas_subnt",
-        description="Atlas subnt renderer: compose the public edition "
-                    "from the Atlas stores and publish it on a content "
-                    "change.")
+        description="Atlas subnt publisher: compose the public edition "
+                    "from the Atlas stores as subnt data files and publish "
+                    "them when a fact moves.")
     parser.add_argument("--config", default=None)
     sub = parser.add_subparsers(dest="command", required=True)
-    comp = sub.add_parser("compose", help="print the edition and the scan "
+    comp = sub.add_parser("compose", help="print the edition and the check "
                                           "result; write nothing")
     comp.add_argument("--dry-run", action="store_true",
                       help="the default: nothing is written")
     comp.add_argument("--out", default=None,
-                      help="also write the document to this path")
+                      help="also write the six files into this directory")
     sub.add_parser("publish", help="run the full pass")
 
     args = parser.parse_args(argv)
@@ -1617,22 +1484,27 @@ def main(argv: Optional[List[str]] = None) -> int:
             state = open_state(state_path) if os.path.exists(state_path) \
                 else None
             try:
-                edition, document, leaks = build(config, state)
+                edition, files, problems = build(config, state)
             finally:
                 if state is not None:
                     state.close()
             if args.out:
-                _atomic_write(args.out, document)
-            sys.stdout.write(document)
-            summary = {"scan": leaks or "clean", "bytes": len(document),
-                       "sha256": _sha256(document),
+                os.makedirs(args.out, exist_ok=True)
+                for name, text in files.items():
+                    _atomic_write(os.path.join(args.out, name), text)
+            sys.stdout.write(json.dumps(edition["docs"], ensure_ascii=False,
+                                        indent=1) + "\n")
+            summary = {"problems": problems or "clean",
+                       "bytes": sum(len(t.encode("utf-8"))
+                                    for t in files.values()),
+                       "digest": fact_digest(files),
                        "first_edition": edition["first_edition"],
                        "window_start": edition["window_start"],
-                       "asof_block": edition["asof_block"],
+                       "block": edition["block"],
                        "written": args.out}
             print(json.dumps(summary, indent=2, sort_keys=True),
                   file=sys.stderr)
-            return 0 if not leaks else 2
+            return 0 if not problems else 2
         print(json.dumps(run(config), indent=2, sort_keys=True))
         return 0
     except SubntError as exc:
