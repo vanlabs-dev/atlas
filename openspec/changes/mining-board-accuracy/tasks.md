@@ -171,6 +171,6 @@
 - [x] 7.3 Flag to the operator that `knowledge/corpus/ground-truth.md` lacks
       per-subnet alpha halving and mechanism splits. Do not edit the corpus
       in this change.
-- [ ] 7.4 Propose the push and the Pi `git pull` to the operator. After the
+- [x] 7.4 Propose the push and the Pi `git pull` to the operator. After the
       first pass, run the read-only verification in design Migration step 4
       and record the results and the block in `docs/decisions.md`.
