@@ -472,6 +472,23 @@ the board's own store. Each finding changed the screen.
   24 owner-capture, 10 identity-placeholder, 4 pool-side-switch-off),
   0 unrated. Head SN4 Targon. On-device verification is pending the first
   post-deploy pass.
+- **On-device verification (2026-09-26, read-only).** The first
+  `model_version` 2 pass is `2026-09-25T06:47:51Z`; the latest checked is
+  `2026-09-25T18:32:03Z` at block 9146562. All six checks pass:
+  - SN93 mechanism 0 (split 2.0%) prices an entrant at 8.11 TAO/mo. The
+    subnet row stores mechanism 1's 847 TAO/mo, but both mechanisms are
+    cut winner-take-all (99.4% and 100%), so no headline figure shows.
+  - SN9 is cut winner-take-all (independent top-1 at 100%).
+  - SN80 on the first model-2 pass: 704.79 alpha/day against 563.83 on
+    the last model-1 pass (`06:21:03Z`), +25.0% at the same price. By
+    `18:32` a fourth independent earner joined, so it reads 584.37.
+  - SN3, SN4 and SN56 rank 4, 1 and 10; none is cut not-minable.
+  - The briefing (`stored_mining`), the LAN board and the subnt
+    `mining.json` all read 128 observed, 64 ranked, 64 cut, 0 unrated.
+    Head SN4 Targon.
+  - Reconciliation holds within 0.01 on 125/125 emitting subnets. The
+    three at delta 1.0 (59, 86, 108) emit nothing and are already cut
+    (identity-placeholder, identity-placeholder, pool-side-switch-off).
 
 ## subnt renderer decisions (2026-09-09, change: subnt-renderer)
 
