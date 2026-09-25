@@ -57,8 +57,8 @@
 
 ## 9. Pi rollout (operator runs, Claude proposes the commands)
 
-- [ ] 9.1 After the operator pushes, `git pull` in `~/atlas` on the Pi and run the subnt test suite there
-- [ ] 9.2 On the Pi, compose from the real stores with `--out /tmp/subnt-data`, build a copy of `~/subnt` at `/tmp/subnt-check` against it, and confirm `npm run build` passes
-- [ ] 9.3 Run `python3 subnt/atlas_subnt.py publish` once by hand; confirm the Cloudflare build and that https://subnt.dev shows the new `composed_at`
-- [ ] 9.4 `systemctl --user enable --now atlas-subnt.timer` and confirm the next scheduled run
-- [ ] 9.5 Update the `subnt-timer-stopped` memory and the README paused notes to record the restart
+- [x] 9.1 After the operator pushes, `git pull` in `~/atlas` on the Pi and run the subnt test suite there
+- [x] 9.2 On the Pi, compose from the real stores with `--out /tmp/subnt-data`, build a copy of `~/subnt` at `/tmp/subnt-check` against it, and confirm `npm run build` passes
+- [x] 9.3 Run `python3 subnt/atlas_subnt.py publish` once by hand; confirm the Cloudflare build and that https://subnt.dev shows the new `composed_at`
+- [x] 9.4 `systemctl --user enable --now atlas-subnt.timer` and confirm the next scheduled run
+- [x] 9.5 Update the `subnt-timer-stopped` memory and the README paused notes to record the restart

@@ -220,11 +220,12 @@ rename was deployed on 2026-09-22 with its prior publish state preserved.
 Cloudflare serves https://subnt.dev from the subnt repo's Astro build of
 `data/`; unknown paths return HTTP 404. `www` is not configured.
 
-**Paused since 2026-09-24.** `atlas-subnt.timer` is stopped (still
-enabled, so a reboot restarts it) because the deployed code wrote only the
-v1 `index.html`. Restart it after the `subnt-json-export` rollout (change
-tasks 9.1 to 9.5). The state store carries over, so the first data-file
-edition compares against the last v1 publish.
+**Paused 2026-09-24 to 2026-09-26.** `atlas-subnt.timer` was stopped
+while the deployed code wrote only the v1 `index.html`. The
+`subnt-json-export` rollout resumed it on 2026-09-26: the first
+data-file publishes are `d61476f` and `de72097` in the subnt repo, and
+the state store carried over, so the first one compared against the last
+v1 publish.
 
 | | |
 |---|---|
