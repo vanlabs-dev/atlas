@@ -1432,6 +1432,47 @@ class LedeTests(unittest.TestCase):
                              "No recorded figure moved in this window.")
 
 
+class ClipTests(unittest.TestCase):
+    """Long verdict lines are shortened on a word, never mid-word."""
+
+    LINE = ("When UAV data is missing and the partner is on mainnet, the "
+            "unused UAV share now goes to the burn UID")
+
+    def test_short_text_is_unchanged(self):
+        self.assertEqual(sh._clip("reward split moved", 90),
+                         "reward split moved")
+        exact = "x" * 90
+        self.assertEqual(sh._clip(exact, 90), exact)
+
+    def test_long_text_ends_on_a_whole_word_with_an_ellipsis(self):
+        clipped = sh._clip(self.LINE, 90)
+        self.assertLessEqual(len(clipped), 90)
+        self.assertTrue(clipped.endswith("\u2026"))
+        self.assertTrue(self.LINE.startswith(clipped[:-1]))
+        self.assertEqual(self.LINE[len(clipped) - 1], " ")
+
+    def test_no_dangling_punctuation_before_the_ellipsis(self):
+        self.assertEqual(sh._clip("alpha beta, gamma delta", 13),
+                         "alpha beta\u2026")
+
+    def test_a_single_long_word_is_cut_hard(self):
+        clipped = sh._clip("a" * 120, 90)
+        self.assertEqual(len(clipped), 90)
+        self.assertTrue(clipped.endswith("\u2026"))
+
+    def test_a_long_verdict_is_clipped_in_the_published_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            build_live(config["live_db"])
+            build_fleet(config["fleet_db"], verdict_text=self.LINE)
+            _e, files, problems = sh.build(config, None)
+            self.assertEqual(problems, [])
+            notes = texts(docs(files)["code.json"], "notes")
+            verdict = [n for n in notes if n.startswith("SN12, ")][0]
+            self.assertIn("goes to\u2026, at commit", verdict)
+            self.assertNotIn("goes to t,", verdict)
+
+
 class ZeroDeltaTests(unittest.TestCase):
     def test_a_delta_that_rounds_to_zero_is_suppressed(self):
         self.assertIsNone(sh._delta_value(100.0, 100.0))

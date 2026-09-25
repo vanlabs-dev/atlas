@@ -232,6 +232,20 @@ def _clean(text: Any) -> Optional[str]:
     return out or None
 
 
+def _clip(text: str, limit: int) -> str:
+    """Text shortened to at most `limit` characters on a word boundary,
+    with an ellipsis marking the cut. A plain slice cut verdict lines
+    mid-word ("the unused UAV share now goes to t"), which reads as a typo
+    rather than a shortened line."""
+    if len(text) <= limit:
+        return text
+    cut = text[:limit - 1]
+    space = cut.rfind(" ")
+    if space > 0:
+        cut = cut[:space]
+    return cut.rstrip(" ,;:.") + "\u2026"
+
+
 def _fact(fid: str, label: str, text: str, *, value: Any = None,
           unit: Optional[str] = None, headline: bool = False,
           ref_block: Optional[int] = None, observed: Optional[str] = None,
@@ -861,7 +875,7 @@ def code_facts(src: Any, cfg: Dict[str, Any], start: str,
         for netuid, what, sha in highs:
             notes.append(
                 "SN%d, %s, at commit %s."
-                % (netuid, (_clean(what) or "no verdict line")[:90],
+                % (netuid, _clip(_clean(what) or "no verdict line", 90),
                    sha[:12] if sha else "not recorded"))
         med = brief._one(fleet, "SELECT COUNT(*) FROM signal_econ_verdicts "
                                 "WHERE created_at > ? AND significance = "
