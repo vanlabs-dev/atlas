@@ -1,9 +1,9 @@
 {
-  "_comment": "subnt renderer (change: subnt-renderer): composes the public subnt.dev edition from stores already on disk, read-only, and publishes it into a second checkout when the content hash changes. No provider call, no model call, no chain call. Atlas writes subnt; subnt is never read back. Rollback: enabled false stops compose and publish and touches nothing else; publish false composes and writes nothing. Rename deployed 2026-09-22 with prior publish state preserved. Publishing originally enabled 2026-09-11. Credential: a write-scoped deploy key for vanlabs-dev/subnt at ~/.ssh/id_ed25519_subnt; the checkout at checkout_dir must use the SSH remote.",
+  "_comment": "subnt publisher (changes: subnt-renderer, subnt-json-export): composes the public subnt.dev edition from stores already on disk, read-only, as six data files (schema subnt/1.x, vendored at subnt/schema/subnt-1.0.json) and publishes them into data_dir of a second checkout when a fact moves. No provider call, no model call, no chain call. Atlas writes subnt; subnt is never read back. Rollback: enabled false stops compose and publish and touches nothing else; publish false composes and writes nothing. Rename deployed 2026-09-22 with prior publish state preserved. Publishing originally enabled 2026-09-11; HTML output replaced by data files 2026-09-26. Credential: a write-scoped deploy key for vanlabs-dev/subnt at ~/.ssh/id_ed25519_subnt; the checkout at checkout_dir must use the SSH remote.",
   "enabled": true,
   "publish": true,
   "checkout_dir": "/home/pi/subnt",
-  "page_file": "index.html",
+  "data_dir": "data",
   "state_db": "var/subnt/subnt.db",
   "commit_name": "vaNlabs",
   "commit_email": "vanlabs@pm.me",

@@ -566,6 +566,32 @@ change. Passes three and four reported `unchanged` and made no commit, so
 the fact gate holds. Commits land as `vanlabs-dev <vanlabs@pm.me>` with no
 trailer.
 
+## subnt JSON export (2026-09-26, change: subnt-json-export)
+
+subnt.dev builds its v2 Astro page from `data/*.json` (schema
+`subnt/1.x`). The publisher wrote only the v1 root `index.html`, which the
+v2 build ignores, so `atlas-subnt.timer` was stopped on 2026-09-24. Three
+decisions close that gap.
+
+**Atlas writes six data files and no HTML.** `edition.json` plus one file
+per section, each validated against a byte copy of the subnt schema at
+`subnt/schema/subnt-1.0.json` before any write. A test fails when the copy
+drifts from a subnt checkout that is present. The builders return schema
+blocks directly, so no sentence is parsed back into a figure.
+
+**The HTML renderer is removed now, not one week after cutover.** The
+subnt-v2 plan kept it for a week as a rollback. It has no reader: subnt.dev
+serves `dist/` only, so a v1 `index.html` changes nothing live. Rollback is
+`git revert` of this change, not a config switch. The stale root
+`index.html` in the subnt repo is that repo's cleanup; Atlas neither reads
+nor writes it.
+
+**The gate ignores `composed_at`, `block` and `previous_composed_at`.**
+Each fact is dated from its own row (the bar from `gate_state.observed_at`),
+never the edition block, which moves every hourly poll. A stored em dash
+(a verdict line, a subnet name) is rewritten to a comma before it reaches a
+file, since the schema refuses one and a refusal would stop every publish.
+
 ## pulse-briefing and rotation-signal-gate acceptance (2026-09-11)
 
 Read off the device before archiving both changes.

@@ -1,6 +1,6 @@
-# Atlas subnt renderer: compose the public edition from the Atlas stores
-# and publish it into the subnt checkout on a fact change (change:
-# subnt-renderer). Install (user-level, as pi; linger is on):
+# Atlas subnt publisher: compose the public edition from the Atlas stores
+# as subnt data files and publish them on a fact change (changes:
+# subnt-renderer, subnt-json-export). Install (user-level, as pi; linger is on):
 # For an existing publisher, first follow docs/subnt-rename.md in the
 # public-page repo: disable the old timer and migrate checkout and state.
 #   cp ~/atlas/subnt/systemd/atlas-subnt.{service,timer} \

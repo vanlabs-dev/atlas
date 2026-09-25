@@ -20,7 +20,7 @@ from live runtime metadata. See [docs/runtime-upgrade.md](docs/runtime-upgrade.m
 It replaced the Hermes cron job "Atlas runtime upgrade", removed
 2026-09-24.
 
-## Current status (2026-09-23, Finney spec 469)
+## Current status (2026-09-24, Finney spec 469)
 
 **Phases 0–5 are complete and accepted on the device.** Hermes Agent
 v0.20.0 runs on the Pi (Grok `grok-4.6` via X OAuth), answering Bittensor
@@ -42,7 +42,8 @@ Corpus and this README are grounded at 469.
 
 **On the device:** fleet clones + LAN boards at
 `http://192.168.0.150:8480/` and `/mining.html`; hourly gate poll and
-chain-parameter watch; Telegram pulse + subnt.dev public edition.
+chain-parameter watch; Telegram pulse. The subnt.dev publisher is paused
+(see `subnt-publish` below).
 The 455 switch
 watch is deployed (`063d206`).
 
@@ -70,7 +71,7 @@ those dated live reads as current.
 | `signal-effectiveness-gate` | Done: deployed + archived (2026-09-11, change `rotation-signal-gate`). Alerts must earn the right to page. The effectiveness ledger lifted out of `fleet-signals` measures every netuid-scoped class by source triple whatever its tier, so a demoted class keeps filling and a demotion can be reversed on evidence. A new `shadow` tier records and measures but sends nothing, and is the default for a new netuid-scoped class, so nothing new can page by accident; a class the tier registry does not name delivers nothing, so drift fails closed. A class reaches a paging tier only by an operator decision recorded in `docs/decisions.md` against a filled read that beats the fleet baseline. On its own ledger read `econ-code` was demoted to `briefing` (no edge at 1 day, worse at 7, n=185 to 212) and `subnet-registry` too (all six alerts in 30 days were renames). **Measured 2026-09-11:** volume fell from about 6.6 pages a day to about 1.5 |
 | `fleet-rotation-metrics` | Done — deployed + archived (2026-07-26) — turns the fleet into a rotation cockpit (`fleet/atlas_fleet_metrics.py` + `atlas_fleet_dashboard.py`): per-`(netuid,epoch)` **emission-redirect map** with `file:line` evidence + opacity flag (proportion/fraction/hotkey-gated so incidental family-word vars aren't mistaken for splits), epoch-scoped activity + **branch pulse** (`ls-remote` tip diff, no fetch), momentum reused from `signal_prices` (→ `n/a` until history accrues), percentile quadrant, and a ranked **LAN-only "attention board"** static dashboard (explicit score; fresh events top, opacity deduped). Read-only, additive tables, per-slot fail-closed, never executes subnet code; runs inline after signals + `atlas-dashboard.service`. Full fleet suite **214 green** off-device; delta specs synced. On the Pi: metrics inline each pass over the active clones (43 emission routes; SN54 = 35% partner); board live at `http://192.168.0.150:8480/` after a LAN-scoped nftables accept for 8480 (2026-07-26); traversal containment verified from another LAN device |
 | `mining-triage` | Done: deployed + archived (2026-08-12). `fleet/atlas_fleet_mining.py`, inline and fail-isolated after metrics in the 6h fleet pass. Ranks subnets by what a **new independent miner** could earn: pool-side emission switch cut (`pool-side-switch-off`; not the emission-gate bar), `identity-placeholder` cut (owner-written `SubnetIdentitiesV3` names such as `deprecated`/`Parked`, or no entry), owner-capture cut (`MinerBurned` ≥ 99%), `winner-take-all` cut (top-1 incentive share ≥ 95%), then sha-gated `file:line` feasibility over the fleet FTS index (`min_compute.yml` VRAM floor, miner entrypoint, GPU and closed-API tells). Headline is an entrant figure under a stated parity model (pool shared among earners + 1). Chain reads are keyless batched `state_queryStorageAt` at one finalized block via livedata (`twox128`, `read_subnet_maps`; hasher derived from the observed key tail and verified, never assumed); zero TaoStats quota. Output: `var/fleet/www/mining.html` at `http://192.168.0.150:8480/mining.html` and read-only `mining_board` / `mining_subnet` / `mining_history` on `atlas-fleet`. `CollateralLockShare` (dormant chain-wide) joined the chain-parameter watch. Latest board: 128 observed / 46 ranked / 82 cut; first rung `pool-side-switch-off` (netuids 29, 35, 36). `mining.budget_band` is still null (rent unknown, hardware rung inert); see Next step |
-| `subnt-publish` | Publisher rename deployed on 2026-09-22; device publish and timer verified (see the public-page repo `docs/subnt-rename.md`). Domain cutover is complete; https://subnt.dev serves the verified edition. Original renderer: deployed + archived (2026-09-11, change `subnt-renderer`). `subnt/atlas_subnt.py` composes the public subnt.dev edition from `livedata` and `fleet` rows, all opened read-only, to the `public-pulse` contract in `vanlabs-dev/subnt`: five landmarks, gaps named never estimated, stale bounds per input (26h for the emission-gate bar; vitals dated, not stale for age; movers over the window since the previous publish). Charts are inline SVG from recorded series and introduce no figure the page does not report. Attention reuses `build_board` ordering, drops `pure_opaque`, caps at ten, and derives each reason from `div_signed`/`cold`/`econ_fresh`/`pulse_spike` rather than the near-constant category, grouping rows that share one; no score, glyph or thesis. Deltas compare against the last subnt publish in its own `var/subnt/subnt.db`, never the Telegram watermark, and a zero delta is suppressed. Before any write the document is scanned for operator material and for any browser data fetch, failing the pass closed. The publish gate hashes the facts with the as-of line normalised out, and the checkout is fast-forwarded first (a diverged one fails closed). Own oneshot unit and timer at `00/6:55` local time, after the fleet pass. On the Pi: a write-scoped deploy key for the subnt repo alone; Atlas itself still pulls anonymously over HTTPS. 75 tests green off-device |
+| `subnt-publish` | Publisher rename deployed on 2026-09-22; device publish and timer verified (see the public-page repo `docs/subnt-rename.md`). Domain cutover is complete; https://subnt.dev serves the verified edition. Original renderer: deployed + archived (2026-09-11, change `subnt-renderer`). `subnt/atlas_subnt.py` composes the public subnt.dev edition from `livedata` and `fleet` rows, all opened read-only, to the `public-pulse` contract in `vanlabs-dev/subnt`: five landmarks, gaps named never estimated, stale bounds per input (26h for the emission-gate bar; vitals dated, not stale for age; movers over the window since the previous publish). Since change `subnt-json-export` (2026-09-26) it writes six data files into the subnt checkout's `data/` (schema `subnt/1.x`, validated against a vendored copy that a test holds to the subnt original) and no HTML; the page is laid out by the subnt repo. Series are carried as recorded points and introduce no figure the files do not report. Attention reuses `build_board` ordering, drops `pure_opaque`, caps at ten, and derives each reason from `div_signed`/`cold`/`econ_fresh`/`pulse_spike` rather than the near-constant category, grouping rows that share one; no score, glyph or thesis. Deltas compare against the last subnt publish in its own `var/subnt/subnt.db`, never the Telegram watermark, and a zero delta is suppressed. Before any write every file is scanned for operator material (a superset of the subnt build's list) and validated, failing the pass closed. The publish gate hashes the facts with `composed_at`, `block` and `previous_composed_at` removed, and the checkout is fast-forwarded first (a diverged one fails closed). Own oneshot unit and timer at `00/6:55` local time, after the fleet pass. **Paused 2026-09-24:** `atlas-subnt.timer` is stopped but still enabled (a reboot restarts it). subnt.dev builds its v2 page from `data/*.json`, and the deployed publisher still writes only the v1 `index.html`, so publishes changed nothing live. The JSON export is implemented (change `subnt-json-export`); restart the timer after its Pi rollout. On the Pi: a write-scoped deploy key for the subnt repo alone; Atlas itself still pulls anonymously over HTTPS. 84 tests green off-device |
 | `econ-alert-intelligence` | Done — deployed + archived (2026-07-26, change `econ-alert-intelligence-gate`). A language-model materiality judgment between econ-path detection and the phone: the gate reads the diff from the local blobless clone (read-only, bounded, never executing subnet code), asks the local Hermes CLI for an evidence-grounded verdict, and routes by significance — page, digest, or recorded drop — with a high-stakes path floor. Diff text is untrusted end to end; verdicts cache by content, fail soft as `unjudged`, and reuse the Hermes subscription (no new credential). Since `rotation-signal-gate` the verdict drives detection, cooldown and the ledger while the class's registered tier alone decides whether anything pages |
 
 Latest closed-loop assessment `20260711T073125Z-d52a70e9`: **ok=7, finding=0**.
@@ -90,6 +91,12 @@ unit) — both to close before production acceptance.
   command line.
 - **Repo on the Pi:** cloned at `~/atlas`, kept current with `git pull`
   (remote: `github.com/vanlabs-dev/atlas`). This is the live working tree.
+- **Scheduled jobs are user-level systemd units** in
+  `~/.config/systemd/user/` (linger on): `atlas-repotrack-update`,
+  `atlas-poll-chain-head`, `atlas-probe`, `atlas-upgrade`, `atlas-fleet`,
+  `atlas-subnt` (paused). Install with `systemctl --user`. Only
+  `atlas-dashboard.service` is a system unit. Old disabled copies of the
+  repotrack, fleet, and subnt units remain in `/etc/systemd/system/`.
 - **Applied hardening:** SSH key-only + X11Forwarding off; rpcbind and avahi
   disabled; nftables default-deny inbound (SSH allowed), enabled at boot;
   unattended security updates on (no auto-reboot).
@@ -177,6 +184,14 @@ enabled, Hermes cron job removed. Operator steps still open:
 
 1. **Hermes script cleanup.** After the first real upgrade, delete
    `~/.hermes/scripts/atlas_live_spec.py` (task 7.4).
+2. **subnt JSON export rollout.** Pull on the Pi, run the subnt suite,
+   compose once and build a copy of `~/subnt` against it, publish once by
+   hand, then `systemctl --user enable --now atlas-subnt.timer`
+   (change `subnt-json-export`, tasks 9.1 to 9.5).
+
+Planned as separate changes: moving the reader wrapper back into the
+repo, and Pi cleanup (including the stale units in
+`/etc/systemd/system/`).
 
 Before any new proposal:
 
