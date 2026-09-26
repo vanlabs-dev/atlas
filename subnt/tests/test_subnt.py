@@ -296,7 +296,7 @@ class StaleBoundTests(unittest.TestCase):
             build_live(config["live_db"], gate_hours=20.0)
             edition, files, _p = sh.build(config, None)
             bar = fact(docs(files)["network.json"], "bar")
-            self.assertEqual(bar["text"], "0.00412")
+            self.assertEqual(bar["text"], "0.412%")
             self.assertEqual(bar["value"], 0.00412)
             self.assertNotIn("stale", files["network.json"])
             self.assertEqual(edition["figures"]["theta"], 0.00412)
@@ -1237,8 +1237,9 @@ class ReadabilityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             _e, files, _p = sh.build(full(tmp), None)
             parsed = docs(files)
-            self.assertIn("1 side change at the bar",
-                          parsed["network.json"]["lead"])
+            self.assertEqual(parsed["network.json"]["lead"],
+                             "The emission cut sits at 0.412% demand share "
+                             "(rank 32), with 32 subnets above it.")
             self.assertTrue(any(n.startswith("1 material incentive-code "
                                              "change and")
                                 for n in texts(parsed["code.json"],
@@ -1246,7 +1247,8 @@ class ReadabilityTests(unittest.TestCase):
             network = parsed["network.json"]
             self.assertEqual(fact(network, "staked")["text"],
                              "7,313,368 TAO")
-            self.assertEqual(fact(network, "accounts")["text"], "1,420")
+            self.assertIsNone(fact(network, "accounts"))
+            self.assertIsNone(fact(network, "side-changes"))
 
 
 class WhyPhraseTests(unittest.TestCase):
@@ -1269,9 +1271,9 @@ class WhyPhraseTests(unittest.TestCase):
         self.assertEqual(
             sh.why_phrase({"why": "fresh", "econ_fresh": True}),
             "reward or emission code changed this pass")
-        self.assertEqual(
-            sh.why_phrase({"why": "fresh", "pulse_spike": True}),
-            "branch activity spiked this pass")
+        # A branch-tip count says nothing about what changed.
+        self.assertIsNone(
+            sh.why_phrase({"why": "fresh", "pulse_spike": True}))
 
     def test_unknown_token_is_a_gap_not_a_raw_token(self):
         self.assertIsNone(sh.why_phrase({"why": "something-new"}))
@@ -1309,6 +1311,130 @@ class GroupingTests(unittest.TestCase):
     def test_a_missing_reason_is_named(self):
         groups = sh.group_attention([{"netuid": 1, "why": None}])
         self.assertEqual(groups[0][0], "reason not recorded")
+
+
+class ReleaseTextTests(unittest.TestCase):
+    def test_upstream_owner_is_dropped(self):
+        self.assertEqual(
+            sh._release_text("Merge pull request #3196 from "
+                             "RaoFoundation/feat/add-swap-basket-many"),
+            "PR #3196 (feat/add-swap-basket-many)")
+
+    def test_a_fork_owner_is_kept(self):
+        self.assertEqual(
+            sh._release_text("Merge pull request #12 from someone/fix-x"),
+            "PR #12 (someone/fix-x)")
+
+    def test_any_other_subject_is_unchanged(self):
+        self.assertEqual(sh._release_text("Bump spec to 470"),
+                         "Bump spec to 470")
+
+
+class MoverNotesTests(unittest.TestCase):
+    def _notes(self, tmp, extra):
+        config = make_config(tmp)
+        build_live(config["live_db"])
+        conn = sqlite3.connect(config["live_db"])
+        for netuid, rank, immune, name in extra:
+            conn.execute(
+                "INSERT INTO panel_snapshot (observed_at, block_number, "
+                "netuid, share, dereg_risk_level, dereg_prune_rank, "
+                "dereg_is_immune, name) VALUES (?, 9018500, ?, 0.001, "
+                "'critical', ?, ?, ?)", (_iso(0.4), netuid, rank, immune,
+                                         name))
+        conn.commit()
+        conn.close()
+        _e, files, problems = sh.build(config, None)
+        self.assertEqual(problems, [])
+        return texts(docs(files)["movers.json"], "notes")
+
+    def test_deregistration_lists_five_by_prune_rank_with_names(self):
+        extra = [(113, 1, 0, "LongShort"), (82, 2, 0, "Compelle"),
+                 (47, 3, 0, None), (72, 4, 0, "StreetVision"),
+                 (98, 5, 0, "NeverPlayAlone"), (42, 6, 0, "Sixth"),
+                 (16, 0, 1, "Immune")]
+        with tempfile.TemporaryDirectory() as tmp:
+            notes = self._notes(tmp, extra)
+        self.assertIn("Closest to deregistration: SN113 LongShort, "
+                      "SN82 Compelle, SN47, SN72 StreetVision, "
+                      "SN98 NeverPlayAlone.", notes)
+        self.assertFalse(any("SN16" in n or "SN42" in n for n in notes))
+
+    def test_ownership_note_is_gone_and_near_cut_is_worded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            notes = self._notes(tmp, [])
+        self.assertFalse(any("Ownership" in n for n in notes))
+        self.assertFalse(any("Hovering" in n for n in notes))
+        self.assertIn("Near the cut, where small price moves swing emission "
+                      "most: SN7.", notes)
+
+
+class MiningWordingTests(unittest.TestCase):
+    def test_head_is_the_largest_pool_and_hardware_is_named(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _e, files, problems = sh.build(full(tmp), None)
+            self.assertEqual(problems, [])
+            mining = docs(files)["mining.json"]
+        self.assertTrue(mining["lead"].startswith(
+            "SN12 Subnet 12 has the largest earnable pool for a new "
+            "independent miner; "), mining["lead"])
+        self.assertEqual(fact(mining, "head")["label"],
+                         "Largest earnable pool")
+        self.assertIn("Ranked by estimated earnings for a new independent "
+                      "miner. Hardware cost and hardware requirements are "
+                      "not counted.", texts(mining, "notes"))
+
+
+class OwnerBurnTests(unittest.TestCase):
+    def test_only_reconciled_chain_figures_are_kept(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = full(tmp)
+            conn = sqlite3.connect(config["fleet_db"])
+            conn.execute("UPDATE mine_econ SET owner_share_pct = 61.1, "
+                         "owner_reconcile_delta = 0.0006 WHERE netuid = 12")
+            conn.execute("UPDATE mine_econ SET owner_share_pct = 100.0, "
+                         "owner_reconcile_delta = 1.0 WHERE netuid = 44")
+            conn.commit()
+            conn.close()
+            src = sh._brief()._Sources(config)
+            try:
+                burn = sh.owner_burn(src, {})
+            finally:
+                src.close()
+        self.assertEqual(burn.get(12), 61.1)
+        self.assertNotIn(44, burn)
+
+    def _rows(self, items, burn):
+        board = mock.Mock()
+        board.build_board.return_value = {"head": items, "mid": [],
+                                          "quiet": []}
+        src = mock.Mock(fleet=object())
+        with mock.patch.object(sh, "_board", return_value=board), \
+                mock.patch.object(sh, "recorded_names", return_value={}), \
+                mock.patch.object(sh, "owner_burn", return_value=burn):
+            return sh.attention_rows(src, {"attention_rows": 10}, {})[0]
+
+    def test_emission_rows_carry_the_chain_figure_or_are_dropped(self):
+        def item(netuid, **sc):
+            base = {"pure_opaque": False}
+            base.update(sc)
+            return {"row": {"netuid": netuid}, "sc": base}
+        rows = self._rows([
+            item(54, why="emission"),
+            item(9, why="emission"),
+            item(4, why="emission"),
+            item(7, why="fresh", pulse_spike=True, econ_fresh=False),
+            item(25, why="divergence", div_signed=40)],
+            {54: 61.1, 4: 0.002})
+        self.assertEqual([r["netuid"] for r in rows], [54, 25])
+        self.assertEqual(rows[0]["detail"], "61% of miner emission")
+        section = sh.attention_section(rows, None)
+        group = section["blocks"][0]["groups"][0]
+        self.assertEqual(group["label"],
+                         "miner emission burned through owner UIDs: "
+                         "1 subnet")
+        self.assertEqual(group["rows"][0]["summary"],
+                         "61% of miner emission")
 
 
 class SeriesTests(unittest.TestCase):
@@ -1386,8 +1512,8 @@ class SeriesTests(unittest.TestCase):
                       ["blocks"][0]["series"]}
             self.assertEqual(
                 series["bar-trend"]["caption"],
-                "Emission-gate bar over the last 2 readings, from 0.00412 "
-                "to 0.00500.")
+                "Emission-gate bar over the last 2 readings, from 0.412% "
+                "to 0.500%.")
             self.assertEqual(series["bar-trend"]["points"], [0.00412, 0.005])
             self.assertEqual(
                 series["tao-trend"]["caption"],
@@ -1424,6 +1550,12 @@ class LedeTests(unittest.TestCase):
             headline = parsed["edition.json"]["headline"]
             self.assertIn("SN", headline)
             self.assertEqual(headline, parsed["movers.json"]["lead"])
+
+    def test_quiet_headline_explains_the_soft_gate(self):
+        self.assertEqual(
+            sh._lede(None, {"theta": 0.0086554, "rank": 32}),
+            "Emission favours the top 32 subnets by demand share; below "
+            "0.866%, a subnet's emission falls off sharply.")
 
     def test_headline_falls_back_rather_than_inventing(self):
         with tempfile.TemporaryDirectory() as tmp:

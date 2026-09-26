@@ -55,7 +55,7 @@ SCHEMA_VERSION = "subnt/1.0"
 SECTIONS: Tuple[Tuple[str, str, str], ...] = (
     ("network", "network",
      "What changed on the network since the last edition?"),
-    ("movers", "movers", "Which subnets moved, and which crossed the bar?"),
+    ("movers", "movers", "Which subnets moved, and which sit near the cut?"),
     ("mining", "mining", "Where is mining worth a look now?"),
     ("attention", "attention",
      "Which subnets deserve a closer read, and why?"),
@@ -78,7 +78,7 @@ _VOLATILE = ("composed_at", "block", "previous_composed_at")
 # thesis, not direction stated in words. So the phrase is derived.
 WHY_PHRASE = {
     "divergence": "code activity and price are moving apart",
-    "emission": "emission routed away from miners",
+    "emission": "miner emission burned through owner UIDs",
     "abandon": "repository has gone quiet",
     "fresh": "something changed this pass",
     "opaque": "emission split is not readable from the repository",
@@ -102,8 +102,10 @@ def why_phrase(sc: Dict[str, Any]) -> Optional[str]:
     if why == "fresh":
         if sc.get("econ_fresh"):
             return "reward or emission code changed this pass"
+        # A branch-tip count says nothing about what changed, so a row that
+        # is fresh on the pulse alone has no public reason.
         if sc.get("pulse_spike"):
-            return "branch activity spiked this pass"
+            return None
         return WHY_PHRASE["fresh"]
     if why == "abandon":
         return ("repository has gone quiet while the price holds up"
@@ -339,6 +341,40 @@ def _sn_list(netuids: Sequence[Any]) -> str:
     return ", ".join("SN%s" % n for n in netuids)
 
 
+def _sn_named(netuids: Sequence[Any], names: Dict[int, str]) -> str:
+    """`SN113 LongShort, SN82 Compelle`: the netuid with its recorded name
+    where one is recorded, the bare netuid where none is."""
+    out = []
+    for n in netuids:
+        name = _clean(names.get(int(n)))
+        out.append("SN%s %s" % (n, name) if name else "SN%s" % n)
+    return ", ".join(out)
+
+
+def _share_pct(share: Any) -> str:
+    """A 0-1 demand share as a percentage: 0.0086554 reads `0.866%`."""
+    return "%.3f%%" % (float(share) * 100)
+
+
+_MERGE_SUBJECT = re.compile(
+    r"^Merge pull request #(\d+) from ([^/\s]+)/(\S+)$")
+# The upstream owner. Its name on every release line is noise; a fork's
+# name is not, so any other owner stays.
+_UPSTREAM_OWNER = "raofoundation"
+
+
+def _release_text(subject: str) -> str:
+    """`Merge pull request #3196 from RaoFoundation/feat/x` reads
+    `PR #3196 (feat/x)`. Any other subject is returned unchanged."""
+    match = _MERGE_SUBJECT.match(subject)
+    if match is None:
+        return subject
+    number, owner, branch = match.groups()
+    if owner.lower() != _UPSTREAM_OWNER:
+        branch = "%s/%s" % (owner, branch)
+    return "PR #%s (%s)" % (number, branch)
+
+
 def _delta_value(new: Any, old: Any) -> Optional[str]:
     """The signed change since the previous subnt publish, or None.
     A change that rounds to zero is suppressed: `+0.0%` is noise."""
@@ -410,7 +446,7 @@ def network_facts(src: Any, cfg: Dict[str, Any], start: str,
             if above is not None:
                 bits.append("%s above" % _num(above))
             facts.append(_fact(
-                "bar", "Emission-gate bar", _num(theta, 5), value=theta,
+                "bar", "Emission-gate bar", _share_pct(theta), value=theta,
                 headline=True, observed=observed_at[:10],
                 freshness=", ".join(bits) or None,
                 delta=_delta(theta, prev.get("theta"))))
@@ -426,18 +462,17 @@ def network_facts(src: Any, cfg: Dict[str, Any], start: str,
                 "", theta_series(src)))
 
     vit = live.execute(
-        "SELECT date, tao_usd, total_staked_tao, subnets_share_pct, "
-        "new_accounts_today FROM network_vitals "
+        "SELECT date, tao_usd, total_staked_tao, subnets_share_pct "
+        "FROM network_vitals "
         "ORDER BY date DESC LIMIT 1").fetchone() \
         if brief._table(live, "network_vitals") else None
     if vit is None:
         gaps.append("Missing network vitals.")
     else:
-        date, usd, staked, share, accounts = vit
+        date, usd, staked, share = vit
         figures["tao_usd"] = usd
         figures["staked"] = staked
         figures["share_pct"] = share
-        figures["accounts"] = accounts
         figures["vitals_date"] = date
         # Vitals are a daily observation. They carry their date and are not
         # stale for age alone.
@@ -457,10 +492,6 @@ def network_facts(src: Any, cfg: Dict[str, Any], start: str,
                 value=staked, unit="TAO", headline=True, observed=date,
                 freshness=("%s%% held by subnets" % _num(share, 2)
                            if share is not None else dated)))
-        if accounts is not None:
-            facts.append(_fact(
-                "accounts", "New accounts", _grouped(accounts),
-                value=accounts, observed=date, freshness=dated))
         tao = vitals_series(src, "tao_usd")
         series.append(_series(
             "tao-trend", "line", "TAO in USD", "", [v for _d, v in tao]))
@@ -482,16 +513,8 @@ def network_facts(src: Any, cfg: Dict[str, Any], start: str,
         subject = _clean(release["subject"]) if release is not None else None
         if subject:
             figures["release"] = subject
-            notes.append("Runtime spec %s, released as %s." % (spec, subject))
-
-    moves = None
-    if brief._table(live, "gate_events"):
-        moves = brief._one(live, "SELECT COUNT(*) FROM gate_events "
-                                 "WHERE observed_at > ?", (start,))
-        figures["side_changes"] = moves
-        facts.append(_fact("side-changes", "Side changes at the bar",
-                           _num(moves), value=moves,
-                           freshness="in this window"))
+            notes.append("Runtime spec %s, released as %s."
+                         % (spec, _release_text(subject)))
 
     if brief._table(live, "chain_param_events"):
         for item, prev_v, new_v in live.execute(
@@ -521,15 +544,13 @@ def network_facts(src: Any, cfg: Dict[str, Any], start: str,
             item["caption"] = _trend_caption(item)
 
     if bar_fresh:
-        lead = "The bar is at %s" % _num(figures["theta"], 5)
+        lead = "The emission cut sits at %s demand share" % _share_pct(
+            figures["theta"])
+        if figures.get("rank") is not None:
+            lead += " (rank %d)" % int(figures["rank"])
         if figures.get("above") is not None:
-            lead += " with %s above it" % _plural(
+            lead += ", with %s above it" % _plural(
                 int(figures["above"]), "subnet", "subnets")
-        if moves == 0:
-            lead += "; no subnet crossed it"
-        elif isinstance(moves, int):
-            lead += "; %s at the bar in this window" % _plural(
-                moves, "side change", "side changes")
         lead += "."
     elif figures.get("tao_usd") is not None:
         lead = ("The bar is not current; TAO is at $%s, observed %s."
@@ -546,7 +567,8 @@ def _trend_caption(series: Dict[str, Any]) -> str:
     points = series["points"]
     if series["id"] == "bar-trend":
         return ("Emission-gate bar over the last %d readings, from %s to %s."
-                % (len(points), _num(points[0], 5), _num(points[-1], 5)))
+                % (len(points), _share_pct(points[0]),
+                   _share_pct(points[-1])))
     return ("TAO over the last %d daily readings, from $%s to $%s."
             % (len(points), _num(points[0], 2), _num(points[-1], 2)))
 
@@ -599,20 +621,17 @@ def mover_facts(src: Any, cfg: Dict[str, Any], start: str
     notes: List[str] = []
     if not rows:
         notes.append("No subnet crossed a mover threshold in this window.")
+    # Prune rank 1 is the next subnet out. An immune subnet cannot be
+    # pruned, so it is excluded even if a rank is recorded for it.
     risk = [r[0] for r in live.execute(
-        "SELECT DISTINCT netuid FROM panel_snapshot WHERE id IN "
+        "SELECT netuid FROM panel_snapshot WHERE id IN "
         "(SELECT MAX(id) FROM panel_snapshot GROUP BY netuid) "
-        "AND dereg_risk_level = 'high' ORDER BY netuid")]
+        "AND dereg_prune_rank IS NOT NULL "
+        "AND COALESCE(dereg_is_immune, 0) = 0 "
+        "ORDER BY dereg_prune_rank, netuid LIMIT 5")]
     if risk:
-        notes.append("High deregistration risk: %s." % _sn_list(risk[:8]))
-    contested = [r[0] for r in live.execute(
-        "SELECT DISTINCT netuid FROM panel_snapshot WHERE id IN "
-        "(SELECT MAX(id) FROM panel_snapshot GROUP BY netuid) "
-        "AND (conviction_is_contested = 1 OR takeover_eligible = 1) "
-        "ORDER BY netuid")]
-    if contested:
-        notes.append("Ownership contested or takeover-eligible: %s."
-                     % _sn_list(contested[:8]))
+        notes.append("Closest to deregistration: %s."
+                     % _sn_named(risk, names))
     if brief._table(live, "gate_sides"):
         try:
             hover = [r[0] for r in live.execute(
@@ -621,8 +640,8 @@ def mover_facts(src: Any, cfg: Dict[str, Any], start: str
         except sqlite3.Error:
             hover = []
         if hover:
-            notes.append("Hovering at the bar (%d): %s."
-                         % (len(hover), _sn_list(hover)))
+            notes.append("Near the cut, where small price moves swing "
+                         "emission most: %s." % _sn_named(hover, names))
 
     blocks: List[Dict[str, Any]] = []
     if lead is not None:
@@ -698,9 +717,14 @@ def mining_facts(src: Any, cfg: Dict[str, Any], prev: Dict[str, Any]
         head_name = _clean(name)
         figures["mining_head"] = netuid
         figures["mining_head_name"] = head_name
-        facts.append(_fact("head", "Board head", "SN%d" % netuid,
+        facts.append(_fact("head", "Largest earnable pool", "SN%d" % netuid,
                            value=netuid, headline=True,
                            freshness=head_name or "name not recorded"))
+    # The ranking is earnings for a new independent miner. What it takes to
+    # enter is not in the figure, and the reader must not assume it is.
+    notes.append("Ranked by estimated earnings for a new independent "
+                 "miner. Hardware cost and hardware requirements are not "
+                 "counted.")
     if board["unrated"]:
         gaps.append("Unrated, no figure: %s."
                     % _sn_list([n for n, _ in board["unrated"]]))
@@ -723,14 +747,15 @@ def mining_facts(src: Any, cfg: Dict[str, Any], prev: Dict[str, Any]
              for i, (n, nm) in enumerate(ranked[:10])]
     if ranked:
         netuid = ranked[0][0]
-        lead = ("SN%d%s heads the mining board; %d of %d observed subnets "
-                "rank." % (netuid, ", %s," % head_name if head_name else "",
-                           len(ranked), board["observed"]))
+        lead = ("SN%d%s has the largest earnable pool for a new "
+                "independent miner; %d of %d observed subnets rank."
+                % (netuid, " %s" % head_name if head_name else "",
+                   len(ranked), board["observed"]))
     else:
         lead = "No observed subnet ranks on the mining board."
     return _section(lead, [_block(
         "board", facts=facts, notes=notes, gaps=gaps,
-        rows={"label": "Top ten on the mining board", "sortable": False,
+        rows={"label": "Top ten by earnable pool", "sortable": False,
               "items": items} if items else None)]), figures
 
 
@@ -751,6 +776,37 @@ def recorded_names(src: Any) -> Dict[int, str]:
     return names
 
 
+# Below this share an owner-UID burn is not worth a reader's attention.
+_OWNER_BURN_FLOOR_PCT = 1.0
+
+
+def owner_burn(src: Any, fleet_config: Dict[str, Any]) -> Dict[int, float]:
+    """Per netuid, the percent of miner emission that owner-controlled UIDs
+    take and the chain burns, from the last classified mining pass. The
+    figure is chain state, not a code reading, and is kept only where it
+    reconciles with chain `MinerBurned` within the mining pass's own
+    tolerance. Anything else is absent, never estimated."""
+    brief = _brief()
+    fleet = src.fleet
+    if fleet is None or not brief._table(fleet, "mine_econ") \
+            or not brief._table(fleet, "mine_state"):
+        return {}
+    ts = brief._one(fleet, "SELECT value FROM mine_state WHERE key = "
+                           "'last_classified_ts'")
+    if not ts:
+        return {}
+    tolerance = float((fleet_config.get("mining") or {}).get(
+        "owner_reconcile_tolerance", 0.01))
+    out: Dict[int, float] = {}
+    for netuid, share, delta in fleet.execute(
+            "SELECT netuid, owner_share_pct, owner_reconcile_delta "
+            "FROM mine_econ WHERE ts = ?", (ts,)):
+        if share is None or delta is None or abs(delta) > tolerance:
+            continue
+        out[int(netuid)] = float(share)
+    return out
+
+
 def attention_rows(src: Any, cfg: Dict[str, Any], fleet_config: Dict[str, Any]
                    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """Rows for the attention section, or a gap. `build_board` already runs
@@ -767,16 +823,29 @@ def attention_rows(src: Any, cfg: Dict[str, Any], fleet_config: Dict[str, Any]
         return [], "Missing fleet attention facts: the metrics report is " \
                    "not readable."
     names = recorded_names(src)
+    burn = owner_burn(src, fleet_config)
     limit = int(cfg.get("attention_rows", 10))
     rows: List[Dict[str, Any]] = []
     for item in (board["head"] + board["mid"] + board["quiet"]):
         if len(rows) >= limit:
             break
-        if item["sc"]["pure_opaque"]:
+        sc = item["sc"]
+        if sc["pure_opaque"]:
             continue
-        netuid = item["row"]["netuid"]
-        rows.append({"netuid": netuid, "name": _clean(names.get(int(netuid))),
-                     "why": why_phrase(item["sc"])})
+        # Fresh on the branch pulse alone: no public reason, so no row.
+        if sc.get("why") == "fresh" and not sc.get("econ_fresh"):
+            continue
+        netuid = int(item["row"]["netuid"])
+        row = {"netuid": netuid, "name": _clean(names.get(netuid)),
+               "why": why_phrase(sc)}
+        if sc.get("why") == "emission":
+            # The score reads the redirect from code, as an upper bound.
+            # Only the chain figure is published; without one, no row.
+            share = burn.get(netuid)
+            if share is None or share < _OWNER_BURN_FLOOR_PCT:
+                continue
+            row["detail"] = "%.0f%% of miner emission" % share
+        rows.append(row)
     if not rows:
         return [], "Missing attention rows: no subnet carries a public " \
                    "attention signal."
@@ -815,7 +884,8 @@ def attention_section(rows: List[Dict[str, Any]], gap: Optional[str]
             "label": "%s: %s" % (reason, _plural(len(members), "subnet",
                                                   "subnets")),
             "rows": [{"netuid": int(r["netuid"]), "name": r.get("name"),
-                      "summary": reason} for r in members]})
+                      "summary": r.get("detail") or reason}
+                     for r in members]})
     unnamed = [r["netuid"] for r in rows if not r.get("name")]
     gaps = (["Name not recorded for %s." % _sn_list(unnamed)]
             if unnamed else [])
@@ -1112,9 +1182,13 @@ def _lede(lead: Optional[Dict[str, Any]], figures: Dict[str, Any]) -> str:
         return ("SN%d moved %s on %s in this window."
                 % (lead["netuid"], lead["pct"], lead["kind"]))
     theta = figures.get("theta")
-    if theta is not None and figures.get("rank") is not None:
-        return ("The bar held at %s and no subnet crossed it."
-                % _num(theta, 5))
+    rank = figures.get("rank")
+    if theta is not None and rank:
+        # The gate is soft: s^h / (s^h + theta^h). Nothing below the bar is
+        # cut to zero, so the sentence says "falls off", never "excluded".
+        return ("Emission favours the top %d subnets by demand share; below "
+                "%s, a subnet's emission falls off sharply."
+                % (int(rank), _share_pct(theta)))
     return "No recorded figure moved in this window."
 
 
