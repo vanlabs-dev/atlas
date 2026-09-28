@@ -777,3 +777,14 @@ Standing reminders carried forward:
   removed, and the same re-sync absorbed the July emission-model changes
   (root_prop out of the share at spec 432; Hill emission gate at spec
   440).
+
+## subnt retired (2026-09-28)
+
+The operator deleted the Cloudflare Worker for subnt.dev: the page did not
+work as expected, and the operator does not plan to bring it back. The
+publisher is switched off so that nothing restarts it, including after a
+reboot. `atlas-subnt.service` and `atlas-subnt.timer` are masked on the
+Pi as both user and system units, and
+`subnt/config.json` has `enabled: false`. The code, schema and unit sources
+are kept. The subnt repo keeps its Astro page and the last edition in
+`data/`, and its `wrangler.jsonc` is removed.
