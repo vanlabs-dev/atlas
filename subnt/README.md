@@ -1,7 +1,14 @@
 # subnt: the public edition
 
-OpenSpec changes `subnt-renderer` and `subnt-json-export`. Composes the
-public [subnt.dev](https://subnt.dev) edition from rows already persisted
+**Retired 2026-09-28.** The operator deleted the Cloudflare Worker, so
+subnt.dev no longer serves a page, and the publisher is switched off.
+On the Pi, `atlas-subnt.service` and `atlas-subnt.timer` are masked in
+`~/.config/systemd/user/` and in `/etc/systemd/system/` (the installed copies were removed;
+the sources stay in `subnt/systemd/`).
+`subnt/config.json` has `enabled: false`. The code is kept.
+
+OpenSpec changes `subnt-renderer` and `subnt-json-export`. Composed the
+public subnt.dev edition from rows already persisted
 in the livedata and fleet stores, all opened read-only, as six data files,
 and publishes them into the `data/` directory of a second checkout when a
 fact in them has moved. The subnt repo builds the page from those files;
@@ -210,7 +217,7 @@ Every one of these fails the pass closed and leaves the checkout unchanged:
 a missing checkout, a checkout that is not a repository, a dirty checkout,
 a scan hit, a schema failure, a missing schema or validator, and a push
 with no usable write credential. A failed push leaves the local commit in
-place and the last Cloudflare deploy live; recovering it is the operator's
+place and, while hosted, left the last Cloudflare deploy live; recovering it is the operator's
 call, and this module does not reset.
 
 Git can never prompt. Every call runs with `GIT_TERMINAL_PROMPT=0`,
@@ -225,10 +232,15 @@ without it the commit fails outright.
 
 ## On the device
 
-The original publisher has been live since 2026-09-10. The subnt publisher
-rename was deployed on 2026-09-22 with its prior publish state preserved.
-Cloudflare serves https://subnt.dev from the subnt repo's Astro build of
-`data/`; unknown paths return HTTP 404. `www` is not configured.
+**Retired 2026-09-28.** The Cloudflare Worker is deleted and nothing
+serves subnt.dev. On the Pi, `atlas-subnt.service` and `atlas-subnt.timer` are masked in
+`~/.config/systemd/user/` and in `/etc/systemd/system/` (the installed copies were removed;
+the sources stay in `subnt/systemd/`).
+
+The original publisher ran from 2026-09-10. The subnt publisher rename
+was deployed on 2026-09-22 with its prior publish state preserved.
+Until 2026-09-28 Cloudflare served https://subnt.dev from the subnt
+repo's Astro build of `data/`.
 
 **Paused 2026-09-24 to 2026-09-26.** `atlas-subnt.timer` was stopped
 while the deployed code wrote only the v1 `index.html`. The
@@ -263,7 +275,8 @@ unit rather than an `ExecStartPost=-` on `atlas-fleet.service`, because
 that unit runs the repo reconcile pass and a bug here writes to a public
 site.
 
-Install lines are in the service file.
+Install lines are in the service file. Not installed since 2026-09-28:
+the units are masked on the Pi.
 
 ## Tests
 
