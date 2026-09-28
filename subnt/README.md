@@ -56,11 +56,11 @@ drifts from a subnt checkout that is present.
 
 | File | Section | Blocks | Reads |
 |---|---|---|---|
-| `edition.json` | none | none | compose time, `MAX(panel_snapshot.block_number)`, the previous publish, the headline |
-| `network.json` | `network` | `vitals`: facts `bar`, `tao`, `staked`, `accounts`, `spec`, `side-changes`; series `bar-trend`, `tao-trend`, `share-strip` | `livedata` `meta.last_live_spec`, `chain_param_events`, `gate_state`, `gate_events`, `network_vitals`, `panel_snapshot.share` |
-| `movers.json` | `movers` | `lead` (the largest mover and `lead-mover-trend`), `board` (sortable rows, risk and hover notes) | `livedata` `panel_snapshot`, `gate_sides.hovering` |
-| `mining.json` | `mining` | `board`: facts `ranked`, `head`; top-ten rows | `fleet` `mine_econ` (never `rent_band`) |
-| `attention.json` | `attention` | `groups`: one group per shared reason | `fleet` metrics report through `build_board`, names from `livedata` `panel_snapshot.name` |
+| `edition.json` | none | none | compose time, `MAX(panel_snapshot.block_number)`, the previous publish, the headline (the lead mover, or the soft-gate sentence from bar and rank) |
+| `network.json` | `network` | `vitals`: facts `bar` (as a percentage), `tao`, `staked`, `spec`; release note as `PR #n (branch)`; series `bar-trend`, `tao-trend`, `share-strip` | `livedata` `meta.last_live_spec`, `chain_param_events`, `gate_state`, `network_vitals`, `panel_snapshot.share` |
+| `movers.json` | `movers` | `lead` (the largest mover and `lead-mover-trend`), `board` (sortable rows; the five non-immune subnets with the lowest `dereg_prune_rank`, named; subnets near the cut, named) | `livedata` `panel_snapshot`, `gate_sides.hovering` |
+| `mining.json` | `mining` | `board`: facts `ranked`, `head` (largest earnable pool for a new independent miner); hardware-not-counted note; top-ten rows | `fleet` `mine_econ` (never `rent_band`) |
+| `attention.json` | `attention` | `groups`: one group per shared reason | `fleet` metrics report through `build_board`, `mine_econ.owner_share_pct` for emission rows, names from `livedata` `panel_snapshot.name` |
 | `code.json` | `code-narrative` | `code` (fact `pushed`, verdict and re-point notes), `narrative` (adoption and cluster notes) | `fleet` `metric_activity.c7`, `signal_econ_verdicts`, `epochs`, `signal_adoptions` (`kind = 'model-id'`), `signal_events` |
 
 Every section file carries the `composed_at` and `block` of
@@ -102,11 +102,21 @@ rows carry the same one**. One phrase per category therefore produced ten
 identical lines that told a reader nothing.
 
 `why_phrase()` derives the phrase from the score's own components
-(`div_signed`, `cold`, `econ_fresh`, `pulse_spike`), stating direction in
-words. `group_attention()` then collapses rows that share a reason. Each
+(`div_signed`, `cold`, `econ_fresh`), stating direction in words. A row
+fresh on the branch pulse alone is dropped: a changed-tip count says
+nothing about what changed.
+
+An `emission` row's score reads the redirect from code, as an upper bound,
+and that bound is never published. `owner_burn()` reads the chain figure
+instead: `mine_econ.owner_share_pct` from the last classified pass, kept
+only where `owner_reconcile_delta` is inside the mining pass's
+`owner_reconcile_tolerance`. The row shows `61% of miner emission` under
+the group `miner emission burned through owner UIDs`; with no reconciled
+figure, or one under 1%, the row is dropped. `group_attention()` then collapses rows that share a reason. Each
 group label states the reason once with its count
 (`priced ahead of its code activity: 8 subnets`). A row carries netuid,
-recorded name (or null, with the gap named in the block) and the reason.
+recorded name (or null, with the gap named in the block) and the reason,
+or its own figure where it has one.
 
 The contract bans the numeric score, direction-cue glyphs and the board
 thesis sentence. It does not ban direction stated in words, and a test
