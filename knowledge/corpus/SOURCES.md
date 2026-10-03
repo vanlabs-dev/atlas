@@ -6,24 +6,29 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | field | value |
 |---|---|
 | Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
-| Sync date | 2026-09-25 |
-| Coverage date | 2026-09-25 |
-| Grounded at | Finney `spec_version` **470** |
+| Sync date | 2026-10-04 |
+| Coverage date | 2026-10-04 |
+| Grounded at | Finney `spec_version` **472** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
 
-Verified 2026-09-25 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
+Verified 2026-10-04 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
 
-- Spec **470**. Knobs, emission-switch map, and dust-floor storage read
-  together at finalized block 9139046
-  (`0xe0bfb56a8cec8be73c93462c6be5fd826be17cd0fa6241fb72931ccec92609ed`).
-  Chain-read probe clean at finalized block 9139048. Tracked clone
-  `923fd1fa7` (`runtime/src/lib.rs` `spec_version: 470`).
+- Spec **472**. Knobs, emission-switch map, and dust-floor storage read
+  together at finalized block 9205342
+  (`0xac0cb5a8f3dd6498d08bcf042f72666381c63ff2e7ba5939e38b5fc84136f5dc`).
+  Chain-read probe clean at finalized block 9205344
+  (`0x16035ae03884e5af0899b11c3220a06c0b313823dfc6c9305cbf278a50495fa5`).
+  Tracked clone `f87cada63` (`runtime/src/lib.rs` `spec_version: 473`);
+  mechanics are stated as of the spec 472 bump (`e7d89a8b3`). Spec 473
+  work (BLS12-381 EVM precompiles, the staking-hotkey cleanup rerun) is
+  not live and not stated.
 - Emission bar is **rank-pinned**: `EmissionBarRank` unset (default 32),
   `EmissionBarQuantile` 0.75 explicit and inert, `EmissionGateExponent`
   unset (default 3).
-- `SubnetEmissionEnabled` is live. 128 keys; **29, 35, 36, 108 off**; SN1 on.
+- `SubnetEmissionEnabled` is live. 128 keys; **29, 35, 36, 82, 108 off**;
+  SN1 on.
 - `set_root_weights` is **retired** (`migrate_remove_root_weights`, spec
   469): `Weights[ROOT]` cleared, `RootWeightSettingEnabled` and
   `RootWeightsCap` removed. Dividends accumulate in place.
@@ -32,8 +37,15 @@ Verified 2026-09-25 against Finney RPC (`https://entrypoint-finney.opentensor.ai
 - `BasketTradingEnabled` is **true** (explicit). It gates `swap_basket` and
   `swap_basket_many`, the only ways fund composition changes. A hotkey can
   still be frozen.
-- `swap_basket_many` (call index 151) is live: 1 to 128 atomic legs, one
+- `swap_basket_many` (call index 151) is live: 1 to 64 atomic legs, one
   dividend flush and one valuation, every `swap_basket` check per leg.
+- Basket trade minimum: each leg's sell proceeds must be at least
+  max(`DefaultMinStake`, 0.5 TAO). Transaction validation rejects a
+  smaller leg before inclusion, including inside Utility batches,
+  `as_derivative`, `if_else`, and Proxy calls.
+- The legacy `Alpha`, `TotalHotkeyShares` and `AlphaMapLastKey` storage
+  items are gone from metadata (`migrate_alpha_v2_and_unstake_dust_v1`);
+  stake shares live in `AlphaV2` / `TotalHotkeySharesV2`.
 - Claim dust floors are unset on chain. Code defaults apply: row floor
   min(1 TAO, 10 bps of anchored NAV); slice floor 0.0001 TAO. Cash-first
   claims are not live.
