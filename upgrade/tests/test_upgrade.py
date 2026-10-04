@@ -66,9 +66,9 @@ class FakeJob(au.Job):
             return {"ok": False, "error": "down"}
         return {"ok": True, "spec_version": self.live}
 
-    def send(self, text):
+    def send(self, msg):
         if self.deliver:
-            self.sent.append(text)
+            self.sent.append(msg.plain())
         return self.deliver
 
     def default_edit(self, wt):
@@ -182,7 +182,9 @@ class DetectTest(Base):
                          ("updated", 470, 1))
         self.assertEqual(len(self.claude_calls(job)), 1)
         self.assertEqual(len(job.sent), 1)
-        self.assertIn("updated to spec 470", job.sent[0])
+        self.assertIn("Atlas updated itself for runtime spec 470",
+                      job.sent[0])
+        self.assertTrue(job.sent[0].startswith("✅ "))
         self.assertTrue(job.ran(["git", "push", "origin", "HEAD:main"]))
 
     def test_corpus_equals_live_does_nothing(self):
@@ -246,6 +248,7 @@ class GateTest(Base):
                              for c in job.calls))
         self.assertEqual(len(job.sent), 1)
         self.assertIn("retrying", job.sent[0])
+        self.assertIn("(attempt 1 of 3)", job.sent[0].split("\n")[0])
         return job
 
     def test_claude_auth(self):
@@ -326,6 +329,9 @@ class PostPushTest(Base):
         state = job.state()
         self.assertEqual((state["status"], state["attempt"]), ("blocked", 1))
         self.assertIn("Blocked", job.sent[0])
+        self.assertTrue(job.sent[0].startswith("🔴 "))
+        self.assertIn("upgrade/atlas_upgrade.py clear --spec",
+                      job.sent[0].split("\n")[-1])
 
     def test_readback_mismatch_blocks_before_pull(self):
         job = self.job()

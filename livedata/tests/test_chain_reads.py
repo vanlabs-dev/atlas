@@ -268,6 +268,25 @@ class WatchTest(unittest.TestCase):
         self.run_watch(error)
         self.assertEqual(len(self.sent), 1)
 
+    def test_drift_page_reads_in_plain_words(self):
+        result = {"ok": False, "spec": 472, "block": 9201345, "failures": [
+            {"pallet": "SubtensorModule", "item": "EmissionBarRank",
+             "reason": "missing from metadata"},
+            {"pallet": "Swap", "item": "AlphaSqrtPrice",
+             "reason": "value type U64F64, declared I96F32"}]}
+        text = ap.drift_message(result).plain()
+        lines = text.split("\n")
+        self.assertEqual(lines[0], "🔴 2 Atlas chain readers no longer "
+                                   "match the live chain")
+        self.assertIn("• EmissionBarRank: removed from the chain metadata",
+                      text)
+        self.assertIn("• AlphaSqrtPrice: type changed (chain U64F64, Atlas "
+                      "expects I96F32)", text)
+        self.assertIn("SubtensorModule.EmissionBarRank", text)
+        self.assertTrue(lines[-1].startswith("Next: "))
+        cleared = ap.cleared_message({"spec": 472, "block": 9201401})
+        self.assertTrue(cleared.plain().startswith("✅ Atlas chain readers"))
+
     def test_failed_send_retries_next_run(self):
         ap.watch_decide(self.failing("A"), self.state, lambda text: False)
         self.run_watch(self.failing("A"))

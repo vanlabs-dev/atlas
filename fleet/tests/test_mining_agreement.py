@@ -1,6 +1,6 @@
 """Store and surface agreement (change: mining-board-accuracy): the board,
-the MCP tools, the pulse briefing and the subnt publisher all read the
-ranking the pass stored, so they report identical counts and head. The
+the MCP tools, the briefing's shared reader and the subnt publisher all
+read the ranking the pass stored, so they report identical counts and head. The
 store is written by the real writer."""
 
 import json
@@ -78,12 +78,16 @@ class TestAgreement(unittest.TestCase):
         self.assertEqual([e["netuid"] for e in self.mcp["ranked"]],
                          [e["netuid"] for e in self.board["ranked"]])
 
-    def test_briefing_matches_the_board(self):
-        lines, figures = ab._mining_section(_Src(self.ro), {}, "", {})
-        self.assertEqual(lines[0], "board head: SN4 Targon")
-        self.assertEqual(lines[1], "2 ranked · 3 cut · 1 unrated · 6 "
-                                   "observed")
-        self.assertEqual(figures["mining_top10"],
+    def test_shared_reader_matches_the_board(self):
+        # The pulse briefing dropped its mining section (change:
+        # telegram-alert-redesign); its stored-ranking reader stays the
+        # one the subnt publisher shares, so it must still agree.
+        stored = ab.stored_mining(self.ro)
+        self.assertEqual(stored["ranked"][0], (4, "Targon"))
+        self.assertEqual((len(stored["ranked"]), stored["cut"],
+                          len(stored["unrated"]), stored["observed"]),
+                         (2, 3, 1, 6))
+        self.assertEqual([n for n, _ in stored["ranked"]],
                          [e["netuid"] for e in self.board["ranked"]])
 
     def test_subnt_matches_the_board(self):

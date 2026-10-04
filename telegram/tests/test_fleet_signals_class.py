@@ -126,19 +126,37 @@ class TestFleetSignalAlerts(FleetSignalBase):
         summary, sent = self.scan()
         self.assertEqual(summary["classes"]["fleet-signal"]["delivered"], 1)
         body = sent[0]
-        self.assertIn("narrative+cluster", body)  # urlencoded space
-        self.assertIn("vllm-flash", body)
+        self.assertIn("subnets+adopted+vllm-flash", body)  # urlencoded
         self.assertIn("subnet+64", body)
-        self.assertIn("first+mover", body)
+        self.assertIn("First%3A", body)           # first mover label
         self.assertIn("a1b2c3d", body)
-        self.assertIn("3%2F104", body)            # prevalence 3/104
-        self.assertIn("entry+price", body)
+        self.assertIn("3+of+104", body)           # prevalence 3/104
+        self.assertIn("Prices+at+detection", body)
         self.assertIn("0.0123", body)
         # re-scan: watermark passed, nothing re-sent
         summary, sent = self.scan()
         self.assertEqual(summary["classes"]["fleet-signal"], {
             "delivered": 0, "suppressed": 0, "failed": 0,
             "scrub-refused": 0, "error": 0})
+
+    def test_shipped_config_shadows_clusters(self):
+        # change: telegram-alert-redesign. The operator does not want
+        # model-adoption alerts: recorded, measured, never sent.
+        shipped = tg.load_config()
+        self.assertEqual(shipped["classes"]["narrative-cluster"]["tier"],
+                         "shadow")
+        self.config["classes"]["narrative-cluster"] = dict(
+            shipped["classes"]["narrative-cluster"])
+        add_event(self.fleet_db, "narrative-cluster", "instant",
+                  "cluster:dependency:vllm-flash", CLUSTER_PAYLOAD,
+                  term="vllm-flash")
+        summary, sent = self.scan()
+        self.assertEqual(sent, [])
+        self.assertEqual(summary["classes"]["fleet-signal"]["shadowed"], 1)
+        status = self.store.execute(
+            "SELECT status, tier FROM events WHERE event_class = "
+            "'narrative-cluster'").fetchall()
+        self.assertEqual(status, [("shadowed", "shadow")])
 
     def test_pending_entry_omits_price_line_never_delays(self):
         add_event(self.fleet_db, "watchlist", "instant",
@@ -150,8 +168,8 @@ class TestFleetSignalAlerts(FleetSignalBase):
                   entry=[(64, None, "pending")])
         summary, sent = self.scan()
         self.assertEqual(summary["classes"]["fleet-signal"]["delivered"], 1)
-        self.assertNotIn("entry+price", sent[0])
-        self.assertIn("watchlist+hit", sent[0])
+        self.assertNotIn("Price+at+detection", sent[0])
+        self.assertIn("Watchlist%3A", sent[0])
         self.assertIn("chutes", sent[0])  # repo label from slots, read-only
 
     def test_econ_alert_and_ledger_dedup_by_range(self):
@@ -162,7 +180,7 @@ class TestFleetSignalAlerts(FleetSignalBase):
                   netuid=64)
         summary, sent = self.scan()
         self.assertEqual(summary["classes"]["fleet-signal"]["delivered"], 1)
-        self.assertIn("incentive-code+change", sent[0])
+        self.assertIn("incentive+code", sent[0])
         self.assertIn("reward.py", sent[0])
         # watermark reset (operator surgery): the ledger still suppresses
         self.store.execute("UPDATE watermarks SET value = '0' WHERE "
@@ -191,7 +209,8 @@ class TestFleetSignalAlerts(FleetSignalBase):
                   netuid=64)
         summary, sent = self.scan()
         self.assertEqual(summary["classes"]["fleet-signal"]["delivered"], 1)
-        self.assertIn("SN12+adopted+sglang", sent[0])
+        self.assertIn("Subnet+12%3C%2Fb%3E%3A+adopted+sglang", sent[0])
+        self.assertIn("Also+pending", sent[0])
         self.assertEqual(self.store.execute(
             "SELECT COUNT(*) FROM pending_signal").fetchone()[0], 0)
 
@@ -223,7 +242,7 @@ class TestFleetSignalAlerts(FleetSignalBase):
         self.store.commit()
         summary, sent = self.scan()
         self.assertEqual(summary["classes"]["fleet-signal"]["delivered"], 1)
-        self.assertIn("signal+digest", sent[0])
+        self.assertIn("minor+code+signal", sent[0])
         self.assertEqual(self.store.execute(
             "SELECT COUNT(*) FROM pending_signal").fetchone()[0], 0)
 
@@ -249,8 +268,8 @@ class TestFleetSignalAlerts(FleetSignalBase):
                   netuid=64)
         _summary, sent = self.scan()
         self.assertEqual(len(sent), 2)
-        self.assertIn("live+chain+upgraded", sent[0])
-        self.assertIn("incentive-code", sent[1])
+        self.assertIn("Bittensor+upgraded", sent[0])
+        self.assertIn("incentive+code", sent[1])
 
     def test_fleet_store_is_never_written(self):
         add_event(self.fleet_db, "signal-digest", "digest", "adopt:4",
@@ -318,12 +337,12 @@ class TestEconVerdictCard(FleetSignalBase):
                   entry=[(64, 0.0265, "recorded")])
         _summary, sent = self.scan()
         body = sent[0]
-        self.assertIn("material+incentive-code+change", body)
+        self.assertIn("changed+how+miners+get+paid", body)
         self.assertIn("latency+penalty+removed", body)
         self.assertIn("favors+slow", body)
-        self.assertIn("significance", body)
+        self.assertIn("Impact", body)
         self.assertIn("high", body)
-        self.assertIn("based+on", body)
+        self.assertIn("Evidence%3A", body)
         self.assertIn("blockquote", body)             # details are collapsible
         self.assertIn("0.0265", body)                 # price in the details
         self.assertNotIn("not+the+live+chain", body)  # disclaimer dropped
@@ -337,7 +356,7 @@ class TestEconVerdictCard(FleetSignalBase):
         _summary, sent = self.scan()
         body = sent[0]
         self.assertIn("unjudged", body)
-        self.assertIn("verdict+unavailable", body)
+        self.assertIn("Verdict+unavailable", body)
 
     def test_verdict_text_is_html_escaped(self):
         payload = dict(ECON_VERDICT_PAYLOAD, range_id=32,
@@ -356,8 +375,8 @@ class TestEconVerdictCard(FleetSignalBase):
                   netuid=64)
         _summary, sent = self.scan()
         body = sent[0]
-        self.assertIn("%3Cb%3Ewhy", body)            # <b>why  (bold label)
-        self.assertIn("%3Cb%3Esignificance", body)   # <b>significance
+        self.assertIn("%3Cb%3EWhy+it+matters", body)  # bold label
+        self.assertIn("%3Cb%3EImpact", body)          # bold label
         self.assertIn("%E2%80%A6", body)             # … word-safe clip
         self.assertLess(body.count("gamma"), 40)     # clipped, not the full run
         self.assertIn("%0A%0A", body)                # blank-line separation
@@ -367,7 +386,7 @@ class TestEconVerdictCard(FleetSignalBase):
         add_event(self.fleet_db, "econ-code", "instant", "econ:33", payload,
                   netuid=64)
         _summary, sent = self.scan()
-        self.assertIn("partial+view", sent[0])
+        self.assertIn("only+part+of+this+change", sent[0])
 
     def test_html_400_falls_back_to_plain(self):
         add_event(self.fleet_db, "econ-code", "instant", "econ:34",

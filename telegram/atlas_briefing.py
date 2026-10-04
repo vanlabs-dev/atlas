@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Atlas pulse briefing (change: pulse-briefing).
+"""Atlas pulse briefing (changes: pulse-briefing, telegram-alert-redesign).
 
 A scheduled Telegram briefing composed ONLY from rows already persisted in
 the livedata, fleet, repotrack, knowledge, and notifier stores, all opened
@@ -15,12 +15,14 @@ one twice, and a missed hour is caught up by the next scan that day. The
 previous edition's figure set is persisted as JSON in the notifier meta
 table; deltas compare against it, and the first edition says it has none.
 
-Sections render in fixed order (network, subnets, code, narrative, mining,
-atlas). When the composed edition exceeds the message bound, whole lines
-drop from the lowest-priority section upward (narrative first, then code,
-mining, atlas, subnets); the network section is never truncated and the
-omission count is stated. The final line is the next action when one
-exists, otherwise the LAN board link.
+Each edition opens with its marker (☀️ daily, 🗓️ weekly) and a one-line
+summary built by fixed rules from the edition's own figures. Sections
+render in fixed order (network, chain rule changes, price moves,
+demand-share moves, watch list, high-impact incentive changes); system
+health sits in an expandable fold. When the edition exceeds the message
+bound the fold sheds first, then whole lines drop from the lowest-priority
+section upward; the network section is never cut and the omission count is
+stated. The final line is the next action when one exists.
 """
 from __future__ import annotations
 
@@ -33,12 +35,23 @@ import atlas_telegram as tg
 
 EDITION_DAILY = "daily"
 EDITION_WEEKLY = "weekly"
+EDITION_MARK = {EDITION_DAILY: "☀️", EDITION_WEEKLY: "🗓️"}
 
-# Fixed render order. Truncation drops from the lowest-priority section
-# upward; "network" is deliberately absent from the drop order.
-SECTION_ORDER = ("network", "subnets", "code", "narrative", "mining",
-                 "atlas")
-DROP_ORDER = ("narrative", "code", "mining", "atlas", "subnets")
+# Fixed render order and the bold title of each section. Truncation drops
+# from the lowest-priority section upward; "network" is never dropped.
+SECTION_ORDER = ("network", "rules", "price_moves", "share_moves", "watch",
+                 "high_impact")
+SECTION_TITLES = {
+    "network": "Network",
+    "rules": "Chain rule changes",
+    "price_moves": "Biggest price moves",
+    "share_moves": "Biggest demand-share moves",
+    "watch": "Watch list",
+    "high_impact": "High-impact incentive changes",
+}
+DROP_ORDER = ("high_impact", "share_moves", "price_moves", "watch", "rules")
+WEEKLY_HIGH_IMPACT_LINES = 5
+MOVER_LINES = 3
 
 _WM_KEY = {EDITION_DAILY: "briefing:daily", EDITION_WEEKLY:
            "briefing:weekly"}
@@ -113,81 +126,6 @@ def _delta_pct(new: Optional[float], old: Optional[float]) -> Optional[str]:
     return "%+.1f%%" % ((new / old - 1.0) * 100.0)
 
 
-# ---------------------------------------------------------------------------
-# Sections. Each returns (lines, figures). Every line is a recorded fact or
-# a comparison of two recorded facts; absent inputs say so or omit the line.
-# ---------------------------------------------------------------------------
-
-def _network_section(src: _Sources, bcfg: Dict[str, Any], start: str,
-                     prev: Dict[str, Any]) -> Tuple[List[str],
-                                                    Dict[str, Any]]:
-    lines: List[str] = []
-    figures: Dict[str, Any] = {}
-    live = src.live
-    if live is None:
-        return ["live store: unavailable"], figures
-
-    spec = _one(live, "SELECT value FROM meta WHERE key = 'last_live_spec'")
-    if spec is not None:
-        line = "runtime spec %s" % spec
-        release = tg._release_for_upgrade(
-            bcfg.get("repo_db", "var/repotrack/repotrack.db"), int(spec))
-        if release is not None:
-            line += " · %s" % release["subject"]
-        lines.append(line)
-        figures["spec"] = int(spec)
-
-    if _table(live, "chain_param_events"):
-        for item, prev_v, new_v in live.execute(
-                "SELECT item, prev_value, new_value FROM chain_param_events "
-                "WHERE observed_at > ? ORDER BY id", (start,)):
-            lines.append("rule change: %s %s to %s" % (item, prev_v, new_v))
-
-    row = live.execute(
-        "SELECT theta, rank, above_count, observed_at FROM gate_state "
-        "WHERE gate_active = 1 ORDER BY id DESC LIMIT 1").fetchone() \
-        if _table(live, "gate_state") else None
-    if row is not None:
-        theta, rank, above, observed_at = row
-        stale_hours = float(bcfg.get("stale_hours", 26))
-        cutoff = (datetime.datetime.now(datetime.timezone.utc)
-                  - datetime.timedelta(hours=stale_hours)).isoformat()
-        if observed_at < cutoff:
-            lines.append("bar: stale (last observed %s)" % observed_at[:16])
-        else:
-            figures["theta"] = theta
-            delta = _delta_pct(theta, prev.get("theta"))
-            lines.append(
-                "bar %.5f%s · rank %s · %s above"
-                % (theta, " · %s vs last edition" % delta if delta else "",
-                   _fmt(rank), _fmt(above)))
-        if _table(live, "gate_events"):
-            moves = _one(live, "SELECT COUNT(*) FROM gate_events "
-                               "WHERE observed_at > ?", (start,))
-            lines.append("side changes in window: %s" % moves)
-            figures["side_changes"] = moves
-
-    if _table(live, "network_vitals"):
-        vit = live.execute(
-            "SELECT date, tao_usd, total_staked_tao, subnets_share_pct, "
-            "new_accounts_today FROM network_vitals "
-            "ORDER BY date DESC LIMIT 1").fetchone()
-        if vit is not None:
-            date, usd, staked, share, accounts = vit
-            figures["tao_usd"] = usd
-            delta = _delta_pct(usd, prev.get("tao_usd"))
-            lines.append("TAO %s USD%s · staked %s · subnet share %s%% · "
-                         "new accounts %s · dated %s"
-                         % (_fmt(usd, 2),
-                            " (%s)" % delta if delta else "",
-                            _fmt(staked, 0), _fmt(share, 2),
-                            _fmt(accounts), date))
-        else:
-            lines.append("network vitals: none recorded yet")
-    else:
-        lines.append("network vitals: none recorded yet")
-    return lines, figures
-
 
 def _movers(live: sqlite3.Connection, start: str, column: str,
             threshold_pct: float, limit: int
@@ -218,116 +156,6 @@ def _movers(live: sqlite3.Connection, start: str, column: str,
     movers.sort(key=lambda m: -abs(m[5]))
     return movers[:limit]
 
-
-def _subnets_section(src: _Sources, bcfg: Dict[str, Any], start: str,
-                     prev: Dict[str, Any]) -> Tuple[List[str],
-                                                    Dict[str, Any]]:
-    lines: List[str] = []
-    figures: Dict[str, Any] = {}
-    live = src.live
-    if live is None or not _table(live, "panel_snapshot"):
-        return ["panel snapshot: none recorded yet"], figures
-    threshold = float(bcfg.get("price_move_threshold_pct", 15))
-    for netuid, old, new, ob, nb, pct in _movers(
-            live, start, "moving_price_tao", threshold, 6):
-        lines.append("SN%d price %+.1f%% · %.5f at block %s to %.5f at "
-                     "block %s" % (netuid, pct, old, ob, new, nb))
-    for netuid, old, new, ob, nb, pct in _movers(
-            live, start, "share", float(
-                bcfg.get("share_move_threshold_pct", 25)), 4):
-        lines.append("SN%d demand share %+.1f%% · %.4f%% at block %s to "
-                     "%.4f%% at block %s"
-                     % (netuid, pct, old * 100, ob, new * 100, nb))
-    risk = [str(r[0]) for r in live.execute(
-        "SELECT DISTINCT netuid FROM panel_snapshot WHERE id IN "
-        "(SELECT MAX(id) FROM panel_snapshot GROUP BY netuid) "
-        "AND dereg_risk_level = 'high' ORDER BY netuid")]
-    if risk:
-        lines.append("dereg risk high: SN%s" % ", SN".join(risk[:8]))
-    contested = [str(r[0]) for r in live.execute(
-        "SELECT DISTINCT netuid FROM panel_snapshot WHERE id IN "
-        "(SELECT MAX(id) FROM panel_snapshot GROUP BY netuid) "
-        "AND (conviction_is_contested = 1 OR takeover_eligible = 1) "
-        "ORDER BY netuid")]
-    if contested:
-        lines.append("ownership contested or takeover-eligible: SN%s"
-                     % ", SN".join(contested[:8]))
-    if _table(live, "gate_sides"):
-        hover = [str(r[0]) for r in live.execute(
-            "SELECT netuid FROM gate_sides WHERE hovering = 1 "
-            "ORDER BY netuid")]
-        if hover:
-            lines.append("hovering at the bar (%d): SN%s"
-                         % (len(hover), ", SN".join(hover)))
-    if not lines:
-        lines.append("no subnet movers beyond thresholds this window")
-    return lines, figures
-
-
-def _code_section(src: _Sources, bcfg: Dict[str, Any], start: str,
-                  prev: Dict[str, Any]) -> Tuple[List[str], Dict[str, Any]]:
-    lines: List[str] = []
-    figures: Dict[str, Any] = {}
-    fleet = src.fleet
-    if fleet is None:
-        return ["fleet store: unavailable"], figures
-    if _table(fleet, "metric_activity"):
-        latest = _one(fleet, "SELECT MAX(pass_ts) FROM metric_activity")
-        if latest:
-            pushed, total = fleet.execute(
-                "SELECT SUM(c7 > 0), COUNT(*) FROM metric_activity "
-                "WHERE pass_ts = ?", (latest,)).fetchone()
-            lines.append("%s of %s tracked subnets pushed in 7d"
-                         % (_fmt(pushed), _fmt(total)))
-    if _table(fleet, "signal_econ_verdicts"):
-        highs = fleet.execute(
-            "SELECT netuid, what_changed, new_sha FROM signal_econ_verdicts "
-            "WHERE created_at > ? AND significance = 'high' "
-            "ORDER BY created_at DESC LIMIT 5", (start,)).fetchall()
-        for netuid, what, sha in highs:
-            lines.append("SN%d high · %s · %s"
-                         % (netuid, (what or "")[:90], (sha or "")[:12]))
-        med = _one(fleet, "SELECT COUNT(*) FROM signal_econ_verdicts "
-                          "WHERE created_at > ? AND significance = 'med'",
-                   (start,))
-        figures["high_count"] = len(highs)
-        figures["med_count"] = med
-        lines.append("incentive-code verdicts: %d high · %s med"
-                     % (len(highs), _fmt(med)))
-    if _table(fleet, "epochs"):
-        repoints = fleet.execute(
-            "SELECT netuid, epoch FROM epochs WHERE opened_at > ? "
-            "AND epoch > 1 ORDER BY opened_at DESC LIMIT 5",
-            (start,)).fetchall()
-        for netuid, epoch in repoints:
-            lines.append("SN%d repo re-pointed (epoch %d)" % (netuid, epoch))
-    return lines or ["no code activity recorded this window"], figures
-
-
-def _narrative_section(src: _Sources, bcfg: Dict[str, Any], start: str,
-                       prev: Dict[str, Any]) -> Tuple[List[str],
-                                                      Dict[str, Any]]:
-    lines: List[str] = []
-    fleet = src.fleet
-    if fleet is None or not _table(fleet, "signal_adoptions"):
-        return ["adoption ledger: unavailable"], {}
-    # Model identifiers only: dependency terms are fleet-search material,
-    # not narrative (pytest and numpy adoptions say nothing).
-    rows = fleet.execute(
-        "SELECT term, GROUP_CONCAT(DISTINCT netuid) FROM signal_adoptions "
-        "WHERE kind = 'model-id' AND seeded = 0 AND adopted_at > ? "
-        "GROUP BY term ORDER BY COUNT(*) DESC LIMIT 6",
-        (start,)).fetchall()
-    for term, netuids in rows:
-        lines.append("model %s · SN%s" % (term,
-                                          netuids.replace(",", ", SN")))
-    if _table(fleet, "signal_events"):
-        clusters = fleet.execute(
-            "SELECT term FROM signal_events WHERE class = "
-            "'narrative-cluster' AND created_at > ?", (start,)).fetchall()
-        for (term,) in clusters:
-            lines.append("cluster formed · %s" % term)
-    return lines or ["no model-id adoptions this window"], {}
 
 
 # Mining model version assumed for an edition recorded before the version
@@ -382,80 +210,245 @@ def mining_top_delta(prev: Dict[str, Any], top: List[int],
     return ("changed" if entered or left else "unchanged"), entered, left
 
 
-def _mining_section(src: _Sources, bcfg: Dict[str, Any], start: str,
-                    prev: Dict[str, Any]) -> Tuple[List[str],
-                                                   Dict[str, Any]]:
+# ---------------------------------------------------------------------------
+# Sections. Each returns (lines, figures). Every line is a recorded fact or
+# a comparison of two recorded facts; absent inputs say so or omit the line.
+# ---------------------------------------------------------------------------
+
+def _change_pct(new: Optional[float], old: Optional[float]
+                ) -> Optional[float]:
+    """Numeric twin of _delta_pct (which subnt reads as a string)."""
+    if new is None or old is None or old == 0:
+        return None
+    return (new / old - 1.0) * 100.0
+
+
+def _window_word(kind: str) -> str:
+    return "since last week's edition" if kind == EDITION_WEEKLY else \
+        "since yesterday's edition"
+
+
+def _network_section(src: _Sources, bcfg: Dict[str, Any], start: str,
+                     prev: Dict[str, Any], kind: str = EDITION_DAILY
+                     ) -> Tuple[List[str], Dict[str, Any]]:
     lines: List[str] = []
     figures: Dict[str, Any] = {}
-    fleet = src.fleet
-    if fleet is None or not _table(fleet, "mine_econ"):
-        return ["mining screen: unavailable"], figures
-    board = stored_mining(fleet)
-    if board is None:
-        return ["mining screen: no classified pass yet"], figures
-    top = [netuid for netuid, _ in board["ranked"][:10]]
-    figures["mining_top10"] = top
-    figures["mining_model_version"] = board["model_version"]
-    if board["ranked"]:
-        netuid, name = board["ranked"][0]
-        lines.append("board head: SN%d %s" % (netuid, name or ""))
-    lines.append("%d ranked · %d cut · %d unrated · %d observed"
-                 % (len(board["ranked"]), board["cut"],
-                    len(board["unrated"]), board["observed"]))
-    if board["unrated"]:
-        shown = board["unrated"][:10]
-        lines.append("unrated: %s%s" % (
-            ", ".join("SN%d (%s)" % (n, (reason or "no figure")
-                                     .split(":")[0])
-                      for n, reason in shown),
-            " +%d more" % (len(board["unrated"]) - len(shown))
-            if len(board["unrated"]) > len(shown) else ""))
-    state, entered, left = mining_top_delta(prev, top,
-                                            board["model_version"])
-    if state == "model-changed":
-        lines.append("top-ten deltas suppressed: the mining model changed "
-                     "(v%s to v%s)" % (prev.get("mining_model_version")
-                                       or MINING_MODEL_UNRECORDED,
-                                       board["model_version"]))
-    elif state == "changed":
-        if entered:
-            lines.append("entered top ten: SN%s"
-                         % ", SN".join(str(n) for n in entered))
-        if left:
-            lines.append("left top ten: SN%s"
-                         % ", SN".join(str(n) for n in left))
-    elif state == "unchanged":
-        lines.append("top ten unchanged")
-    if board["rent_unknown"]:
-        lines.append("budget band unset · rent unknown · hardware rung "
-                     "inert")
+    live = src.live
+    if live is None:
+        return ["Live store unavailable"], figures
+
+    if _table(live, "network_vitals"):
+        vit = live.execute(
+            "SELECT date, tao_usd FROM network_vitals "
+            "ORDER BY date DESC LIMIT 1").fetchone()
+        if vit is not None and vit[1] is not None:
+            date, usd = vit
+            figures["tao_usd"] = usd
+            figures["tao_date"] = date
+            change = _change_pct(usd, prev.get("tao_usd"))
+            figures["tao_change"] = change
+            lines.append("TAO %s%s · dated %s" % (
+                tg.fmt_usd(usd),
+                " · %s %s" % (tg.fmt_change(change), _window_word(kind))
+                if change is not None else "",
+                tg.fmt_date(date)))
+        else:
+            lines.append("TAO price: none recorded yet")
+    else:
+        lines.append("TAO price: none recorded yet")
+
+    row = live.execute(
+        "SELECT theta, rank, above_count, observed_at FROM gate_state "
+        "WHERE gate_active = 1 ORDER BY id DESC LIMIT 1").fetchone() \
+        if _table(live, "gate_state") else None
+    crossings = None
+    if _table(live, "gate_events"):
+        crossings = _one(live, "SELECT COUNT(*) FROM gate_events "
+                               "WHERE observed_at > ?", (start,))
+        figures["side_changes"] = crossings
+    if row is not None:
+        theta, _rank, above, observed_at = row
+        stale_hours = float(bcfg.get("stale_hours", 26))
+        cutoff = (datetime.datetime.now(datetime.timezone.utc)
+                  - datetime.timedelta(hours=stale_hours)).isoformat()
+        if observed_at < cutoff:
+            lines.append("Emission bar: dated (last observed %s)"
+                         % tg.fmt_time(observed_at))
+        else:
+            figures["theta"] = theta
+            change = _change_pct(theta, prev.get("theta"))
+            parts = ["Emission bar %s" % tg.fmt_pct(theta)]
+            if change is not None:
+                parts.append(tg.fmt_change(change))
+            if above is not None:
+                parts.append("%s subnets above" % _fmt(above))
+            if crossings is not None:
+                parts.append("no crossings" if not crossings else
+                             "%d crossing%s" % (crossings,
+                                                "" if crossings == 1
+                                                else "s"))
+            lines.append(" · ".join(parts))
+
+    spec = _one(live, "SELECT value FROM meta WHERE key = 'last_live_spec'") \
+        if _table(live, "meta") else None
+    if spec is not None:
+        figures["spec"] = int(spec)
+        first_prev = _one(live, "SELECT prev_spec FROM spec_upgrades WHERE "
+                                "observed_at > ? ORDER BY id ASC LIMIT 1",
+                          (start,)) if _table(live, "spec_upgrades") else None
+        if first_prev is not None and int(first_prev) != int(spec):
+            lines.append("Runtime spec %s → %s" % (first_prev, spec))
+        else:
+            lines.append("Runtime spec %s" % spec)
     return lines, figures
 
 
-def _atlas_section(src: _Sources, bcfg: Dict[str, Any], start: str,
-                   prev: Dict[str, Any], config: Dict[str, Any],
-                   connection: sqlite3.Connection
+def _rules_section(src: _Sources, start: str,
+                   names: Dict[int, str]) -> Tuple[List[str], Dict[str, Any]]:
+    """Root-settable parameter transitions in the window, one line per
+    item and subnet, a set-then-reset pair merged into one line."""
+    live = src.live
+    if live is None or not _table(live, "chain_param_events"):
+        return [], {}
+    groups: Dict[str, List[Tuple[str, str]]] = {}
+    order: List[str] = []
+    for item, prev_v, new_v in live.execute(
+            "SELECT item, prev_value, new_value FROM chain_param_events "
+            "WHERE observed_at > ? ORDER BY id", (start,)):
+        if item not in groups:
+            order.append(item)
+            groups[item] = []
+        groups[item].append((str(prev_v), str(new_v)))
+    lines = []
+    for item in order:
+        base, netuid = tg.parse_netuid_item(item)
+        moves = groups[item]
+        first_prev, last_new = moves[0][0], moves[-1][1]
+        if base == "SubnetEmissionEnabled":
+            what = ("TAO emission switched back on"
+                    if last_new.lower() == "true"
+                    else "TAO emission switched off")
+            if first_prev == last_new:
+                what = "TAO emission switched and restored"
+        elif len(moves) > 1 and first_prev == last_new:
+            what = "%s set, then reset to %s" % (
+                base, tg._param_value(last_new))
+        else:
+            what = "%s %s → %s" % (base, tg._param_value(first_prev),
+                                   tg._param_value(last_new))
+        who = tg.subnet_tag(netuid, names) if netuid is not None else None
+        lines.append("%s: %s" % (who, what) if who else what)
+    return lines, {"rule_changes": len(lines)}
+
+
+def _price_moves_section(src: _Sources, bcfg: Dict[str, Any], start: str,
+                         names: Dict[int, str]
+                         ) -> Tuple[List[str], Dict[str, Any]]:
+    live = src.live
+    if live is None or not _table(live, "panel_snapshot"):
+        return [], {}
+    threshold = float(bcfg.get("price_move_threshold_pct", 15))
+    lines = []
+    top = None
+    for netuid, old, new, _ob, _nb, pct in _movers(
+            live, start, "moving_price_tao", threshold, MOVER_LINES):
+        lines.append("%s: %s → %s, %s" % (
+            tg.subnet_tag(netuid, names), tg.fmt_tao(old).replace(" τ", ""),
+            tg.fmt_tao(new), tg.fmt_change(pct)))
+        if top is None:
+            top = {"netuid": netuid, "pct": pct, "what": "price"}
+    return lines, {"top_price": top} if top else {}
+
+
+def _share_moves_section(src: _Sources, bcfg: Dict[str, Any], start: str,
+                         names: Dict[int, str]
+                         ) -> Tuple[List[str], Dict[str, Any]]:
+    live = src.live
+    if live is None or not _table(live, "panel_snapshot"):
+        return [], {}
+    threshold = float(bcfg.get("share_move_threshold_pct", 25))
+    lines = []
+    top = None
+    for netuid, old, new, _ob, _nb, pct in _movers(
+            live, start, "share", threshold, MOVER_LINES):
+        lines.append("%s: %s → %s, %s" % (
+            tg.subnet_tag(netuid, names), tg.fmt_pct(old, 2),
+            tg.fmt_pct(new, 2), tg.fmt_change(pct)))
+        if top is None:
+            top = {"netuid": netuid, "pct": pct, "what": "demand share"}
+    return lines, {"top_share": top} if top else {}
+
+
+def _watch_section(src: _Sources, names: Dict[int, str]
                    ) -> Tuple[List[str], Dict[str, Any]]:
+    """The three non-immune subnets closest to deregistration, whatever
+    their risk level, then the subnets hovering at the bar."""
+    live = src.live
     lines: List[str] = []
-    figures: Dict[str, Any] = {}
+    if live is None or not _table(live, "panel_snapshot"):
+        return lines, {}
+    columns = {r[1] for r in live.execute("PRAGMA table_info(panel_snapshot)")}
+    if {"dereg_prune_rank", "dereg_is_immune"} <= columns:
+        risk = live.execute(
+            "SELECT netuid FROM panel_snapshot WHERE id IN "
+            "(SELECT MAX(id) FROM panel_snapshot GROUP BY netuid) "
+            "AND dereg_prune_rank IS NOT NULL AND dereg_is_immune = 0 "
+            "ORDER BY dereg_prune_rank ASC LIMIT 3").fetchall()
+        if risk:
+            lines.append("Closest to deregistration (not immune):")
+            lines.extend("%d. %s" % (i, tg.subnet_tag(r[0], names))
+                         for i, r in enumerate(risk, start=1))
+    if _table(live, "gate_sides"):
+        hover = [r[0] for r in live.execute(
+            "SELECT netuid FROM gate_sides WHERE hovering = 1 "
+            "ORDER BY netuid")]
+        if hover:
+            lines.append("At the bar: %s" % ", ".join(
+                tg.subnet_tag(n, names) for n in hover))
+    return lines, {}
+
+
+def _high_impact_section(src: _Sources, start: str, names: Dict[int, str]
+                         ) -> Tuple[List[str], Dict[str, Any]]:
+    """Every high verdict in the window, named; medium verdicts are not
+    counted or listed. An empty window omits the section."""
+    fleet = src.fleet
+    if fleet is None or not _table(fleet, "signal_econ_verdicts"):
+        return [], {}
+    rows = fleet.execute(
+        "SELECT netuid, what_changed FROM signal_econ_verdicts "
+        "WHERE created_at > ? AND significance = 'high' "
+        "ORDER BY created_at DESC", (start,)).fetchall()
+    lines = ["%s: %s" % (tg.subnet_tag(netuid, names),
+                         tg.rec(tg._clip_words(what or "no summary", 90)))
+             for netuid, what in rows]
+    return lines, {"high_count": len(lines)}
+
+
+def _health_section(src: _Sources, bcfg: Dict[str, Any], start: str,
+                    config: Dict[str, Any], connection: sqlite3.Connection,
+                    figures: Dict[str, Any]
+                    ) -> Tuple[List[str], Dict[str, Any]]:
+    """System health for the details fold: provider events, the above-bar
+    count distribution, TaoStats quota, the last knowledge ingest, the
+    price data date, stalled watermarks, and the release subject."""
+    lines: List[str] = []
     live = src.live
     if live is not None and _table(live, "integration_health"):
         fails = live.execute(
             "SELECT provider, COUNT(*) FROM integration_health "
             "WHERE timestamp > ? GROUP BY provider ORDER BY 2 DESC",
             (start,)).fetchall()
-        if fails:
-            lines.append("provider events: %s" % " · ".join(
-                "%s %d" % (p, n) for p, n in fails[:4]))
-        else:
-            lines.append("providers: quiet")
+        lines.append("Provider events: %s" % " · ".join(
+            "%s %d" % (tg.rec(p), n) for p, n in fails[:4])
+            if fails else "Providers quiet")
     if live is not None and _table(live, "gate_state"):
         dist = live.execute(
             "SELECT above_count, COUNT(*) FROM gate_state "
             "WHERE observed_at > ? AND above_count IS NOT NULL "
             "GROUP BY above_count ORDER BY above_count", (start,)).fetchall()
         if dist:
-            lines.append("above-bar counts: %s" % " · ".join(
+            lines.append("Above-bar counts: %s" % " · ".join(
                 "%s on %d polls" % (c, n) for c, n in dist))
     if live is not None and _table(live, "calls"):
         month_start = datetime.datetime.now(
@@ -465,11 +458,24 @@ def _atlas_section(src: _Sources, bcfg: Dict[str, Any], start: str,
                           "'taostats' AND ts >= ?",
                     (month_start.timestamp(),))
         cap = int(bcfg.get("taostats_monthly_cap", 10000))
-        lines.append("TaoStats quota: %s of %d this month" % (used, cap))
+        lines.append("TaoStats %s of %s calls this month"
+                     % (tg.fmt_int(used), tg.fmt_int(cap)))
     if src.knowledge is not None and _table(src.knowledge, "intake_runs"):
         last = _one(src.knowledge, "SELECT MAX(run_id) FROM intake_runs")
         if last:
-            lines.append("last knowledge ingest: %s" % str(last)[:8])
+            day = str(last)[:8]
+            lines.append("Knowledge last ingested %s" % tg.fmt_date(
+                "%s-%s-%s" % (day[:4], day[4:6], day[6:8])))
+    if figures.get("tao_date"):
+        lines.append("Price data dated %s" % tg.fmt_date(figures["tao_date"]))
+    if figures.get("spec") is not None:
+        release = tg._release_for_upgrade(
+            bcfg.get("repo_db", "var/repotrack/repotrack.db"),
+            int(figures["spec"]))
+        if release is not None:
+            lines.append("Release for spec %s: %s" % (
+                figures["spec"], tg.rec(tg._clip_words(release["subject"],
+                                                        90))))
     # A class is reported stalled only against a configured expectation.
     for name, spec in (config.get("classes") or {}).items():
         hours = spec.get("expected_interval_hours")
@@ -483,9 +489,50 @@ def _atlas_section(src: _Sources, bcfg: Dict[str, Any], start: str,
         cutoff = (datetime.datetime.now(datetime.timezone.utc)
                   - datetime.timedelta(hours=float(hours))).isoformat()
         if row[0] < cutoff:
-            lines.append("class %s: watermark stalled since %s"
+            lines.append("Class %s: watermark stalled since %s"
                          % (name, row[0][:16]))
-    return lines or ["no atlas records this window"], figures
+    return lines, {}
+
+
+def _summary_line(kind: str, figures: Dict[str, Any],
+                  names: Dict[int, str]) -> str:
+    """One line built by fixed rules from figures already in the edition:
+    quiet marker, TAO move, the largest mover, rule changes, high-impact
+    changes. Nothing here is absent from the body."""
+    parts: List[str] = []
+    quiet = (not figures.get("side_changes")
+             and not figures.get("rule_changes"))
+    if quiet:
+        parts.append("Quiet week." if kind == EDITION_WEEKLY
+                     else "Quiet day.")
+    usd = figures.get("tao_usd")
+    change = figures.get("tao_change")
+    if usd is not None:
+        price = tg.fmt_usd(usd)
+        if change is None:
+            parts.append("TAO at %s." % price)
+        elif abs(change) < 1.0:
+            parts.append("TAO flat at %s." % price)
+        else:
+            parts.append("TAO %s %s." % ("rose" if change > 0 else "fell",
+                                         tg.fmt_change(abs(change)).lstrip("+")))
+    movers = [m for m in (figures.get("top_share"), figures.get("top_price"))
+              if m]
+    if movers:
+        top = max(movers, key=lambda m: abs(m["pct"]))
+        parts.append("%s %s %s %s." % (
+            tg.subnet_tag(top["netuid"], names), top["what"],
+            "rose" if top["pct"] > 0 else "fell",
+            tg.fmt_change(abs(top["pct"])).lstrip("+")))
+    if figures.get("rule_changes"):
+        count = figures["rule_changes"]
+        parts.append("%d chain rule change%s." % (count,
+                                                  "" if count == 1 else "s"))
+    if figures.get("high_count"):
+        count = figures["high_count"]
+        parts.append("%d high-impact incentive change%s." % (
+            count, "" if count == 1 else "s"))
+    return " ".join(parts) or "No recorded changes this window."
 
 
 # ---------------------------------------------------------------------------
@@ -495,8 +542,9 @@ def _atlas_section(src: _Sources, bcfg: Dict[str, Any], start: str,
 def compose(config: Dict[str, Any], connection: sqlite3.Connection,
             kind: str, now: Optional[datetime.datetime] = None
             ) -> Dict[str, Any]:
-    """Build the edition: sections, figures, and the closing line. Pure
-    read; delivery and watermarks belong to run_briefing."""
+    """Build the edition: header, summary, sections, fold, figures, and
+    the closing next action. Pure read; delivery and watermarks belong to
+    run_briefing."""
     bcfg = config.get("briefing") or {}
     now = _utc(now)
     window_days = 7 if kind == EDITION_WEEKLY else 1
@@ -508,44 +556,65 @@ def compose(config: Dict[str, Any], connection: sqlite3.Connection,
     src = _Sources(bcfg)
     sections: Dict[str, List[str]] = {}
     figures: Dict[str, Any] = {}
+    health: List[str] = []
     try:
-        for name, builder in (
-                ("network", _network_section), ("subnets", _subnets_section),
-                ("code", _code_section), ("narrative", _narrative_section),
-                ("mining", _mining_section)):
+        names = tg.subnet_names_from(src.live)
+        builders = (
+            ("network", lambda: _network_section(src, bcfg, start, prev,
+                                                 kind)),
+            ("rules", lambda: _rules_section(src, start, names)),
+            ("price_moves", lambda: _price_moves_section(src, bcfg, start,
+                                                         names)),
+            ("share_moves", lambda: _share_moves_section(src, bcfg, start,
+                                                         names)),
+            ("watch", lambda: _watch_section(src, names)),
+            ("high_impact", lambda: _high_impact_section(src, start,
+                                                         names)),
+        )
+        for name, builder in builders:
             try:
-                lines, figs = builder(src, bcfg, start, prev)
+                lines, figs = builder()
             except sqlite3.Error as exc:
                 lines, figs = ["%s: unreadable (%s)"
-                               % (name, type(exc).__name__)], {}
+                               % (SECTION_TITLES[name], type(exc).__name__)
+                               ], {}
             sections[name] = lines
             figures.update(figs)
         try:
-            lines, figs = _atlas_section(src, bcfg, start, prev, config,
-                                         connection)
+            health, _figs = _health_section(src, bcfg, start, config,
+                                            connection, figures)
         except sqlite3.Error as exc:
-            lines, figs = ["atlas: unreadable (%s)" % type(exc).__name__], {}
-        sections["atlas"] = lines
-        figures.update(figs)
+            health = ["System health unreadable (%s)" % type(exc).__name__]
     finally:
         src.close()
 
-    next_action = None
-    if any("budget band unset" in line for line in sections["mining"]):
-        next_action = ("next: pick mining.budget_band, or disable the "
-                       "mining screen")
-    closing = next_action or ("board: %s" % bcfg.get(
-        "board_url", "http://192.168.0.150:8480/"))
-    return {"kind": kind, "sections": sections, "figures": figures,
-            "first_edition": first_edition, "closing": closing,
+    if kind == EDITION_WEEKLY:
+        header = "Atlas weekly · %s to %s" % (
+            tg.fmt_date((now - datetime.timedelta(days=6)).isoformat()),
+            tg.fmt_date(now.isoformat()))
+    else:
+        header = "Atlas daily · %s %s" % (
+            now.strftime("%a"),
+            tg.fmt_date(now.isoformat()))
+    summary = _summary_line(kind, figures, names)
+    if first_edition:
+        summary += " First edition: changes begin next time."
+    # Persist only plain figures the next edition compares against.
+    persisted = {k: v for k, v in figures.items()
+                 if k in ("tao_usd", "theta", "spec", "side_changes",
+                          "rule_changes", "high_count")}
+    return {"kind": kind, "header": header, "summary": summary,
+            "sections": sections, "health": health, "figures": persisted,
+            "first_edition": first_edition, "closing": None,
             "window_start": start}
 
 
 def _to_messages(edition: Dict[str, Any], config: Dict[str, Any]
-                 ) -> List[Tuple[str, List[str]]]:
-    """(headline, lines) per message. Lines drop from the lowest-priority
-    section upward until the edition fits the configured message count;
-    the network section is never cut, and the omission count is stated."""
+                 ) -> List[tg.Message]:
+    """One or more Messages per edition. When the edition needs more
+    messages than allowed, the health fold sheds first, then whole lines
+    drop from the lowest-priority section upward; the network section is
+    never cut and the omission count is stated."""
     bcfg = config.get("briefing") or {}
     max_messages = int(bcfg.get(
         "max_messages_weekly" if edition["kind"] == EDITION_WEEKLY
@@ -554,53 +623,75 @@ def _to_messages(edition: Dict[str, Any], config: Dict[str, Any]
     per_message = max_chars - 400  # markup + headline headroom
     sections = {name: list(lines)
                 for name, lines in edition["sections"].items()}
-    date = _utc(None).date().isoformat()
-    head = "Atlas · %s pulse · %s" % (edition["kind"], date)
+    health = list(edition.get("health") or [])
+    overflow: List[str] = []
+    if (edition["kind"] == EDITION_WEEKLY
+            and len(sections.get("high_impact") or []) > WEEKLY_HIGH_IMPACT_LINES):
+        overflow = sections["high_impact"][WEEKLY_HIGH_IMPACT_LINES:]
+        sections["high_impact"] = (
+            sections["high_impact"][:WEEKLY_HIGH_IMPACT_LINES]
+            + ["+%d more in the fold" % len(overflow)])
 
-    def pack() -> List[Tuple[str, List[str]]]:
-        blocks: List[List[str]] = []
-        if edition["first_edition"]:
-            blocks.append(["first edition · deltas begin next time"])
+    def blocks() -> List[List[str]]:
+        out = []
         for name in SECTION_ORDER:
-            if sections[name]:
-                blocks.append(
-                    ["%s%s%s" % (tg._BOLD_OPEN, name, tg._BOLD_CLOSE)]
-                    + sections[name])
-        messages: List[Tuple[str, List[str]]] = []
+            if sections.get(name):
+                out.append([tg.bold(SECTION_TITLES[name])] + sections[name])
+        return out
+
+    def pack(omitted: int) -> List[tg.Message]:
+        groups: List[List[str]] = []
         current: List[str] = []
-        size = 0
-        for block in blocks:
+        size = len(edition["summary"]) + 1
+        for block in blocks():
             block_len = sum(len(line) + 1 for line in block) + 1
             if current and size + block_len > per_message:
-                messages.append((head if not messages else
-                                 "%s · %d" % (head, len(messages) + 1),
-                                 current))
+                groups.append(current)
                 current, size = [], 0
-            current.extend(block + [""])
+            current.extend(([""] if current else []) + block)
             size += block_len
-        if current:
-            messages.append((head if not messages else
-                             "%s · %d" % (head, len(messages) + 1),
-                             current))
+        if current or not groups:
+            groups.append(current)
+        fold = (["More high-impact changes:"] + overflow if overflow
+                else []) + health
+        messages = []
+        for index, body in enumerate(groups):
+            last = index == len(groups) - 1
+            if last and omitted:
+                body = body + ["", "%s omitted for size"
+                               % tg.plural(omitted, "line")]
+            messages.append(tg.Message(
+                severity=EDITION_MARK[edition["kind"]],
+                headline=edition["header"] + (
+                    "" if index == 0 else " · %d" % (index + 1)),
+                meaning=edition["summary"] if index == 0 else None,
+                body=body,
+                details=fold if last else [],
+                next_action=edition.get("closing") if last else None))
         return messages
 
     omitted = 0
-    messages = pack()
-    while len(messages) > max_messages:
-        for name in DROP_ORDER:
-            if sections[name]:
-                sections[name].pop()
-                omitted += 1
-                break
+    messages = pack(omitted)
+
+    def too_big(msgs: List[tg.Message]) -> bool:
+        return len(msgs) > max_messages or any(
+            len(tg._layout(m, True, None)) > max_chars for m in msgs)
+
+    while too_big(messages):
+        if health:
+            health.pop()
+        elif overflow:
+            overflow.pop()
         else:
-            messages = messages[:max_messages]  # nothing left to drop
-            break
-        messages = pack()
-    if messages:
-        headline, lines = messages[-1]
-        tail = (["%d line(s) omitted for size" % omitted] if omitted
-                else []) + [edition["closing"]]
-        messages[-1] = (headline, lines + tail)
+            for name in DROP_ORDER:
+                if sections.get(name):
+                    sections[name].pop()
+                    omitted += 1
+                    break
+            else:
+                messages = messages[:max_messages]  # nothing left to drop
+                break
+        messages = pack(omitted)
     return messages
 
 
@@ -627,17 +718,11 @@ def run_briefing(config: Dict[str, Any], token: str, chat_id: str,
     edition = compose(config, connection, kind, now=now)
     messages = _to_messages(edition, config)
     max_chars = int(config.get("message_max_chars", 3500))
-    _lexicon, glosses = tg.voice_maps(config)
     statuses: List[str] = []
-    for index, (headline, lines) in enumerate(messages, start=1):
-        event = {
-            "event_id": "briefing:%s:%s:%d" % (kind, stamp, index),
-            "event_class": "pulse-briefing", "created_at": tg._utc_now(),
-            "text": tg.render_plain(headline, lines, "", None, max_chars,
-                                    glosses=glosses),
-            "html": tg.render_html(headline, lines, "", None, max_chars,
-                                   glosses=glosses),
-        }
+    for index, msg in enumerate(messages, start=1):
+        event = tg.message_event(
+            msg, "briefing:%s:%s:%d" % (kind, stamp, index),
+            "pulse-briefing", tg._utc_now(), max_chars, None)
         statuses.append(tg.deliver_event(connection, config, token,
                                          chat_id, event, poster=poster))
     delivered = statuses and all(

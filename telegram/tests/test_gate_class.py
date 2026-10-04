@@ -113,16 +113,15 @@ class GateAdapterTests(unittest.TestCase):
                          "gate-crossing:42:%d" % row_id)
         self.assertEqual(event["event_class"], "gate-crossing")
         text = event["text"]
-        self.assertIn("subnet 42 fell below the bar", text)
+        self.assertIn("Subnet 42 fell below the emission bar", text)
         self.assertIn("gated emission collapses toward zero", text)
-        self.assertIn("demand share 0.520%", text)
-        self.assertIn("bar 0.930%", text)
-        self.assertIn("demand share: TaoSwap panel", text)
-        self.assertIn("bar: chain RPC", text)
-        self.assertIn("next: review your subnet 42 position", text)
+        self.assertIn("Demand share: 0.520%", text)
+        self.assertIn("Bar: 0.930%", text)
+        self.assertIn("Shares: TaoSwap panel. Bar: chain RPC.", text)
+        self.assertIn("Next: review your subnet 42 position", text)
         self.assertNotIn("—", text)  # em dash
         self.assertNotIn("–", text)  # en dash
-        self.assertNotIn("emission is disabled", text)  # enabled: no note
+        self.assertNotIn("switched off", text)  # enabled: no note
         self.assertIn("<b>", event["html"])
 
     def test_rose_above_and_disabled_note(self):
@@ -131,10 +130,10 @@ class GateAdapterTests(unittest.TestCase):
         events, _wm = tg.gate_crossing_events(self.live_db, None,
                                               self.ctx())
         text = events[0]["text"]
-        self.assertIn("rose above the bar", text)
-        self.assertIn("amplified emission share", text)
-        self.assertIn("emission is disabled", text)
-        self.assertNotIn("next:", text)  # informational: no action
+        self.assertIn("rose above the emission bar, no effect", text)
+        self.assertIn("Emission is switched off", text)
+        self.assertIn("earns zero either way", text)
+        self.assertNotIn("Next:", text)  # informational: no action
 
     def test_watermark_excludes_seen_rows(self):
         first = add_crossing(self.live_db, 1)

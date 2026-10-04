@@ -29,6 +29,39 @@ cutting words that do no work, not from numeric limits.
 - Provenance survives condensation: however brief the message, every
   sourced figure keeps its source and its date, block, or commit.
 
+### 1a. Alert layout (change: telegram-alert-redesign, 2026-10-04)
+
+Every outbound message (notifier classes, pulse briefing, probe watch,
+upgrade job) renders from one message model, in this order:
+
+1. **Marker and headline.** One severity marker, then the effect in plain
+   words, naming the subnet: `🔴 Subnet 82 (uruz) stopped receiving TAO
+   emission`. Never the mechanism alone, never an `Atlas ·` prefix.
+2. **Meaning.** One sentence on what it means for the operator. This is the
+   only place a gloss attaches.
+3. **Key figures.** Two to four bold-labelled lines (`Demand share:`,
+   `When:`).
+4. **Body.** Lists, such as commit subjects or digest items, one per line.
+5. **Details fold.** Sources, blocks, SHAs, raw values, and provenance in an
+   expandable blockquote.
+6. **`Next:`.** The single next action, last, only when one exists.
+
+Links to GitHub and taostats ride inline keyboard buttons, never the LAN
+board. Times render as `tg-time` entities (the reader's timezone) with a
+UTC fallback. Integers carry thousands separators, the bar is always a
+percentage, and alpha prices show three significant figures.
+
+| Marker | Meaning |
+|---|---|
+| 🔴 | act now |
+| 🟠 | watch |
+| 🟢 | good news |
+| 🔵 | for information |
+| ✅ | done or recovered |
+
+The pulse editions use their own marker instead: ☀️ daily, 🗓️ weekly.
+A marker never changes delivery: tiers alone decide what pages.
+
 ## 2. Lexicon and glosses
 
 One concept, one word. Chat and alerts use the approved word and never
@@ -42,7 +75,7 @@ Approved lexicon:
 
 | Concept | Approved | Banned in prose |
 |---|---|---|
-| subnet identity | `subnet N` | `netuid`, `SN` |
+| subnet identity | `subnet N`; named `Subnet N (Name)` in alerts, `Name (N)` in briefing lists | `netuid`, `SN` |
 | emission-gate bar | `bar` | `theta`, `threshold`, `limit`, `cutoff` |
 | demand share | `demand share` | (none) |
 | crossing | `crossing` | `flip`, `transition` |
@@ -63,7 +96,9 @@ template text; recorded free text (commit subjects, provider detail) is
 data and is exempt.
 
 Jargon glosses (terms with no plain approved word; gloss in parentheses at
-first use in a message, bare after):
+first use in a message, bare after). In alerts the gloss attaches only
+inside the meaning sentence: never in a headline, a label, or recorded
+text such as a commit subject, a pallet label, or a subnet name:
 
 | Term | Gloss |
 |---|---|
@@ -233,8 +268,10 @@ Markdown conversion, MEDIA tags, and chunk mechanics.
 
 - **Alerts:** renderer unit tests (`telegram/tests/test_voice.py`) assert
   lexicon conformance (approved words present, banned synonyms absent,
-  gloss on first use only), the verdict-led structure per class, and the
-  shrink-order protection. Config-to-canon conformance is asserted against
+  gloss on first use in prose only), the house layout per class (marker
+  first, `Next:` last, no raw timestamps outside the fold), and the
+  shrink-order protection. `telegram/tests/test_real_samples.py` runs
+  real Pi rows from 2026-10-04 through every class. Config-to-canon conformance is asserted against
   the tables in section 2.
 - **Chat:** the MV-RI-4 adversarial battery (`hermes/modelval`) re-run
   on-device against the re-voiced live chat, extended with voice probes

@@ -27,19 +27,22 @@ priority — a live chain upgrade surfaces before repo alerts in the same scan:
 | `chain-runtime-upgrade` | `var/livedata/livedata.db` (`spec_upgrades`) | the **live** Finney runtime `spec_version` changed (the network changed) |
 | `chain-parameter-change` | `var/livedata/livedata.db` (`chain_param_events`) | a root-settable economic knob changed value (change: network-drift-443): the three emission-gate bar parameters plus the basket knobs (`BasketConcentrationCap`, the `swap_basket` buy cap, since root-weight-drift; the retired `RootWeightSettingEnabled` curation switch is no longer watched). Instant tier, **no cooldown and no digest** — such a knob cannot burst, and suppressing a second flip would be the wrong failure. A bar-parameter transition also states that the bar was re-priced for every subnet and that per-subnet crossing pages were withheld for that pass |
 | `gate-crossing` | `var/livedata/livedata.db` (`gate_events`) | a subnet's demand share crossed the emission-gate bar in either direction (change: gate-crossing-signal) — an economic cliff event; instant tier with a per-netuid cooldown. Since network-drift-443 the body also names the active bar mode (rank-pinned or q-mass) and the bar's own movement, attributing the crossing to the bar when the bar alone accounts for it. Since rotation-signal-gate a crossing pages only once livedata marks it `eligible`: one reversed inside the 48h durability window is recorded and never paged, and one still `pending` holds the watermark for a later scan |
-| `fleet-signal` | `var/fleet/fleet.db` (`signal_events`, read **strictly read-only**) | fleet-signals queue (change: fleet-signals): `narrative-cluster` and `watchlist` page immediately, `econ-code` is registered `briefing` and no longer pages (change: rotation-signal-gate); `signal-digest` rows are held durably in `pending_signal`, ride the next instant fleet alert, or flush via `digest_backstop_hours` — never paged, never dropped |
+| `fleet-signal` | `var/fleet/fleet.db` (`signal_events`, read **strictly read-only**) | fleet-signals queue (change: fleet-signals): `watchlist` pages immediately, `narrative-cluster` is registered `shadow` and sends nothing (change: telegram-alert-redesign), `econ-code` is registered `briefing` and no longer pages (change: rotation-signal-gate); `signal-digest` rows are held durably in `pending_signal`, ride the next instant fleet alert, or flush via `digest_backstop_hours` — never paged, never dropped |
 | `repository-update` | `var/repotrack/repotrack.db` (`change_ranges`) | a **significant** tracked commit range (Phase 3 timer); churn is digested, not paged |
 | `schema-drift` | `var/livedata/livedata.db` (`integration_health`) | a live provider response stopped validating (Phase 4) |
 | `knowledge-ingestion` | `var/knowledge/knowledge.db` (`intake_runs`) | a new ingest run staged units for review (Phase 2) |
 | `subnet-registry` | `var/livedata/livedata.db` (`panel_snapshot`) | a netuid appears, disappears, or changes its on-chain name between consecutive snapshots (change: pulse-briefing); the first snapshot seeds silently. Registered `briefing` since rotation-signal-gate: all six alerts in the preceding 30 days were renames |
 | `fail-closed` | `var/livedata/livedata.db` (`integration_health`) | the gate poll or the chain-parameter watch has recorded only failures for longer than `window_hours` (change: pulse-briefing), keyed by the outage's first failure so a persisting outage pages once |
 
-**Fleet signal alerts** carry the term/subnet facts as single-fact `·`
-lines (cluster: members, first mover with date and `code` SHA, adoption
-window, fleet prevalence; watchlist: term, source file, commit; econ-code:
-range SHAs, commit count, matched files) plus one entry-price line (alpha
-in TAO) when the fleet's price snapshot is already recorded — a pending
-snapshot omits the line and never delays delivery. Terms and paths
+**Fleet signal alerts** name each subnet from the panel snapshot and
+carry the term/subnet facts in the house layout (cluster: members, first
+mover with date and `code` SHA, adoption window, fleet prevalence;
+watchlist: term, source file, commit; econ-code: what changed, why it
+matters, impact, then range SHAs, commit count, and matched files in the
+fold) plus the entry price (alpha in TAO) when the fleet's price snapshot
+is already recorded. A pending snapshot omits the price and never delays
+delivery. Minor signals riding an instant alert are listed in its fold,
+one per line. Terms and paths
 originate in untrusted subnet repos: escaped, length-bounded, data only.
 The delivery watermark lives in this module's ledger (never in the fleet
 store); ledger dedup keys are the fleet's own per-class dedup keys
@@ -49,11 +52,14 @@ unit and this scan runs in the repo unit — delivery may lag extraction by
 up to one cycle by design.
 
 **Gate-crossing alerts** page confirmed crossings only (livedata applies
-the hysteresis and 2-poll confirmation before an event exists). The body
-is single-fact `·` lines — netuid, demand share, bar, relative margin —
-and names each figure's source (`shares: TaoSwap panel · bar: chain RPC ·
-block N`), plus an `emission is DISABLED` note when the crossing subnet
-earns zero either way. Both directions page (a cliff either way);
+the hysteresis and 2-poll confirmation before an event exists). The
+headline names the subnet and direction. Key figures give the demand
+share and its distance from the bar, the bar (as the Nth largest share in
+rank mode), the cause (the subnet's demand or the bar moving), and the
+alpha price at the event's block. The fold names each source (`Shares:
+TaoSwap panel. Bar: chain RPC.`) and the block. A crossing on a subnet
+with emission switched off renders as a short 🔵 note: it earns zero
+either way. Both directions page (a cliff either way);
 `cooldown_hours` (per netuid, default 24) records further events in the
 ledger as `suppressed` instead of paging — never dropped. The watermark is
 the livedata `gate_events` row id.
@@ -85,8 +91,14 @@ range is classified from recorded facts (changed paths + the recorded runtime
 The tier directory sets, the backstop cadence, and the governance threshold
 live in [config.json](config.json). Every repo alert is badged a source-code
 event, distinct from the live chain; a repo advance never implies the chain
-moved. Messages render as Telegram HTML (escaped, size-bounded, single-fact
-lines, no em dashes); an HTTP 400 falls back once to plain text, recorded.
+moved. Messages render as Telegram HTML in the house layout (canon:
+[docs/voice.md](docs/voice.md) section 1a): severity marker, effect-first
+headline, one meaning sentence, labelled key figures, provenance in an
+expandable fold, `Next:` last. Values are escaped, bodies are sized before
+rendering, and there are no em dashes. Links ride inline keyboard buttons
+(`links` in [config.json](config.json)); link previews are off through
+`link_preview_options`. An HTTP 400 resends once as plain text with the
+same buttons, then once more without buttons; the fallback is recorded.
 
 **Guarantees**
 
@@ -144,13 +156,18 @@ suppressed, never paged.
 The briefing itself (`atlas_briefing.py`) is a daily edition at
 `briefing.daily_hour_utc`, replaced weekly on `briefing.weekly_weekday`,
 composed ONLY from stores already on disk (no provider call, no model
-call): network, subnets, code, narrative, mining, atlas, each line a
-recorded fact with its delta against the previous edition's persisted
-figures. Edition watermarks in the ledger stop double-sends; a missed
-hour catches up on the next scan that day. Oversized editions drop whole
-lines from the lowest-priority section upward (network is never cut) and
-state the omission count. The last line is the next action when one
-exists, otherwise the LAN board link.
+call). Each edition starts with ☀️ (daily) or 🗓️ (weekly) and a one-line
+summary built by fixed rules. Then come network, chain rule changes,
+biggest price moves, biggest demand-share moves, a watch list (the 3
+non-immune subnets closest to deregistration, plus subnets at the bar),
+and named high-impact incentive changes. Every line is a recorded fact
+with its delta against the previous edition's persisted figures. System
+health sits in an expandable fold. Edition watermarks in the ledger stop
+double-sends; a missed hour catches up on the next scan that day.
+Oversized editions shed the fold first, then whole lines from the
+lowest-priority section upward (network is never cut), and state the
+omission count. The last line is the next action when one exists. There
+is no board link.
 
 ## Commands
 

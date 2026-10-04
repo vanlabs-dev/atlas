@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
@@ -89,49 +90,115 @@ def cmd_check(config: Dict[str, Any], rpc: Optional[Any] = None,
     return 0 if result["ok"] else 1
 
 
-def _drift_text(result: Dict[str, Any]) -> str:
-    where = "spec %s block %s" % (result.get("spec"), result.get("block"))
+def _tg() -> Any:
+    import atlas_telegram as tg
+    return tg
+
+
+_REASON_RE = (
+    (re.compile(r"^pallet missing from metadata$"),
+     lambda m: "pallet removed from the chain metadata"),
+    (re.compile(r"^missing from metadata$"),
+     lambda m: "removed from the chain metadata"),
+    (re.compile(r"^hashers (.+), declared (.+)$"),
+     lambda m: "key layout changed (chain %s, Atlas expects %s)"
+     % (m.group(1), m.group(2))),
+    (re.compile(r"^value type (.+), declared (.+)$"),
+     lambda m: "type changed (chain %s, Atlas expects %s)"
+     % (m.group(1), m.group(2))),
+)
+
+
+def _plain_reason(reason: str) -> str:
+    for pattern, words in _REASON_RE:
+        match = pattern.match(reason or "")
+        if match:
+            return words(match)
+    return reason
+
+
+def drift_message(result: Dict[str, Any]) -> Any:
+    """The probe-drift page in the house layout (change:
+    telegram-alert-redesign)."""
+    tg = _tg()
+    details = ["Runtime spec %s · block %s" % (
+        result.get("spec"), tg.fmt_int(result.get("block")))]
     if result.get("error"):
-        return "Atlas • probe-drift: probe failed closed (%s): %s" % (
-            where, result["error"])
-    lines = ["Atlas • probe-drift: %d chain read(s) fail at %s"
-             % (len(result["failures"]), where)]
-    lines += ["- %s.%s: %s" % (f["pallet"], f["item"], f["reason"])
-              for f in result["failures"]]
-    return "\n".join(lines)
+        return tg.Message(
+            severity=tg.severity_for("probe-drift"),
+            headline="Atlas could not check its chain readers",
+            meaning="The probe failed closed, so drift in the live chain "
+                    "metadata is not being checked.",
+            facts=[("Error", tg.rec(result["error"])[:300])],
+            details=details,
+            next_action="run %s on the Pi and read the error."
+                        % tg.mono("python3 livedata/atlas_probe.py check"))
+    failures = result["failures"]
+    body = ["• %s: %s" % (tg.bold(f["item"]), tg.rec(_plain_reason(
+        f["reason"]))) for f in failures[:12]]
+    if len(failures) > 12:
+        body.append("+%d more in the details" % (len(failures) - 12))
+    details += ["%s.%s: %s" % (tg.rec(f["pallet"]), tg.rec(f["item"]),
+                               tg.rec(f["reason"])) for f in failures]
+    return tg.Message(
+        severity=tg.severity_for("probe-drift"),
+        headline="%s no longer match%s the live chain" % (
+            tg.plural(len(failures), "Atlas chain reader"),
+            "es" if len(failures) == 1 else ""),
+        meaning="At runtime spec %s these storage reads changed shape. "
+                "Figures that depend on them can be missing or wrong until "
+                "fixed." % result.get("spec"),
+        body=body, details=details,
+        next_action="wait for the self-update report. If it says blocked, "
+                    "fix the readers by hand.")
+
+
+def cleared_message(result: Dict[str, Any]) -> Any:
+    tg = _tg()
+    return tg.Message(
+        severity=tg.severity_for("probe-cleared"),
+        headline="Atlas chain readers match the live chain again",
+        meaning="Runtime spec %s, block %s." % (
+            result.get("spec"), tg.fmt_int(result.get("block"))))
 
 
 def watch_decide(result: Dict[str, Any], state: Dict[str, Any],
-                 send: Callable[[str], bool]) -> Dict[str, Any]:
+                 send: Callable[[Any], bool]) -> Dict[str, Any]:
     """Page once per failing set. `state["paged"]` is the signature of the
     last delivered page; a clear sends one note and resets it. A failed
     send leaves the state alone, so the next run tries again."""
     if result["ok"]:
-        if state.get("paged") and send(
-                "Atlas • probe-drift cleared at spec %s block %s"
-                % (result.get("spec"), result.get("block"))):
+        if state.get("paged") and send(cleared_message(result)):
             state["paged"] = None
         return state
     signature = ("error" if result.get("error") else
                  "|".join(sorted("%s.%s" % (f["pallet"], f["item"])
                                  for f in result["failures"])))
-    if signature != state.get("paged") and send(_drift_text(result)):
+    if signature != state.get("paged") and send(drift_message(result)):
         state["paged"] = signature
     return state
 
 
-def telegram_send(text: str) -> bool:
-    """Deliver through the telegram module's send path, credentials, and
-    scrubber. Returns False on any refusal or delivery failure."""
-    import atlas_telegram as tg
+def telegram_send(msg: Any) -> bool:
+    """Deliver one Message through the telegram module's renderer,
+    credentials, scrubber, and HTML-to-plain fallback. Returns False on
+    any refusal or delivery failure."""
+    tg = _tg()
     try:
         config = tg.load_config()
         token, chat_id = tg.resolve_credentials(config)
+        max_chars = int(config.get("message_max_chars", 3500))
+        _lexicon, glosses = tg.voice_maps(config)
+        text = tg.render_plain(msg, max_chars, glosses)
+        html = tg.render_html(msg, max_chars, glosses)
         tg.assert_sendable(text)
+        tg.assert_sendable(html)
     except (tg.FatalTelegramError, tg.ScrubRefusal) as exc:
         print("telegram: %s" % tg.redact(str(exc)), file=sys.stderr)
         return False
-    return bool(tg.send_message(config, token, chat_id, text)["delivered"])
+    result, _note = tg.send_with_fallback(config, token, chat_id, text, html,
+                                          list(msg.buttons))
+    return bool(result["delivered"])
 
 
 def cmd_watch(config: Dict[str, Any]) -> int:

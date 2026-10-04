@@ -45,6 +45,7 @@ sys.path.insert(0, os.path.join(ROOT, "livedata"))
 import allowed_paths  # noqa: E402
 import atlas_live as al  # noqa: E402
 import atlas_probe  # noqa: E402
+import atlas_telegram as tg  # noqa: E402  (atlas_probe put it on the path)
 
 AUTHOR_NAME = "vaNlabs"
 AUTHOR_EMAIL = "vanlabs@pm.me"
@@ -77,11 +78,6 @@ class StepFailed(Exception):
 def _tail(text: str, limit: int = 400) -> str:
     text = (text or "").strip()
     return text if len(text) <= limit else "..." + text[-limit:]
-
-
-def _utc(epoch: float) -> str:
-    return datetime.datetime.fromtimestamp(
-        epoch, tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
 def status_paths(porcelain_z: str) -> List[str]:
@@ -176,11 +172,11 @@ class Job:
     def live_spec(self) -> Dict[str, Any]:
         return al.read_live_spec(al.load_config())
 
-    def send(self, text: str) -> bool:
+    def send(self, msg: "tg.Message") -> bool:
         if self.dry_run:
-            print("[dry-run report] " + text)
+            print("[dry-run report] " + msg.plain())
             return True
-        return atlas_probe.telegram_send(text)
+        return atlas_probe.telegram_send(msg)
 
     # -- helpers ------------------------------------------------------------
 
@@ -234,22 +230,30 @@ class Job:
 
     # -- reporting ----------------------------------------------------------
 
-    def report(self, state: Dict[str, Any], kind: str, text: str) -> None:
+    def report(self, state: Dict[str, Any], kind: str,
+               msg: "tg.Message") -> None:
         """Exactly one delivery per (spec, attempt, outcome). An undelivered
         report is kept and retried at the start of the next run."""
         key = "%s:%s:%s" % (state.get("spec"), state.get("attempt", 0), kind)
         reported = state.setdefault("reported", [])
         if key in reported:
             return
-        if self.send(text):
+        if self.send(msg):
             reported.append(key)
             del reported[:-20]
         else:
-            state["pending_report"] = {"key": key, "text": text}
+            state["pending_report"] = {"key": key,
+                                       "message": msg.to_dict()}
 
     def flush_pending(self, state: Dict[str, Any]) -> None:
         pending = state.get("pending_report")
-        if pending and self.send(pending["text"]):
+        if not pending:
+            return
+        if "message" in pending:
+            msg = tg.Message.from_dict(pending["message"])
+        else:  # a report saved before the house layout (plain text)
+            msg = tg.Message(severity=None, headline=str(pending["text"]))
+        if self.send(msg):
             state.setdefault("reported", []).append(pending["key"])
             state.pop("pending_report")
 
@@ -264,19 +268,37 @@ class Job:
         state.update(status="blocked" if blocked else "retrying",
                      last_error="%s: %s" % (gate, _tail(detail, 600)),
                      step=None)
-        lines = ["Atlas • runtime upgrade %s: spec %s, attempt %d failed "
-                 "at %s" % ("stalled" if stalled else state["status"],
-                            spec, attempt, gate), _tail(detail, 600)]
+        of = "attempt %d of %d" % (attempt, MAX_ATTEMPTS)
+        details = _tail(detail, 600).splitlines()
         if blocked:
-            lines.append("Blocked. Branch %s kept. Release with: python3 "
-                         "upgrade/atlas_upgrade.py clear --spec %s"
-                         % (state.get("branch"), spec))
+            why = ("this gate runs after the push, so another attempt "
+                   "cannot fix it" if gate in POST_PUSH_GATES
+                   else "all %d attempts are used" % MAX_ATTEMPTS)
+            msg = tg.Message(
+                severity=tg.severity_for("upgrade-blocked"),
+                headline="Atlas self-update for spec %s is %s" % (
+                    spec, "stalled and blocked" if stalled else "blocked"),
+                meaning="Blocked after %s failed at %s: %s. Branch %s is "
+                        "kept for you." % (of, gate, why,
+                                           tg.mono(state.get("branch"))),
+                details=details,
+                next_action="fix the branch, then run %s" % tg.mono(
+                    "python3 upgrade/atlas_upgrade.py clear --spec %s"
+                    % spec))
         else:
             state["next_attempt_at"] = (
                 self.now() + BACKOFF_SECONDS[attempt - 1])
-            lines.append("Next attempt %s." % _utc(state["next_attempt_at"]))
-        self.report(state, "stalled" if stalled else state["status"],
-                    "\n".join(lines))
+            msg = tg.Message(
+                severity=tg.severity_for("upgrade-stalled" if stalled
+                                         else "upgrade-retrying"),
+                headline=("Atlas self-update for spec %s stalled (%s)"
+                          % (spec, of) if stalled else
+                          "Atlas self-update for spec %s failed, retrying "
+                          "(%s)" % (spec, of)),
+                meaning="Failed at %s. The next attempt runs %s." % (
+                    gate, tg.fmt_time(state["next_attempt_at"])),
+                details=details)
+        self.report(state, "stalled" if stalled else state["status"], msg)
 
     # -- the run ------------------------------------------------------------
 
@@ -337,10 +359,12 @@ class Job:
         clone = self.clone_spec()
         if clone is None or clone < spec:
             state.update(status="waiting", clone_spec=clone)
-            self.report(state, "waiting",
-                        "Atlas • runtime upgrade waiting: live spec %d, "
-                        "subtensor clone at spec %s. No attempt used; "
-                        "checking again each run." % (spec, clone))
+            self.report(state, "waiting", tg.Message(
+                severity=tg.severity_for("upgrade-waiting"),
+                headline="Atlas self-update waiting for subtensor code",
+                meaning="The live chain is on spec %d. The tracked subtensor "
+                        "code is at spec %s. No attempt used; Atlas checks "
+                        "again each run." % (spec, clone)))
             self.save_state(state)
             return 0
 
@@ -372,15 +396,24 @@ class Job:
 
         state.update(status="updated", step=None, commit=ctx.get("commit"))
         if self.dry_run:
-            self.report(state, "updated", "Atlas • runtime upgrade dry run "
-                        "passed every gate for spec %d (no push, no "
-                        "activate)." % spec)
+            self.report(state, "updated", tg.Message(
+                severity=tg.severity_for("upgrade-dry-run"),
+                headline="Atlas self-update dry run passed for spec %d"
+                         % spec,
+                meaning="Every gate passed. No push, no activation."))
         else:
-            self.report(state, "updated",
-                        "Atlas • runtime upgrade: updated to spec %d\n"
-                        "commit %s on main, corpus run %s active\n%s"
-                        % (spec, ctx["commit"][:12], ctx["run_id"],
-                           _tail(ctx.get("summary", ""), 1200)))
+            summary = (ctx.get("summary") or "").strip().splitlines()
+            self.report(state, "updated", tg.Message(
+                severity=tg.severity_for("upgrade-updated"),
+                headline="Atlas updated itself for runtime spec %d" % spec,
+                meaning="Every check passed: edit scope, all test suites, "
+                        "live chain probe. Pushed to main and the new "
+                        "knowledge corpus is active.",
+                facts=[("Commit", tg.mono(ctx["commit"][:8])),
+                       ("Corpus run", tg.mono(ctx["run_id"]))],
+                details=(["What changed:"] + summary) if summary else [],
+                buttons=tg.button(None, "View commit", "atlas_commit",
+                                  sha=ctx["commit"])))
         self.save_state(state)
         return 0
 
