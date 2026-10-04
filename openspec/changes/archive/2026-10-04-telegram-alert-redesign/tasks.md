@@ -43,4 +43,4 @@
 ## 7. Integration
 
 - [x] 7.1 Run every suite: `telegram`, `livedata`, `upgrade`, `subnt`, `fleet`. Verify all pass.
-- [ ] 7.2 On the Pi after the pull, render one message per class read-only from the live stores, plus `atlas_telegram.py test --class schema-drift` to the real chat. Verify on the phone: buttons open, times show local, nothing is truncated.
+- [x] 7.2 On the Pi after the pull, render one message per class read-only from the live stores, plus `atlas_telegram.py test --class schema-drift` to the real chat. Verify on the phone: buttons open, times show local, nothing is truncated.
