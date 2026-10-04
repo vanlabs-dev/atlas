@@ -316,9 +316,11 @@ class RenderedClassBase(unittest.TestCase):
 
     def assert_layout_invariants(self, event):
         text, html = event["text"], event["html"]
-        self.assertTrue(text.split("\n")[0].startswith("Atlas · "),
-                        "verdict headline must lead: %r" % text[:80])
-        self.assertTrue(html.startswith("<b>"))
+        first = text.split("\n")[0]
+        self.assertIn(first[:1], tuple(tg.SEVERITY_MARK.values()),
+                      "severity marker must lead: %r" % text[:80])
+        self.assertNotIn("Atlas · ", first)
+        self.assertTrue(html.split("\n")[0].endswith("</b>"))
         self.assertNotIn(EM_DASH, text)
         self.assertNotIn(EN_DASH, text)
         self.assertNotIn(EM_DASH, html)
@@ -326,10 +328,16 @@ class RenderedClassBase(unittest.TestCase):
         self.assertLessEqual(len(text), self.max_chars)
         self.assertLessEqual(len(html), self.max_chars)
         for open_t, close_t in (("<b>", "</b>"), ("<code>", "</code>"),
-                                ("<i>", "</i>"),
+                                ("<i>", "</i>"), ("<tg-time", "</tg-time>"),
                                 ("<blockquote", "</blockquote>")):
             self.assertEqual(html.count(open_t), html.count(close_t),
                              "unbalanced %s in %r" % (close_t, html[:120]))
+        # No raw microsecond timestamp outside the details fold.
+        body = html.split("<blockquote")[0]
+        self.assertIsNone(re.search(r"\d{2}:\d{2}:\d{2}\.\d{6}", body))
+        # A next action, when present, is the last line.
+        if "Next:" in text:
+            self.assertTrue(text.split("\n")[-1].startswith("Next: "))
 
 
 class PerClassVoiceTests(RenderedClassBase):
@@ -351,173 +359,255 @@ class PerClassVoiceTests(RenderedClassBase):
     def test_gate_crossing_voice(self):
         fell, rose = self.events["gate-crossing"]
         self.assertEqual(fell["text"].split("\n")[0],
-                         "Atlas · subnet 42 fell below the bar · "
-                         "gated emission collapses toward zero")
-        for word in ("subnet 42", "demand share", "bar"):
+                         "🔴 Subnet 42 fell below the emission bar")
+        self.assertIn("gated emission collapses toward zero", fell["text"])
+        for word in ("demand share", "bar"):
             self.assertIn(word, fell["text"])
-        self.assertIn("demand share: TaoSwap panel · bar: chain RPC",
+        self.assertIn("Shares: TaoSwap panel. Bar: chain RPC.",
                       fell["text"])
-        self.assertIn("next: review your subnet 42 position", fell["text"])
-        # rank-pinned glossed exactly once, at its first (only) use
-        self.assertEqual(fell["text"].count("rank-pinned"), 1)
-        self.assertEqual(fell["text"].count("(the bar is the Nth largest"),
-                         1)
+        self.assertIn("Bar: 0.930% (the 32nd largest demand share)",
+                      fell["text"])
+        self.assertEqual(fell["text"].split("\n")[-1],
+                         "Next: review your subnet 42 position.")
+        self.assertIn("<blockquote expandable>", fell["html"])
+        self.assertIn("<tg-time unix=", fell["html"])
         # emission-disabled informational crossing: no action line
-        self.assertIn("emission is disabled", rose["text"])
-        self.assertNotIn("next:", rose["text"])
+        self.assertTrue(rose["text"].startswith("🔵 "))
+        self.assertIn("earns zero either way", rose["text"])
+        self.assertNotIn("Next:", rose["text"])
 
     def test_chain_runtime_upgrade_voice(self):
         crossing, plain = self.events["chain-runtime-upgrade"]
-        headline = crossing["text"].split("\n")[0]
-        self.assertTrue(headline.startswith(
-            "Atlas · live chain upgraded · runtime spec"))
-        for word in ("live chain", "runtime spec", "governance spec"):
-            self.assertIn(word, crossing["text"])
-        self.assertIn("reference block: 8612004", crossing["text"])
-        self.assertIn("next: review your subnet positions",
-                      crossing["text"])
-        # conviction-based glossed exactly once
+        self.assertEqual(crossing["text"].split("\n")[0],
+                         "🔴 Bittensor upgraded to runtime spec 430")
+        for word in ("live chain", "governance spec"):
+            self.assertIn(word.lower(), crossing["text"].lower())
+        self.assertIn("Block 8,612,004", crossing["text"])
+        self.assertEqual(crossing["text"].split("\n")[-1],
+                         "Next: review your subnet positions, because "
+                         "conviction enforcement is live.")
+        # conviction-based glossed exactly once, in the prose sentence
         self.assertEqual(crossing["text"].count("conviction-based"), 1)
         self.assertEqual(
             crossing["text"].count("(weighted by how long a position "
                                    "is held)"), 1)
-        # no governance crossing: no action line
-        self.assertNotIn("next:", plain["text"])
+        # no governance crossing: no action line, watch marker
+        self.assertTrue(plain["text"].startswith("🟠 "))
+        self.assertNotIn("Next:", plain["text"])
 
     def test_chain_parameter_change_voice(self):
         bar, knob = self.events["chain-parameter-change"]
         self.assertEqual(bar["text"].split("\n")[0],
-                         "Atlas · chain parameter changed · "
-                         "EmissionBarRank")
+                         "🔴 Emission bar rule changed: EmissionBarRank "
+                         "0 → 3")
         self.assertIn("emission gate", bar["text"])
-        self.assertIn("governs:", bar["text"])
-        self.assertIn("source: assumed-default to explicit", bar["text"])
-        self.assertIn("next: review your subnet positions against the "
+        self.assertIn("Governs:", bar["text"])
+        self.assertIn("Before: chain default, not stored. After: stored "
+                      "value.", bar["text"])
+        self.assertIn("Next: review your subnet positions against the "
                       "new gate terms", bar["text"])
-        # no governs entry, no mode words: no action line, no boilerplate
-        self.assertNotIn("next:", knob["text"])
+        # no governs entry: says so, and the action names the config key
+        self.assertIn("no plain description", knob["text"])
+        self.assertIn("classes.chain-parameter-change.governs",
+                      knob["text"].split("\n")[-1])
 
     def test_repository_update_voice(self):
         spec_bump = self.events["repository-update"][0]
-        self.assertTrue(spec_bump["text"].startswith(
-            "Atlas · subtensor repo · runtime spec"))
+        headline = spec_bump["text"].split("\n")[0]
+        self.assertTrue(headline.startswith("🟠 Subtensor code for runtime "
+                                            "spec 428"))
+        # glosses never reach a headline or recorded data
+        self.assertNotIn("(the chain's runtime code version)",
+                         spec_bump["text"])
         self.assertIn("repo", spec_bump["text"])
-        self.assertIn("source: repo (source code), not the live chain",
-                      spec_bump["text"])
-        # runtime spec glossed exactly once in the whole message
-        self.assertEqual(
-            spec_bump["text"].count("(the chain's runtime code version)"),
-            1)
+        self.assertIn("View diff on GitHub",
+                      [b[0] for b in spec_bump["buttons"]])
 
     def test_fleet_signal_voice(self):
         cluster = self.events["fleet-signal"][0]
         self.assertTrue(cluster["text"].startswith(
-            "Atlas · narrative cluster · ai agents · 2 subnets"))
+            "🟠 2 subnets adopted ai agents within 3 days"))
         self.assertIn("subnet 1", cluster["text"])
-        self.assertIn("source: fleet repos (code), not the live chain",
+        self.assertIn("Source: fleet repos (code), not the live chain",
                       cluster["text"])
 
     def test_schema_drift_voice(self):
         drift, no_detail = self.events["schema-drift"]
         self.assertEqual(drift["text"].split("\n")[0],
-                         "Atlas · schema drift · taostats get_subnets "
-                         "replies no longer match the pinned schema")
-        self.assertIn("detail: field total_stake missing", drift["text"])
-        self.assertIn("source: livedata integration health", drift["text"])
-        self.assertIn("next: review the pinned schema for taostats "
+                         "🟠 TaoStats changed its reply format. "
+                         "get_subnets is paused.")
+        self.assertIn("What changed: field total_stake missing",
+                      drift["text"])
+        self.assertIn("Source: livedata integration health", drift["text"])
+        self.assertIn("Next: update the pinned schema for taostats "
                       "get_subnets", drift["text"])
         # absent recorded value carries the n/a marker
-        self.assertIn("detail: n/a", no_detail["text"])
+        self.assertIn("What changed: n/a", no_detail["text"])
 
     def test_knowledge_ingestion_voice(self):
         staged, empty = self.events["knowledge-ingestion"]
         self.assertEqual(staged["text"].split("\n")[0],
-                         "Atlas · knowledge ingestion complete · "
-                         "2 units staged")
-        self.assertIn("source: knowledge intake store", staged["text"])
-        self.assertIn("next: review the staged units, then run "
-                      "activate --run 20260813T010000Z-ab12",
-                      staged["text"])
-        self.assertIn("<code>activate --run 20260813T010000Z-ab12</code>",
-                      staged["html"])
+                         "🟠 2 new knowledge units are waiting for review")
+        self.assertIn("Source: knowledge intake store", staged["text"])
+        self.assertIn("python3 knowledge/atlas_kb.py activate --run "
+                      "20260813T010000Z-ab12", staged["text"].split(
+                          "\n")[-1])
+        self.assertIn("<code>python3 knowledge/atlas_kb.py activate --run "
+                      "20260813T010000Z-ab12</code>", staged["html"])
         # zero staged: nothing to review, no action line
-        self.assertNotIn("next:", empty["text"])
+        self.assertTrue(empty["text"].startswith("🔵 "))
+        self.assertNotIn("Next:", empty["text"])
 
 
 class GlossFrameTests(unittest.TestCase):
-    GLOSSES = {"q-mass": "a quantile of the demand-share distribution"}
+    GLOSSES = {"q-mass": "a quantile of the demand-share distribution",
+               "basket": "one root validator's escrowed fund"}
 
-    def test_gloss_on_first_use_only(self):
-        text = tg.render_plain(
-            "headline", ["q-mass one", "q-mass two"], "", None, 3500,
-            glosses=dict(self.GLOSSES))
+    def test_gloss_on_first_use_in_prose_only(self):
+        msg = tg.Message("info", "q-mass headline",
+                         meaning="q-mass one, q-mass two",
+                         body=["q-mass body"], facts=[("Mode", "q-mass")])
+        text = tg.render_plain(msg, 3500, dict(self.GLOSSES))
         lines = text.split("\n")
+        self.assertEqual(lines[0], "🔵 q-mass headline")
         self.assertEqual(lines[1], "q-mass (a quantile of the "
-                                   "demand-share distribution) one")
-        self.assertEqual(lines[2], "q-mass two")
+                                   "demand-share distribution) one, "
+                                   "q-mass two")
         self.assertEqual(text.count("(a quantile"), 1)
+        self.assertIn("Mode: q-mass", text)
+        self.assertIn("q-mass body", text)
+
+    def test_recorded_text_is_never_glossed(self):
+        msg = tg.Message("watch", "Subtensor code changed",
+                         body=["• " + tg.rec("fix(basket): restore checks")],
+                         details=["pallets: basket"])
+        text = tg.render_plain(msg, 3500, dict(self.GLOSSES))
+        self.assertIn("fix(basket): restore checks", text)
+        self.assertNotIn("escrowed fund", text)
 
     def test_gloss_outside_code_span(self):
-        text = tg.render_plain(
-            "headline", ["mode %sq-mass%s at q 0.75"
-                         % (tg._MONO_OPEN, tg._MONO_CLOSE)],
-            "", None, 3500, glosses=dict(self.GLOSSES))
-        self.assertIn("q-mass (a quantile of the demand-share "
-                      "distribution) at q 0.75", text)
+        msg = tg.Message("info", "h", meaning="mode %sq-mass%s at q 0.75"
+                         % (tg._MONO_OPEN, tg._MONO_CLOSE))
+        html = tg.render_html(msg, 3500, dict(self.GLOSSES))
+        self.assertIn("<code>q-mass</code> (a quantile of the demand-share "
+                      "distribution) at q 0.75", html)
 
 
 class ShrinkOrderTests(unittest.TestCase):
-    GLOSSES = {"q-mass": "a quantile of the demand-share distribution"}
-
-    def test_expandable_absorbs_shrinkage_first(self):
-        html = tg.render_html(
-            "headline", ["fact one", "fact two"],
-            "expandable " + "x" * 1200, "trailer", 600,
-            next_action="next: do the thing")
+    def test_details_absorb_shrinkage_first(self):
+        msg = tg.Message("watch", "headline", meaning="meaning",
+                         facts=[("One", "fact one"), ("Two", "fact two")],
+                         details=["detail " + "x" * 400 for _ in range(4)],
+                         next_action="do the thing.")
+        html = tg.render_html(msg, 600)
         self.assertIn("<b>headline</b>", html)
         self.assertIn("fact one", html)
         self.assertIn("fact two", html)
-        self.assertIn("<i>trailer</i>", html)
-        self.assertIn("next: do the thing", html)
-        self.assertIn("…", html)  # the expandable took the cut
+        self.assertIn("<b>Next:</b> do the thing.", html)
         self.assertLessEqual(len(html), 600)
 
-    def test_trailer_drops_before_body_lines(self):
-        html = tg.render_html(
-            "headline", ["fact one", "fact two"], "",
-            "trailer " + "y" * 400, 200,
-            next_action="next: do the thing")
-        self.assertNotIn("<i>", html)
-        self.assertIn("fact one", html)
-        self.assertIn("next: do the thing", html)
-
-    def test_body_lines_drop_before_next_action(self):
-        lines = ["fact %d %s" % (i, "z" * 100) for i in range(6)]
-        html = tg.render_html("headline", lines, "", None, 300,
-                              next_action="next: do the thing")
+    def test_body_drops_before_facts_and_next_action(self):
+        msg = tg.Message("watch", "headline",
+                         facts=[("Fact", "kept")],
+                         body=["line %d %s" % (i, "z" * 100)
+                               for i in range(6)],
+                         next_action="do the thing.")
+        html = tg.render_html(msg, 400)
         self.assertIn("<b>headline</b>", html)
-        self.assertIn("next: do the thing", html)
-        self.assertNotIn("fact 5", html)  # dropped from the end first
-        self.assertLessEqual(len(html), 300)
+        self.assertIn("kept", html)
+        self.assertIn("do the thing.", html)
+        self.assertNotIn("line 5", html)  # dropped from the end first
+        self.assertLessEqual(len(html), 400)
 
     def test_headline_never_dropped(self):
-        html = tg.render_html(
-            "h" * 80, ["fact " + "z" * 200], "x" * 500, "trailer", 120,
-            next_action="next: " + "a" * 100)
-        self.assertTrue(html.startswith("<b>"))
+        msg = tg.Message("act", "h" * 80, meaning="m" * 200,
+                         facts=[("F", "z" * 200)], details=["x" * 500],
+                         next_action="a" * 100)
+        html = tg.render_html(msg, 120)
+        self.assertTrue(html.startswith("🔴 <b>"))
         self.assertTrue(html.endswith("</b>"))
         self.assertLessEqual(len(html), 120)
 
-    def test_gloss_reapplies_after_shrink_cuts_first_use(self):
-        # The first q-mass use sits past the expandable cut point; once
-        # the cut removes it, the trailer use must carry the gloss.
-        html = tg.render_html(
-            "headline", ["body fact"],
-            "intro " + "x" * 200 + " q-mass tail",
-            "more q-mass info", 300, glosses=dict(self.GLOSSES))
-        self.assertIn("more q-mass (a quantile of the demand-share "
-                      "distribution) info", html)
-        self.assertEqual(html.count("(a quantile"), 1)
+
+class FormatTests(unittest.TestCase):
+    def test_numbers(self):
+        self.assertEqual(tg.fmt_int(9197096), "9,197,096")
+        self.assertEqual(tg.fmt_pct(0.008581174), "0.858%")
+        self.assertEqual(tg.fmt_pct(0.0077, 2), "0.77%")
+        self.assertEqual(tg.fmt_tao(0.00425), "0.00425 τ")
+        self.assertEqual(tg.fmt_tao(0.0460907), "0.0461 τ")
+        self.assertEqual(tg.fmt_tao(0.0000123), "0.0000123 τ")
+        self.assertEqual(tg.fmt_usd(292.234), "$292.23")
+        self.assertEqual(tg.fmt_change(12.64), "+12.6%")
+        self.assertEqual(tg.fmt_change(-51.3), tg.MINUS + "51.3%")
+        self.assertEqual(tg.plural(1, "commit"), "1 commit")
+        self.assertEqual(tg.plural(1200, "file"), "1,200 files")
+
+    def test_time_token(self):
+        token = tg.fmt_time("2026-10-02T19:02:20.932792+00:00")
+        msg = tg.Message("info", "h", facts=[("When", token)])
+        html = tg.render_html(msg)
+        self.assertIn('<tg-time unix="1790967740" format="wDT">'
+                      'Fri 2 Oct, 19:02 UTC</tg-time>', html)
+        self.assertIn("When: Fri 2 Oct, 19:02 UTC", tg.render_plain(msg))
+        self.assertIn("(dated)", tg.fmt_time("not a time"))
+
+    def test_subnet_names(self):
+        names = {49: "Nepher Robotics", 5: "a<b"}
+        self.assertEqual(tg.subnet_label(49, names),
+                         "Subnet 49 (Nepher Robotics)")
+        self.assertEqual(tg.subnet_label(7, names), "Subnet 7")
+        self.assertEqual(tg.subnet_tag(49, names), "Nepher Robotics (49)")
+        html = tg.render_html(tg.Message("info", tg.subnet_label(5, names)))
+        self.assertIn("a&lt;b", html)
+
+    def test_names_skip_unknown_and_empty(self):
+        conn = sqlite3.connect(":memory:")
+        conn.execute("CREATE TABLE panel_snapshot (id INTEGER PRIMARY KEY, "
+                     "netuid INTEGER, name TEXT)")
+        conn.executemany("INSERT INTO panel_snapshot (netuid, name) "
+                         "VALUES (?, ?)", [(1, "old"), (1, "new"),
+                                           (2, "Unknown"), (3, "")])
+        self.assertEqual(tg.subnet_names_from(conn), {1: "new"})
+
+    def test_severity_table(self):
+        sf = tg.severity_for
+        self.assertEqual(sf("chain-runtime-upgrade"), "watch")
+        self.assertEqual(sf("chain-runtime-upgrade", governance_crossed=True),
+                         "act")
+        self.assertEqual(sf("chain-parameter-change",
+                            item="SubnetEmissionEnabled"), "act")
+        self.assertEqual(sf("chain-parameter-change", item="Other"), "watch")
+        self.assertEqual(sf("gate-crossing", emission_enabled=1,
+                            direction="rose-above"), "good")
+        self.assertEqual(sf("gate-crossing", emission_enabled=1,
+                            direction="fell-below"), "act")
+        self.assertEqual(sf("gate-crossing", emission_enabled=0,
+                            direction="fell-below"), "info")
+        for cls in ("fail-closed", "probe-drift", "upgrade-blocked"):
+            self.assertEqual(sf(cls), "act")
+        for cls in ("schema-drift", "repository-update", "econ-code",
+                    "narrative-cluster", "watchlist", "upgrade-retrying",
+                    "upgrade-stalled"):
+            self.assertEqual(sf(cls), "watch")
+        self.assertEqual(sf("knowledge-ingestion", staged=2), "watch")
+        self.assertEqual(sf("knowledge-ingestion", staged=0), "info")
+        for cls in ("churn-digest", "signal-digest", "subnet-registry",
+                    "upgrade-waiting"):
+            self.assertEqual(sf(cls), "info")
+        for cls in ("upgrade-updated", "upgrade-dry-run", "probe-cleared",
+                    "test"):
+            self.assertEqual(sf(cls), "done")
+
+    def test_links_omit_unsafe_or_missing(self):
+        self.assertEqual(tg.link({}, "taostats_subnet", netuid=49),
+                         "https://taostats.io/subnets/49")
+        self.assertIsNone(tg.link({}, "taostats_subnet", netuid=None))
+        self.assertIsNone(tg.link({}, "github_commit", repo="a/b",
+                                  sha="x y"))
+        self.assertIsNone(tg.link({"links": {"taostats_subnet": ""}},
+                                  "taostats_subnet", netuid=1))
+        self.assertEqual(tg.button({"links": {}}, "x", "nope"), [])
 
 
 class WorstCaseBudgetTests(unittest.TestCase):

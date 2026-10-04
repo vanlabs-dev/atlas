@@ -791,3 +791,38 @@ Pi as both user and system units, and
 `subnt/config.json` has `enabled: false`. The code, schema and unit sources
 are kept. The subnt repo keeps its Astro page and the last edition in
 `data/`, and its `wrangler.jsonc` is removed.
+
+## Telegram alert redesign (2026-10-04, change: telegram-alert-redesign)
+
+The operator reviewed every Telegram message Atlas sends, rendered from
+live Pi data beside a proposed rewrite (artifact
+`https://claude.ai/artifact/M9mbpJZX3Q7diUfVf5ns1Y`, version 3), and
+approved:
+
+- **House layout for every sender.** Severity marker first, an effect-first
+  headline that names the subnet, one meaning sentence, labelled key
+  figures, provenance in an expandable fold, and `Next:` last only when an
+  action exists. Times render as `tg-time` (reader's timezone). Links ride
+  inline keyboard buttons. The probe watch and the upgrade job use the
+  same renderer.
+- **Bug fixes.** A single-subnet parameter change now names its subnet.
+  Glosses no longer enter headlines or recorded text. Repeated commit
+  subjects are listed once. The briefing's risk line no longer drops
+  `critical` subnets. Riding fleet signals show their items instead of a
+  pointer to a digest they never reach.
+- **Pulse trims.** Staked, subnet share, new accounts, ownership contested,
+  the medium-verdict count, the pushed count, repo re-points, model
+  adoptions, and the mining board are gone. The watch list shows the 3
+  non-immune subnets closest to deregistration. Only high-impact incentive
+  changes are listed, by name. Editions start with ☀️ (daily) or 🗓️
+  (weekly). No LAN board link anywhere.
+- **narrative-cluster to `shadow`.** The operator does not want
+  model-adoption alerts. Detection and measurement continue. Flip the tier
+  back to `instant` to roll back.
+
+Not approved, so not built: silent sends, skipping 0-staged knowledge
+runs, a silent path for emission-off crossings, outage recovery messages,
+and a registry section in the briefing.
+
+Open: 7 repository alerts in the ledger are `scrub-refused` (last
+2026-09-22). Their cause is not investigated.

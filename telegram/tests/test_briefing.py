@@ -159,84 +159,120 @@ class CompositionTests(BriefingBase):
         self.assertEqual(list(edition["sections"]),
                          list(ab.SECTION_ORDER))
         net = "\n".join(edition["sections"]["network"])
-        self.assertIn("runtime spec 452", net)
-        self.assertIn("rule change: BasketConcentrationCap 4096 to 2048",
-                      net)
-        self.assertIn("bar 0.00830", net)
-        self.assertIn("TAO 198.59 USD", net)
-        self.assertIn("dated 2026-08-30", net)
-        subnets = "\n".join(edition["sections"]["subnets"])
-        self.assertIn("SN59 price +104.0%", subnets)
-        self.assertIn("block 100 to", subnets)
-        self.assertIn("dereg risk high: SN7", subnets)
-        self.assertIn("ownership contested", subnets)
-        self.assertIn("hovering at the bar (1): SN9", subnets)
-        code = "\n".join(edition["sections"]["code"])
-        self.assertIn("2 of 3 tracked subnets pushed", code)
-        self.assertIn("SN89 high · Signed points scoring path added",
-                      code)
-        self.assertIn("1 high · 1 med", code)
-        self.assertIn("SN5 repo re-pointed (epoch 3)", code)
-        narrative = "\n".join(edition["sections"]["narrative"])
-        self.assertIn("model qwen3-14b · SN56", narrative)
-        self.assertNotIn("numpy", narrative)
-        mining = "\n".join(edition["sections"]["mining"])
-        self.assertIn("board head: SN64 Chutes", mining)
-        self.assertIn("2 ranked · 1 cut · 1 unrated · 4 observed", mining)
-        self.assertIn("unrated: SN12 (owner-set-unread)", mining)
-        self.assertIn("budget band unset", mining)
+        self.assertIn("Runtime spec 452", net)
+        self.assertIn("Emission bar 0.830%", net)
+        self.assertIn("32 subnets above", net)
+        self.assertIn("TAO $198.59", net)
+        self.assertIn("dated 30 Aug", net)
+        rules = "\n".join(edition["sections"]["rules"])
+        self.assertIn("BasketConcentrationCap 4,096 → 2,048", rules)
+        prices = "\n".join(edition["sections"]["price_moves"])
+        self.assertIn("fiftynine (59): 0.00250 → 0.00510 τ, +104.0%", prices)
+        self.assertNotIn("block", prices)
+        watch = "\n".join(edition["sections"]["watch"])
+        self.assertIn("At the bar: Subnet 9", watch)
+        high = edition["sections"]["high_impact"]
+        self.assertEqual(high, ["Subnet 89: Signed points scoring path "
+                                "added"])
         self.assertTrue(edition["first_edition"])
-        self.assertIn("next: pick mining.budget_band", edition["closing"])
+        self.assertIn("First edition", edition["summary"])
+        self.assertIsNone(edition["closing"])
+        self.assertTrue(edition["header"].startswith("Atlas daily · "))
+
+    def test_removed_content_stays_out(self):
+        edition = ab.compose(self.config, self.store, "daily")
+        joined = "\n".join(line for lines in edition["sections"].values()
+                           for line in lines) + "\n".join(edition["health"])
+        for gone in ("staked", "subnet share", "new accounts", "contested",
+                     "takeover", " med", "pushed", "re-pointed", "qwen3-14b",
+                     "cluster", "board head", "ranked", "mining", "SN"):
+            self.assertNotIn(gone, joined, gone)
+
+    def test_watch_list_top_three_non_immune_by_prune_rank(self):
+        live = self.config["briefing"]["live_db"]
+        conn = sqlite3.connect(live)
+        conn.execute("ALTER TABLE panel_snapshot ADD COLUMN "
+                     "dereg_prune_rank INTEGER")
+        conn.execute("ALTER TABLE panel_snapshot ADD COLUMN "
+                     "dereg_is_immune INTEGER")
+        rows = [(113, "LongShort", "critical", 1, 0),
+                (116, "for sale", "critical", 2, 0),
+                (5, "Immune One", "critical", 3, 1),
+                (47, "GPUForge", "critical", 4, 0),
+                (72, "StreetVision", "high", 5, 0),
+                (8, "Unread", "high", 6, None)]
+        conn.executemany(
+            "INSERT INTO panel_snapshot (observed_at, block_number, netuid, "
+            "share, moving_price_tao, dereg_risk_level, name, "
+            "dereg_prune_rank, dereg_is_immune) VALUES "
+            "(?, 300, ?, 0.001, 0.001, ?, ?, ?, ?)",
+            [(_iso(0.5), n, level, name, rank, immune)
+             for n, name, level, rank, immune in rows])
+        conn.commit()
+        conn.close()
+        watch = ab.compose(self.config, self.store, "daily")[
+            "sections"]["watch"]
+        self.assertEqual(watch[:4], [
+            "Closest to deregistration (not immune):",
+            "1. LongShort (113)", "2. for sale (116)", "3. GPUForge (47)"])
+        self.assertNotIn("Immune One", "\n".join(watch))
+
+    def test_rule_set_then_reset_is_one_line(self):
+        live = self.config["briefing"]["live_db"]
+        conn = sqlite3.connect(live)
+        conn.executemany(
+            "INSERT INTO chain_param_events (item, prev_value, new_value, "
+            "observed_at) VALUES (?, ?, ?, ?)",
+            [("CollateralLockShare[82]", "0", "62258", _iso(5)),
+             ("CollateralLockShare[82]", "62258", "0", _iso(4)),
+             ("SubnetEmissionEnabled[82]", "true", "false", _iso(3))])
+        conn.commit()
+        conn.close()
+        rules = ab.compose(self.config, self.store, "daily")[
+            "sections"]["rules"]
+        self.assertIn("Subnet 82: CollateralLockShare set, then reset to 0",
+                      rules)
+        self.assertIn("Subnet 82: TAO emission switched off", rules)
 
     def test_unavailable_stores_named_not_estimated(self):
         self.config["briefing"]["fleet_db"] = os.path.join(
             self.tmp.name, "missing.db")
+        self.config["briefing"]["live_db"] = os.path.join(
+            self.tmp.name, "missing-live.db")
         edition = ab.compose(self.config, self.store, "daily")
-        self.assertEqual(edition["sections"]["code"],
-                         ["fleet store: unavailable"])
-        self.assertEqual(edition["sections"]["mining"],
-                         ["mining screen: unavailable"])
-
-    def test_top_ten_delta_is_suppressed_across_a_model_change(self):
-        # A previous edition recorded before the model version existed.
-        ab._meta_set(self.store, "briefing:figures:daily",
-                     json.dumps({"mining_top10": [120, 93, 9]}))
-        edition = ab.compose(self.config, self.store, "daily")
-        mining = "\n".join(edition["sections"]["mining"])
-        self.assertIn("top-ten deltas suppressed: the mining model changed "
-                      "(v1 to v2)", mining)
-        self.assertNotIn("entered top ten", mining)
-        self.assertNotIn("left top ten", mining)
-        self.assertEqual(edition["figures"]["mining_model_version"], "2")
-
-    def test_a_cut_subnet_is_never_the_head(self):
-        # SN9-style: the highest raw figure, cut winner-take-all.
-        snapshot = BOARD_SNAPSHOT()
-        wta = mf.synthetic([mf.subnet(9, [100, 0, 0], name="iota",
-                                      tao_pool=900_000.0)])
-        for item, values in wta["values"].items():
-            snapshot["values"][item].update(values)
-        snapshot["owners"].update(wta["owners"])
-        conn = sqlite3.connect(self.config["briefing"]["fleet_db"])
-        mf.seed_board(conn, {"mining": {"enabled": True}}, snapshot)
-        conn.close()
-        edition = ab.compose(self.config, self.store, "daily")
-        mining = edition["sections"]["mining"]
-        self.assertEqual(mining[0], "board head: SN64 Chutes")
-        self.assertIn("2 ranked · 2 cut", mining[1])
+        self.assertEqual(edition["sections"]["network"],
+                         ["Live store unavailable"])
+        self.assertEqual(edition["sections"]["high_impact"], [])
 
     def test_delta_against_previous_edition(self):
         ab._meta_set(self.store, "briefing:figures:daily",
-                     json.dumps({"theta": 0.0080, "tao_usd": 190.0,
-                                 "mining_top10": [64, 107],
-                                 "mining_model_version": "2"}))
+                     json.dumps({"theta": 0.0080, "tao_usd": 190.0}))
         edition = ab.compose(self.config, self.store, "daily")
         self.assertFalse(edition["first_edition"])
         net = "\n".join(edition["sections"]["network"])
-        self.assertIn("+3.8% vs last edition", net)
-        self.assertIn("(+4.5%)", net)  # TAO/USD delta
-        mining = "\n".join(edition["sections"]["mining"])
-        self.assertIn("top ten unchanged", mining)
+        self.assertIn("Emission bar 0.830% · +3.8%", net)
+        self.assertIn("+4.5% since yesterday's edition", net)
+        self.assertIn("TAO rose 4.5%.", edition["summary"])
+
+    def test_summary_names_the_largest_mover(self):
+        edition = ab.compose(self.config, self.store, "daily")
+        self.assertIn("fiftynine (59) price rose 104.0%.",
+                      edition["summary"])
+        self.assertIn("1 chain rule change.", edition["summary"])
+        self.assertIn("1 high-impact incentive change.", edition["summary"])
+        self.assertNotIn("Quiet day.", edition["summary"])
+
+    def test_weekly_header_and_marker(self):
+        now = datetime.datetime(2026, 10, 4, 8, 0,
+                                tzinfo=datetime.timezone.utc)
+        edition = ab.compose(self.config, self.store, "weekly", now=now)
+        self.assertEqual(edition["header"], "Atlas weekly · 28 Sep to 4 Oct")
+        msgs = ab._to_messages(edition, self.config)
+        self.assertTrue(tg.render_plain(msgs[0]).startswith(
+            "🗓️ Atlas weekly · 28 Sep to 4 Oct"))
+        daily = ab.compose(self.config, self.store, "daily", now=now)
+        self.assertTrue(tg.render_plain(ab._to_messages(
+            daily, self.config)[0]).startswith("☀️ Atlas daily · Sun 4 Oct"))
 
 
 class DeliveryTests(BriefingBase):
@@ -276,16 +312,19 @@ class DeliveryTests(BriefingBase):
         self.assertEqual(result["kind"], "weekly")
         import urllib.parse
         decoded = [urllib.parse.unquote_plus(p) for p in posts]
-        self.assertTrue(any("weekly pulse" in p for p in decoded))
+        self.assertTrue(any("🗓️ <b>Atlas weekly" in p for p in decoded))
         again = self.run_briefing([], now=sunday.replace(hour=10))
         self.assertEqual(again["status"], "current")
 
-    def test_closing_line_is_last(self):
+    def test_no_board_link_or_button(self):
         posts = []
         self.run_briefing(posts)
         import urllib.parse
         last = urllib.parse.unquote_plus(posts[-1])
-        self.assertIn("next: pick mining.budget_band", last)
+        self.assertNotIn("board.local", last)
+        self.assertNotIn("reply_markup", last)
+        self.assertNotIn("Next:", last)
+        self.assertIn("☀️ <b>Atlas daily", last)
 
     def test_disabled_briefing_is_inert(self):
         self.config["briefing"]["enabled"] = False
@@ -296,22 +335,29 @@ class DeliveryTests(BriefingBase):
 class TruncationTests(BriefingBase):
     def test_lowest_priority_drops_first_network_never(self):
         edition = ab.compose(self.config, self.store, "daily")
-        edition["sections"]["narrative"] = [
-            "model filler-%d · SN1" % i for i in range(200)]
+        edition["sections"]["high_impact"] = [
+            "Filler (%d): change" % i for i in range(200)]
+        edition["health"] = ["health line %d" % i for i in range(50)]
         self.config["message_max_chars"] = 1200
         messages = ab._to_messages(edition, self.config)
         self.assertLessEqual(len(messages), 2)
-        joined = "\n".join("\n".join(lines) for _h, lines in messages)
-        self.assertIn("runtime spec 452", joined)       # network intact
+        joined = "\n".join(tg.render_plain(m, 1200) for m in messages)
+        self.assertIn("Runtime spec 452", joined)       # network intact
         self.assertIn("omitted for size", joined)
-        self.assertLess(joined.count("filler"), 200)
+        self.assertLess(joined.count("Filler"), 200)
+        self.assertNotIn("health line", joined)        # fold shed first
+        for m in messages:
+            self.assertLessEqual(len(tg.render_html(m, 1200)), 1200)
 
     def test_closing_line_present_after_truncation(self):
         edition = ab.compose(self.config, self.store, "daily")
+        edition["closing"] = "do the thing."
+        edition["sections"]["high_impact"] = [
+            "Filler (%d): change" % i for i in range(200)]
         self.config["message_max_chars"] = 1500
         messages = ab._to_messages(edition, self.config)
-        _head, lines = messages[-1]
-        self.assertEqual(lines[-1], edition["closing"])
+        last = tg.render_plain(messages[-1], 1500)
+        self.assertEqual(last.split("\n")[-1], "Next: do the thing.")
 
 
 if __name__ == "__main__":

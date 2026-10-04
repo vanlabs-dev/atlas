@@ -7,6 +7,8 @@ scan-loop isolation on delivery failure."""
 import datetime
 import json
 import os
+import urllib.parse
+import re
 import sqlite3
 import sys
 import tempfile
@@ -435,22 +437,21 @@ class FourHeadsTests(unittest.TestCase):
         self.assertEqual(wm, "4")
         self.assertEqual(len(events), 2)
         first, second = events
-        self.assertIn("runtime spec (the chain's runtime code version) "
-                      "bump 425 → 428", first["text"])
+        self.assertIn("Subtensor code for runtime spec 428", first["text"])
+        self.assertIn("Repo spec 425 → 428", first["text"])
         self.assertEqual(first["digest_range_ids"], [])
-        self.assertIn("runtime spec (the chain's runtime code version) "
-                      "bump 428 → 429", second["text"])
+        self.assertIn("Subtensor code for runtime spec 429", second["text"])
+        self.assertIn("Repo spec 428 → 429", second["text"])
         # The sdk/-only churn (range 2) rides the second significant alert.
         self.assertEqual(second["digest_range_ids"], [2])
-        self.assertIn("sdk", second["text"])
-        self.assertIn(SHA_2[:12], second["text"])
+        self.assertIn("SDK · " + SHA_2[:8], second["text"])
         self.assertIn("no protocol or runtime spec change", second["text"])
         # Interpreted breakdown: signal split from noise, pallet named.
-        self.assertIn("protocol changed · common 1 files · pallets 1 files "
-                      "· runtime 1 files", second["text"])
-        self.assertIn("pallets · subtensor (staking/emissions/weights)",
-                      second["text"])
-        self.assertIn("• use Vec<PerU16> for typed units (#2867)",
+        for area in ("common 1 file", "pallets 1 file", "runtime 1 file"):
+            self.assertIn(area, second["text"])
+        self.assertIn("Areas: staking, emissions, weights", second["text"])
+        self.assertIn("pallets: subtensor", second["text"])
+        self.assertIn("• Use Vec<PerU16> for typed units (#2867)",
                       second["text"])
         self.assertIn("Vec&lt;PerU16&gt;", second["html"])
         # Both churn ranges are durably pending until a digest DELIVERS.
@@ -466,19 +467,20 @@ class FourHeadsTests(unittest.TestCase):
             self.assertNotIn("—", event["text"])
             self.assertNotIn("—", event["html"])
             self.assertNotIn("–", event["text"])
-        self.assertIn("• drand - round skip fix (#2794)",
+        self.assertIn("• Drand - round skip fix (#2794)",
                       events[0]["text"])
 
     def test_both_clocks_line_and_repo_marking(self):
         events, _ = tg.repository_update_events(
             self.config["classes"]["repository-update"]["source_db"], None,
             repo_ctx(self.config, self.store))
-        self.assertIn("repo spec 428 · live Finney spec 424 · Δ+4 · "
-                      "not enacted on chain", events[0]["text"])
-        self.assertIn("repo spec 429 · live Finney spec 424 · Δ+5",
+        self.assertIn("The live chain runs spec 424. These repo changes go "
+                      "live only when the chain upgrades.", events[0]["text"])
+        self.assertIn("Repo spec 425 → 428 · live spec 424",
+                      events[0]["text"])
+        self.assertIn("Repo spec 428 → 429 · live spec 424",
                       events[1]["text"])
-        self.assertIn("source: repo (source code), not the live chain",
-                      events[1]["text"])
+        self.assertIn("Not live yet.", events[1]["text"].split("\n")[0])
 
     def test_live_unavailable_degrades_honestly(self):
         os.remove(self.config["classes"]["repository-update"]["live_db"])
@@ -487,7 +489,7 @@ class FourHeadsTests(unittest.TestCase):
             repo_ctx(self.config, self.store))
         self.assertEqual(len(events), 2)
         self.assertIn("live spec n/a", events[0]["text"])
-        self.assertIn("repo event only", events[0]["text"])
+        self.assertIn("repo (source code) event only", events[0]["text"])
 
     def test_read_live_spec_resolves_relative_path_from_any_cwd(self):
         """systemd oneshot has no WorkingDirectory; config uses repo-relative
@@ -507,7 +509,7 @@ class FourHeadsTests(unittest.TestCase):
             self.assertIsNotNone(live)
             assert live is not None  # narrow for type checkers
             self.assertEqual(live["spec_version"], 431)
-            self.assertIn("live Finney spec 431",
+            self.assertIn("The live chain runs spec 431",
                           tg._both_clocks_line(432, live))
         finally:
             tg._REPO_ROOT = old_root
@@ -540,7 +542,7 @@ class FourHeadsTests(unittest.TestCase):
         self.assertEqual(
             summary["classes"]["repository-update"]["delivered"], 1)
         self.assertEqual(self.pending(), [])
-        self.assertIn("low-signal", posts[-1])
+        self.assertIn("housekeeping+update", posts[-1])
 
     def test_failed_digest_delivery_keeps_pending(self):
         def poster(url, data, timeout):
@@ -586,10 +588,11 @@ class InterpretiveBreakdownTests(unittest.TestCase):
         seed_livedata(self.live)
         event = self.only_event()
         self.assertIn("light protocol touch", event["text"])
-        self.assertIn("protocol changed · pallets 1 files +50/-10",
+        self.assertIn("pallets 1 file +50/-10", event["text"])
+        self.assertIn("Protocol code: +50 / " + tg.MINUS + "10 lines",
                       event["text"])
-        self.assertIn("housekeeping ·", event["text"])
-        self.assertIn("vendor (1)", event["text"])
+        self.assertIn("housekeeping 3 files", event["text"])
+        self.assertIn("vendor 1", event["text"])
 
     def test_spec_bump_leads_even_when_files_are_tests(self):
         seed_custom(self.db, [
@@ -599,11 +602,9 @@ class InterpretiveBreakdownTests(unittest.TestCase):
         ], ["chore: bump spec_version to 430"], prev_spec=429, new_spec=430)
         seed_livedata(self.live, live_spec=424)
         event = self.only_event()
-        self.assertIn("subtensor repo · runtime spec (the chain's "
-                      "runtime code version) bump 429 → 430",
-                      event["text"])
-        self.assertIn("repo spec 430 · live Finney spec 424 · Δ+6",
-                      event["text"])
+        self.assertTrue(event["text"].startswith(
+            "🟠 Subtensor code for runtime spec 430 is ready."))
+        self.assertIn("Repo spec 429 → 430 · live spec 424", event["text"])
 
     def test_commit_filter_keeps_signal_drops_noise(self):
         seed_custom(self.db, [
@@ -616,12 +617,12 @@ class InterpretiveBreakdownTests(unittest.TestCase):
              "ci: warm sccache"])
         seed_livedata(self.live)
         text = self.only_event()["text"]
-        self.assertIn("• feat(subtensor): add limit order guard", text)
-        self.assertIn("• chore: bump spec_version to 430; add devnet "
+        self.assertIn("• Add limit order guard (subtensor)", text)
+        self.assertIn("• Bump spec_version to 430; add devnet "
                       "endpoint", text)  # release chore retained
         self.assertNotIn("Merge pull request", text)
-        self.assertNotIn("• test:", text)
-        self.assertNotIn("• ci:", text)
+        self.assertNotIn("Poll NextKey", text)
+        self.assertNotIn("Warm sccache", text)
 
     def test_no_meaningful_commits_states_it(self):
         seed_custom(self.db, [
@@ -629,8 +630,8 @@ class InterpretiveBreakdownTests(unittest.TestCase):
              "deletions": 1}],
             ["Merge pull request #1 from a/b", "ci: x", "test: y"])
         seed_livedata(self.live)
-        self.assertIn("• no feature or fix commits in range (tooling only)",
-                      self.only_event()["text"])
+        self.assertIn("• No feature or fix commits in this range (tooling "
+                      "only)", self.only_event()["text"])
 
     def test_pallet_touch_is_named_and_interpreted(self):
         seed_custom(self.db, [
@@ -640,9 +641,10 @@ class InterpretiveBreakdownTests(unittest.TestCase):
         text = self.only_event()["text"]
         # Headline is the short category; the pallet + domain detail lives in
         # the body, not repeated in the (bold) headline.
-        self.assertIn("subtensor repo · core protocol change", text)
-        self.assertNotIn("core protocol change: admin-utils", text)
-        self.assertIn("pallets · admin-utils (governance params)", text)
+        self.assertIn("Subtensor protocol code changed", text.split("\n")[0])
+        self.assertNotIn("admin-utils", text.split("\n")[0])
+        self.assertIn("Areas: governance params", text)
+        self.assertIn("pallets: admin-utils", text)
 
     def test_unknown_dir_is_surfaced_not_hidden(self):
         seed_custom(self.db, [
@@ -652,13 +654,13 @@ class InterpretiveBreakdownTests(unittest.TestCase):
             ["feat: new consensus tree"])
         seed_livedata(self.live)
         text = self.only_event()["text"]
-        self.assertIn("subtensor repo · new unmapped area: consensus-v2",
-                      text)
-        self.assertIn("NEW / unclassified area · consensus-v2 1 files +10/-2",
-                      text)
+        self.assertIn("Subtensor code touches a new area: consensus-v2",
+                      text.split("\n")[0])
+        self.assertIn("New area: consensus-v2", text)
+        self.assertIn("new area consensus-v2 1 file +10/-2", text)
         # consensus-v2 must NOT be filed under housekeeping.
         housekeeping = [ln for ln in text.splitlines()
-                        if ln.startswith("housekeeping ·")]
+                        if ln.startswith("housekeeping ")]
         self.assertTrue(housekeeping)
         self.assertNotIn("consensus-v2", housekeeping[0])
 
@@ -668,9 +670,9 @@ class InterpretiveBreakdownTests(unittest.TestCase):
              "deletions": 1}], ["feat(subtensor): x"], truncated=True)
         seed_livedata(self.live)
         text = self.only_event()["text"]
-        self.assertIn("large or incomplete range · review", text)
-        self.assertIn("pallets 1 files +5/-1 (partial)", text)
-        self.assertIn("counts are a lower bound · change record incomplete",
+        self.assertIn("Large or incomplete subtensor update", text)
+        self.assertIn("pallets 1 file +5/-1 (partial)", text)
+        self.assertIn("Counts are a lower bound: change record incomplete",
                       text)
 
     def test_root_file_grouped_not_a_protocol_area(self):
@@ -680,10 +682,11 @@ class InterpretiveBreakdownTests(unittest.TestCase):
              "deletions": 5}], ["feat(subtensor): x"])
         seed_livedata(self.live)
         text = self.only_event()["text"]
-        self.assertIn("housekeeping · (root) (1)", text)
+        self.assertIn("housekeeping 1 file ((root) 1)", text)
         protocol = [ln for ln in text.splitlines()
-                    if ln.startswith("protocol changed ·")][0]
+                    if ln.startswith("Protocol code:")][0]
         self.assertNotIn("(root)", protocol)
+        self.assertIn("+20 / " + tg.MINUS + "5 lines", protocol)
         # A large generated root file is noise: counts only, its churn is
         # never surfaced as if it were signal.
         self.assertNotIn("5.0k", text)
@@ -700,11 +703,12 @@ class InterpretiveBreakdownTests(unittest.TestCase):
         seed_custom(self.db, files, ["feat(subtensor): rewrite emissions"])
         seed_livedata(self.live)
         text = self.only_event()["text"]
-        self.assertIn("subtensor repo · core protocol change", text)
-        self.assertIn("pallets · subtensor (staking/emissions/weights)", text)
+        self.assertIn("Subtensor protocol code changed", text)
+        self.assertIn("Areas: staking, emissions, weights", text)
         self.assertNotIn("light protocol touch", text)
         # compact k-suffix on core line churn (5000 -> 5k, 1000 -> 1k)
-        self.assertIn("protocol changed · pallets 1 files +5k/-1k", text)
+        self.assertIn("Protocol code: +5k / " + tg.MINUS + "1k lines", text)
+        self.assertIn("pallets 1 file +5k/-1k", text)
 
     def test_spacing_groups_and_mono_sha(self):
         # Operator layout feedback 2026-07-15: blank lines separate signal
@@ -719,13 +723,14 @@ class InterpretiveBreakdownTests(unittest.TestCase):
         seed_livedata(self.live)
         event = self.only_event()
         text, html = event["text"], event["html"]
-        self.assertIn("pallets · subtensor (staking/emissions/weights)"
-                      "\n\nhousekeeping ·", text)
-        self.assertIn("\n\n• feat(subtensor): guard weights", text)
-        self.assertIn("\n\nfrom recorded change data", text)
-        self.assertIn("<code>%s → %s</code>"
-                      % (tg.SHA_BASE[:12] if hasattr(tg, "SHA_BASE")
-                         else SHA_BASE[:12], SHA_1[:12]), html)
+        # Facts, body, and the details fold are separate blocks.
+        self.assertIn("\n\nSize: 2 commits, 2 files", text)
+        self.assertIn("\n\nMain changes\n• Guard weights (subtensor)", text)
+        self.assertIn("\n\nRange 14bc6f90 → 647ca2b0", text)
+        self.assertIn("<blockquote expandable>Range <code>14bc6f90</code>",
+                      html)
+        self.assertIn("<code>%s</code> → <code>%s</code>"
+                      % (SHA_BASE[:8], SHA_1[:8]), html)
         self.assertNotIn("\x01", text)
         self.assertNotIn("\x01", html)
         self.assertNotIn("\x02", text)
@@ -767,7 +772,7 @@ class WatermarkMigrationTests(unittest.TestCase):
             self.db, SHA_2, repo_ctx(self.config, self.store))
         self.assertEqual(wm, "4")
         self.assertEqual(len(events), 1)  # range 3 significant, range 4 churn
-        self.assertIn("428 → 429", events[0]["text"])
+        self.assertIn("Repo spec 428 → 429", events[0]["text"])
 
     def test_unknown_sha_reseeds_to_max_without_replay(self):
         events, wm = tg.repository_update_events(
@@ -802,17 +807,15 @@ class ChainUpgradeTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(wm, "1")
         text = events[0]["text"]
-        self.assertIn("live chain upgraded", text)
-        self.assertIn("runtime spec (the chain's runtime code version) "
-                      "424 → 425 enacted", text)
-        self.assertIn("8612004", text)
-        self.assertIn("governance spec 425 crossed", text)
+        self.assertEqual(text.split("\n")[0],
+                         "🔴 Bittensor upgraded to runtime spec 425")
+        self.assertIn("Runtime spec 424 → 425", text)
+        self.assertIn("8,612,004", text)
+        self.assertIn("Governance spec 425 is crossed", text)
         self.assertIn("conviction-based (weighted by how long a position "
-                      "is held) subnet ownership enforcement is now "
-                      "enacted", text)
-        self.assertIn("the live chain changed (enacted), not the repo",
-                      text)
-        self.assertIn("next: review your subnet positions", text)
+                      "is held) subnet ownership is now enforced", text)
+        self.assertIn("enacted live chain change, not a repo change", text)
+        self.assertIn("Next: review your subnet positions", text)
         self.assertNotIn("—", text)
         self.assertNotIn("—", events[0]["html"])
         # Watermark advanced -> no re-emit.
@@ -827,8 +830,8 @@ class ChainUpgradeTests(unittest.TestCase):
                "connection": None}
         events, _ = tg.chain_runtime_upgrade_events(self.db, None, ctx)
         self.assertEqual(len(events), 1)
-        self.assertNotIn("governance spec", events[0]["text"])
-        self.assertNotIn("next:", events[0]["text"])
+        self.assertNotIn("Governance spec", events[0]["text"])
+        self.assertNotIn("Next:", events[0]["text"])
 
     def test_missing_table_is_no_events_not_error(self):
         conn = sqlite3.connect(self.db)
@@ -938,7 +941,7 @@ class TierRoutingTests(unittest.TestCase):
         self.scan(posts)
         import urllib.parse
         decoded = [urllib.parse.unquote_plus(p) for p in posts]
-        self.assertTrue(any("live chain upgraded" in p for p in decoded))
+        self.assertTrue(any("Bittensor upgraded" in p for p in decoded))
         self.assertIn(("chain-runtime-upgrade", "delivered"), self.ledger())
 
 
@@ -979,13 +982,13 @@ class RuntimeMergeTests(unittest.TestCase):
         self.seed_range(450, 452, "Bump spec_version to 452. (#3131)")
         events, _ = tg.chain_runtime_upgrade_events(self.db, None, self.ctx)
         text = events[0]["text"]
-        self.assertIn("release: Bump spec_version to 452. (#3131)", text)
-        self.assertIn("touched: pallets (2)", text)
+        self.assertIn("Release: Bump spec_version to 452. (#3131)", text)
+        self.assertIn("Touched: pallets (2)", text)
         self.assertNotIn("not yet tracked", text)
 
     def test_missing_range_is_stated(self):
         events, _ = tg.chain_runtime_upgrade_events(self.db, None, self.ctx)
-        self.assertIn("repo evidence: not yet tracked",
+        self.assertIn("Release: not matched to a tracked repo range yet",
                       events[0]["text"])
 
 
@@ -1029,11 +1032,10 @@ class SubnetRegistryTests(unittest.TestCase):
                                  "subnet-registry:200:2:deregistered",
                                  "subnet-registry:200:1:renamed"])
         texts = " || ".join(e["text"] for e in events)
-        self.assertIn("subnet 3 registered", texts)
-        self.assertIn("name: new", texts)
-        self.assertIn("subnet 2 deregistered", texts)
-        self.assertIn("name: alpha to alpha-renamed", texts)
-        self.assertIn("blocks: 100 to 200", texts)
+        self.assertIn('Subnet 3 registered: "new"', texts)
+        self.assertIn('Subnet 2 deregistered (was "beta-sub")', texts)
+        self.assertIn('Subnet 1 renamed: "alpha" → "alpha-renamed"', texts)
+        self.assertIn("Blocks 100 → 200", texts)
         # Watermark advanced: nothing replays.
         again, _ = tg.subnet_registry_events(self.db, wm, self.ctx)
         self.assertEqual(again, [])
@@ -1087,8 +1089,10 @@ class FailClosedTests(unittest.TestCase):
         self.seed(good_hours_ago=10, fail_hours_ago=9)
         events, _ = tg.fail_closed_events(self.db, None, self.ctx)
         self.assertEqual(len(events), 1)
-        self.assertIn("gate poll failing closed", events[0]["text"])
-        self.assertIn("last good observation", events[0]["text"])
+        self.assertIn("Atlas can't read the emission bar",
+                      events[0]["text"].split("\n")[0])
+        self.assertIn("Bar-crossing alerts are paused", events[0]["text"])
+        self.assertIn("Last good observation", events[0]["text"])
         # Delivered once: the same outage never pages again.
         tg.ledger_record(self.store, events[0]["event_id"], "fail-closed",
                          events[0]["created_at"], None, "delivered", 1,
@@ -1107,29 +1111,125 @@ class FailClosedTests(unittest.TestCase):
         self.assertEqual(events, [])
 
 
+class TransportTests(unittest.TestCase):
+    """change: telegram-alert-redesign. Buttons, link previews, and the
+    400 fallback chain."""
+
+    def setUp(self):
+        tg._SECRET_VALUES.clear()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.config = make_config(self.tmp.name)
+        self.store = tg.open_store(self.config["db"])
+        self.addCleanup(self.store.close)
+
+    @staticmethod
+    def fields(data):
+        return dict(urllib.parse.parse_qsl(data.decode("utf-8")))
+
+    def test_payload_has_preview_options_and_keyboard(self):
+        posts = []
+
+        def poster(url, data, timeout):
+            posts.append(self.fields(data))
+            return 200, "{}"
+        tg.send_message(self.config, "tok12345", "42", "<b>x</b>",
+                        poster=poster, parse_mode="HTML",
+                        buttons=[("A", "https://a.example/1"),
+                                 ("B", "https://b.example/2"),
+                                 ("C", "https://c.example/3")])
+        sent = posts[0]
+        self.assertNotIn("disable_web_page_preview", sent)
+        self.assertEqual(json.loads(sent["link_preview_options"]),
+                         {"is_disabled": True})
+        rows = json.loads(sent["reply_markup"])["inline_keyboard"]
+        self.assertEqual([[b["text"] for b in row] for row in rows],
+                         [["A", "B"], ["C"]])
+
+    def test_no_buttons_no_keyboard(self):
+        posts = []
+
+        def poster(url, data, timeout):
+            posts.append(self.fields(data))
+            return 200, "{}"
+        tg.send_message(self.config, "tok12345", "42", "x", poster=poster)
+        self.assertNotIn("reply_markup", posts[0])
+
+    def event(self):
+        msg = tg.Message("watch", "Head <x>", facts=[("A", "b")],
+                         buttons=[("Open", "https://a.example/1")])
+        return tg.message_event(msg, "e:1", "schema-drift", tg._utc_now(),
+                                3500, None)
+
+    def test_400_falls_back_to_plain_with_buttons(self):
+        posts = []
+
+        def poster(url, data, timeout):
+            fields = self.fields(data)
+            posts.append(fields)
+            return (400, "bad") if "parse_mode" in fields else (200, "{}")
+        status = tg.deliver_event(self.store, self.config, "tok12345", "42",
+                                  self.event(), poster=poster)
+        self.assertEqual(status, tg.STATUS_DELIVERED)
+        self.assertEqual(len(posts), 2)
+        self.assertIn("reply_markup", posts[1])
+        self.assertNotIn("<b>", posts[1]["text"])
+        note = self.store.execute("SELECT final_failure FROM events").fetchone()
+        self.assertIn("html-400-fallback", note[0])
+
+    def test_rejected_buttons_drop_last(self):
+        posts = []
+
+        def poster(url, data, timeout):
+            fields = self.fields(data)
+            posts.append(fields)
+            return (400, "bad") if "reply_markup" in fields else (200, "{}")
+        status = tg.deliver_event(self.store, self.config, "tok12345", "42",
+                                  self.event(), poster=poster)
+        self.assertEqual(status, tg.STATUS_DELIVERED)
+        self.assertEqual(len(posts), 3)
+        self.assertNotIn("reply_markup", posts[2])
+        note = self.store.execute("SELECT final_failure FROM events").fetchone()
+        self.assertIn("buttons dropped", note[0])
+
+
 class HtmlRenderTests(unittest.TestCase):
     def setUp(self):
         tg._SECRET_VALUES.clear()
 
     def test_dynamic_values_escaped(self):
-        body = tg.render_html("Repo — spec bump",
-                              ["subject: use Vec<PerU16> & friends"],
-                              "summary with <tags> & entities", None, 3500)
+        body = tg.render_html(tg.Message(
+            "watch", "Repo — spec bump",
+            body=["subject: use Vec<PerU16> & friends"],
+            details=["summary with <tags> & entities"]), 3500)
         self.assertIn("Vec&lt;PerU16&gt; &amp; friends", body)
         self.assertIn("&lt;tags&gt; &amp; entities", body)
         self.assertNotIn("<PerU16>", body)
+        self.assertNotIn("—", body)
+
+    def test_recorded_text_cannot_open_a_tag(self):
+        body = tg.render_html(tg.Message(
+            "watch", "h", body=[tg.rec("x\x03bold?\x04 \x05123;r;y\x06")]))
+        self.assertNotIn("<b>bold", body)
+        self.assertNotIn("<tg-time", body)
 
     def test_only_supported_tags_and_balanced(self):
-        body = tg.render_html("head", ["line"], "expand", "trail", 3500)
-        self.assertTrue(body.startswith("<b>"))
+        body = tg.render_html(tg.Message(
+            "info", "head", meaning="m", facts=[("F", "v")], body=["line"],
+            details=["expand"], next_action="act."), 3500)
+        self.assertTrue(body.startswith("🔵 <b>"))
+        for tag in re.findall(r"</?([a-z-]+)", body):
+            self.assertIn(tag, ("b", "i", "code", "pre", "blockquote",
+                                "tg-time"))
         self.assertEqual(body.count("<blockquote expandable>"),
                          body.count("</blockquote>"))
         self.assertEqual(body.count("<b>"), body.count("</b>"))
         self.assertEqual(body.count("<i>"), body.count("</i>"))
 
     def test_oversized_content_shrinks_within_limit_balanced(self):
-        body = tg.render_html("headline", ["line one", "line two"],
-                              "x" * 10000, "trailer", 1000)
+        body = tg.render_html(tg.Message(
+            "watch", "headline", body=["line one", "line two"],
+            details=["x" * 10000]), 1000)
         self.assertLessEqual(len(body), 1000)
         self.assertEqual(body.count("<blockquote expandable>"),
                          body.count("</blockquote>"))
@@ -1221,7 +1321,7 @@ class EndToEndTests(unittest.TestCase):
             self.assertEqual(
                 summary["classes"]["repository-update"]["delivered"], 2)
             # Priority: the chain upgrade is the FIRST message out.
-            self.assertIn("live+chain+upgraded",
+            self.assertIn("Bittensor+upgraded",
                           posts[0].replace("%20", "+"))
             # Exactly three messages: no churn ever paged.
             self.assertEqual(len(posts), 3)

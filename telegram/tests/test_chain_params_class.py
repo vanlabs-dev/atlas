@@ -142,16 +142,14 @@ class GateBarModeTests(_Base):
         add_state(self.live_db, bar_mode="rank", rank=32)
         add_crossing(self.live_db, 49, "rose-above", 0.0090, 0.0073, 0.0088)
         text = self.body()
-        self.assertIn("bar mode: rank-pinned (the bar is the Nth largest "
-                      "demand share and moves with the distribution) "
-                      "at N 32", text)
-        self.assertNotIn("q-mass at q", text)
+        self.assertIn("Bar: 0.730% (the 32nd largest demand share)", text)
+        self.assertNotIn("q 0.75", text)
 
     def test_q_mass_mode_is_named(self):
         add_state(self.live_db, bar_mode="q-mass", rank=0, q=0.75)
         add_crossing(self.live_db, 49, "rose-above", 0.0090, 0.0073, 0.0088)
-        self.assertIn("bar mode: q-mass (a quantile of the demand-share "
-                      "distribution) at q 0.75", self.body())
+        self.assertIn("Bar: 0.730% (a quantile of the demand-share "
+                      "distribution, q 0.75)", self.body())
 
     def test_bar_driven_crossing_is_attributed_to_the_bar(self):
         # SN49's real 2026-08-03 numbers: share 0.0086 sat BELOW the old bar
@@ -161,7 +159,7 @@ class GateBarModeTests(_Base):
         add_crossing(self.live_db, 49, "rose-above", 0.0086, 0.0073, 0.0088)
         text = self.body()
         self.assertIn("the bar moved onto this subnet", text)
-        self.assertIn("bar moved -17.0%", text)
+        self.assertIn("Bar moved " + tg.MINUS + "17.0%", text)
 
     def test_share_driven_crossing_is_attributed_to_the_subnet(self):
         # SN9's real shape: bar near-static, share vaults across it.
@@ -175,10 +173,11 @@ class GateBarModeTests(_Base):
         # Recorded before the migration: no gate_state row, no prev_theta.
         add_crossing(self.live_db, 42, "fell-below", 0.005, 0.010, None)
         text = self.body()
-        self.assertNotIn("bar mode:", text)
-        self.assertNotIn("bar moved", text)
-        self.assertNotIn("attribution:", text)
-        self.assertIn("subnet 42 fell below the bar", text)
+        self.assertIn("Bar: 1.000%\n", text)
+        self.assertNotIn("largest demand share", text)
+        self.assertNotIn("Bar moved", text)
+        self.assertNotIn("Cause:", text)
+        self.assertIn("Subnet 42 fell below the emission bar", text)
 
     def test_house_style_holds(self):
         add_state(self.live_db, bar_mode="rank", rank=32)
@@ -226,11 +225,12 @@ class ChainParameterClassTests(_Base):
         self.assertEqual(event["event_id"],
                          "chain-parameter-change:%d" % row_id)
         text = event["text"]
-        self.assertIn("BasketConcentrationCap: 4096 to 2048", text)
-        self.assertIn("source: assumed-default to explicit", text)
-        self.assertIn("reference block: 8766216", text)
+        self.assertIn("Setting: BasketConcentrationCap, 4,096 → 2,048", text)
+        self.assertIn("Before: chain default, not stored. After: stored "
+                      "value.", text)
+        self.assertIn("Block 8,766,216", text)
         self.assertIn("swap_basket concentration cap", text)
-        self.assertIn("next: review root basket positions", text)
+        self.assertIn("Next: review root basket positions", text)
         self.assertIn("concentration cap moved", text)
         self.assertNotIn("re-priced", text)   # not a bar parameter
         self.assertNotIn(EM_DASH, text)
@@ -261,7 +261,7 @@ class ChainParameterClassTests(_Base):
         text = events[0]["text"]
         self.assertIn("re-priced for every subnet", text)
         self.assertIn("withheld", text)
-        self.assertIn("next: review your subnet positions", text)
+        self.assertIn("Next: review your subnet positions", text)
 
     def test_mode_change_is_stated_in_words(self):
         first = add_param_event(self.live_db, "EmissionBarRank", "32", "0")
@@ -298,10 +298,11 @@ class ChainParameterClassTests(_Base):
         events, _wm = self.events()
         self.assertEqual(len(events), 1)
         text = events[0]["text"]
-        self.assertIn("49 subnets", text)
-        self.assertIn("false to true", text)
+        self.assertIn("TAO emission restored on 49 subnets",
+                      text.split("\n")[0])
+        self.assertIn("SubnetEmissionEnabled, off → on", text)
         self.assertIn("pool-side emission switch", text)
-        self.assertIn("alpha distribution continues", text)
+        self.assertIn("Alpha distribution", text)
         self.assertIn("TAO injection", text)
         self.assertNotIn("emission gate", text)
         self.assertEqual(events[0]["member_ids"],

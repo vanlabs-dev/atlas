@@ -50,6 +50,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import secrets as secretsmod
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -136,6 +137,12 @@ DEFAULT_PALLET_MAP = {
     "proxy": "account tooling", "utility": "account tooling",
 }
 DEFAULT_LIGHT_TOUCH_RATIO = 0.15
+# Plain area words for the repository alert (display only).
+_CHURN_AREA_WORDS = {".github": "CI", "docs": "docs", "website": "website",
+                     "vendor": "vendored code", "sdk": "SDK"}
+_CORE_AREA_WORDS = {"precompiles": "EVM precompiles",
+                    "runtime": "runtime config", "common": "shared code",
+                    "primitives": "primitives"}
 
 # Commit-subject conventions for the meaningful-commit filter. There is no
 # recorded commit->file map, so selection ranks SUBJECTS only.
@@ -467,14 +474,17 @@ def assert_sendable(text: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Telegram HTML rendering — escape after redact, size before render
+# Telegram HTML rendering (change: telegram-alert-redesign)
 # ---------------------------------------------------------------------------
-# Only Bot-API-supported tags are ever emitted (b, i, code, blockquote,
-# blockquote expandable). Every dynamic value passes html_escape(); a real
-# in-range commit subject contains `Vec<PerU16>`, which unescaped would
-# 400 the send. Rendered HTML is NEVER truncated after rendering — the
-# builder shortens *content* until the rendered body fits, because a
-# post-render slice can cut a tag mid-entity and 400 every long message.
+# Every sender builds a Message: severity marker, plain headline, one
+# meaning sentence, labelled facts, body lines, a details fold for
+# provenance, an optional next action, and URL buttons. One renderer turns
+# it into Telegram HTML and one into plain text. Only Bot-API tags are
+# emitted (b, i, code, pre, blockquote expandable, tg-time). Every dynamic
+# value passes html_escape(); a real commit subject contains `Vec<PerU16>`,
+# which unescaped would 400 the send. Rendered HTML is NEVER truncated
+# after rendering: the builder sheds content until the body fits, because
+# a post-render slice can cut a tag and 400 every long message.
 
 
 def html_escape(text: str) -> str:
@@ -483,143 +493,494 @@ def html_escape(text: str) -> str:
 
 
 def _typography(text: str) -> str:
-    """Operator style rule (2026-07-13): alert bodies never contain em or
-    en dashes. Composed strings use '·' separators; anything imported
-    from stored data is normalized here, the single choke point."""
+    """Operator style rule (2026-07-13): message bodies never contain em
+    or en dashes. Anything imported from stored data is normalized here,
+    the single choke point."""
     return text.replace("—", "-").replace("–", "-")
 
 
-# Inline-mono markers (operator layout feedback 2026-07-15). Composed
-# header lines may wrap a span in these sentinels; render_html turns the
-# span into a <code> entity AFTER escaping (so the span itself is still
-# escaped), render_plain strips them. Imported free text (subjects, dir
-# names) never legitimately contains control chars — both renderers strip
-# stray sentinels from the expandable/trailer so recorded data can never
-# smuggle an unbalanced tag into the HTML body.
-_MONO_OPEN = "\x01"
-_MONO_CLOSE = "\x02"
-# Bold-span sentinels (econ card labels). Like the mono pair: converted to
-# <b>/</b> AFTER escaping in render_html body lines, stripped everywhere else.
-_BOLD_OPEN = "\x03"
-_BOLD_CLOSE = "\x04"
+# Inline span sentinels. Composed strings wrap spans in these; the HTML
+# renderer turns them into entities AFTER escaping (so the span text is
+# still escaped), the plain renderer strips them. Recorded text passes
+# through rec(), which removes every sentinel, so stored data can never
+# open a tag.
+_MONO_OPEN, _MONO_CLOSE = "\x01", "\x02"
+_BOLD_OPEN, _BOLD_CLOSE = "\x03", "\x04"
+_ITAL_OPEN, _ITAL_CLOSE = "\x0e", "\x0f"
+# A time token: \x05<unix>;<format>;<fallback>\x06 (see fmt_time).
+_TIME_OPEN, _TIME_CLOSE = "\x05", "\x06"
+_SENTINELS = (_MONO_OPEN, _MONO_CLOSE, _BOLD_OPEN, _BOLD_CLOSE,
+              _ITAL_OPEN, _ITAL_CLOSE, _TIME_OPEN, _TIME_CLOSE)
+_TIME_RE = re.compile("\x05(\\d+);([rwdDtT]*);([^\x05\x06]*)\x06")
+
+
+def rec(value: Any) -> str:
+    """Recorded text as display data: stringified, sentinel-free, dashes
+    normalized. Never glossed, never interpreted as markup."""
+    text = "" if value is None else str(value)
+    for mark in _SENTINELS:
+        text = text.replace(mark, "")
+    return _typography(text)
+
+
+def mono(text: Any) -> str:
+    return _MONO_OPEN + rec(text) + _MONO_CLOSE
+
+
+def bold(text: Any) -> str:
+    return _BOLD_OPEN + rec(text) + _BOLD_CLOSE
+
+
+def italic(text: Any) -> str:
+    return _ITAL_OPEN + rec(text) + _ITAL_CLOSE
 
 
 def _strip_mono(text: str) -> str:
-    return (text.replace(_MONO_OPEN, "").replace(_MONO_CLOSE, "")
-            .replace(_BOLD_OPEN, "").replace(_BOLD_CLOSE, ""))
+    """Plain rendering of a composed string: time tokens become their
+    fallback text, every other sentinel is removed."""
+    text = _TIME_RE.sub(lambda m: m.group(3), text)
+    for mark in _SENTINELS:
+        text = text.replace(mark, "")
+    return text
 
 
-def _gloss_message(headline: str, lines: List[str], expandable: str,
-                   trailer: Optional[str], next_action: Optional[str],
-                   glosses: Dict[str, str]
-                   ) -> Tuple[str, List[str], str, Optional[str],
-                              Optional[str]]:
-    """Attach ' (gloss)' to the FIRST use of each glossed term across the
-    message, in render order (headline -> lines -> expandable -> trailer ->
-    next-action); later uses in the same message stay bare (voice canon
-    section 2). A term abutting a mono sentinel keeps the gloss OUTSIDE the
-    code span. Matches on word boundaries, case-insensitive, and never
-    inside a hyphenated compound."""
-    remaining = dict(glosses)
-    parts: List[Any] = [headline, list(lines), expandable, trailer,
-                        next_action]
-    for index, part in enumerate(parts):
-        is_scalar = not isinstance(part, list)
-        texts = [part] if is_scalar else part
-        for term in list(remaining):
-            pattern = re.compile(r"(?<![\w-])" + re.escape(term)
-                                 + r"(?![\w-])", re.IGNORECASE)
-            for pos, text in enumerate(texts):
-                if not text:
-                    continue
-                match = pattern.search(text)
-                if match is None:
-                    continue
-                insert_at = match.end()
-                if text[insert_at:insert_at + 1] == _MONO_CLOSE:
-                    insert_at += 1
-                gloss = " (" + _typography(remaining.pop(term)) + ")"
-                texts[pos] = text[:insert_at] + gloss + text[insert_at:]
-                break
-        if is_scalar:
-            parts[index] = texts[0]
-    return (parts[0], parts[1], parts[2], parts[3], parts[4])
+def _html_spans(text: str) -> str:
+    """Escape, then convert sentinels to entities (after escaping, so
+    the span content is escaped too)."""
+    out = html_escape(text)
+    out = _TIME_RE.sub(lambda m: '<tg-time unix="%s" format="%s">%s</tg-time>'
+                       % (m.group(1), m.group(2), m.group(3)), out)
+    for mark, tag in ((_MONO_OPEN, "<code>"), (_MONO_CLOSE, "</code>"),
+                      (_BOLD_OPEN, "<b>"), (_BOLD_CLOSE, "</b>"),
+                      (_ITAL_OPEN, "<i>"), (_ITAL_CLOSE, "</i>"),
+                      (_TIME_OPEN, ""), (_TIME_CLOSE, "")):
+        out = out.replace(mark, tag)
+    return out
 
 
-def render_html(headline: str, lines: List[str], expandable: str,
-                trailer: Optional[str], max_chars: int,
-                next_action: Optional[str] = None,
-                glosses: Optional[Dict[str, str]] = None) -> str:
-    """Compose the supported-tag HTML body, shrinking the expandable
-    content (never the markup) until the result fits max_chars.
+# Severity markers (change: telegram-alert-redesign). The first character
+# of every alert. Markers change no delivery behaviour.
+SEVERITY_MARK = {"act": "🔴", "watch": "🟠", "good": "🟢", "info": "🔵",
+                 "done": "✅"}
 
-    Shrink order protects the verdict-led layout (voice canon): the
-    expandable absorbs shrinkage first, the trailer drops next, body fact
-    lines drop before the next-action line, and the headline is never
-    dropped. Glosses re-apply from the unglossed base each pass so a
-    dropped line never strands a later use unglossed."""
-    headline = _strip_mono(_typography(headline))
-    lines = [_typography(line) for line in lines]
-    expandable = _strip_mono(_typography(expandable))
-    trailer = _strip_mono(_typography(trailer)) if trailer else None
-    # next_action keeps its mono sentinels: composed classes wrap command
-    # spans in them (watchlist commit, knowledge activate) and the escape
-    # pass below converts them, exactly like body lines.
-    next_action = _typography(next_action) if next_action else None
+
+@dataclass
+class Message:
+    """One outbound message in the house layout. `severity` is a key of
+    SEVERITY_MARK, a literal marker (the pulse editions pass their own
+    edition emoji), or None for no marker."""
+    severity: Optional[str]
+    headline: str
+    meaning: Optional[str] = None
+    facts: List[Tuple[str, str]] = field(default_factory=list)
+    body: List[str] = field(default_factory=list)
+    details: List[str] = field(default_factory=list)
+    next_action: Optional[str] = None
+    buttons: List[Tuple[str, str]] = field(default_factory=list)
+
+    def plain(self, max_chars: int = 3500,
+              glosses: Optional[Dict[str, str]] = None) -> str:
+        return render_plain(self, max_chars, glosses)
+
+    def html(self, max_chars: int = 3500,
+             glosses: Optional[Dict[str, str]] = None) -> str:
+        return render_html(self, max_chars, glosses)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"severity": self.severity, "headline": self.headline,
+                "meaning": self.meaning,
+                "facts": [list(f) for f in self.facts],
+                "body": list(self.body), "details": list(self.details),
+                "next_action": self.next_action,
+                "buttons": [list(b) for b in self.buttons]}
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Message":
+        return cls(severity=data.get("severity"),
+                   headline=data.get("headline") or "",
+                   meaning=data.get("meaning"),
+                   facts=[tuple(f) for f in data.get("facts") or []],
+                   body=list(data.get("body") or []),
+                   details=list(data.get("details") or []),
+                   next_action=data.get("next_action"),
+                   buttons=[tuple(b) for b in data.get("buttons") or []])
+
+
+def _gloss_text(text: str, glosses: Dict[str, str]) -> str:
+    """Attach ' (gloss)' to the first use of each glossed term in ONE
+    composed prose sentence (voice canon section 2). Glossing is scoped to
+    the meaning sentence so it can never reach a headline or recorded
+    data. Word boundaries, case-insensitive, never inside a hyphenated
+    compound; a term abutting a mono sentinel keeps the gloss outside the
+    code span."""
+    for term, gloss in glosses.items():
+        pattern = re.compile(r"(?<![\w-])" + re.escape(term) + r"(?![\w-])",
+                             re.IGNORECASE)
+        match = pattern.search(text)
+        if match is None:
+            continue
+        insert_at = match.end()
+        if text[insert_at:insert_at + 1] == _MONO_CLOSE:
+            insert_at += 1
+        text = (text[:insert_at] + " (" + _typography(gloss) + ")"
+                + text[insert_at:])
+    return text
+
+
+def _layout(msg: Message, html: bool,
+            glosses: Optional[Dict[str, str]]) -> str:
+    span = _html_spans if html else _strip_mono
+    mark = SEVERITY_MARK.get(msg.severity or "", msg.severity or "")
+    head = _typography(msg.headline)
+    first = "<b>%s</b>" % _html_spans(head) if html else _strip_mono(head)
+    lines = [(mark + " " if mark else "") + first]
+    if msg.meaning:
+        meaning = _typography(msg.meaning)
+        if glosses:
+            meaning = _gloss_text(meaning, glosses)
+        lines.append(span(meaning))
+    block: List[str] = []
+    for label, value in msg.facts:
+        label_t, value_t = _typography(label), _typography(value)
+        block.append(("<b>%s:</b> %s" % (html_escape(label_t),
+                                          _html_spans(value_t)))
+                     if html else "%s: %s" % (label_t, _strip_mono(value_t)))
+    if block:
+        lines.append("")
+        lines.extend(block)
+    if msg.body:
+        lines.append("")
+        lines.extend(span(_typography(line)) for line in msg.body)
+    if msg.details:
+        detail = "\n".join(span(_typography(line)) for line in msg.details)
+        if html:
+            lines.append("<blockquote expandable>%s</blockquote>" % detail)
+        else:
+            lines.append("")
+            lines.append(detail)
+    if msg.next_action:
+        action = span(_typography(msg.next_action))
+        lines.append(("<b>Next:</b> %s" if html else "Next: %s") % action)
+    return "\n".join(lines)
+
+
+def _fit(msg: Message, max_chars: int, html: bool,
+         glosses: Optional[Dict[str, str]]) -> str:
+    """Shed content until the rendered body fits (design D3): the details
+    fold first (whole lines from the end, then a clipped last line), then
+    body lines from the end, then facts from the end, then the meaning.
+    The headline and the next action are never dropped."""
+    work = Message(**{**msg.__dict__, "facts": list(msg.facts),
+                      "body": list(msg.body), "details": list(msg.details)})
     while True:
-        rendered = _gloss_message(headline, lines, expandable, trailer,
-                                  next_action, glosses) if glosses else (
-            headline, lines, expandable, trailer, next_action)
-        r_head, r_lines, r_exp, r_trailer, r_next = rendered
-        parts = ["<b>%s</b>" % html_escape(r_head)]
-        parts.extend(html_escape(line)
-                     .replace(_MONO_OPEN, "<code>")
-                     .replace(_MONO_CLOSE, "</code>")
-                     .replace(_BOLD_OPEN, "<b>")
-                     .replace(_BOLD_CLOSE, "</b>") for line in r_lines)
-        if r_exp:
-            parts.append("<blockquote expandable>%s</blockquote>"
-                         % html_escape(r_exp))
-        if r_trailer:
-            parts.append("<i>%s</i>" % html_escape(r_trailer))
-        if r_next:
-            parts.append(html_escape(r_next)
-                         .replace(_MONO_OPEN, "<code>")
-                         .replace(_MONO_CLOSE, "</code>"))
-        body = "\n".join(parts)
+        body = _layout(work, html, glosses)
         if len(body) <= max_chars:
             return body
-        overshoot = len(body) - max_chars
-        if expandable and len(expandable) > 40:
-            expandable = expandable[:max(20, len(expandable)
-                                         - overshoot - 20)] + "…"
-        elif trailer:
-            trailer = None
-        elif lines:
-            lines = lines[:-1]
-        elif next_action:
-            next_action = None
+        over = len(body) - max_chars
+        last = _strip_mono(work.details[-1]) if work.details else ""
+        if work.details and len(last) > 80 and len(last) - over - 20 >= 40:
+            # A long last line (a listing) is clipped, visibly, before
+            # any whole line goes.
+            work.details[-1] = _clip_words(last, len(last) - over - 20)
+        elif len(work.details) > 1:
+            work.details.pop()
+        elif work.details and len(last) > 40:
+            work.details[0] = _clip_words(last, max(20, len(last) - over - 20))
+        elif work.details:
+            work.details = []
+        elif work.body:
+            work.body.pop()
+        elif work.facts:
+            work.facts.pop()
+        elif work.meaning:
+            work.meaning = None
         else:
-            break  # headline alone remains: never dropped
-    return "<b>%s</b>" % html_escape(headline[:max_chars - 7])
+            break
+    mark = SEVERITY_MARK.get(msg.severity or "", msg.severity or "")
+    room = max_chars - len(mark) - 8
+    head = _strip_mono(_typography(msg.headline))[:max(room, 1)]
+    return ((mark + " " if mark else "")
+            + ("<b>%s</b>" % html_escape(head) if html else head))
 
 
-def render_plain(headline: str, lines: List[str], expandable: str,
-                 trailer: Optional[str], max_chars: int,
-                 next_action: Optional[str] = None,
+def _clip_words(text: str, limit: int) -> str:
+    """Trim to `limit` chars on a word boundary, appending … when cut."""
+    text = " ".join(str(text).split())
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(" ", 1)[0].rstrip(" ,.;:-")
+    return (cut or text[:limit]) + "…"
+
+
+def render_html(msg: Message, max_chars: int = 3500,
+                glosses: Optional[Dict[str, str]] = None) -> str:
+    return _fit(msg, max_chars, True, glosses)
+
+
+def render_plain(msg: Message, max_chars: int = 3500,
                  glosses: Optional[Dict[str, str]] = None) -> str:
-    if glosses:
-        headline, lines, expandable, trailer, next_action = _gloss_message(
-            headline, list(lines), expandable, trailer, next_action,
-            glosses)
-    parts = [headline] + list(lines)
-    if expandable:
-        parts.append(expandable)
-    if trailer:
-        parts.append(trailer)
-    if next_action:
-        parts.append(next_action)
-    return _strip_mono(_typography("\n".join(parts)))[:max_chars]
+    return _fit(msg, max_chars, False, glosses)
+
+
+# ---------------------------------------------------------------------------
+# Reading formats (design D4, D5)
+# ---------------------------------------------------------------------------
+
+MINUS = "−"  # minus sign in signed figures; not a dash
+
+
+def plural(count: Any, word: str, many: Optional[str] = None) -> str:
+    """`1 commit`, `2 commits`, with thousands separators."""
+    try:
+        number = int(count)
+    except (TypeError, ValueError):
+        return "%s %s" % (rec(count), many or word + "s")
+    return "%s %s" % (fmt_int(number),
+                      word if number == 1 else (many or word + "s"))
+
+
+def fmt_int(value: Any) -> str:
+    try:
+        return "{:,}".format(int(value))
+    except (TypeError, ValueError):
+        return "n/a" if value is None else rec(value)
+
+
+def fmt_pct(fraction: Optional[float], digits: int = 3) -> str:
+    """A share stored as a fraction, shown as a percentage."""
+    if fraction is None:
+        return "n/a"
+    return ("%%.%df%%%%" % digits) % (fraction * 100.0)
+
+
+def fmt_change(pct: Optional[float], digits: int = 1) -> str:
+    """A signed relative change already in percent."""
+    if pct is None:
+        return "n/a"
+    sign = "+" if pct >= 0 else MINUS
+    return ("%s%%.%df%%%%" % (sign, digits)) % abs(pct)
+
+
+def fmt_tao(value: Optional[float]) -> str:
+    """Three significant figures, never scientific notation."""
+    if value is None:
+        return "n/a"
+    if value == 0:
+        return "0 τ"
+    import math
+    places = max(0, 2 - int(math.floor(math.log10(abs(value)))))
+    return ("%%.%df τ" % places) % value
+
+
+def fmt_usd(value: Optional[float]) -> str:
+    return "n/a" if value is None else "${:,.2f}".format(value)
+
+
+def _parse_time(value: Any) -> Optional[datetime.datetime]:
+    if value is None:
+        return None
+    try:
+        if isinstance(value, (int, float)):
+            return datetime.datetime.fromtimestamp(
+                float(value), tz=datetime.timezone.utc)
+        parsed = datetime.datetime.fromisoformat(str(value).replace(
+            "Z", "+00:00"))
+    except (ValueError, OverflowError, OSError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+    return parsed.astimezone(datetime.timezone.utc)
+
+
+def time_fallback(moment: datetime.datetime) -> str:
+    return "%s %d %s, %s UTC" % (moment.strftime("%a"), moment.day,
+                                 moment.strftime("%b"),
+                                 moment.strftime("%H:%M"))
+
+
+def fmt_time(value: Any, fmt: str = "wDT") -> str:
+    """A recorded instant as a Telegram tg-time token: the HTML body shows
+    it in the reader's timezone, plain text shows the UTC fallback. A
+    value that does not parse renders as recorded, marked dated."""
+    moment = _parse_time(value)
+    if moment is None:
+        return "n/a" if value is None else "%s (dated)" % rec(value)
+    return "%s%d;%s;%s%s" % (_TIME_OPEN, int(moment.timestamp()), fmt,
+                             time_fallback(moment), _TIME_CLOSE)
+
+
+def fmt_date(value: Any) -> str:
+    moment = _parse_time(value)
+    if moment is None:
+        return "n/a" if value is None else rec(value)
+    return "%d %s" % (moment.day, moment.strftime("%b"))
+
+
+# ---------------------------------------------------------------------------
+# Subnet names (design D6): the latest recorded panel-snapshot name
+# ---------------------------------------------------------------------------
+
+def subnet_names_from(conn: Optional[sqlite3.Connection]) -> Dict[int, str]:
+    if conn is None:
+        return {}
+    try:
+        present = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND "
+            "name = 'panel_snapshot'").fetchone()
+        if present is None:
+            return {}
+        rows = conn.execute(
+            "SELECT netuid, name FROM panel_snapshot WHERE id IN "
+            "(SELECT MAX(id) FROM panel_snapshot WHERE name IS NOT NULL "
+            "AND name != '' GROUP BY netuid)").fetchall()
+    except sqlite3.Error:
+        return {}
+    return {int(n): rec(name).strip()[:60] for n, name in rows
+            if name and rec(name).strip()
+            and rec(name).strip().lower() != "unknown"}
+
+
+def subnet_names(live_db: Optional[str]) -> Dict[int, str]:
+    if not live_db:
+        return {}
+    conn = open_source_ro(resolve(live_db))
+    if conn is None:
+        return {}
+    try:
+        return subnet_names_from(conn)
+    finally:
+        conn.close()
+
+
+def live_db_path(config: Dict[str, Any]) -> str:
+    return ((config.get("briefing") or {}).get("live_db")
+            or "var/livedata/livedata.db")
+
+
+def subnet_label(netuid: Any, names: Dict[int, str],
+                 capital: bool = True) -> str:
+    """`Subnet 49 (Nepher Robotics)` in alerts; the number alone when no
+    name is recorded."""
+    word = "Subnet" if capital else "subnet"
+    try:
+        number = int(netuid)
+    except (TypeError, ValueError):
+        return "%s %s" % (word, rec(netuid))
+    name = names.get(number)
+    return ("%s %d (%s)" % (word, number, name) if name
+            else "%s %d" % (word, number))
+
+
+def subnet_tag(netuid: Any, names: Dict[int, str]) -> str:
+    """`Nepher Robotics (49)` in briefing lists."""
+    try:
+        number = int(netuid)
+    except (TypeError, ValueError):
+        return "Subnet %s" % rec(netuid)
+    name = names.get(number)
+    return "%s (%d)" % (name, number) if name else "Subnet %d" % number
+
+
+# ---------------------------------------------------------------------------
+# Links (design D7): URL buttons from configured templates
+# ---------------------------------------------------------------------------
+
+DEFAULT_LINKS = {
+    "subtensor_compare":
+        "https://github.com/RaoFoundation/subtensor/compare/{prev}...{new}",
+    "subtensor_releases": "https://github.com/RaoFoundation/subtensor/releases",
+    "github_commit": "https://github.com/{repo}/commit/{sha}",
+    "github_compare": "https://github.com/{repo}/compare/{prev}...{new}",
+    "atlas_commit": "https://github.com/vanlabs-dev/atlas/commit/{sha}",
+    "taostats_subnet": "https://taostats.io/subnets/{netuid}",
+}
+_URL_VALUE_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
+
+
+def link(config: Optional[Dict[str, Any]], key: str,
+         **values: Any) -> Optional[str]:
+    """A URL from the configured template, or None when the template or a
+    value is missing or unsafe. A None never blocks delivery: the button
+    is just omitted."""
+    links = dict(DEFAULT_LINKS)
+    links.update(((config or {}).get("links") or {}))
+    template = links.get(key)
+    if not isinstance(template, str) or not template:
+        return None
+    clean = {}
+    for name, value in values.items():
+        text = "" if value is None else str(value).strip()
+        if not text or not _URL_VALUE_RE.match(text) or ".." in text:
+            return None
+        clean[name] = text
+    try:
+        url = template.format(**clean)
+    except (KeyError, IndexError, ValueError):
+        return None
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        return None
+    return url
+
+
+def repo_slug(github_repo: Any) -> Optional[str]:
+    """owner/repo from a recorded GitHub URL or slug."""
+    if not github_repo:
+        return None
+    parts = str(github_repo).rstrip("/").removesuffix(".git").split("/")
+    slug = "/".join(parts[-2:])
+    return slug if len(parts) >= 2 and _URL_VALUE_RE.match(slug) else None
+
+
+def button(config: Optional[Dict[str, Any]], text: str, key: str,
+           **values: Any) -> List[Tuple[str, str]]:
+    url = link(config, key, **values)
+    return [(text, url)] if url else []
+
+
+# ---------------------------------------------------------------------------
+# Severity selection (design D8)
+# ---------------------------------------------------------------------------
+
+def severity_for(event_class: str, **fields: Any) -> str:
+    """The marker for one event, from its class and recorded fields."""
+    if event_class == "chain-runtime-upgrade":
+        return "act" if fields.get("governance_crossed") else "watch"
+    if event_class == "chain-parameter-change":
+        return ("act" if fields.get("item") in _ACT_PARAMS else "watch")
+    if event_class == "gate-crossing":
+        if fields.get("emission_enabled") == 0:
+            return "info"
+        return "act" if fields.get("direction") == "fell-below" else "good"
+    if event_class in ("fail-closed", "probe-drift", "upgrade-blocked"):
+        return "act"
+    if event_class == "knowledge-ingestion":
+        return "watch" if fields.get("staged") else "info"
+    if event_class in ("churn-digest", "signal-digest", "subnet-registry",
+                       "upgrade-waiting"):
+        return "info"
+    if event_class in ("upgrade-updated", "upgrade-dry-run", "probe-cleared",
+                       "test"):
+        return "done"
+    return "watch"
+
+
+_ACT_PARAMS = frozenset(("EmissionBarRank", "EmissionBarQuantile",
+                         "EmissionGateExponent", "SubnetEmissionEnabled"))
+
+
+def message_event(msg: Message, event_id: str, event_class: str,
+                  created_at: str, max_chars: int,
+                  glosses: Optional[Dict[str, str]],
+                  **extra: Any) -> Dict[str, Any]:
+    """The scan's event dict for one Message."""
+    event = {"event_id": event_id, "event_class": event_class,
+             "created_at": created_at,
+             "text": render_plain(msg, max_chars, glosses),
+             "html": render_html(msg, max_chars, glosses),
+             "buttons": list(msg.buttons)}
+    event.update(extra)
+    return event
 
 
 # ---------------------------------------------------------------------------
@@ -638,11 +999,14 @@ def _do_post(url: str, data: bytes, timeout: int) -> Tuple[int, str]:
 def send_message(config: Dict[str, Any], token: str, chat_id: str,
                  text: str,
                  poster: Optional[Callable[[str, bytes, int], Tuple[int, str]]]
-                 = None, parse_mode: Optional[str] = None) -> Dict[str, Any]:
+                 = None, parse_mode: Optional[str] = None,
+                 buttons: Optional[List[Tuple[str, str]]] = None
+                 ) -> Dict[str, Any]:
     """Attempt delivery with bounded retry. Returns a result dict with
     delivered/attempts/status/detail. Never raises for transport or API
     failures — those are the caller's recorded terminal outcomes. The
-    token is in the URL and MUST NOT appear in any returned detail."""
+    token is in the URL and MUST NOT appear in any returned detail.
+    `buttons` ride as an inline keyboard, two URL buttons per row."""
     poster = poster or _do_post
     register_secret(token)  # defensive: token is in the URL, never in output
     retry = config["retry"]
@@ -653,9 +1017,13 @@ def send_message(config: Dict[str, Any], token: str, chat_id: str,
     timeout = int(config.get("request_timeout_seconds", 20))
     url = "%s/bot%s/sendMessage" % (config["api_base"], token)
     fields = {"chat_id": chat_id, "text": text,
-              "disable_web_page_preview": "true"}
+              "link_preview_options": json.dumps({"is_disabled": True})}
     if parse_mode:
         fields["parse_mode"] = parse_mode
+    if buttons:
+        rows = [[{"text": label, "url": url} for label, url in
+                 buttons[i:i + 2]] for i in range(0, len(buttons), 2)]
+        fields["reply_markup"] = json.dumps({"inline_keyboard": rows})
     payload = urllib.parse.urlencode(fields).encode("utf-8")
 
     attempts = 0
@@ -793,15 +1161,23 @@ def read_live_spec(live_db: Optional[str]) -> Optional[Dict[str, Any]]:
 
 def _both_clocks_line(new_spec: Optional[int],
                       live: Optional[Dict[str, Any]]) -> str:
-    """The repo-vs-live-chain distinction, stated on every repo alert."""
+    """The repo-vs-live-chain distinction, stated on every repo alert as
+    one plain sentence: is this code live yet?"""
     if live is None:
-        return ("live spec n/a · cannot compare · repo event only")
+        return ("Live runtime spec n/a, so Atlas cannot compare. This is a "
+                "repo (source code) event only.")
+    live_spec = live["spec_version"]
     if new_spec is None:
-        return ("repo spec n/a · live Finney spec %d · not enacted "
-                "on chain" % live["spec_version"])
-    delta = new_spec - live["spec_version"]
-    return ("repo spec %d · live Finney spec %d · Δ%+d · not enacted "
-            "on chain" % (new_spec, live["spec_version"], delta))
+        return ("The live chain runs spec %d. This repo range records no "
+                "runtime spec, so it is not live on chain." % live_spec)
+    if new_spec > live_spec:
+        return ("The live chain runs spec %d. These repo changes go live "
+                "only when the chain upgrades." % live_spec)
+    if new_spec == live_spec:
+        return ("The live chain already runs spec %d. This repo range is "
+                "not a new upgrade." % live_spec)
+    return ("The live chain already runs spec %d, ahead of this repo "
+            "range." % live_spec)
 
 
 def _pending_churn_rows(store: sqlite3.Connection
@@ -812,9 +1188,8 @@ def _pending_churn_rows(store: sqlite3.Connection
 
 
 def _digest_line(pending: List[Tuple[int, str, str, str]]) -> str:
-    items = " · ".join("%s (%s)" % (row[2], row[1][:12]) for row in pending)
-    return ("digested %d low-signal update(s): %s · no protocol or "
-            "runtime spec change" % (len(pending), items))
+    return ("Held housekeeping: %s, no protocol or runtime spec change"
+            % plural(len(pending), "update"))
 
 
 def _area_class(top: str, area_map: Dict[str, str]) -> str:
@@ -857,11 +1232,12 @@ def _compact(n: int) -> str:
 
 def _area_churn(area: Dict[str, Any]) -> str:
     tail = " (partial)" if area["partial"] else ""
+    files = plural(area["files"], "file")
     if area["adds"] or area["dels"]:
-        return "%s %d files +%s/-%s%s" % (
-            area["area"], area["files"], _compact(area["adds"]),
+        return "%s %s +%s/-%s%s" % (
+            area["area"], files, _compact(area["adds"]),
             _compact(area["dels"]), tail)
-    return "%s %d files%s" % (area["area"], area["files"], tail)
+    return "%s %s%s" % (area["area"], files, tail)
 
 
 def _pallet_domains(file_entries: List[Any],
@@ -891,8 +1267,10 @@ def _filter_commits(commits: List[Dict[str, Any]]) -> List[str]:
     """Rank commit SUBJECTS (no commit->file map exists, so this is a
     subject heuristic, not 'the commits that changed area X'). Drop merges
     and ci/test/docs/build/style; drop chore unless it names a release;
-    rank feat/fix/refactor/perf and protocol-keyword subjects first."""
+    drop a subject that repeats an earlier one; rank feat/fix/refactor/perf
+    and protocol-keyword subjects first."""
     kept: List[str] = []
+    seen = set()
     for commit in commits:
         subject = (commit.get("subject") or "").strip()
         if not subject or subject.startswith("Merge "):
@@ -903,6 +1281,10 @@ def _filter_commits(commits: List[Dict[str, Any]]) -> List[str]:
         if prefix == "chore" and not any(
                 kw in subject.lower() for kw in _RELEASE_KEYWORDS):
             continue
+        key = " ".join(subject.lower().split())
+        if key in seen:
+            continue
+        seen.add(key)
         kept.append(subject)
 
     def rank(subject: str) -> int:
@@ -967,106 +1349,184 @@ def _repo_verdict(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
     return "repo change"
 
 
-def _breakdown_lines(rng: Dict[str, Any], areas: List[Dict[str, Any]],
-                     policy: Dict[str, Any]) -> str:
-    """Interpreted breakdown: one fact per line, signal split from noise,
-    built only from already-recorded fields (operator feedback 2026-07-14:
-    'none of the info really tells me anything'). Groups are separated by
-    a blank line (operator layout feedback 2026-07-15: break the wall of
-    text) — signal, then noise/context, then commits, then the trailer."""
-    core = [a for a in areas if a["cls"] == CORE]
-    unknown = [a for a in areas if a["cls"] == UNKNOWN]
-    node = [a for a in areas if a["cls"] == NODE]
-    noise = [a for a in areas if a["cls"] == NOISE]
+def _digest_details(pending: List[Tuple[int, str, str, str]]) -> List[str]:
+    return ["%s · %s" % (_CHURN_AREA_WORDS.get(row[2], rec(row[2])),
+                         mono(row[1][:8])) for row in pending]
 
-    signal: List[str] = []
-    if core:
-        signal.append("protocol changed · " + " · ".join(
-            _area_churn(a) for a in core[:6]))
-        domains = _pallet_domains(rng["file_entries"], policy["pallet_map"])
-        if domains:
-            signal.append("pallets · " + " · ".join(domains[:4]))
-    if unknown:
-        signal.append("NEW / unclassified area · " + " · ".join(
-            _area_churn(a) for a in unknown[:6]))
 
-    context: List[str] = []
-    if node:
-        context.append("node / network · " + " · ".join(
-            "%s (%d)" % (a["area"], a["files"]) for a in node[:6]))
-    if noise:
-        context.append("housekeeping · " + " · ".join(
-            "%s (%d)" % (a["area"], a["files"]) for a in noise[:8]))
-    if rng["tags"]:
-        context.append("tags · " + " · ".join(rng["tags"][:10]))
+def _sentence_case(text: str) -> str:
+    """First letter up, the rest untouched (keeps acronyms like CI)."""
+    return text[:1].upper() + text[1:]
 
-    commits_group: List[str] = []
-    commits = _filter_commits(rng["commits"])
-    if commits:
-        commits_group.extend("• " + subject[:100] for subject in commits[:5])
-    else:
-        commits_group.append(
-            "• no feature or fix commits in range (tooling only)")
-    if rng["commits_truncated"]:
-        commits_group.append("commit list truncated at cap · sample only")
 
-    trailer_group: List[str] = []
-    if rng["files_truncated"] or rng["non_fast_forward"]:
-        trailer_group.append(
-            "counts are a lower bound · change record incomplete")
-    trailer_group.append("from recorded change data · effects not verified")
+def _tidy_subject(subject: str) -> str:
+    """Display form of a commit subject: conventional prefix removed, its
+    scope kept in parentheses at the end, first letter capitalized."""
+    match = _CONV_PREFIX_RE.match(subject)
+    scope = ""
+    if match:
+        scope = (match.group(2) or "").strip("()")
+        subject = subject[match.end():].strip()
+    subject = subject[:1].upper() + subject[1:]
+    if scope:
+        subject = "%s (%s)" % (subject, scope)
+    return _clip_words(subject, 100)
 
-    groups = [signal, context, commits_group, trailer_group]
-    return "\n\n".join("\n".join(g) for g in groups if g)
+
+def _repo_headline(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
+                   verdict: str, areas: List[Dict[str, Any]]) -> str:
+    prev_spec, new_spec = rng["prev_spec"], rng["new_spec"]
+    if (prev_spec is not None and new_spec is not None
+            and prev_spec != new_spec):
+        if live is None:
+            return "Subtensor code moved to runtime spec %d" % new_spec
+        if new_spec > live["spec_version"]:
+            return ("Subtensor code for runtime spec %d is ready. Not live "
+                    "yet." % new_spec)
+        return ("Subtensor code moved to runtime spec %d (live chain: %d)"
+                % (new_spec, live["spec_version"]))
+    if verdict.startswith("large or incomplete"):
+        return "Large or incomplete subtensor update: review it"
+    if verdict.startswith("new unmapped area"):
+        unknown = [a["area"] for a in areas if a["cls"] == UNKNOWN][:3]
+        return "Subtensor code touches a new area: %s" % ", ".join(unknown)
+    if verdict.startswith("large sync"):
+        return "Large subtensor sync with a light protocol touch"
+    if verdict == "core protocol change":
+        return "Subtensor protocol code changed"
+    if verdict.startswith("node"):
+        return "Subtensor node code changed"
+    return "Subtensor code changed"
 
 
 def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
                       pending: List[Tuple[int, str, str, str]],
                       max_chars: int,
                       policy: Dict[str, Any],
-                      glosses: Dict[str, str]) -> Dict[str, Any]:
-    new_spec = rng["new_spec"]
+                      glosses: Dict[str, str],
+                      config: Optional[Dict[str, Any]] = None
+                      ) -> Dict[str, Any]:
+    """A significant range in the house layout: headline answers "is it
+    live?", the size and protocol churn are key figures, the most
+    substantive commit subjects sit in the body, and the per-area counts,
+    pallets, housekeeping, and provenance sit in the details fold."""
     areas = _aggregate_areas(rng["file_entries"], rng["files_truncated"],
                              policy["area_map"])
     verdict = _repo_verdict(rng, live, areas, policy)
-    headline = "Atlas · subtensor repo · %s" % verdict
-    lines = [
-        "%s%s → %s%s · %d commit(s)%s · %d file(s)%s"
-        % (_MONO_OPEN, rng["prev_sha"][:12], rng["new_sha"][:12], _MONO_CLOSE,
-           len(rng["commits"]), "+" if rng["commits_truncated"] else "",
-           len(rng["files"]), "+" if rng["files_truncated"] else ""),
-        _both_clocks_line(new_spec, live),
-        "source: repo (source code), not the live chain",
-    ]
-    breakdown = redact(_breakdown_lines(rng, areas, policy))
-    trailer = _digest_line(pending) if pending else None
-    plain = render_plain(headline, lines, breakdown, trailer, max_chars,
-                         glosses=glosses)
-    html = render_html(headline, lines, breakdown, trailer, max_chars,
-                       glosses=glosses)
-    return {"event_id": "repository-update:range:%d" % rng["id"],
-            "event_class": "repository-update",
-            "created_at": _utc_now(), "text": plain, "html": html,
-            "digest_range_ids": [row[0] for row in pending]}
+    core = [a for a in areas if a["cls"] == CORE]
+    unknown = [a for a in areas if a["cls"] == UNKNOWN]
+    node = [a for a in areas if a["cls"] == NODE]
+    noise = [a for a in areas if a["cls"] == NOISE]
+    lower = rng["files_truncated"] or rng["non_fast_forward"]
+    at_least = "at least " if lower else ""
+
+    facts = [("Size", "%s%s, %s%s" % (
+        "at least " if rng["commits_truncated"] else "",
+        plural(len(rng["commits"]), "commit"),
+        at_least, plural(len(rng["files"]), "file")))]
+    if core:
+        adds = sum(a["adds"] for a in core)
+        dels = sum(a["dels"] for a in core)
+        facts.append(("Protocol code", "%s+%s / %s%s lines" % (
+            at_least, _compact(adds), MINUS, _compact(dels))
+            if adds or dels else "%s%s" % (
+                at_least, plural(sum(a["files"] for a in core), "file"))))
+        words: List[str] = []
+        for entry in _pallet_domains(rng["file_entries"],
+                                     policy["pallet_map"]):
+            name, _sep, label = entry.partition(" (")
+            word = label.rstrip(")") if label else name
+            word = word.replace("/", ", ")
+            if word not in words:
+                words.append(word)
+        for area in core:
+            if area["area"] != "pallets":
+                word = _CORE_AREA_WORDS.get(area["area"], area["area"])
+                if word not in words:
+                    words.append(word)
+        if words:
+            facts.append(("Areas", " · ".join(rec(w) for w in words[:5])))
+    if unknown:
+        facts.append(("New area", " · ".join(
+            rec(a["area"]) for a in unknown[:4])))
+
+    body: List[str] = []
+    commits = _filter_commits(rng["commits"])
+    if commits:
+        body.append(bold("Main changes"))
+        body.extend("• " + rec(_tidy_subject(s)) for s in commits[:4])
+    else:
+        body.append("• No feature or fix commits in this range (tooling "
+                    "only)")
+
+    details = ["Range %s → %s" % (mono(rng["prev_sha"][:8]),
+                                  mono(rng["new_sha"][:8])),
+               "Repo spec %s · live spec %s" % (
+                   ("%s → %s" % (rng["prev_spec"], rng["new_spec"])
+                    if rng["prev_spec"] is not None
+                    and rng["new_spec"] is not None
+                    and rng["prev_spec"] != rng["new_spec"]
+                    else rng["new_spec"] if rng["new_spec"] is not None
+                    else "n/a"),
+                   live["spec_version"] if live else "n/a")]
+    details.extend(rec(_area_churn(a)) for a in core[:6])
+    pallets = [entry.partition(" (")[0] for entry in _pallet_domains(
+        rng["file_entries"], policy["pallet_map"])]
+    if pallets:
+        details.append("pallets: %s" % ", ".join(rec(p) for p in pallets[:6]))
+    details.extend("new area " + rec(_area_churn(a)) for a in unknown[:6])
+    if node:
+        details.append("node %s (%s)" % (
+            plural(sum(a["files"] for a in node), "file"),
+            ", ".join("%s %d" % (rec(a["area"]), a["files"])
+                      for a in node[:6])))
+    if noise:
+        details.append("housekeeping %s (%s)" % (
+            plural(sum(a["files"] for a in noise), "file"),
+            ", ".join("%s %d" % (rec(a["area"]), a["files"])
+                      for a in sorted(noise, key=lambda a: -a["files"])[:6])))
+    if rng["tags"]:
+        details.append("tags: %s" % ", ".join(rec(t) for t in rng["tags"][:6]))
+    if rng["commits_truncated"]:
+        details.append("Commit list truncated at the recorder cap")
+    if lower:
+        details.append("Counts are a lower bound: change record incomplete")
+    if pending:
+        details.append(_digest_line(pending))
+        details.extend(_digest_details(pending))
+    details.append("Built from recorded change data. Effects not verified.")
+
+    msg = Message(severity="watch",
+                  headline=_repo_headline(rng, live, verdict, areas),
+                  meaning=_both_clocks_line(rng["new_spec"], live),
+                  facts=facts, body=body,
+                  details=[redact(line) for line in details],
+                  buttons=button(config, "View diff on GitHub",
+                                 "subtensor_compare",
+                                 prev=rng["prev_sha"], new=rng["new_sha"]))
+    return message_event(msg, "repository-update:range:%d" % rng["id"],
+                         "repository-update", _utc_now(), max_chars, glosses,
+                         digest_range_ids=[row[0] for row in pending])
 
 
 def _build_digest_event(pending: List[Tuple[int, str, str, str]],
                         max_chars: int,
                         glosses: Dict[str, str]) -> Dict[str, Any]:
-    headline = "Atlas · subtensor repo · low-signal digest"
-    lines = ["no protocol or runtime spec change in these ranges",
-             "source: repo (source code), not the live chain"]
-    body = _digest_line(pending)
-    plain = render_plain(headline, lines, body, None, max_chars,
-                         glosses=glosses)
-    html = render_html(headline, lines, body, None, max_chars,
-                       glosses=glosses)
-    return {"event_id": "repository-churn-digest:%d" % pending[-1][0],
-            "event_class": "repository-update",
-            "created_at": _utc_now(), "text": plain, "html": html,
-            "digest_range_ids": [row[0] for row in pending]}
-
-
+    words: List[str] = []
+    for row in pending:
+        word = _CHURN_AREA_WORDS.get(row[2], rec(row[2]))
+        if word not in words:
+            words.append(word)
+    msg = Message(severity="info",
+                  headline="Subtensor: %d housekeeping update%s" % (
+                      len(pending), "" if len(pending) == 1 else "s"),
+                  meaning="%s only. No protocol or runtime spec change. "
+                          "Repo (source code) only, not the live chain."
+                          % _sentence_case(", ".join(words[:5])),
+                  details=_digest_details(pending))
+    return message_event(msg, "repository-churn-digest:%d" % pending[-1][0],
+                         "repository-update", _utc_now(), max_chars, glosses,
+                         digest_range_ids=[row[0] for row in pending])
 def repository_update_events(source_db: str, watermark: Optional[str],
                              ctx: Optional[Dict[str, Any]] = None
                              ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
@@ -1127,7 +1587,7 @@ def repository_update_events(source_db: str, watermark: Optional[str],
             tier = SIGNIFICANT  # no durable store → never silently drop
         pending = _pending_churn_rows(store) if store is not None else []
         events.append(_build_repo_event(rng, live, pending, max_chars,
-                                        policy, glosses))
+                                        policy, glosses, config))
 
     if not events and store is not None:
         # Backstop: pending churn must not linger forever waiting for a
@@ -1231,37 +1691,39 @@ def chain_runtime_upgrade_events(source_db: str, watermark: Optional[str],
     high = last_id
     for row_id, observed_at, prev_spec, new_spec, block in rows:
         high = max(high, int(row_id))
-        headline = ("Atlas · live chain upgraded · runtime spec %s → %s "
-                    "enacted" % (prev_spec, new_spec))
-        lines = ["the live chain changed (enacted), not the repo",
-                 "reference block: %s · observed: %s"
-                 % (block if block is not None else "n/a",
-                    observed_at)]
+        crossed = prev_spec < threshold <= new_spec
+        meaning = ("The live chain now runs new code (was %s). This is an "
+                   "enacted live chain change, not a repo change."
+                   % prev_spec)
+        next_action = None
+        if crossed:
+            meaning += (" Governance spec %d is crossed: conviction-based "
+                        "subnet ownership is now enforced." % threshold)
+            next_action = ("review your subnet positions, because "
+                           "conviction enforcement is live.")
         # One message explains the upgrade (change: pulse-briefing): the
         # matching repository range supplies the release subject and the
         # touched areas; its absence is stated, never guessed around.
         release = _release_for_upgrade(spec.get("repo_db"), new_spec)
-        if release is None:
-            lines.append("repo evidence: not yet tracked for this upgrade")
-        else:
-            lines.append("release: %s" % release["subject"])
-            if release["areas"]:
-                lines.append("touched: %s" % release["areas"])
-        next_action = None
-        if prev_spec < threshold <= new_spec:
-            lines.append("governance spec %d crossed · conviction-based "
-                         "subnet ownership enforcement is now enacted"
-                         % threshold)
-            next_action = ("next: review your subnet positions · "
-                           "conviction enforcement is live")
-        plain = render_plain(headline, lines, "", None, max_chars,
-                             next_action=next_action, glosses=glosses)
-        html = render_html(headline, lines, "", None, max_chars,
-                           next_action=next_action, glosses=glosses)
-        events.append({"event_id": "chain-runtime-upgrade:%s" % row_id,
-                       "event_class": "chain-runtime-upgrade",
-                       "created_at": _utc_now(), "text": plain,
-                       "html": html})
+        facts = [("Release", rec(release["subject"]) if release else
+                  "not matched to a tracked repo range yet")]
+        if release and release["areas"]:
+            facts.append(("Touched", rec(release["areas"])))
+        facts.append(("When", fmt_time(observed_at)))
+        msg = Message(
+            severity=severity_for("chain-runtime-upgrade",
+                                  governance_crossed=crossed),
+            headline="Bittensor upgraded to runtime spec %s" % new_spec,
+            meaning=meaning, facts=facts,
+            details=["Block %s" % fmt_int(block),
+                     "Runtime spec %s → %s" % (prev_spec, new_spec),
+                     "Source: livedata spec record (live chain)"],
+            next_action=next_action,
+            buttons=button(config, "Subtensor releases",
+                           "subtensor_releases"))
+        events.append(message_event(
+            msg, "chain-runtime-upgrade:%s" % row_id,
+            "chain-runtime-upgrade", _utc_now(), max_chars, glosses))
     return events, (str(high) if high else watermark)
 
 
@@ -1291,26 +1753,35 @@ def schema_drift_events(source_db: str, watermark: Optional[str],
     high = last_id
     for row_id, ts, provider, operation, detail in rows:
         high = max(high, int(row_id))
-        headline = ("Atlas · schema drift · %s %s replies no longer match "
-                    "the pinned schema" % (provider, operation))
-        lines = [
-            "provider: %s · operation: %s" % (provider, operation),
-            "detail: %s" % ((detail or "n/a")[:400]),
-            "the %s operation fails closed (live-unavailable) until the "
-            "pinned schema is updated" % operation,
-            "source: livedata integration health · observed: %s" % ts,
-        ]
-        next_action = ("next: review the pinned schema for %s %s"
-                       % (provider, operation))
-        plain = render_plain(headline, lines, "", None, max_chars,
-                             next_action=next_action, glosses=glosses)
-        html = render_html(headline, lines, "", None, max_chars,
-                           next_action=next_action, glosses=glosses)
-        events.append({"event_id": "schema-drift:%s" % row_id,
-                       "event_class": "schema-drift",
-                       "created_at": _utc_now(), "text": plain,
-                       "html": html})
+        name = provider_name(provider)
+        msg = Message(
+            severity="watch",
+            headline="%s changed its reply format. %s is paused."
+                     % (name, rec(operation)),
+            meaning=("Atlas rejects the new replies rather than guess, so "
+                     "this source shows n/a until the expected format is "
+                     "updated."),
+            facts=[("What changed", rec(_clip_words(detail or "n/a", 300))),
+                   ("Since", fmt_time(ts))],
+            details=["Provider: %s · operation: %s" % (rec(provider),
+                                                        rec(operation)),
+                     "Source: livedata integration health"],
+            next_action="update the pinned schema for %s %s under %s."
+                        % (rec(provider), rec(operation),
+                           mono("livedata/schemas/%s/" % rec(provider))))
+        events.append(message_event(msg, "schema-drift:%s" % row_id,
+                                    "schema-drift", _utc_now(), max_chars,
+                                    glosses))
     return events, (str(high) if high else watermark)
+
+
+_PROVIDER_NAMES = {"coingecko": "CoinGecko", "taostats": "TaoStats",
+                   "taoswap": "TaoSwap", "finney-rpc": "The chain RPC"}
+
+
+def provider_name(provider: Any) -> str:
+    text = rec(provider)
+    return _PROVIDER_NAMES.get(text.lower(), text)
 
 
 def knowledge_ingestion_events(source_db: str, watermark: Optional[str],
@@ -1347,28 +1818,30 @@ def knowledge_ingestion_events(source_db: str, watermark: Optional[str],
     for rid, intake_date, coverage in rows:
         high = rid
         staged = staged_counts[rid]
-        headline = ("Atlas · knowledge ingestion complete · %d units staged"
-                    % staged)
-        lines = [
-            "run: %s" % rid,
-            "ingested: %s · coverage: %s" % (intake_date, coverage),
-            "source: knowledge intake store",
-        ]
-        next_action = None
+        details = ["Run %s" % mono(rid), "Ingested %s" % rec(intake_date),
+                   "Source: knowledge intake store"]
         if staged > 0:
-            lines.append("staged units are not active until reviewed and "
-                         "activated")
-            next_action = ("next: review the staged units, then run "
-                           "%sactivate --run %s%s"
-                           % (_MONO_OPEN, rid, _MONO_CLOSE))
-        plain = render_plain(headline, lines, "", None, max_chars,
-                             next_action=next_action, glosses=glosses)
-        html = render_html(headline, lines, "", None, max_chars,
-                           next_action=next_action, glosses=glosses)
-        events.append({"event_id": "knowledge-ingestion:%s" % rid,
-                       "event_class": "knowledge-ingestion",
-                       "created_at": _utc_now(), "text": plain,
-                       "html": html})
+            msg = Message(
+                severity=severity_for("knowledge-ingestion", staged=staged),
+                headline="%s new knowledge unit%s waiting for review"
+                         % (fmt_int(staged), "s are" if staged != 1
+                            else " is"),
+                meaning="Staged units stay inactive until you activate "
+                        "them.",
+                facts=[("Covers", "up to %s" % rec(coverage))],
+                details=details,
+                next_action="review the units, then run %s"
+                            % mono("python3 knowledge/atlas_kb.py activate "
+                                   "--run %s" % rid))
+        else:
+            msg = Message(
+                severity=severity_for("knowledge-ingestion", staged=0),
+                headline="Knowledge ingest finished, nothing new to review",
+                facts=[("Covers", "up to %s" % rec(coverage))],
+                details=details)
+        events.append(message_event(msg, "knowledge-ingestion:%s" % rid,
+                                    "knowledge-ingestion", _utc_now(),
+                                    max_chars, glosses))
     return events, high
 
 
@@ -1438,6 +1911,23 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
                     " WHERE s.observed_at <= e.observed_at "
                     " ORDER BY s.id DESC LIMIT 1)" % column)
 
+        names = subnet_names_from(conn)
+        has_panel = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND "
+            "name = 'panel_snapshot'").fetchone() is not None
+
+        def _price_at(netuid: int, block: Any) -> Optional[float]:
+            """Alpha price from the panel snapshot at the crossing's block,
+            else the latest at or below it. A recorded row, not a guess."""
+            if not has_panel or block is None:
+                return None
+            row = conn.execute(
+                "SELECT moving_price_tao FROM panel_snapshot WHERE "
+                "netuid = ? AND block_number <= ? AND moving_price_tao > 0 "
+                "ORDER BY block_number DESC, id DESC LIMIT 1",
+                (netuid, block)).fetchone()
+            return float(row[0]) if row else None
+
         rows = conn.execute(
             "SELECT e.id, e.observed_at, e.netuid, e.direction, e.share, "
             "e.theta, e.prev_side, e.emission_enabled, e.block_number, "
@@ -1451,6 +1941,7 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
             " FROM gate_events e "
             "WHERE e.id > ? ORDER BY e.id ASC LIMIT 50",
             (last_id,)).fetchall()
+        prices = {row[0]: _price_at(row[2], row[8]) for row in rows}
     finally:
         conn.close()
 
@@ -1499,58 +1990,101 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
                           _utc_now(), STATUS_SUPPRESSED, 0,
                           "per-netuid cooldown (%gh)" % cooldown_hours)
             continue
-        fell = direction == "fell-below"
-        headline = ("Atlas · subnet %d %s the bar · %s"
-                    % (netuid, "fell below" if fell else "rose above",
-                       "gated emission collapses toward zero" if fell else
-                       "earns an amplified emission share"))
-        margin_pct = ((share - theta) / theta * 100.0) if theta else 0.0
-        lines = [
-            "subnet %d · demand share %.3f%% · bar %.3f%% · margin %+.1f%%"
-            % (netuid, share * 100.0, theta * 100.0, margin_pct),
-            "demand share: TaoSwap panel · bar: chain RPC · block %s"
-            % (block_number if block_number is not None else "n/a"),
-            "observed: %s" % observed_at,
-        ]
-        # The bar's selection rule (change: network-drift-443). Never infer
-        # it: a q recorded while rank mode is active is inert. The gloss
-        # map carries each mode's one-line explanation at first use.
-        if bar_mode == "rank":
-            lines.append("bar mode: rank-pinned at N %s" % bar_rank)
-        elif bar_mode == "q-mass":
-            lines.append("bar mode: q-mass at q %s" % bar_q)
-        # A rank-pinned bar is itself a demand share, so it moves on its own.
-        # Without this a subnet the bar descended onto reads as a subnet
-        # whose demand rose, which is what the 2026-08-03 reset produced.
-        if prev_theta is not None and prev_theta > 0:
-            bar_move = (theta - prev_theta) / prev_theta * 100.0
-            crossed_by_bar = (
-                (prev_theta > share >= theta) if not fell
-                else (prev_theta < share <= theta))
-            lines.append("bar moved %+.1f%% since the previous poll "
-                         "(%.3f%% to %.3f%%)"
-                         % (bar_move, prev_theta * 100.0, theta * 100.0))
-            lines.append("attribution: the bar moved onto this subnet · "
-                         "its demand share did not cross on its own"
-                         if crossed_by_bar else
-                         "attribution: the subnet's own demand share moved "
-                         "across the bar")
-        next_action = None
-        if emission_enabled == 0:
-            lines.append("subnet emission is disabled · informational · "
-                         "earns zero either way")
-        elif fell:
-            next_action = ("next: review your subnet %d position"
-                           % netuid)
-        plain = render_plain(headline, lines, "", None, max_chars,
-                             next_action=next_action, glosses=glosses)
-        html = render_html(headline, lines, "", None, max_chars,
-                           next_action=next_action, glosses=glosses)
-        events.append({"event_id": event_id,
-                       "event_class": "gate-crossing",
-                       "created_at": _utc_now(), "text": plain,
-                       "html": html})
+        events.append(_gate_crossing_event(
+            event_id, observed_at, netuid, direction, share, theta,
+            emission_enabled, block_number, prev_theta, bar_mode, bar_rank,
+            bar_q, prices.get(row_id), names, config, max_chars, glosses))
     return events, (str(high) if high else watermark)
+
+
+def _ordinal(value: Any) -> str:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return rec(value)
+    suffix = ("th" if 10 <= number % 100 <= 20
+              else {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th"))
+    return "%d%s" % (number, suffix)
+
+
+def _gate_crossing_event(event_id: str, observed_at: str, netuid: int,
+                         direction: str, share: float, theta: float,
+                         emission_enabled: Any, block_number: Any,
+                         prev_theta: Optional[float], bar_mode: Any,
+                         bar_rank: Any, bar_q: Any, price: Optional[float],
+                         names: Dict[int, str], config: Dict[str, Any],
+                         max_chars: int, glosses: Dict[str, str]
+                         ) -> Dict[str, Any]:
+    """One confirmed crossing in the house layout. Every figure comes from
+    the recorded event, its gate observation, or the panel snapshot at
+    the event's block."""
+    fell = direction == "fell-below"
+    label = subnet_label(netuid, names)
+    verb = "fell below" if fell else "rose above"
+    margin_pct = ((share - theta) / theta * 100.0) if theta else 0.0
+    details: List[str] = []
+    # A rank-pinned bar is itself a demand share, so it moves on its own.
+    # Without this a subnet the bar descended onto reads as a subnet whose
+    # demand rose, which is what the 2026-08-03 reset produced.
+    cause = None
+    if prev_theta is not None and prev_theta > 0:
+        bar_move = (theta - prev_theta) / prev_theta * 100.0
+        crossed_by_bar = ((prev_theta > share >= theta) if not fell
+                          else (prev_theta < share <= theta))
+        cause = ("the bar moved onto this subnet, its demand share did not "
+                 "cross on its own" if crossed_by_bar else
+                 "the subnet's own demand share moved across the bar")
+        details.append("Bar moved %s this poll (%s → %s)" % (
+            fmt_change(bar_move), fmt_pct(prev_theta), fmt_pct(theta)))
+    details.append("Shares: TaoSwap panel. Bar: chain RPC.")
+    details.append("Block %s · %s" % (fmt_int(block_number),
+                                      fmt_time(observed_at)))
+    buttons = button(config, "Subnet %d on taostats" % netuid,
+                     "taostats_subnet", netuid=netuid)
+    above_below = "%s %s the bar" % (fmt_change(abs(margin_pct)).lstrip("+"),
+                                     "below" if margin_pct < 0 else "above")
+    if emission_enabled == 0:
+        msg = Message(
+            severity=severity_for("gate-crossing", emission_enabled=0,
+                                  direction=direction),
+            headline="%s %s the emission bar, no effect" % (label, verb),
+            meaning="Emission is switched off for this subnet, so it earns "
+                    "zero either way.",
+            details=["Demand share %s, bar %s (%s)" % (
+                fmt_pct(share), fmt_pct(theta), above_below)] + details,
+            buttons=buttons)
+        return message_event(msg, event_id, "gate-crossing", _utc_now(),
+                             max_chars, glosses)
+    meaning = ("Its demand share dropped under the bar, so its gated "
+               "emission collapses toward zero." if fell else
+               "Its demand share passed the bar, so it now earns an "
+               "amplified emission share instead of a collapsing one.")
+    # The bar's selection rule (change: network-drift-443). Never infer it:
+    # a q recorded while rank mode is active is inert.
+    if bar_mode == "rank":
+        bar_value = "%s (the %s largest demand share)" % (
+            fmt_pct(theta), _ordinal(bar_rank))
+    elif bar_mode == "q-mass":
+        bar_value = ("%s (a quantile of the demand-share distribution, "
+                     "q %s)" % (fmt_pct(theta), rec(bar_q)))
+    else:
+        bar_value = fmt_pct(theta)
+    facts = [("Demand share", "%s, %s" % (fmt_pct(share), above_below)),
+             ("Bar", bar_value)]
+    if cause:
+        facts.append(("Cause", cause))
+    if price is not None:
+        facts.append(("Price", fmt_tao(price)))
+    msg = Message(
+        severity=severity_for("gate-crossing", emission_enabled=1,
+                              direction=direction),
+        headline="%s %s the emission bar" % (label, verb),
+        meaning=meaning, facts=facts, details=details,
+        next_action=("review your subnet %d position." % netuid
+                     if fell else None),
+        buttons=buttons)
+    return message_event(msg, event_id, "gate-crossing", _utc_now(),
+                         max_chars, glosses)
 
 
 # ---------------------------------------------------------------------------
@@ -1562,7 +2096,13 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
 # ---------------------------------------------------------------------------
 
 DEFAULT_SIGNAL_BACKSTOP_HOURS = 24
-_FLEET_SOURCE_LINE = "source: fleet repos (code), not the live chain"
+_SN_LINE_RE = re.compile(r"^SN(\d+)\s+(.*)$")
+_SHA12_RE = re.compile(r"\b[0-9a-f]{12}\b")
+_ECON_IMPACT_LABEL = {"high": "high", "med": "medium"}
+_ECON_DIRECTION_LABEL = {
+    "emissions_up": "emissions ↑", "emissions_down": "emissions ↓",
+    "reshuffle": "winners and losers reshuffle", "neutral": "no net effect",
+    "unknown": "direction unclear"}
 
 
 def _pending_signal_rows(store: sqlite3.Connection
@@ -1572,88 +2112,149 @@ def _pending_signal_rows(store: sqlite3.Connection
         "ORDER BY event_row_id ASC").fetchall()
 
 
-def _signal_digest_line(pending: List[Tuple[int, str, str]]) -> str:
-    return ("fleet signal digest · %d item(s): %s"
-            % (len(pending), " · ".join(row[1] for row in pending[:12])))
+def _riding_digest(pending: List[Tuple[int, str, str]],
+                   names: Dict[int, str]) -> List[str]:
+    """Pending minor signals carried in an instant alert's fold. They are
+    cleared once this alert is delivered, so the items themselves ride
+    here, never a pointer to a later digest."""
+    if not pending:
+        return []
+    body, shas = _digest_items(pending, names)
+    return (["Also pending, %s:" % plural(len(pending), "minor signal")]
+            + body + shas)
 
 
-def _subnet_label(conn: sqlite3.Connection, netuid: Optional[int]) -> str:
-    """`subnet <netuid> (owner/repo)` when the fleet registry knows the
-    repo, else just `subnet <netuid>`. Repo text is recorded data —
-    display only."""
+def _subnet_label(conn: sqlite3.Connection, netuid: Optional[int],
+                  names: Optional[Dict[int, str]] = None) -> str:
+    """`Subnet <netuid> (Name)` from the recorded panel name; the number
+    alone when none is recorded."""
     if netuid is None:
-        return "fleet"
-    label = "subnet %d" % netuid
-    try:
-        row = conn.execute("SELECT github_repo FROM slots WHERE netuid = ?",
-                           (netuid,)).fetchone()
-    except sqlite3.Error:
-        return label
-    if row and row[0]:
-        tail = "/".join(str(row[0]).rstrip("/").split("/")[-2:])
-        if tail:
-            label += " (%s)" % tail[:60]
-    return label
+        return "Fleet"
+    return subnet_label(netuid, names or {})
 
 
 def _entry_price_line(conn: sqlite3.Connection,
                       event_row_id: int) -> Optional[str]:
-    """One entry-price line (alpha in TAO) when snapshots are available;
-    None (line omitted, delivery never delayed) while pending."""
+    parts = ["subnet %d %s" % (n, fmt_tao(p))
+             for n, p in _entry_prices(conn, event_row_id)]
+    return ("entry price · " + " · ".join(parts[:8])) if parts else None
+
+
+def _digest_items(pending: List[Tuple[int, str, str]],
+                  names: Dict[int, str]
+                  ) -> Tuple[List[str], List[str]]:
+    """Pending fleet digest lines as (body lines, detail lines). Each item
+    gets its own line, named by subnet; items of one subnet and one kind
+    merge into one line with a count, their SHAs moving to the details.
+    The lines are recorded fleet text: escaped data, never glossed."""
+    order: List[Tuple[Any, str]] = []
+    groups: Dict[Tuple[Any, str], Dict[str, Any]] = {}
+    for _row_id, line, _detected in pending:
+        text = rec(line)
+        match = _SN_LINE_RE.match(text)
+        netuid = int(match.group(1)) if match else None
+        rest = match.group(2) if match else text
+        shas = _SHA12_RE.findall(rest)
+        kind = " ".join(_SHA12_RE.sub("", rest).split())
+        kind = re.sub(r"\s+·\s+·\s+", " · ", kind).strip(" ·")
+        key = (netuid, kind)
+        if key not in groups:
+            order.append(key)
+            groups[key] = {"count": 0, "shas": []}
+        groups[key]["count"] += 1
+        groups[key]["shas"].extend(shas)
+    body: List[str] = []
+    details: List[str] = []
+    for key in order:
+        netuid, kind = key
+        group = groups[key]
+        who = subnet_tag(netuid, names) if netuid is not None else "Fleet"
+        count = " (%d×)" % group["count"] if group["count"] > 1 else ""
+        body.append("• %s: %s%s" % (bold(who), _clip_words(kind, 120), count))
+        if group["shas"]:
+            details.append("%s: %s" % (who, ", ".join(
+                mono(sha[:8]) for sha in group["shas"][:6])))
+    return body, details
+
+
+def _slot_repo(conn: sqlite3.Connection, netuid: Any) -> Optional[str]:
+    """owner/repo of a subnet's tracked repository, or None."""
+    if netuid is None:
+        return None
+    try:
+        row = conn.execute("SELECT github_repo FROM slots WHERE netuid = ?",
+                           (netuid,)).fetchone()
+    except sqlite3.Error:
+        return None
+    return repo_slug(row[0]) if row and row[0] else None
+
+
+def _entry_prices(conn: sqlite3.Connection,
+                  event_row_id: int) -> List[Tuple[int, float]]:
+    """(netuid, alpha price) snapshots recorded for one event; empty while
+    pending (the line is omitted, delivery is never delayed)."""
     try:
         rows = conn.execute(
             "SELECT netuid, price_tao, status FROM signal_entries "
             "WHERE event_id = ? ORDER BY netuid ASC",
             (event_row_id,)).fetchall()
     except sqlite3.Error:
-        return None
-    parts = []
-    for netuid, price, status in rows:
-        if status in ("recorded", "late") and price is not None:
-            parts.append("subnet %d %.6g τ" % (netuid, price))
-    return ("entry price · " + " · ".join(parts[:8])) if parts else None
+        return []
+    return [(int(n), float(p)) for n, p, status in rows
+            if status in ("recorded", "late") and p is not None]
 
 
 def _build_cluster_event(conn: sqlite3.Connection, row_id: int,
                          payload: Dict[str, Any], created_at: str,
                          dedup_key: str, pending: List[Tuple[int, str, str]],
                          max_chars: int,
-                         glosses: Dict[str, str]) -> Dict[str, Any]:
-    term = str(payload.get("term") or "?")[:120]
+                         glosses: Dict[str, str],
+                         names: Optional[Dict[int, str]] = None,
+                         config: Optional[Dict[str, Any]] = None
+                         ) -> Dict[str, Any]:
+    names = names or {}
+    term = rec(payload.get("term") or "?")[:120]
     members = payload.get("members") or []
     first = payload.get("first_mover") or {}
     prevalence = payload.get("prevalence") or {}
-    headline = "Atlas · narrative cluster · %s · %d subnets" % (
-        term, len(members))
-    lines = [
-        "subnets · %s · adopted within %sd"
-        % (" · ".join(str(m.get("netuid")) for m in members[:8]),
-           payload.get("window_days", "?")),
-    ]
+    first_n = first.get("netuid")
+    facts: List[Tuple[str, str]] = []
     if first:
-        lines.append("first mover · subnet %s · %s · %s%s%s"
-                     % (first.get("netuid"),
-                        str(first.get("adopted_at") or "")[:10],
-                        _MONO_OPEN,
-                        str(first.get("commit_sha") or "-")[:12],
-                        _MONO_CLOSE))
+        facts.append(("First", "%s, %s" % (
+            subnet_label(first_n, names, capital=False),
+            fmt_date(first.get("adopted_at")))))
+    others = [m.get("netuid") for m in members if m.get("netuid") != first_n]
+    if others:
+        facts.append(("Then", ", ".join(
+            subnet_label(n, names, capital=False) for n in others[:8])))
+    prices = _entry_prices(conn, row_id)
+    body = []
+    if prices:
+        body = [bold("Prices at detection"), " · ".join(
+            "%s %s" % (subnet_tag(n, names), fmt_tao(p))
+            for n, p in prices[:8])]
+    details = []
+    if first.get("commit_sha"):
+        details.append("First commit %s in subnet %s" % (
+            mono(str(first["commit_sha"])[:8]), rec(first_n)))
+    details.append("Source: fleet repos (code), not the live chain")
+    details.extend(_riding_digest(pending, names))
+    meaning = "A shared model choice across subnets can signal a trend."
     if prevalence:
-        lines.append("prevalence · %s/%s active subnets"
-                     % (prevalence.get("adopters", "?"),
-                        prevalence.get("active_slots", "?")))
-    price = _entry_price_line(conn, row_id)
-    if price:
-        lines.append(price)
-    lines.append(_FLEET_SOURCE_LINE)
-    trailer = _signal_digest_line(pending) if pending else None
-    plain = render_plain(headline, lines, "", trailer, max_chars,
-                         glosses=glosses)
-    html = render_html(headline, lines, "", trailer, max_chars,
-                       glosses=glosses)
-    return {"event_id": "fleet-signal:%s" % dedup_key,
-            "event_class": "narrative-cluster", "created_at": created_at,
-            "text": plain, "html": html,
-            "digest_signal_ids": [row[0] for row in pending]}
+        meaning += " %s of %s active subnets now use it." % (
+            rec(prevalence.get("adopters", "?")),
+            rec(prevalence.get("active_slots", "?")))
+    msg = Message(
+        severity="watch",
+        headline="%d subnets adopted %s within %s days" % (
+            len(members), term, rec(payload.get("window_days", "?"))),
+        meaning=meaning, facts=facts, body=body, details=details,
+        buttons=button(config, "First commit", "github_commit",
+                       repo=_slot_repo(conn, first_n),
+                       sha=first.get("commit_sha")))
+    return message_event(msg, "fleet-signal:%s" % dedup_key,
+                         "narrative-cluster", created_at, max_chars, glosses,
+                         digest_signal_ids=[row[0] for row in pending])
 
 
 def _build_watchlist_event(conn: sqlite3.Connection, row_id: int,
@@ -1661,34 +2262,40 @@ def _build_watchlist_event(conn: sqlite3.Connection, row_id: int,
                            dedup_key: str,
                            pending: List[Tuple[int, str, str]],
                            max_chars: int,
-                           glosses: Dict[str, str]) -> Dict[str, Any]:
-    term = str(payload.get("term") or "?")[:120]
+                           glosses: Dict[str, str],
+                           names: Optional[Dict[int, str]] = None,
+                           config: Optional[Dict[str, Any]] = None
+                           ) -> Dict[str, Any]:
+    names = names or {}
+    term = rec(payload.get("term") or "?")[:120]
     netuid = payload.get("netuid")
-    headline = "Atlas · watchlist hit · %s · %s" % (
-        term, _subnet_label(conn, netuid))
-    lines = []
+    commit = str(payload.get("commit_sha") or "")[:12] or None
+    facts = []
+    prices = _entry_prices(conn, row_id)
+    if prices:
+        facts.append(("Price at detection", fmt_tao(prices[0][1])))
+    details = []
     if payload.get("source_file"):
-        lines.append("file · %s%s%s" % (
-            _MONO_OPEN, str(payload["source_file"])[:120], _MONO_CLOSE))
-    next_action = None
-    if payload.get("commit_sha"):
-        commit = str(payload["commit_sha"])[:12]
-        lines.append("commit · %s%s%s" % (_MONO_OPEN, commit, _MONO_CLOSE))
-        next_action = ("next: review commit %s%s%s"
-                       % (_MONO_OPEN, commit, _MONO_CLOSE))
-    price = _entry_price_line(conn, row_id)
-    if price:
-        lines.append(price)
-    lines.append(_FLEET_SOURCE_LINE)
-    trailer = _signal_digest_line(pending) if pending else None
-    plain = render_plain(headline, lines, "", trailer, max_chars,
-                         next_action=next_action, glosses=glosses)
-    html = render_html(headline, lines, "", trailer, max_chars,
-                       next_action=next_action, glosses=glosses)
-    return {"event_id": "fleet-signal:%s" % dedup_key,
-            "event_class": "watchlist", "created_at": created_at,
-            "text": plain, "html": html,
-            "digest_signal_ids": [row[0] for row in pending]}
+        details.append("File %s" % mono(str(payload["source_file"])[:120]))
+    if commit:
+        details.append("Commit %s" % mono(commit[:8]))
+    repo = _slot_repo(conn, netuid)
+    if repo:
+        details.append("Repo %s" % rec(repo))
+    details.append("Source: fleet repos (code), not the live chain")
+    details.extend(_riding_digest(pending, names))
+    msg = Message(
+        severity="watch",
+        headline="Watchlist: %s now uses %s" % (
+            _subnet_label(conn, netuid, names), term),
+        meaning="A term on your watchlist appeared in this subnet's code.",
+        facts=facts, details=details,
+        next_action="review the commit." if commit else None,
+        buttons=button(config, "Open commit", "github_commit",
+                       repo=_slot_repo(conn, netuid), sha=commit))
+    return message_event(msg, "fleet-signal:%s" % dedup_key, "watchlist",
+                         created_at, max_chars, glosses,
+                         digest_signal_ids=[row[0] for row in pending])
 
 
 # Verdict free-text bounds (repo/model-derived; escaped at render). Clipped
@@ -1697,12 +2304,6 @@ _WHAT_MAX = 160
 _WHY_MAX = 160
 _EVIDENCE_MAX = 220
 
-_ECON_SIGNIFICANCE_CLASS = {"high": "material incentive-code change",
-                            "med": "notable incentive-code change"}
-_ECON_DIRECTION_LABEL = {
-    "emissions_up": "emissions ↑", "emissions_down": "emissions ↓",
-    "reshuffle": "winners / losers reshuffle", "neutral": "no net effect",
-    "unknown": "direction unclear"}
 
 
 def _clip(text: Any, limit: int) -> Optional[str]:
@@ -1718,108 +2319,94 @@ def _clip(text: Any, limit: int) -> Optional[str]:
     return value[:limit].rsplit(" ", 1)[0].rstrip(" ,.;:—-") + "…"
 
 
-def _econ_provenance(payload: Dict[str, Any],
-                     price: Optional[str]) -> List[str]:
-    """Provenance as its own labeled single-fact lines. Files show as
-    basenames (full paths wrap into mush on a phone), capped with a +N tail."""
-    commits_suffix = "+" if payload.get("commits_truncated") else ""
-    prov = ["%scommits ·%s %s%s → %s%s · %s commit(s)%s"
-            % (_BOLD_OPEN, _BOLD_CLOSE,
-               _MONO_OPEN, str(payload.get("prev_sha") or "-")[:12],
-               str(payload.get("new_sha") or "-")[:12], _MONO_CLOSE,
-               payload.get("commit_count", "?"), commits_suffix)]
-    files = [str(path) for path in (payload.get("files") or [])]
-    if files:
-        shown = [f.rstrip("/").rsplit("/", 1)[-1][:48] for f in files[:3]]
-        line = "%sfiles ·%s %s" % (_BOLD_OPEN, _BOLD_CLOSE, " · ".join(shown))
-        if len(files) > 3:
-            line += " · +%d more" % (len(files) - 3)
-        prov.append(line)
-    if price:
-        prov.append("%sentry ·%s %s" % (_BOLD_OPEN, _BOLD_CLOSE,
-                                        price.replace("entry price · ", "")))
-    return prov
-
-
 def _build_econ_event(conn: sqlite3.Connection, row_id: int,
                       payload: Dict[str, Any], created_at: str,
                       dedup_key: str, pending: List[Tuple[int, str, str]],
                       max_chars: int,
-                      glosses: Dict[str, str]) -> Dict[str, Any]:
+                      glosses: Dict[str, str],
+                      names: Optional[Dict[int, str]] = None,
+                      config: Optional[Dict[str, Any]] = None
+                      ) -> Dict[str, Any]:
+    """Meaning-first card: what changed leads, why it matters and the
+    impact are key figures, evidence and provenance sit in the fold.
+    Verdict text is model output over untrusted repos: escaped data."""
+    names = names or {}
     netuid = payload.get("netuid")
-    label = _subnet_label(conn, netuid)
+    label = _subnet_label(conn, netuid, names)
     significance = payload.get("significance")
     unjudged = bool(payload.get("unjudged"))
-    price = _entry_price_line(conn, row_id)
+    prices = _entry_prices(conn, row_id)
+    repo = _slot_repo(conn, netuid)
 
+    facts: List[Tuple[str, str]] = []
+    body: List[str] = []
+    details: List[str] = []
+    meaning = None
     if unjudged:
-        # Judge could not read this change — page it, but say so plainly.
-        headline = "Atlas · %s · incentive-code change · unjudged" % label
-        lines = ["", "verdict unavailable · judge could not read this change"]
-        groups = [_econ_provenance(payload, price)]
+        headline = "%s changed its incentive code (unjudged)" % label
+        meaning = "Verdict unavailable: the judge could not read this change."
     elif significance:
-        # Meaning-first card. Each fact sits on its own line, separated by
-        # blank lines, so it reads as a card at a glance rather than a
-        # paragraph. Provenance tucks into the expandable blockquote.
-        klass = _ECON_SIGNIFICANCE_CLASS.get(significance,
-                                             "incentive-code change")
-        headline = "Atlas · %s · %s" % (label, klass)
-        lines = [""]  # blank line under the headline
-        what = _clip(payload.get("what_changed"), _WHAT_MAX)
+        headline = "%s changed how miners get paid" % label
+        meaning = rec(_clip(payload.get("what_changed"), _WHAT_MAX) or "")
         why = _clip(payload.get("why_it_matters"), _WHY_MAX)
-        if what:
-            lines.append(what)
         if why:
-            lines += ["", "%swhy ·%s %s" % (_BOLD_OPEN, _BOLD_CLOSE, why)]
-        read = "%ssignificance ·%s %s%s%s · %s" % (
-            _BOLD_OPEN, _BOLD_CLOSE, _BOLD_OPEN, significance, _BOLD_CLOSE,
+            facts.append(("Why it matters", rec(why)))
+        facts.append(("Impact", "%s · %s" % (
+            _ECON_IMPACT_LABEL.get(significance, rec(significance)),
             _ECON_DIRECTION_LABEL.get(payload.get("direction"),
-                                      "direction unclear"))
+                                      "direction unclear"))))
         if payload.get("partial_view"):
-            read += " · partial view"
-        lines += ["", read]
-        groups = []
+            body.append(italic("The judge saw only part of this change."))
         evidence = _clip(payload.get("evidence"), _EVIDENCE_MAX)
         if evidence:
-            groups.append(["based on · %s" % evidence])
-        groups.append(_econ_provenance(payload, price))
+            details.append("Evidence: %s" % rec(evidence))
     else:
         # Legacy / gate-off event (no verdict in payload).
-        headline = "Atlas · %s · incentive-code change" % label
-        lines = []
-        groups = [_econ_provenance(payload, price)]
-
-    # Blank-line-separated groups inside one expandable blockquote (house
-    # style, matching the subtensor repo breakdown).
-    expandable = "\n\n".join("\n".join(g) for g in groups if g)
-    trailer = _signal_digest_line(pending) if pending else None
-    plain = render_plain(headline, lines, expandable, trailer, max_chars,
-                         glosses=glosses)
-    html = render_html(headline, lines, expandable, trailer, max_chars,
-                       glosses=glosses)
-    return {"event_id": "fleet-signal:%s" % dedup_key,
-            "event_class": "econ-code", "created_at": created_at,
-            "text": plain, "html": html,
-            "digest_signal_ids": [row[0] for row in pending]}
+        headline = "%s changed its incentive code" % label
+    if prices:
+        facts.append(("Price at detection", fmt_tao(prices[0][1])))
+    details.append("%s%s · %s → %s" % (
+        plural(payload.get("commit_count", "?"), "commit"),
+        "+" if payload.get("commits_truncated") else "",
+        mono(str(payload.get("prev_sha") or "-")[:8]),
+        mono(str(payload.get("new_sha") or "-")[:8])))
+    files = [str(path) for path in (payload.get("files") or [])]
+    if files:
+        shown = [f.rstrip("/").rsplit("/", 1)[-1][:48] for f in files[:3]]
+        details.append(", ".join(rec(f) for f in shown)
+                       + (", +%d more" % (len(files) - 3)
+                          if len(files) > 3 else ""))
+    if repo:
+        details.append("Repo %s" % rec(repo))
+    details.extend(_riding_digest(pending, names))
+    buttons = button(config, "View commits", "github_compare", repo=repo,
+                     prev=payload.get("prev_sha"), new=payload.get("new_sha"))
+    if netuid is not None:
+        buttons += button(config, "Subnet %s" % rec(netuid),
+                          "taostats_subnet", netuid=netuid)
+    msg = Message(severity="watch", headline=headline, meaning=meaning,
+                  facts=facts, body=body, details=details, buttons=buttons)
+    return message_event(msg, "fleet-signal:%s" % dedup_key, "econ-code",
+                         created_at, max_chars, None,
+                         digest_signal_ids=[row[0] for row in pending])
 
 
 def _build_signal_digest_event(pending: List[Tuple[int, str, str]],
                                max_chars: int,
-                               glosses: Dict[str, str]) -> Dict[str, Any]:
-    headline = "Atlas · fleet signal digest · %d item(s)" % len(pending)
-    lines = ["adoption and dampened-signal notes · no instant alert due",
-             _FLEET_SOURCE_LINE]
-    body = _signal_digest_line(pending)
-    plain = render_plain(headline, lines, body, None, max_chars,
-                         glosses=glosses)
-    html = render_html(headline, lines, body, None, max_chars,
-                       glosses=glosses)
-    return {"event_id": "fleet-signal-digest:%d" % pending[-1][0],
-            "event_class": "signal-digest", "created_at": _utc_now(),
-            "text": plain, "html": html,
-            "digest_signal_ids": [row[0] for row in pending]}
-
-
+                               glosses: Dict[str, str],
+                               names: Optional[Dict[int, str]] = None
+                               ) -> Dict[str, Any]:
+    body, details = _digest_items(pending, names or {})
+    details.append("Source: fleet repos (code), not the live chain")
+    msg = Message(
+        severity=severity_for("signal-digest"),
+        headline="%d minor code signal%s since the last alert" % (
+            len(pending), "" if len(pending) == 1 else "s"),
+        meaning="None was strong enough to page on its own.",
+        body=body, details=details)
+    return message_event(msg, "fleet-signal-digest:%d" % pending[-1][0],
+                         "signal-digest", _utc_now(), max_chars, glosses,
+                         digest_signal_ids=[row[0] for row in pending])
 def fleet_signal_events(source_db: str, watermark: Optional[str],
                         ctx: Optional[Dict[str, Any]] = None
                         ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
@@ -1849,6 +2436,7 @@ def fleet_signal_events(source_db: str, watermark: Optional[str],
         store: Optional[sqlite3.Connection] = ctx.get("connection")
         max_chars = int(config.get("message_max_chars", 3500))
         _lexicon, glosses = voice_maps(config)
+        names = subnet_names(live_db_path(config))
 
         events: List[Dict[str, Any]] = []
         high = last_id
@@ -1868,15 +2456,15 @@ def fleet_signal_events(source_db: str, watermark: Optional[str],
             if event_class == "narrative-cluster":
                 events.append(_build_cluster_event(
                     conn, row_id, payload, created_at, dedup_key, pending,
-                    max_chars, glosses))
+                    max_chars, glosses, names, config))
             elif event_class == "watchlist":
                 events.append(_build_watchlist_event(
                     conn, row_id, payload, created_at, dedup_key, pending,
-                    max_chars, glosses))
+                    max_chars, glosses, names, config))
             else:  # econ-code (and any future instant class: fail visible)
                 events.append(_build_econ_event(
                     conn, row_id, payload, created_at, dedup_key, pending,
-                    max_chars, glosses))
+                    max_chars, glosses, names, config))
 
         if not events and store is not None:
             pending = _pending_signal_rows(store)
@@ -1893,7 +2481,7 @@ def fleet_signal_events(source_db: str, watermark: Optional[str],
                     age = backstop + 1
                 if age > backstop:
                     events.append(_build_signal_digest_event(
-                        pending, max_chars, glosses))
+                        pending, max_chars, glosses, names))
         return events, (str(high) if high else watermark)
     finally:
         conn.close()
@@ -1906,12 +2494,8 @@ def fleet_signal_events(source_db: str, watermark: Optional[str],
 # switch like `BasketTradingEnabled` would be the wrong failure.
 # ---------------------------------------------------------------------------
 
-_PARAM_MODE_WORDS = {
-    ("EmissionBarRank", "to-rank"):
-        "the bar is now rank-pinned · q is inert",
-    ("EmissionBarRank", "to-qmass"):
-        "the bar has fallen back to q-mass selection",
-}
+_PROVENANCE_WORDS = {"explicit": "stored value",
+                     "assumed-default": "chain default, not stored"}
 
 _NETUID_ITEM_RE = re.compile(r"^(?P<item>[A-Za-z0-9_]+)\[(?P<netuid>\d+)\]$")
 _PARAM_FETCH_LIMIT = 256
@@ -1930,85 +2514,131 @@ def _param_event_id(row_id: int) -> str:
     return "chain-parameter-change:%s" % row_id
 
 
-def _switch_body_line(base_item: str, _new_value: str) -> Optional[str]:
+def _switch_body_line(base_item: str, new_value: str) -> Optional[str]:
+    """The pool-side emission switch named as a switch: alpha distribution
+    continues while TAO injection stops (or resumes)."""
     if base_item != "SubnetEmissionEnabled":
         return None
-    return ("pool-side emission switch: alpha distribution continues "
-            "while TAO injection stops")
+    if str(new_value).lower() == "true":
+        return ("Root turned TAO injection back on for this subnet. Alpha "
+                "distribution was never interrupted.")
+    return ("Root switched off TAO injection for this subnet. Its alpha "
+            "distribution continues. Its TAO share goes to the other "
+            "subnets.")
+
+
+def _param_value(value: Any) -> str:
+    text = rec(value)
+    if text.lower() in ("true", "false"):
+        return "on" if text.lower() == "true" else "off"
+    return fmt_int(text) if text.isdigit() else text
 
 
 def _render_param_event(item: str, prev_value: str, new_value: str,
                         prev_prov: str, new_prov: str, observed_at: str,
                         block_number: Any, governs: Dict[str, str],
                         max_chars: int, glosses: Dict[str, str],
-                        netuids: Optional[List[int]] = None
-                        ) -> Tuple[str, str, Optional[str]]:
-    """Return (plain, html, next_action) for one page, single or collapsed."""
-    base_item, _netuid = parse_netuid_item(item)
-    count = len(netuids) if netuids else 1
-    collapsed = bool(netuids) and count > 1
-    if collapsed:
-        headline = ("Atlas · chain parameter changed · %s · %d subnets"
-                    % (base_item, count))
-        lines = [
-            "%s: %s to %s on %d subnets" % (base_item, prev_value,
-                                            new_value, count),
-            "source: %s to %s" % (prev_prov, new_prov),
-            "reference block: %s · observed: %s"
-            % (block_number if block_number is not None else "n/a",
-               observed_at),
-        ]
+                        netuids: Optional[List[int]] = None,
+                        names: Optional[Dict[int, str]] = None,
+                        config: Optional[Dict[str, Any]] = None
+                        ) -> Tuple[str, str, Optional[str],
+                                   List[Tuple[str, str]]]:
+    """Return (plain, html, next_action, buttons) for one page, single or
+    collapsed. A netuid-keyed item always names its subnet."""
+    names = names or {}
+    base_item, item_netuid = parse_netuid_item(item)
+    if netuids is None and item_netuid is not None:
+        netuids = [item_netuid]
+    count = len(netuids) if netuids else 0
+    collapsed = count > 1
+    single = netuids[0] if count == 1 else None
+    where = (subnet_label(single, names) if single is not None else None)
+    change = "%s → %s" % (_param_value(prev_value), _param_value(new_value))
+    description = governs.get(base_item)
+
+    meaning: Optional[str] = None
+    next_action: Optional[str] = None
+    if base_item == "SubnetEmissionEnabled":
+        on = str(new_value).lower() == "true"
+        if collapsed:
+            headline = "TAO emission %s on %d subnets" % (
+                "restored" if on else "switched off", count)
+        else:
+            headline = "%s %s TAO emission%s" % (
+                where or "A subnet", "receives" if on else
+                "stopped receiving", " again" if on else "")
+        meaning = _switch_body_line(base_item, new_value)
+        if collapsed and meaning:
+            meaning = meaning.replace("this subnet", "these subnets").replace(
+                "Its ", "Their ")
+    elif base_item in ("EmissionBarRank", "EmissionBarQuantile",
+                       "EmissionGateExponent"):
+        headline = "Emission bar rule changed: %s %s" % (base_item, change)
+        parts = []
+        if base_item == "EmissionBarRank":
+            if str(new_value) == "0":
+                parts.append("The bar has fallen back to q-mass selection.")
+            elif str(prev_value) == "0":
+                parts.append("The bar is now rank-pinned; q is inert.")
+        parts.append("The bar was re-priced for every subnet. Per-subnet "
+                     "crossing alerts were withheld for that pass by "
+                     "design.")
+        meaning = " ".join(parts)
+        next_action = "review your subnet positions against the new gate terms."
+    elif collapsed:
+        headline = "%s changed on %d subnets" % (base_item, count)
+    elif where:
+        headline = "%s: %s changed" % (where, base_item)
     else:
-        headline = "Atlas · chain parameter changed · %s" % item
-        lines = [
-            "%s: %s to %s" % (item, prev_value, new_value),
-            "source: %s to %s" % (prev_prov, new_prov),
-            "reference block: %s · observed: %s"
-            % (block_number if block_number is not None else "n/a",
-               observed_at),
-        ]
-    if base_item == "EmissionBarRank":
-        moved = ("to-qmass" if new_value == "0"
-                 else "to-rank" if prev_value == "0" else None)
-        if moved:
-            lines.append(_PARAM_MODE_WORDS[(base_item, moved)])
-    switch_line = _switch_body_line(base_item, new_value)
-    if switch_line:
-        lines.append(switch_line)
-    if governs.get(base_item):
-        lines.append("governs: %s" % governs[base_item])
-    next_action = None
-    if base_item in ("EmissionBarRank", "EmissionBarQuantile",
-                     "EmissionGateExponent"):
-        lines.append("the bar was re-priced for every subnet · "
-                     "per-subnet crossing alerts were withheld for "
-                     "that pass by design")
-        next_action = ("next: review your subnet positions against "
-                       "the new gate terms")
-    elif base_item == "BasketConcentrationCap":
-        next_action = ("next: review root basket positions · the "
-                       "swap_basket concentration cap moved")
+        headline = "Chain setting changed: %s" % base_item
+    if base_item == "BasketConcentrationCap":
+        next_action = ("review root basket positions; the swap_basket "
+                       "concentration cap moved.")
     elif base_item == "SubnetEmissionEnabled":
-        next_action = ("next: review subnet positions · the pool-side "
-                       "emission switch moved")
-    expandable = ""
+        next_action = ("if you hold %s alpha, review that position."
+                       % (("subnet %d" % single) if single is not None
+                          else "an affected subnet's"))
+    if meaning is None:
+        meaning = (rec(description) if description else
+                   "Atlas has no plain description of this setting yet.")
+    if not description and next_action is None:
+        next_action = ("add %s to %s in telegram/config.json."
+                       % (base_item, mono("classes.chain-parameter-change"
+                                          ".governs")))
+
+    facts = [("Setting", "%s, %s%s" % (
+        base_item, change,
+        " (pool-side emission switch)"
+        if base_item == "SubnetEmissionEnabled" else ""))]
+    if collapsed:
+        facts.append(("Subnets", fmt_int(count)))
+    facts.append(("When", fmt_time(observed_at)))
+    details = ["Block %s" % fmt_int(block_number),
+               "Before: %s. After: %s." % (
+                   _PROVENANCE_WORDS.get(prev_prov, rec(prev_prov)),
+                   _PROVENANCE_WORDS.get(new_prov, rec(new_prov)))]
+    if description and base_item in ("SubnetEmissionEnabled",
+                                     "EmissionBarRank",
+                                     "EmissionBarQuantile",
+                                     "EmissionGateExponent",
+                                     "BasketConcentrationCap"):
+        details.append("Governs: %s" % rec(description))
     if collapsed and netuids:
         shown = netuids[:_NETUID_LIST_CAP]
-        listing = ", ".join("subnet %d" % n for n in shown)
+        listing = ", ".join(subnet_tag(n, names) for n in shown)
         if len(netuids) > _NETUID_LIST_CAP:
-            listing += " … and %d more" % (len(netuids) - _NETUID_LIST_CAP)
-        expandable = "subnets: %s" % listing
-        lines.append("%d subnets listed%s"
-                     % (count,
-                        " (truncated)" if len(netuids) > _NETUID_LIST_CAP
-                        else ""))
-    plain = render_plain(headline, lines, expandable, None, max_chars,
-                         next_action=next_action, glosses=glosses)
-    html = render_html(headline, lines, expandable, None, max_chars,
-                       next_action=next_action, glosses=glosses)
-    return plain, html, next_action
-
-
+            listing += " … and %d more (truncated)" % (
+                len(netuids) - _NETUID_LIST_CAP)
+        details.append("Subnets: %s" % listing)
+    buttons = (button(config, "Subnet %d on taostats" % single,
+                      "taostats_subnet", netuid=single)
+               if single is not None else [])
+    msg = Message(severity=severity_for("chain-parameter-change",
+                                        item=base_item),
+                  headline=headline, meaning=meaning, facts=facts,
+                  details=details, next_action=next_action, buttons=buttons)
+    return (render_plain(msg, max_chars, glosses),
+            render_html(msg, max_chars, glosses), next_action, buttons)
 def chain_parameter_change_events(source_db: str, watermark: Optional[str],
                                   ctx: Optional[Dict[str, Any]] = None
                                   ) -> Tuple[List[Dict[str, Any]],
@@ -2045,6 +2675,7 @@ def chain_parameter_change_events(source_db: str, watermark: Optional[str],
     max_chars = int(config.get("message_max_chars", 3500))
     _lexicon, glosses = voice_maps(config)
     governs = dict(spec.get("governs") or {})
+    names = subnet_names(source_db)
 
     grouped: Dict[Tuple[Any, ...], List[Any]] = {}
     order: List[Tuple[Any, ...]] = []
@@ -2087,14 +2718,15 @@ def chain_parameter_change_events(source_db: str, watermark: Optional[str],
                     "mixed",
                     "%d on, %d off" % (on_count, off_count))
             item = key[1]
-        plain, html, _next = _render_param_event(
+        plain, html, _next, buttons = _render_param_event(
             item, prev_value, new_value, prev_prov, new_prov,
             observed_at, block_number, governs, max_chars, glosses,
-            netuids=netuids)
+            netuids=netuids, names=names, config=config)
         event: Dict[str, Any] = {
             "event_id": member_ids[0],
             "event_class": "chain-parameter-change",
-            "created_at": _utc_now(), "text": plain, "html": html}
+            "created_at": _utc_now(), "text": plain, "html": html,
+            "buttons": buttons}
         if len(member_ids) > 1:
             event["member_ids"] = member_ids
         events.append(event)
@@ -2154,25 +2786,26 @@ def subnet_registry_events(source_db: str, watermark: Optional[str],
                     changes.append((netuid, "renamed", prev.get(netuid),
                                     cur.get(netuid)))
             for netuid, kind, old_name, new_name in changes:
-                headline = ("Atlas · subnet %d %s" % (netuid, kind))
-                lines = ["subnet %d · %s" % (netuid, kind)]
                 if kind == "renamed":
-                    lines.append("name: %s to %s"
-                                 % (old_name or "n/a", new_name or "n/a"))
-                elif new_name:
-                    lines.append("name: %s" % new_name)
-                elif old_name:
-                    lines.append("name was: %s" % old_name)
-                lines.append("blocks: %s to %s" % (prev_block, block))
-                plain = render_plain(headline, lines, "", None, max_chars,
-                                     glosses=glosses)
-                html = render_html(headline, lines, "", None, max_chars,
-                                   glosses=glosses)
-                events.append({
-                    "event_id": "subnet-registry:%s:%s:%s"
-                                % (block, netuid, kind),
-                    "event_class": "subnet-registry",
-                    "created_at": _utc_now(), "text": plain, "html": html})
+                    headline = 'Subnet %d renamed: "%s" → "%s"' % (
+                        netuid, rec(old_name or "n/a"),
+                        rec(new_name or "n/a"))
+                elif kind == "registered":
+                    headline = "Subnet %d registered%s" % (
+                        netuid, (': "%s"' % rec(new_name)) if new_name
+                        else "")
+                else:
+                    headline = "Subnet %d deregistered%s" % (
+                        netuid, (' (was "%s")' % rec(old_name)) if old_name
+                        else "")
+                msg = Message(severity=severity_for("subnet-registry"),
+                              headline=headline,
+                              details=["Blocks %s → %s" % (
+                                  fmt_int(prev_block), fmt_int(block)),
+                                  "Source: panel snapshot"])
+                events.append(message_event(
+                    msg, "subnet-registry:%s:%s:%s" % (block, netuid, kind),
+                    "subnet-registry", _utc_now(), max_chars, glosses))
             prev_block = block
         new_wm = str(pending[:10][-1]) if pending else watermark
         return events, new_wm
@@ -2185,6 +2818,11 @@ _FAIL_CLOSED_COMPONENTS = (
     ("gate poll", "gate_state", "finney-rpc"),
     ("chain-parameter watch", "chain_params", "finney-rpc"),
 )
+# component -> (what Atlas cannot read, which alerts pause)
+_FAIL_CLOSED_WORDS = {
+    "gate poll": ("the emission bar", "Bar-crossing"),
+    "chain-parameter watch": ("chain settings", "Chain setting"),
+}
 
 
 def fail_closed_events(source_db: str, watermark: Optional[str],
@@ -2230,21 +2868,27 @@ def fail_closed_events(source_db: str, watermark: Optional[str],
                     "SELECT 1 FROM events WHERE event_id = ?",
                     (event_id,)).fetchone():
                 continue  # this outage already paged once
-            headline = "Atlas · %s failing closed" % component
-            lines = [
-                "%s has recorded only failures for over %g hours"
-                % (component, window_hours),
-                "first failure: %s" % first_fail,
-                "last good observation: %s" % (last_good or "none recorded"),
-            ]
-            plain = render_plain(headline, lines, "", None, max_chars,
-                                 glosses=glosses)
-            html = render_html(headline, lines, "", None, max_chars,
-                               glosses=glosses)
-            events.append({"event_id": event_id,
-                           "event_class": "fail-closed",
-                           "created_at": _utc_now(),
-                           "text": plain, "html": html})
+            what, paused = _FAIL_CLOSED_WORDS.get(
+                component, (component, "Related"))
+            msg = Message(
+                severity=severity_for("fail-closed"),
+                headline="Atlas can't read %s (%g+ hours)" % (
+                    what, window_hours),
+                meaning="The %s has recorded only failures since %s. %s "
+                        "alerts are paused until it recovers." % (
+                            component, fmt_time(first_fail), paused),
+                facts=[("Last good reading",
+                        fmt_time(last_good, "r") if last_good
+                        else "none recorded")],
+                details=["First failure %s" % rec(first_fail),
+                         "Last good observation %s" % rec(
+                             last_good or "none recorded"),
+                         "Source: livedata integration health"],
+                next_action="check the chain RPC from the Pi: %s"
+                            % mono("python3 livedata/atlas_live.py "
+                                   "poll-gate"))
+            events.append(message_event(msg, event_id, "fail-closed",
+                                        _utc_now(), max_chars, glosses))
     finally:
         conn.close()
     return events, watermark
@@ -2299,22 +2943,9 @@ def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
                       _utc_now(), STATUS_SCRUB_REFUSED, 0, str(refusal))
         return STATUS_SCRUB_REFUSED
 
-    fallback_note = None
-    if html:
-        result = send_message(config, token, chat_id, html, poster=poster,
-                              parse_mode="HTML")
-        if (not result["delivered"] and result.get("status") == 400):
-            # Rejected formatting must never suppress an alert: resend
-            # once as the untagged structured text (never the HTML
-            # source) and record the fallback.
-            plain_result = send_message(config, token, chat_id, text,
-                                        poster=poster)
-            plain_result["attempts"] += result["attempts"]
-            if plain_result["delivered"]:
-                fallback_note = "html-400-fallback: delivered as plain text"
-            result = plain_result
-    else:
-        result = send_message(config, token, chat_id, text, poster=poster)
+    result, fallback_note = send_with_fallback(
+        config, token, chat_id, text, html, event.get("buttons") or [],
+        poster=poster)
 
     if result["delivered"]:
         ledger_record(connection, event_id, event_class, created_at,
@@ -2325,6 +2956,41 @@ def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
                   STATUS_FAILED, result["attempts"], result["detail"],
                   tier=tier)
     return STATUS_FAILED
+
+
+def send_with_fallback(config: Dict[str, Any], token: str, chat_id: str,
+                       text: str, html: Optional[str],
+                       buttons: List[Tuple[str, str]],
+                       poster: Optional[Callable[..., Tuple[int, str]]] = None
+                       ) -> Tuple[Dict[str, Any], Optional[str]]:
+    """Send HTML with its buttons. Rejected formatting must never
+    suppress a message: an HTTP 400 resends once as the untagged
+    structured text (never the HTML source) with the same buttons, and a
+    400 on that resend sends once more without buttons. Returns the
+    final result and a note naming the fallback taken, if any."""
+    buttons = list(buttons or [])
+    if not html:
+        result = send_message(config, token, chat_id, text, poster=poster,
+                              buttons=buttons)
+        attempts = result["attempts"]
+        note = None
+    else:
+        result = send_message(config, token, chat_id, html, poster=poster,
+                              parse_mode="HTML", buttons=buttons)
+        attempts = result["attempts"]
+        note = None
+        if not result["delivered"] and result.get("status") == 400:
+            result = send_message(config, token, chat_id, text,
+                                  poster=poster, buttons=buttons)
+            attempts += result["attempts"]
+            note = "html-400-fallback: delivered as plain text"
+    if (not result["delivered"] and result.get("status") == 400
+            and buttons):
+        result = send_message(config, token, chat_id, text, poster=poster)
+        attempts += result["attempts"]
+        note = ((note + "; ") if note else "") + "buttons dropped after 400"
+    result["attempts"] = attempts
+    return result, (note if result["delivered"] else None)
 
 
 def seed_watermarks(config: Dict[str, Any],
@@ -2482,10 +3148,14 @@ def _cmd_test(config: Dict[str, Any], event_class: str) -> int:
     token, chat_id = resolve_credentials(config)  # validate before any state
     connection = open_store(resolve(config["db"]))
     try:
-        event = {"event_id": "test:%s:%s" % (event_class, run_id()),
-                 "event_class": event_class, "created_at": _utc_now(),
-                 "text": "Atlas • test alert (%s) — delivery check only"
-                         % event_class}
+        msg = Message(severity=severity_for("test"),
+                      headline="Telegram delivery test",
+                      meaning="Atlas can reach this chat. Class: %s."
+                              % event_class)
+        event = message_event(msg, "test:%s:%s" % (event_class, run_id()),
+                              event_class, _utc_now(),
+                              int(config.get("message_max_chars", 3500)),
+                              None)
         status = deliver_event(connection, config, token, chat_id, event)
     finally:
         connection.close()

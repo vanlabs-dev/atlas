@@ -32,6 +32,15 @@
   "coalesce_window_seconds": 3600,
   "message_max_chars": 3500,
   "parse_mode": "HTML",
+  "links": {
+    "_comment": "URL button templates (change: telegram-alert-redesign). A missing key or an unsafe value omits the button; delivery never depends on one. No LAN board link: the operator removed it 2026-10-04.",
+    "subtensor_compare": "https://github.com/RaoFoundation/subtensor/compare/{prev}...{new}",
+    "subtensor_releases": "https://github.com/RaoFoundation/subtensor/releases",
+    "github_commit": "https://github.com/{repo}/commit/{sha}",
+    "github_compare": "https://github.com/{repo}/compare/{prev}...{new}",
+    "atlas_commit": "https://github.com/vanlabs-dev/atlas/commit/{sha}",
+    "taostats_subnet": "https://taostats.io/subnets/{netuid}"
+  },
   "governance_threshold": 425,
   "voice": {
     "_comment": "Alert voice maps (change: telegram-voice-overhaul). Canon is telegram/docs/voice.md section 2; a conformance test asserts every entry here exists in canon. Both maps are REQUIRED and fail closed: a missing or malformed map refuses the render, no code defaults. lexicon maps a concept to its one approved word (banned synonyms live in voice.md); gloss maps a jargon term to the one parenthetical gloss attached at first use in a message.",
@@ -158,9 +167,9 @@
       "delivery_only": true
     },
     "narrative-cluster": {
-      "_comment": "Unchanged. n=9 at the 1d horizon is too small to read either way; it stays instant until its own sample is readable.",
+      "_comment": "SHADOWED 2026-10-04 (change: telegram-alert-redesign): the operator does not want model-adoption alerts. Detection and the ledger continue; nothing is sent and the briefing no longer lists clusters. Flip back to instant to roll back.",
       "enabled": true,
-      "tier": "instant",
+      "tier": "shadow",
       "delivery_only": true
     },
     "watchlist": {
