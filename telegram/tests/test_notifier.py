@@ -36,6 +36,9 @@ def make_config(tmp, **over):
         "message_max_chars": 3500,
         "parse_mode": "HTML",
         "governance_threshold": 425,
+        # Subnet names resolve from this live store; it must never fall
+        # back to the device's real var/livedata (test isolation).
+        "briefing": {"live_db": os.path.join(tmp, "livedata.db")},
         "voice": {
             "lexicon": {
                 "subnet identity": "subnet N",
