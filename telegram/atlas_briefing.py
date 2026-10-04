@@ -652,8 +652,8 @@ def _to_messages(edition: Dict[str, Any], config: Dict[str, Any]
             size += block_len
         if current or not groups:
             groups.append(current)
-        fold = (["More high-impact changes:"] + overflow if overflow
-                else []) + health
+        fold = ((["More high-impact changes:"] + overflow if overflow
+                 else []) + (["System health:"] + health if health else []))
         messages = []
         for index, body in enumerate(groups):
             last = index == len(groups) - 1
