@@ -48,11 +48,11 @@ during apply:
   ingestion are **removed**, not disabled. Their tables and rows stay. The
   `root-rotation` promotion item due 2026-11-04 is void.
 
-## Live chain (2026-10-04)
+## Live chain (2026-10-06)
 
-Finney `spec_version` **472** (knob and emission-switch read at finalized
-block 9205342; chain-read probe clean at finalized block 9205344).
-`SubnetEmissionEnabled` off netuids **29, 35, 36, 82, 108**. Emission bar
+Finney `spec_version` **473** (knob and emission-switch read at finalized
+block 9217341; chain-read probe clean at finalized block 9217343).
+`SubnetEmissionEnabled` off netuids **29, 35, 36, 82, 108, 116**. Emission bar
 is rank-pinned (N unset, default 32; q 0.75 explicit and inert; h unset,
 default 3). `set_root_weights` is retired (`Weights[ROOT]` cleared, the
 curation switch removed). `BasketTradingEnabled` is **true** (explicit).
@@ -61,9 +61,13 @@ unset. Root dividends accumulate in place, and fund composition changes
 only through `swap_basket` or the atomic multi-leg `swap_basket_many` (up
 to 64 legs). Every basket leg must be worth at least 0.5 TAO at its sell
 quote; smaller legs are rejected at transaction validation, including
-inside Utility and Proxy wrappers. Spec 472 removed the legacy `Alpha`,
-`TotalHotkeyShares` and `AlphaMapLastKey` storage items; Atlas reads none
-of them, so no reader changed.
+inside Utility and Proxy wrappers. The legacy `Alpha`, `TotalHotkeyShares`
+and `AlphaMapLastKey` storage items are not in metadata. Queued subnet
+registrations prepay into a per-entry escrow (`NetworkRegistrationEscrow`)
+and are refunded if settlement fails. The EVM has the EIP-2537 BLS12-381
+precompiles (`0x0b` to `0x11`). Spec 473 renamed, removed or reshaped no
+item Atlas reads (it only added `NetworkRegistrationEscrow`), so no reader
+changed.
 
 Runtime upgrades are automated; see the runtime-upgrade entry above.
 Web leads stay out of the confirmed knowledge base (ATLAS-WEB-003).

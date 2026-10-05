@@ -52,7 +52,7 @@ Pattern: a subnet with real demand (nonzero moving price, nonzero demand share) 
 
 **Check**: the bar is a continuous Hill function of demand share. The pool-side emission switch is a binary root-settable per-netuid bool. The chain draws the bar first, then zeroes TAO for subnets whose switch is off and redistributes that TAO to the rest. Alpha distribution continues either way. A subnet can sit above the bar and still earn no TAO.
 
-Fix: name the pool-side emission switch (`SubnetEmissionEnabled`). Live off set (2026-10-04, spec 472, finalized block 9205342): netuids 29, 35, 36, 82, 108. Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
+Fix: name the pool-side emission switch (`SubnetEmissionEnabled`). Live off set (2026-10-06, spec 473, finalized block 9217341): netuids 29, 35, 36, 82, 108, 116. Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
 
 ### 5. Validators mine
 Pattern: "validators mine/mining/produce work"
@@ -92,7 +92,7 @@ Fix: a rank-pinned bar IS a demand share, so it moves on its own as the distribu
 ### 7f. Root Reborn curation described as live, or a validator described as setting root weights
 Pattern: "curation is on/live/enabled", "`RootWeightSettingEnabled` is true", "validators set root weights", "validator X steers root dividends with `set_root_weights`", or "the cap is `RootWeightsCap`".
 
-Fix: Spec 469 retired `set_root_weights`, cleared `Weights[ROOT]`, and removed the `RootWeightSettingEnabled` switch (upstream migration `migrate_remove_root_weights`). Root dividends accumulate in place, and a fund's composition changes only through basket trades: `swap_basket` (one leg) or `swap_basket_many` (1 to 64 atomic legs), both gated by `BasketTradingEnabled` (explicit true). The cap is `BasketConcentrationCap` (4096 = 1/16 of fund NAV, explicit at finalized block 9205342) and it checks basket-trade buys only, per leg. Do not describe a validator as curating with a weight vector. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
+Fix: Spec 469 retired `set_root_weights`, cleared `Weights[ROOT]`, and removed the `RootWeightSettingEnabled` switch (upstream migration `migrate_remove_root_weights`). Root dividends accumulate in place, and a fund's composition changes only through basket trades: `swap_basket` (one leg) or `swap_basket_many` (1 to 64 atomic legs), both gated by `BasketTradingEnabled` (explicit true). The cap is `BasketConcentrationCap` (4096 = 1/16 of fund NAV, explicit at finalized block 9217341) and it checks basket-trade buys only, per leg. Do not describe a validator as curating with a weight vector. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
 
 ### 7g. Multi-leg basket rebalance described as non-atomic or unavailable
 Pattern: "a validator must submit one `swap_basket` per leg", "a rebalance can fail halfway and leave the fund part-traded", "up to 128 legs", a multi-leg rebalance that skips the per-trade guardrails, or a basket trade of any size above the staking minimum described as accepted.
@@ -103,6 +103,11 @@ Fix: `swap_basket_many` (call index 151) runs 1 to 64 legs in one call. It flush
 Pattern: telling a reader to query `SubtensorModule.Alpha` or `TotalHotkeyShares` for a stake position, or describing those items as live storage.
 
 Fix: those items, and `AlphaMapLastKey`, are not in the runtime metadata. Stake shares are stored in `AlphaV2` and `TotalHotkeySharesV2`. Use a stake runtime API or the V2 items.
+
+### 7i. Queued subnet registration described as a balance lock, or a failed one as lost funds
+Pattern: "a queued registration locks/freezes the coldkey's TAO", "the burn cost is taken from the coldkey when the slot opens", "a failed queued registration keeps the deposit", or "a new subnet's pool is seeded with at least the minimum lock cost".
+
+Fix: a queued registration prepays the full price into its own escrow account (`NetworkRegistrationEscrow`) at queue time. Settlement pays the subnet from that escrow. A settlement that fails for any reason other than the subnet limit refunds the escrow, drops the entry, and emits `NetworkRegistrationCancelled`; no subnet is created. Every registration must pay the full price and keep the coldkey above the existential deposit. The new pool's TAO is exactly what was paid, with no top-up to the minimum lock.
 
 ## WARNINGS (verify but don't block)
 
