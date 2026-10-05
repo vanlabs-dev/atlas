@@ -6,29 +6,34 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | field | value |
 |---|---|
 | Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
-| Sync date | 2026-10-04 |
-| Coverage date | 2026-10-04 |
-| Grounded at | Finney `spec_version` **472** |
+| Sync date | 2026-10-06 |
+| Coverage date | 2026-10-06 |
+| Grounded at | Finney `spec_version` **473** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
 
-Verified 2026-10-04 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
+Verified 2026-10-06 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
 
-- Spec **472**. Knobs, emission-switch map, and dust-floor storage read
-  together at finalized block 9205342
-  (`0xac0cb5a8f3dd6498d08bcf042f72666381c63ff2e7ba5939e38b5fc84136f5dc`).
-  Chain-read probe clean at finalized block 9205344
-  (`0x16035ae03884e5af0899b11c3220a06c0b313823dfc6c9305cbf278a50495fa5`).
-  Tracked clone `f87cada63` (`runtime/src/lib.rs` `spec_version: 473`);
-  mechanics are stated as of the spec 472 bump (`e7d89a8b3`). Spec 473
-  work (BLS12-381 EVM precompiles, the staking-hotkey cleanup rerun) is
-  not live and not stated.
+- Spec **473**. Knobs, emission-switch map, and dust-floor storage read
+  together at finalized block 9217341
+  (`0xe2a5014f26b820b98402d6002e8c496fe261bc27eddf82b31c410f56a4cf9b4b`).
+  Chain-read probe clean at finalized block 9217343
+  (`0x9a8b03aa2ccfb3bdb09c696cefc8dabcf67d68cafbd264da877ed9b74899da97`).
+  Tracked clone `f87cada63` (`runtime/src/lib.rs` `spec_version: 473`,
+  bump `007980330`, release merge PR #3208).
+- Spec 473 shipped: queued subnet registrations prepay into a per-entry
+  escrow account (`NetworkRegistrationEscrow`), and a failed settlement
+  refunds it (`NetworkRegistrationCancelled`); a new subnet's pool is
+  seeded with exactly the TAO paid; final EIP-2537 BLS12-381 EVM
+  precompiles at `0x0b` to `0x11`; `StakingHotkeys` entries are kept until
+  a pair's last alpha key and basket watermark are gone (cleanup rerun
+  `migrate_cleanup_staking_hotkeys_v3`).
 - Emission bar is **rank-pinned**: `EmissionBarRank` unset (default 32),
   `EmissionBarQuantile` 0.75 explicit and inert, `EmissionGateExponent`
   unset (default 3).
-- `SubnetEmissionEnabled` is live. 128 keys; **29, 35, 36, 82, 108 off**;
-  SN1 on.
+- `SubnetEmissionEnabled` is live. 128 keys; **29, 35, 36, 82, 108, 116
+  off**; SN1 on.
 - `set_root_weights` is **retired** (`migrate_remove_root_weights`, spec
   469): `Weights[ROOT]` cleared, `RootWeightSettingEnabled` and
   `RootWeightsCap` removed. Dividends accumulate in place.
