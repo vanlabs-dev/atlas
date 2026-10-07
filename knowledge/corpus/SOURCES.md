@@ -6,29 +6,46 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | field | value |
 |---|---|
 | Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
-| Sync date | 2026-10-06 |
-| Coverage date | 2026-10-06 |
-| Grounded at | Finney `spec_version` **473** |
+| Sync date | 2026-10-08 |
+| Coverage date | 2026-10-08 |
+| Grounded at | Finney `spec_version` **475** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
 
-Verified 2026-10-06 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
+Verified 2026-10-08 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
 
-- Spec **473**. Knobs, emission-switch map, and dust-floor storage read
-  together at finalized block 9217341
-  (`0xe2a5014f26b820b98402d6002e8c496fe261bc27eddf82b31c410f56a4cf9b4b`).
-  Chain-read probe clean at finalized block 9217343
-  (`0x9a8b03aa2ccfb3bdb09c696cefc8dabcf67d68cafbd264da877ed9b74899da97`).
-  Tracked clone `f87cada63` (`runtime/src/lib.rs` `spec_version: 473`,
-  bump `007980330`, release merge PR #3208).
-- Spec 473 shipped: queued subnet registrations prepay into a per-entry
-  escrow account (`NetworkRegistrationEscrow`), and a failed settlement
-  refunds it (`NetworkRegistrationCancelled`); a new subnet's pool is
-  seeded with exactly the TAO paid; final EIP-2537 BLS12-381 EVM
-  precompiles at `0x0b` to `0x11`; `StakingHotkeys` entries are kept until
-  a pair's last alpha key and basket watermark are gone (cleanup rerun
-  `migrate_cleanup_staking_hotkeys_v3`).
+- Spec **475**. Knobs, emission-switch map, and dust-floor storage read
+  together at finalized block 9233846
+  (`0x88119399e81e1ba0a8513f897783e275d154a061af4e5d1d8a2cb8614fc725f7`).
+  Chain-read probe clean at finalized block 9233848
+  (`0xf31a7c8d3df4ceeaf1ca8e7c8687cd5d225a34f2461fb710588eb29ee75b2a94`).
+  Tracked clone `d1718c99c` (`runtime/src/lib.rs` `spec_version: 475`,
+  bump `ba274b9fb`, merge PR #3214; spec 474 came from PR #3206).
+- Specs 474 and 475 shipped, all live at 475:
+  - Per-subnet epoch consensus (`SubnetEpochConsensus`, Yuma default,
+    owner/root `sudo_set_epoch_consensus` call 111). Null mode: one permit
+    for the largest-stake hotkey, miner incentive from its weight row,
+    stake-proportional dividends, no bonds, 2,500-UID shared cap, bounded
+    pruning via `sudo_trim_null_uids_batch` (call 112, 64 UIDs per call).
+    Which subnets run Null was not read.
+  - Owner-enabled fee-free PoW registration (`pow_register`, call 152;
+    `NetworkPowRegistrationAllowed` default off) with its own difficulty
+    price. Owners toggle burn and PoW registration independently; not both
+    off.
+  - Childkey fan-in capped at 100 parents per child per subnet; longer
+    existing lists are kept but cannot grow.
+  - Basket trade minimum is root-settable: `BasketMinTradeTao`
+    (`sudo_set_basket_min_trade_tao`, call 113, code default 0.5 TAO).
+    Not part of the knob read, so its live value is not stated.
+  - Not live: the 4K-UID Null cap (`d1c250341`), replaced by the
+    2,500-UID cap (`8fc43030a`) before 474 shipped.
+- Carried from spec 473 and still live: queued subnet registrations prepay
+  into a per-entry escrow (`NetworkRegistrationEscrow`) refunded on failed
+  settlement (`NetworkRegistrationCancelled`); a new pool holds exactly
+  the TAO paid; EIP-2537 BLS12-381 precompiles at `0x0b` to `0x11`;
+  `StakingHotkeys` entries are kept until a pair's last alpha key and
+  basket watermark are gone (`migrate_cleanup_staking_hotkeys_v3`).
 - Emission bar is **rank-pinned**: `EmissionBarRank` unset (default 32),
   `EmissionBarQuantile` 0.75 explicit and inert, `EmissionGateExponent`
   unset (default 3).
@@ -45,9 +62,9 @@ Verified 2026-10-06 against Finney RPC (`https://entrypoint-finney.opentensor.ai
 - `swap_basket_many` (call index 151) is live: 1 to 64 atomic legs, one
   dividend flush and one valuation, every `swap_basket` check per leg.
 - Basket trade minimum: each leg's sell proceeds must be at least
-  max(`DefaultMinStake`, 0.5 TAO). Transaction validation rejects a
-  smaller leg before inclusion, including inside Utility batches,
-  `as_derivative`, `if_else`, and Proxy calls.
+  max(`DefaultMinStake`, `BasketMinTradeTao`). Transaction validation
+  rejects a smaller leg before inclusion, including inside Utility
+  batches, `as_derivative`, `if_else`, and Proxy calls.
 - The legacy `Alpha`, `TotalHotkeyShares` and `AlphaMapLastKey` storage
   items are gone from metadata (`migrate_alpha_v2_and_unstake_dust_v1`);
   stake shares live in `AlphaV2` / `TotalHotkeySharesV2`.

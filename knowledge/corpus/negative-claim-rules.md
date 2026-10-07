@@ -137,3 +137,17 @@ and still distributes alpha. Do not write that a subnet "earns nothing
 because it is below the bar" unless the switch is on and the share is
 below the bar. A zero TAO reading with nonzero demand is first a switch
 question, then a bar question.
+
+---
+
+## One validator is not a validator outage
+
+A subnet can run Null epoch consensus instead of Yuma. Under Null exactly
+one hotkey, the largest by stake, holds a validator permit, and only it can
+set weights. The subnet keeps no bonds.
+
+Do not write that a subnet's validators are "inactive", "not setting
+weights" or "centralized on one key" from a single permit or a single
+weight-setter until a chain read shows the subnet runs Yuma
+(`SubnetEpochConsensus`). On a Null subnet that pattern is the protocol
+working as designed. It is not a negative claim about the team.
