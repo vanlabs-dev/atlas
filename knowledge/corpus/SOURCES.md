@@ -6,23 +6,33 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | field | value |
 |---|---|
 | Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
-| Sync date | 2026-10-08 |
-| Coverage date | 2026-10-08 |
-| Grounded at | Finney `spec_version` **475** |
+| Sync date | 2026-10-13 |
+| Coverage date | 2026-10-13 |
+| Grounded at | Finney `spec_version` **477** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
 
-Verified 2026-10-08 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
+Verified 2026-10-13 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
 
-- Spec **475**. Knobs, emission-switch map, and dust-floor storage read
-  together at finalized block 9233846
-  (`0x88119399e81e1ba0a8513f897783e275d154a061af4e5d1d8a2cb8614fc725f7`).
-  Chain-read probe clean at finalized block 9233848
-  (`0xf31a7c8d3df4ceeaf1ca8e7c8687cd5d225a34f2461fb710588eb29ee75b2a94`).
-  Tracked clone `d1718c99c` (`runtime/src/lib.rs` `spec_version: 475`,
-  bump `ba274b9fb`, merge PR #3214; spec 474 came from PR #3206).
-- Specs 474 and 475 shipped, all live at 475:
+- Spec **477**. Knobs, emission-switch map, and dust-floor storage read
+  together at finalized block 9267737
+  (`0xf0128d01203ccf59bbf3a4e4f599f8b53504f28ae931bf706bbf5fbca846b47f`).
+  Chain-read probe clean at finalized block 9267738
+  (`0xf9eececbed7951b263b1d7d8272ab80fff6060ab966c5b4bf92b786317a79932`).
+  Tracked clone `5c6e83e2f` (`runtime/src/lib.rs` `spec_version: 477`,
+  bump `c94e737f0`, merge PR #3221).
+- Spec 477 shipped:
+  - PoW difficulty is owner-settable (`d6dd557a7`, PR #3217):
+    `sudo_set_min_difficulty` (call 4) and `sudo_set_difficulty` (call 24)
+    accept the subnet owner or root. Owner calls are subject to the admin
+    window and per-parameter owner rate limits (`MinDifficulty`,
+    `Difficulty`), and the `Owner` proxy admits them and the PoW toggle.
+    Root can override the owner cooldown. On netuid 0 only root can set them.
+  - No storage item was added, removed, renamed or reshaped. The other 477
+    change only affects testnet: the root-claim admission budget for
+    `claim_root_with_hotkey` there is 129 units, the same as Finney.
+- Carried from specs 474 and 475 and still live:
   - Per-subnet epoch consensus (`SubnetEpochConsensus`, Yuma default,
     owner/root `sudo_set_epoch_consensus` call 111). Null mode: one permit
     for the largest-stake hotkey, miner incentive from its weight row,
@@ -49,13 +59,13 @@ Verified 2026-10-08 against Finney RPC (`https://entrypoint-finney.opentensor.ai
 - Emission bar is **rank-pinned**: `EmissionBarRank` unset (default 32),
   `EmissionBarQuantile` 0.75 explicit and inert, `EmissionGateExponent`
   unset (default 3).
-- `SubnetEmissionEnabled` is live. 128 keys; **29, 35, 36, 82, 108, 116
-  off**; SN1 on.
+- `SubnetEmissionEnabled` is live. 128 keys; **29, 35, 36, 82, 92, 108,
+  116 off**; SN1 on.
 - `set_root_weights` is **retired** (`migrate_remove_root_weights`, spec
   469): `Weights[ROOT]` cleared, `RootWeightSettingEnabled` and
   `RootWeightsCap` removed. Dividends accumulate in place.
-- `BasketConcentrationCap` is **4096** (explicit, 1/16 of fund NAV). It
-  caps basket-trade buys (`swap_basket` and each `swap_basket_many` leg).
+- `BasketConcentrationCap` is **7865** (explicit, about 12% of fund NAV;
+  code default 4096 = 1/16). It caps basket-trade buys (`swap_basket` and each `swap_basket_many` leg).
 - `BasketTradingEnabled` is **true** (explicit). It gates `swap_basket` and
   `swap_basket_many`, the only ways fund composition changes. A hotkey can
   still be frozen.

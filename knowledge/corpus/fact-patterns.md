@@ -52,7 +52,7 @@ Pattern: a subnet with real demand (nonzero moving price, nonzero demand share) 
 
 **Check**: the bar is a continuous Hill function of demand share. The pool-side emission switch is a binary root-settable per-netuid bool. The chain draws the bar first, then zeroes TAO for subnets whose switch is off and redistributes that TAO to the rest. Alpha distribution continues either way. A subnet can sit above the bar and still earn no TAO.
 
-Fix: name the pool-side emission switch (`SubnetEmissionEnabled`). Live off set (2026-10-08, spec 475, finalized block 9233846): netuids 29, 35, 36, 82, 108, 116. Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
+Fix: name the pool-side emission switch (`SubnetEmissionEnabled`). Live off set (2026-10-13, spec 477, finalized block 9267737): netuids 29, 35, 36, 82, 92, 108, 116. Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
 
 ### 5. Validators mine
 Pattern: "validators mine/mining/produce work"
@@ -92,7 +92,7 @@ Fix: a rank-pinned bar IS a demand share, so it moves on its own as the distribu
 ### 7f. Root Reborn curation described as live, or a validator described as setting root weights
 Pattern: "curation is on/live/enabled", "`RootWeightSettingEnabled` is true", "validators set root weights", "validator X steers root dividends with `set_root_weights`", or "the cap is `RootWeightsCap`".
 
-Fix: Spec 469 retired `set_root_weights`, cleared `Weights[ROOT]`, and removed the `RootWeightSettingEnabled` switch (upstream migration `migrate_remove_root_weights`). Root dividends accumulate in place, and a fund's composition changes only through basket trades: `swap_basket` (one leg) or `swap_basket_many` (1 to 64 atomic legs), both gated by `BasketTradingEnabled` (explicit true). The cap is `BasketConcentrationCap` (4096 = 1/16 of fund NAV, explicit at finalized block 9233846) and it checks basket-trade buys only, per leg. Do not describe a validator as curating with a weight vector. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
+Fix: Spec 469 retired `set_root_weights`, cleared `Weights[ROOT]`, and removed the `RootWeightSettingEnabled` switch (upstream migration `migrate_remove_root_weights`). Root dividends accumulate in place, and a fund's composition changes only through basket trades: `swap_basket` (one leg) or `swap_basket_many` (1 to 64 atomic legs), both gated by `BasketTradingEnabled` (explicit true). The cap is `BasketConcentrationCap` (7865, about 12% of fund NAV, explicit at finalized block 9267737; the 4096 = 1/16 code default is not the live value) and it checks basket-trade buys only, per leg. Do not describe a validator as curating with a weight vector. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
 
 ### 7g. Multi-leg basket rebalance described as non-atomic or unavailable
 Pattern: "a validator must submit one `swap_basket` per leg", "a rebalance can fail halfway and leave the fund part-traded", "up to 128 legs", a multi-leg rebalance that skips the per-trade guardrails, or a basket trade of any size above the staking minimum described as accepted.
@@ -114,10 +114,10 @@ Pattern: "all subnets use Yuma Consensus", "the top 64 validators on subnet X", 
 
 Fix: each subnet runs Yuma (default) or Null (`SubnetEpochConsensus`, chosen by the owner or root through `sudo_set_epoch_consensus`). Under Null, the single largest-stake hotkey holds the only permit and is the only key that can set weights; miner incentive follows its weights alone; dividends go to every staked UID in proportion to stake; there are no bonds or consensus clipping. The tempo and 18/41/41 split are unchanged. Do not name a subnet's mode without a chain read.
 
-### 7k. PoW registration described as gone, or as universal
-Pattern: "registration always burns TAO", "proof-of-work registration was removed", or "anyone can register by PoW on any subnet".
+### 7k. PoW registration described as gone, or as universal, or its difficulty as root-only
+Pattern: "registration always burns TAO", "proof-of-work registration was removed", "anyone can register by PoW on any subnet", or "only root/governance can set a subnet's (minimum) PoW difficulty".
 
-Fix: `pow_register` (call index 152) registers a hotkey with no TAO burn and no fee, but only on subnets whose owner enabled PoW (`NetworkPowRegistrationAllowed`, off by default). The proof binds the subnet, a work block at most 5 blocks old, the hotkey and the coldkey. PoW has its own difficulty price, separate from the burn price. An owner cannot turn both routes off. Root is burn-only. Check the subnet before saying PoW is available.
+Fix: `pow_register` (call index 152) registers a hotkey with no TAO burn and no fee, but only on subnets whose owner enabled PoW (`NetworkPowRegistrationAllowed`, off by default). The proof binds the subnet, a work block at most 5 blocks old, the hotkey and the coldkey. PoW has its own difficulty price, separate from the burn price. The subnet owner or root sets `min_difficulty` (call index 4), `difficulty` (call index 24) and `max_difficulty`; owner changes respect the admin window and a per-parameter owner rate limit, and can go through an `Owner` proxy. Only netuid 0 keeps difficulty root-only. An owner cannot turn both routes off. Root is burn-only. Check the subnet before saying PoW is available.
 
 ## WARNINGS (verify but don't block)
 

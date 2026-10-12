@@ -48,33 +48,34 @@ during apply:
   ingestion are **removed**, not disabled. Their tables and rows stay. The
   `root-rotation` promotion item due 2026-11-04 is void.
 
-## Live chain (2026-10-08)
+## Live chain (2026-10-13)
 
-Finney `spec_version` **475** (knob and emission-switch read at finalized
-block 9233846; chain-read probe clean at finalized block 9233848).
-`SubnetEmissionEnabled` off netuids **29, 35, 36, 82, 108, 116**. Emission bar
+Finney `spec_version` **477** (knob and emission-switch read at finalized
+block 9267737; chain-read probe clean at finalized block 9267738).
+`SubnetEmissionEnabled` off netuids **29, 35, 36, 82, 92, 108, 116**. Emission bar
 is rank-pinned (N unset, default 32; q 0.75 explicit and inert; h unset,
 default 3). `set_root_weights` is retired (`Weights[ROOT]` cleared, the
 curation switch removed). `BasketTradingEnabled` is **true** (explicit).
-`BasketConcentrationCap` is **4096** (explicit). Claim dust floors are
+`BasketConcentrationCap` is **7865** (explicit, about 12% of fund NAV; code
+default 4096). Claim dust floors are
 unset. Root dividends accumulate in place, and fund composition changes
 only through `swap_basket` or the atomic multi-leg `swap_basket_many` (up
 to 64 legs). Every basket leg must be worth at least
 max(`DefaultMinStake`, `BasketMinTradeTao`) at its sell quote; smaller legs
 are rejected at transaction validation, including inside Utility and Proxy
-wrappers. `BasketMinTradeTao` is root-settable since spec 475 (code default
-0.5 TAO) and is not in the knob read. The legacy `Alpha`,
+wrappers. `BasketMinTradeTao` is root-settable (code default 0.5 TAO) and
+is not in the knob read. The legacy `Alpha`,
 `TotalHotkeyShares` and `AlphaMapLastKey` storage items are not in
 metadata. Queued subnet registrations prepay into a per-entry escrow
 (`NetworkRegistrationEscrow`) and are refunded if settlement fails. The EVM
 has the EIP-2537 BLS12-381 precompiles (`0x0b` to `0x11`). Subnets choose
 Yuma or Null epoch consensus (`SubnetEpochConsensus`, Yuma default; Null
 gives one permit to the largest-stake hotkey and pays dividends pro rata to
-stake). Owners can enable fee-free PoW registration (`pow_register`).
-Childkey fan-in is capped at 100 parents. Specs 474 and 475 renamed,
-removed or reshaped no item Atlas reads (they only added items such as
-`SubnetEpochConsensus`, `BasketMinTradeTao` and `LastPowRegistrationBlock`),
-so no reader changed.
+stake). Owners can enable fee-free PoW registration (`pow_register`), and
+the owner or root sets `min_difficulty` and `difficulty` (root only on
+netuid 0). Childkey fan-in is capped at 100 parents. Spec 477 renamed,
+removed or reshaped no item Atlas reads (it changed call origins only), so
+no reader changed.
 
 Runtime upgrades are automated; see the runtime-upgrade entry above.
 Web leads stay out of the confirmed knowledge base (ATLAS-WEB-003).
