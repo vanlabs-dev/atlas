@@ -48,10 +48,10 @@ during apply:
   ingestion are **removed**, not disabled. Their tables and rows stay. The
   `root-rotation` promotion item due 2026-11-04 is void.
 
-## Live chain (2026-10-13)
+## Live chain (2026-10-14)
 
-Finney `spec_version` **477** (knob and emission-switch read at finalized
-block 9267737; chain-read probe clean at finalized block 9267738).
+Finney `spec_version` **478** (knob and emission-switch read at finalized
+block 9277041; chain-read probe clean at finalized block 9277043).
 `SubnetEmissionEnabled` off netuids **29, 35, 36, 82, 92, 108, 116**. Emission bar
 is rank-pinned (N unset, default 32; q 0.75 explicit and inert; h unset,
 default 3). `set_root_weights` is retired (`Weights[ROOT]` cleared, the
@@ -73,9 +73,11 @@ Yuma or Null epoch consensus (`SubnetEpochConsensus`, Yuma default; Null
 gives one permit to the largest-stake hotkey and pays dividends pro rata to
 stake). Owners can enable fee-free PoW registration (`pow_register`), and
 the owner or root sets `min_difficulty` and `difficulty` (root only on
-netuid 0). Childkey fan-in is capped at 100 parents. Spec 477 renamed,
-removed or reshaped no item Atlas reads (it changed call origins only), so
-no reader changed.
+netuid 0). Childkey fan-in is capped at 100 parents. A bounded idle-block
+migration re-adds missing `StakingHotkeys` entries (completion not read),
+and EVM and contract stake exits reserve the `StakingHotkeys` walk for the
+signer's current list instead of the cap. Spec 478 renamed, removed or
+reshaped no item Atlas reads, so no reader changed.
 
 Runtime upgrades are automated; see the runtime-upgrade entry above.
 Web leads stay out of the confirmed knowledge base (ATLAS-WEB-003).

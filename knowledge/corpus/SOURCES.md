@@ -6,32 +6,45 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | field | value |
 |---|---|
 | Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
-| Sync date | 2026-10-13 |
-| Coverage date | 2026-10-13 |
-| Grounded at | Finney `spec_version` **477** |
+| Sync date | 2026-10-14 |
+| Coverage date | 2026-10-14 |
+| Grounded at | Finney `spec_version` **478** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
 
-Verified 2026-10-13 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
+Verified 2026-10-14 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
 
-- Spec **477**. Knobs, emission-switch map, and dust-floor storage read
-  together at finalized block 9267737
-  (`0xf0128d01203ccf59bbf3a4e4f599f8b53504f28ae931bf706bbf5fbca846b47f`).
-  Chain-read probe clean at finalized block 9267738
-  (`0xf9eececbed7951b263b1d7d8272ab80fff6060ab966c5b4bf92b786317a79932`).
-  Tracked clone `5c6e83e2f` (`runtime/src/lib.rs` `spec_version: 477`,
-  bump `c94e737f0`, merge PR #3221).
-- Spec 477 shipped:
-  - PoW difficulty is owner-settable (`d6dd557a7`, PR #3217):
-    `sudo_set_min_difficulty` (call 4) and `sudo_set_difficulty` (call 24)
-    accept the subnet owner or root. Owner calls are subject to the admin
-    window and per-parameter owner rate limits (`MinDifficulty`,
-    `Difficulty`), and the `Owner` proxy admits them and the PoW toggle.
-    Root can override the owner cooldown. On netuid 0 only root can set them.
-  - No storage item was added, removed, renamed or reshaped. The other 477
-    change only affects testnet: the root-claim admission budget for
-    `claim_root_with_hotkey` there is 129 units, the same as Finney.
+- Spec **478**. Knobs, emission-switch map, and dust-floor storage read
+  together at finalized block 9277041
+  (`0x03d9509323b0b4ecbc38c356a01648adf33bc22da31b550700acdcfa70481eb0`).
+  Chain-read probe clean at finalized block 9277043
+  (`0xe9f2c2adb02506abfdf20be0e1bf6f1fc4a35162c56f67c1b3c2da42df4115ab`).
+  Tracked clone `850f2755b` (`runtime/src/lib.rs` `spec_version: 478`,
+  bump `8677391fb`, merge PR #3237).
+- Spec 478 shipped:
+  - `StakingHotkeys` repair (`3010d1099`, PR #3235):
+    `migrate_restore_staking_hotkeys_v1` re-adds hotkeys with an `AlphaV2`
+    row or a nonzero `BasketClaimed` watermark to the coldkey's list, at most
+    64 rows per idle block, once the alpha conversion and
+    `migrate_cleanup_staking_hotkeys` have finished. It moves no stake and
+    keeps issuance. Its progress is a storage alias outside the metadata;
+    whether it has finished was not read.
+  - Stake-exit gas in the EVM staking precompile and the contracts chain
+    extension (`41afc661d`, `900bd9e8f`, PR #3233): the `StakingHotkeys`
+    walk is reserved for the signer's current list plus one (capped at the
+    declared bound) plus one sizing read, per envelope slot for
+    `unstake_all*`. Signed extrinsic weights still reserve the walk at the
+    cap.
+  - No storage item in the metadata was added, removed, renamed or
+    reshaped. The remaining 478 changes are node logging (vendored
+    `sc-informant`) and regenerated docs.
+- Carried from spec 477 and still live: the subnet owner or root sets
+  `min_difficulty` (call 4) and `difficulty` (call 24) under the admin
+  window and per-parameter owner rate limits; the `Owner` proxy admits them
+  and the PoW toggle; root can override the owner cooldown; netuid 0 stays
+  root-only. The `claim_root_with_hotkey` admission budget is 129 units on
+  every network.
 - Carried from specs 474 and 475 and still live:
   - Per-subnet epoch consensus (`SubnetEpochConsensus`, Yuma default,
     owner/root `sudo_set_epoch_consensus` call 111). Null mode: one permit
