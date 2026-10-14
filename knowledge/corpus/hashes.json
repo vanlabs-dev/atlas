@@ -1,10 +1,10 @@
 {
   "origin": "D:/Coding/Bittensor/IntoOps/intoops-routines/references (source of truth)",
-  "sync_date": "2026-10-13",
-  "coverage_date": "2026-10-13",
+  "sync_date": "2026-10-14",
+  "coverage_date": "2026-10-14",
   "grounded_spec": 478,
   "files": {
-    "ground-truth.md": "02dcc2528d1104aaefaf97e91b0d7a4316b186fe74ba84dd614bf86d02587841",
+    "ground-truth.md": "b58fe5f851249f51266c6c53881b27df7121a2a749db54c9d4b7d1ba98f34840",
     "fact-patterns.md": "e9faa3e535b2ed3a1dddb2e224458653ed166083566e47c5b9c0cd49b54ff183",
     "negative-claim-rules.md": "ee606a57daf9b0a80c0e0918192cf894ad30d72db1729354431aff3861f98491"
   },

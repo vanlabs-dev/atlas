@@ -11,7 +11,7 @@
 
 ## 3. Corpus
 
-- [ ] 3.1 Correct `ground-truth.md` (60-day immunity, the lock-cost decay rule with the 8-day interval, the 2-day gap) and record the reads in `SOURCES.md`. Regenerate `hashes.json`. Verify the knowledge suite passes.
+- [x] 3.1 Correct `ground-truth.md` (60-day immunity, the lock-cost decay rule with the 8-day interval, the 2-day gap) and record the reads in `SOURCES.md`. Regenerate `hashes.json`. Verify the knowledge suite passes.
 
 ## 4. Deploy
 

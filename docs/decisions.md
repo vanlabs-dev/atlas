@@ -840,3 +840,20 @@ and a registry section in the briefing.
 
 Open: 7 repository alerts in the ledger are `scrub-refused` (last
 2026-09-22). Their cause is not investigated.
+
+## Subnet registration settings watched (2026-10-14, change: registration-knob-watch)
+
+Root changed two subnet registration rules on 2026-10-14 with no runtime
+upgrade: `NetworkImmunityPeriod` to 432,000 blocks (60 days, from 120) and
+`NetworkLockReductionInterval` to 57,600 blocks (8 days, from 16). Atlas
+missed both: the chain-parameter watch did not read them, and the upgrade
+job only runs on a spec change. Read at finalized block 9,278,789.
+
+- The watch now reads both, plus `NetworkRateLimit` (14,400 blocks, 2
+  days, unchanged), on pinned plain keys. They are declared for the probe
+  and listed in `read-knobs`. Their first observation seeds silently, so
+  today's change is recorded in the corpus, not paged.
+- Alerts and pulse rule lines name these settings in words and show days.
+  `CollateralLockShare` got the description its alerts lacked.
+- The corpus states 60-day immunity and the exact lock-cost rule. The
+  external source of truth needs the same edit before its next sync.
