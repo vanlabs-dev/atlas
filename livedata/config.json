@@ -133,6 +133,30 @@
         "codec": "bool",
         "default": false,
         "governs": "network switch for swap_basket. Not the curation switch. Spec 468 set it true with a stamped migration. An explicit false is a durable emergency off."
+      },
+      {
+        "item": "NetworkImmunityPeriod",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf0555be4bea261cfe8a2b911e689c943bbd43",
+        "codec": "u64",
+        "default": 1296000,
+        "governs": "blocks a newly registered subnet is immune from deregistration (7,200 blocks a day). Root set 432,000 (60 days) on 2026-10-14; the subtensor announcement gives the old value as 120 days. Default is the spec 478 runtime constant SubtensorInitialNetworkImmunity."
+      },
+      {
+        "item": "NetworkLockReductionInterval",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf055567d5740b25f3ae7aea68123bdcdc6bd4",
+        "codec": "u64",
+        "default": 100800,
+        "governs": "blocks over which the subnet lock cost falls by one last-lock amount: cost = 2 x last lock - last lock x blocks since / interval, floored at NetworkMinLockCost. Root set 57,600 (8 days) on 2026-10-14; the subtensor announcement gives the old value as 16 days. Default is the spec 478 runtime constant (14 days)."
+      },
+      {
+        "item": "NetworkRateLimit",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf05559432d347db1cb70ce515b7a097bb84d9",
+        "codec": "u64",
+        "default": 7200,
+        "governs": "minimum blocks between two subnet registrations. 14,400 (2 days) at 2026-10-14. Default is the spec 478 runtime constant (1 day)."
       }
     ]
   },
