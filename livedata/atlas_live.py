@@ -1647,6 +1647,11 @@ CHAIN_READS: Tuple[ChainRead, ...] = tuple(
         ("BasketClaimRowDustCapTao", (), "u64"),
         ("BasketClaimRowDustBps", (), "u16"),
         ("BasketClaimSliceDustTao", (), "u64"),
+        # Subnet registration rules (change: registration-knob-watch).
+        # Root changed the first two on 2026-10-14 with no runtime upgrade.
+        ("NetworkImmunityPeriod", (), "u64"),
+        ("NetworkLockReductionInterval", (), "u64"),
+        ("NetworkRateLimit", (), "u64"),
         ("SubnetworkN", ("identity",), "u16"),
         ("Incentive", ("identity",), "Vec<PerU16>"),
         ("MinerBurned", ("identity",), "FixedU128<U32>"),
@@ -3323,6 +3328,9 @@ KNOB_ITEMS: Dict[str, str] = {
     "BasketClaimRowDustCapTao": "u64",
     "BasketClaimRowDustBps": "u16",
     "BasketClaimSliceDustTao": "u64",
+    "NetworkImmunityPeriod": "u64",
+    "NetworkLockReductionInterval": "u64",
+    "NetworkRateLimit": "u64",
 }
 
 

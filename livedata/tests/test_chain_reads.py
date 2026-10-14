@@ -87,6 +87,20 @@ class ChainReadCoverageTest(unittest.TestCase):
                                    "BasketConcentrationCap", (), "u16"),
                       al.CHAIN_READS)
 
+    def test_registration_keys_are_the_plain_derivation(self):
+        # change: registration-knob-watch.
+        items = {spec["item"]: spec
+                 for spec in al.load_config()["chain_params"]["items"]}
+        for name in ("NetworkImmunityPeriod", "NetworkLockReductionInterval",
+                     "NetworkRateLimit"):
+            expected = "0x" + (al.twox128("SubtensorModule")
+                               + al.twox128(name)).hex()
+            self.assertEqual(items[name]["key"], expected, name)
+            self.assertEqual(items[name]["codec"], "u64")
+            self.assertIn(al.ChainRead(al.SUBTENSOR_PALLET, name, (), "u64"),
+                          al.CHAIN_READS)
+            self.assertEqual(al.KNOB_ITEMS[name], "u64")
+
     def test_every_table_driven_read_is_declared(self):
         # Dynamic call sites take their items from these tables.
         config = al.load_config()

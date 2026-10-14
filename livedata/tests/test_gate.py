@@ -493,6 +493,23 @@ class ChainParamWatchTests(unittest.TestCase):
             self.transitions(),
             [("BasketTradingEnabled", "false", "true")])
 
+    def test_immunity_period_change_records_a_transition(self):
+        # change: registration-knob-watch. The shipped item, read as a
+        # plain u64 on its pinned key: 120 days -> 60 days.
+        shipped = {spec["item"]: spec for spec in
+                   al.load_config()["chain_params"]["items"]}
+        item = dict(shipped["NetworkImmunityPeriod"])
+        self.config["chain_params"]["items"] = [item]
+        key = item["key"]
+        self.watch({key: "0x" + (864000).to_bytes(8, "little").hex()})
+        result = self.watch({key: "0x" + (432000).to_bytes(8, "little").hex()})
+        self.assertEqual(
+            [(t["item"], t["prev_value"], t["new_value"])
+             for t in result["transitions"]],
+            [("NetworkImmunityPeriod", "864000", "432000")])
+        self.assertEqual(self.values("NetworkImmunityPeriod"),
+                         ["864000", "432000"])
+
     def test_provenance_only_change_is_not_a_transition(self):
         # Governance pinning the switch to the value it already had by
         # default changes nothing economically.
