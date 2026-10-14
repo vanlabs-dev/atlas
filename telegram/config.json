@@ -112,7 +112,17 @@
         "EmissionBarQuantile": "q-mass bar value, applied only when the bar rank is 0",
         "EmissionGateExponent": "gate sharpness: how hard emission collapses below the bar",
         "BasketConcentrationCap": "largest share of a fund's value one holding may reach through a swap_basket buy (4096 of 65535 is 1/16, so a traded fund spreads across at least 16 holdings); buys only",
-        "SubnetEmissionEnabled": "per-subnet root switch over TAO injection, not the emission-gate bar: off zeroes the TAO-side share and redistributes it; alpha distribution continues"
+        "SubnetEmissionEnabled": "per-subnet root switch over TAO injection, not the emission-gate bar: off zeroes the TAO-side share and redistributes it; alpha distribution continues",
+        "CollateralLockShare": "share of a miner's registration price that is staked and locked as collateral instead of burned (65535 = 100%). The lock is released only as the hotkey earns emission on that subnet; 0 burns the whole price",
+        "NetworkImmunityPeriod": "how long a newly registered subnet cannot be deregistered. After it, the subnet can be pruned when a new one registers",
+        "NetworkLockReductionInterval": "how fast the subnet registration price falls. It doubles at each registration, halves over one interval, and reaches the floor after two",
+        "NetworkRateLimit": "the minimum gap between two subnet registrations"
+      },
+      "display": {
+        "_comment": "Plain labels and units for chain-parameter alerts (change: registration-knob-watch). unit blocks renders block counts as days at 7,200 blocks a day.",
+        "NetworkImmunityPeriod": {"label": "New-subnet immunity", "unit": "blocks"},
+        "NetworkLockReductionInterval": {"label": "Subnet lock-cost reduction interval", "unit": "blocks"},
+        "NetworkRateLimit": {"label": "Minimum gap between subnet registrations", "unit": "blocks"}
       },
       "tier": "instant"
     },

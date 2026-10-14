@@ -208,6 +208,30 @@ class ChainParameterClassTests(_Base):
         return tg.chain_parameter_change_events(
             self.live_db, watermark, self.ctx())
 
+    def test_immunity_change_reads_in_days(self):
+        # change: registration-knob-watch, with the shipped wording.
+        shipped = tg.load_config()["classes"]["chain-parameter-change"]
+        self.spec["governs"] = shipped["governs"]
+        self.spec["display"] = shipped["display"]
+        add_param_event(self.live_db, "NetworkImmunityPeriod", "864000",
+                        "432000", prev_prov="explicit")
+        events, _wm = self.events()
+        text = events[0]["text"]
+        self.assertEqual(text.split("\n")[0],
+                         "🟠 New-subnet immunity changed: 120 days → 60 days")
+        self.assertIn("Setting: NetworkImmunityPeriod, 864,000 blocks "
+                      "(120 days) → 432,000 blocks (60 days)", text)
+        self.assertIn("cannot be deregistered", text)
+        self.assertNotIn("no plain description", text)
+
+    def test_unlabelled_setting_renders_as_before(self):
+        self.spec["display"] = {"Other": {"label": "x", "unit": "blocks"}}
+        add_param_event(self.live_db, "BasketConcentrationCap", "4096",
+                        "2048")
+        text = self.events()[0][0]["text"]
+        self.assertIn("Setting: BasketConcentrationCap, 4,096 → 2,048", text)
+        self.assertNotIn("days", text)
+
     def test_missing_table_is_inert(self):
         bare = os.path.join(self.tmp.name, "bare.db")
         sqlite3.connect(bare).close()

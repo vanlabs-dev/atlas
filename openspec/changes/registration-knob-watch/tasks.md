@@ -7,7 +7,7 @@
 
 ## 2. Alert wording
 
-- [ ] 2.1 Add `governs` text for the three items and `CollateralLockShare`, and a `display` map (label, unit) to `telegram/config.json`. Render labelled block-count settings in days. Verify a test for the immunity scenario and that unlabelled settings render unchanged.
+- [x] 2.1 Add `governs` text for the three items and `CollateralLockShare`, and a `display` map (label, unit) to `telegram/config.json`. Render labelled block-count settings in days. Verify a test for the immunity scenario and that unlabelled settings render unchanged.
 
 ## 3. Corpus
 
