@@ -38,6 +38,8 @@ None.
   watched.
 - `telegram-integration`: adds a requirement that block-count settings
   render in days under a plain label.
+- `pulse-briefing`: adds a requirement that rule lines for those settings
+  read in days.
 
 ## Impact
 

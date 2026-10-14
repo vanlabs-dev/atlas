@@ -234,6 +234,22 @@ class CompositionTests(BriefingBase):
                       rules)
         self.assertIn("Subnet 82: TAO emission switched off", rules)
 
+    def test_rule_line_for_a_block_setting_reads_in_days(self):
+        live = self.config["briefing"]["live_db"]
+        conn = sqlite3.connect(live)
+        conn.execute("INSERT INTO chain_param_events (item, prev_value, "
+                     "new_value, observed_at) VALUES "
+                     "('NetworkImmunityPeriod', '864000', '432000', ?)",
+                     (_iso(2),))
+        conn.commit()
+        conn.close()
+        self.config["classes"]["chain-parameter-change"] = {
+            "display": {"NetworkImmunityPeriod": {
+                "label": "New-subnet immunity", "unit": "blocks"}}}
+        rules = ab.compose(self.config, self.store, "daily")[
+            "sections"]["rules"]
+        self.assertIn("New-subnet immunity 120 days → 60 days", rules)
+
     def test_unavailable_stores_named_not_estimated(self):
         self.config["briefing"]["fleet_db"] = os.path.join(
             self.tmp.name, "missing.db")

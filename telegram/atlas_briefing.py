@@ -303,8 +303,9 @@ def _network_section(src: _Sources, bcfg: Dict[str, Any], start: str,
     return lines, figures
 
 
-def _rules_section(src: _Sources, start: str,
-                   names: Dict[int, str]) -> Tuple[List[str], Dict[str, Any]]:
+def _rules_section(src: _Sources, start: str, names: Dict[int, str],
+                   display: Optional[Dict[str, Any]] = None
+                   ) -> Tuple[List[str], Dict[str, Any]]:
     """Root-settable parameter transitions in the window, one line per
     item and subnet, a set-then-reset pair merged into one line."""
     live = src.live
@@ -330,6 +331,12 @@ def _rules_section(src: _Sources, start: str,
                     else "TAO emission switched off")
             if first_prev == last_new:
                 what = "TAO emission switched and restored"
+        elif (isinstance((display or {}).get(base), dict)
+              and display[base].get("unit") == "blocks"
+              and tg._block_days(first_prev) and tg._block_days(last_new)):
+            what = "%s %s → %s" % (display[base].get("label") or base,
+                                   tg._block_days(first_prev),
+                                   tg._block_days(last_new))
         elif len(moves) > 1 and first_prev == last_new:
             what = "%s set, then reset to %s" % (
                 base, tg._param_value(last_new))
@@ -562,7 +569,10 @@ def compose(config: Dict[str, Any], connection: sqlite3.Connection,
         builders = (
             ("network", lambda: _network_section(src, bcfg, start, prev,
                                                  kind)),
-            ("rules", lambda: _rules_section(src, start, names)),
+            ("rules", lambda: _rules_section(
+                src, start, names,
+                ((config.get("classes") or {}).get(
+                    "chain-parameter-change") or {}).get("display"))),
             ("price_moves", lambda: _price_moves_section(src, bcfg, start,
                                                          names)),
             ("share_moves", lambda: _share_moves_section(src, bcfg, start,

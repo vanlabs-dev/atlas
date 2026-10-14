@@ -2527,6 +2527,19 @@ def _switch_body_line(base_item: str, new_value: str) -> Optional[str]:
             "subnets.")
 
 
+BLOCKS_PER_DAY = 7200
+
+
+def _block_days(value: Any) -> Optional[str]:
+    """`60 days` for a block count, or None when the value is not one."""
+    text = rec(value)
+    if not text.isdigit():
+        return None
+    days = int(text) / BLOCKS_PER_DAY
+    return "%s day%s" % (("%d" % days) if days == int(days)
+                         else ("%.1f" % days), "" if days == 1 else "s")
+
+
 def _param_value(value: Any) -> str:
     text = rec(value)
     if text.lower() in ("true", "false"):
@@ -2540,7 +2553,8 @@ def _render_param_event(item: str, prev_value: str, new_value: str,
                         max_chars: int, glosses: Dict[str, str],
                         netuids: Optional[List[int]] = None,
                         names: Optional[Dict[int, str]] = None,
-                        config: Optional[Dict[str, Any]] = None
+                        config: Optional[Dict[str, Any]] = None,
+                        display: Optional[Dict[str, Any]] = None
                         ) -> Tuple[str, str, Optional[str],
                                    List[Tuple[str, str]]]:
     """Return (plain, html, next_action, buttons) for one page, single or
@@ -2555,6 +2569,18 @@ def _render_param_event(item: str, prev_value: str, new_value: str,
     where = (subnet_label(single, names) if single is not None else None)
     change = "%s → %s" % (_param_value(prev_value), _param_value(new_value))
     description = governs.get(base_item)
+    # A configured label and block unit (change: registration-knob-watch)
+    # name the setting in words and state block counts as days.
+    shown = (display or {}).get(base_item) or {}
+    label = shown.get("label") if isinstance(shown, dict) else None
+    in_days = None
+    if label and shown.get("unit") == "blocks":
+        prev_days, new_days = _block_days(prev_value), _block_days(new_value)
+        if prev_days and new_days:
+            in_days = (prev_days, new_days)
+            change = "%s blocks (%s) → %s blocks (%s)" % (
+                _param_value(prev_value), prev_days,
+                _param_value(new_value), new_days)
 
     meaning: Optional[str] = None
     next_action: Optional[str] = None
@@ -2585,6 +2611,8 @@ def _render_param_event(item: str, prev_value: str, new_value: str,
                      "design.")
         meaning = " ".join(parts)
         next_action = "review your subnet positions against the new gate terms."
+    elif in_days and not collapsed and single is None:
+        headline = "%s changed: %s → %s" % (label, in_days[0], in_days[1])
     elif collapsed:
         headline = "%s changed on %d subnets" % (base_item, count)
     elif where:
@@ -2675,6 +2703,7 @@ def chain_parameter_change_events(source_db: str, watermark: Optional[str],
     max_chars = int(config.get("message_max_chars", 3500))
     _lexicon, glosses = voice_maps(config)
     governs = dict(spec.get("governs") or {})
+    display = dict(spec.get("display") or {})
     names = subnet_names(source_db)
 
     grouped: Dict[Tuple[Any, ...], List[Any]] = {}
@@ -2721,7 +2750,7 @@ def chain_parameter_change_events(source_db: str, watermark: Optional[str],
         plain, html, _next, buttons = _render_param_event(
             item, prev_value, new_value, prev_prov, new_prov,
             observed_at, block_number, governs, max_chars, glosses,
-            netuids=netuids, names=names, config=config)
+            netuids=netuids, names=names, config=config, display=display)
         event: Dict[str, Any] = {
             "event_id": member_ids[0],
             "event_class": "chain-parameter-change",
