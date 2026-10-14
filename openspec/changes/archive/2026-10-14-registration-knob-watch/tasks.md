@@ -15,4 +15,4 @@
 
 ## 4. Deploy
 
-- [ ] 4.1 After the push is approved, pull on the Pi, run every suite, run the chain-read probe, ingest and activate the corpus, and confirm the next gate poll seeds the three items. Verify `chain_params` rows exist for all three.
+- [x] 4.1 After the push is approved, pull on the Pi, run every suite, run the chain-read probe, ingest and activate the corpus, and confirm the next gate poll seeds the three items. Verify `chain_params` rows exist for all three.
