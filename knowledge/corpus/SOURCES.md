@@ -91,6 +91,14 @@ Verified 2026-10-14 against Finney RPC (`https://entrypoint-finney.opentensor.ai
 - The legacy `Alpha`, `TotalHotkeyShares` and `AlphaMapLastKey` storage
   items are gone from metadata (`migrate_alpha_v2_and_unstake_dust_v1`);
   stake shares live in `AlphaV2` / `TotalHotkeySharesV2`.
+- Subnet registration rules, read at finalized block 9,278,789 on
+  2026-10-14 (change: registration-knob-watch): `NetworkImmunityPeriod`
+  **432,000** (60 days), `NetworkLockReductionInterval` **57,600** (8
+  days), `NetworkRateLimit` **14,400** (2 days), all explicit;
+  `NetworkMinLockCost` 1 TAO, `NetworkLastLockCost` 884.38 TAO. Root set
+  the first two the same day with no runtime upgrade; the subtensor
+  announcement gives the old values as 120 and 16 days. The
+  chain-parameter watch now reads all three.
 - Claim dust floors are unset on chain. Code defaults apply: row floor
   min(1 TAO, 10 bps of anchored NAV); slice floor 0.0001 TAO. Cash-first
   claims are not live.
