@@ -48,10 +48,10 @@ during apply:
   ingestion are **removed**, not disabled. Their tables and rows stay. The
   `root-rotation` promotion item due 2026-11-04 is void.
 
-## Live chain (2026-10-14)
+## Live chain (2026-10-16)
 
-Finney `spec_version` **478** (knob and emission-switch read at finalized
-block 9277041; chain-read probe clean at finalized block 9277043).
+Finney `spec_version` **479** (knob and emission-switch read at finalized
+block 9289187; chain-read probe clean at finalized block 9289189).
 `SubnetEmissionEnabled` off netuids **29, 35, 36, 82, 92, 108, 116**. Emission bar
 is rank-pinned (N unset, default 32; q 0.75 explicit and inert; h unset,
 default 3). `set_root_weights` is retired (`Weights[ROOT]` cleared, the
@@ -76,8 +76,17 @@ the owner or root sets `min_difficulty` and `difficulty` (root only on
 netuid 0). Childkey fan-in is capped at 100 parents. A bounded idle-block
 migration re-adds missing `StakingHotkeys` entries (completion not read),
 and EVM and contract stake exits reserve the `StakingHotkeys` walk for the
-signer's current list instead of the cap. Spec 478 renamed, removed or
-reshaped no item Atlas reads, so no reader changed.
+signer's current list instead of the cap. A coldkey can opt out of
+staking-list growth caused by other accounts
+(`set_reject_staking_hotkey_growth`, call 153); a single-subnet hotkey swap
+leaves a delegator's stake on the old hotkey when it cannot follow without
+growing that list (`HotkeySwapStakeRetained`, root credits in
+`HotkeySwapBasketCredits`). EIP-7702 authorization lists are capped at 255
+entries before signature recovery, and EVM nonces survive balance-account
+reaping (`EVM.AccountNonces`). Registration rules are unchanged at block
+9289187 (immunity 432,000, lock reduction 57,600, rate limit 14,400, all
+explicit). Spec 479 renamed, removed or reshaped no item Atlas reads, so no
+reader changed.
 
 Runtime upgrades are automated; see the runtime-upgrade entry above.
 Web leads stay out of the confirmed knowledge base (ATLAS-WEB-003).

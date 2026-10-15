@@ -52,7 +52,7 @@ Pattern: a subnet with real demand (nonzero moving price, nonzero demand share) 
 
 **Check**: the bar is a continuous Hill function of demand share. The pool-side emission switch is a binary root-settable per-netuid bool. The chain draws the bar first, then zeroes TAO for subnets whose switch is off and redistributes that TAO to the rest. Alpha distribution continues either way. A subnet can sit above the bar and still earn no TAO.
 
-Fix: name the pool-side emission switch (`SubnetEmissionEnabled`). Live off set (2026-10-14, spec 478, finalized block 9277041): netuids 29, 35, 36, 82, 92, 108, 116. Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
+Fix: name the pool-side emission switch (`SubnetEmissionEnabled`). Live off set (2026-10-16, spec 479, finalized block 9289187): netuids 29, 35, 36, 82, 92, 108, 116. Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
 
 ### 5. Validators mine
 Pattern: "validators mine/mining/produce work"
@@ -92,7 +92,7 @@ Fix: a rank-pinned bar IS a demand share, so it moves on its own as the distribu
 ### 7f. Root Reborn curation described as live, or a validator described as setting root weights
 Pattern: "curation is on/live/enabled", "`RootWeightSettingEnabled` is true", "validators set root weights", "validator X steers root dividends with `set_root_weights`", or "the cap is `RootWeightsCap`".
 
-Fix: Spec 469 retired `set_root_weights`, cleared `Weights[ROOT]`, and removed the `RootWeightSettingEnabled` switch (upstream migration `migrate_remove_root_weights`). Root dividends accumulate in place, and a fund's composition changes only through basket trades: `swap_basket` (one leg) or `swap_basket_many` (1 to 64 atomic legs), both gated by `BasketTradingEnabled` (explicit true). The cap is `BasketConcentrationCap` (7865, about 12% of fund NAV, explicit at finalized block 9277041; the 4096 = 1/16 code default is not the live value) and it checks basket-trade buys only, per leg. Do not describe a validator as curating with a weight vector. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
+Fix: Spec 469 retired `set_root_weights`, cleared `Weights[ROOT]`, and removed the `RootWeightSettingEnabled` switch (upstream migration `migrate_remove_root_weights`). Root dividends accumulate in place, and a fund's composition changes only through basket trades: `swap_basket` (one leg) or `swap_basket_many` (1 to 64 atomic legs), both gated by `BasketTradingEnabled` (explicit true). The cap is `BasketConcentrationCap` (7865, about 12% of fund NAV, explicit at finalized block 9289187; the 4096 = 1/16 code default is not the live value) and it checks basket-trade buys only, per leg. Do not describe a validator as curating with a weight vector. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
 
 ### 7g. Multi-leg basket rebalance described as non-atomic or unavailable
 Pattern: "a validator must submit one `swap_basket` per leg", "a rebalance can fail halfway and leave the fund part-traded", "up to 128 legs", a multi-leg rebalance that skips the per-trade guardrails, or a basket trade of any size above the staking minimum described as accepted.
@@ -122,7 +122,12 @@ Fix: `pow_register` (call index 152) registers a hotkey with no TAO burn and no 
 ### 7l. `StakingHotkeys` treated as a complete stake inventory
 Pattern: "coldkey X has no stake with hotkey Y because Y is not in its `StakingHotkeys`", or a coldkey's staking list used as the full set of its positions.
 
-Fix: some lists lost entries before the current retention rule. A bounded idle-block repair (`migrate_restore_staking_hotkeys_v1`) re-adds hotkeys that have an `AlphaV2` row or a nonzero `BasketClaimed` watermark, but whether it has finished was not read. Establish a position from `AlphaV2` or a stake runtime API, not from the list. A listed hotkey is not proof of a meaningful stake either: zero and fractional shares keep the entry.
+Fix: some lists lost entries before the current retention rule. A bounded idle-block repair (`migrate_restore_staking_hotkeys_v1`) re-adds hotkeys that have an `AlphaV2` row or a nonzero `BasketClaimed` watermark, but whether it has finished was not read. Establish a position from `AlphaV2` or a stake runtime API, not from the list. A listed hotkey is not proof of a meaningful stake either: zero and fractional shares keep the entry, and so does an auto-stake destination.
+
+### 7m. Hotkey swap described as moving every delegator, or stake transfers as always accepted
+Pattern: "after the swap all stake sits on the new hotkey", "delegators' stake left on the old hotkey means the swap failed", "the validator stranded its delegators", or "anyone can send stake to any coldkey".
+
+Fix: an all-subnets hotkey swap renames every delegator's entry. A single-subnet swap renames an entry when the delegator's stake under the old hotkey exists nowhere else; when following would need a second staking-list entry and the delegator has the growth opt-out on (`set_reject_staking_hotkey_growth`, call index 153) or is at the 128-entry third-party cap, its stake on that subnet stays on the old hotkey with its lock and auto-stake target, and the chain emits `HotkeySwapStakeRetained`. That is the protocol protecting the delegator, not a fault. A receiver with the opt-out on accepts stake transfers only onto hotkeys it already lists or owns (`AccountRejectsStakingHotkeyGrowth` otherwise). Whether a coldkey has the flag on needs a chain read.
 
 ## WARNINGS (verify but don't block)
 
