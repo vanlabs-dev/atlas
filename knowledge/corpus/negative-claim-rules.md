@@ -151,3 +151,17 @@ weights" or "centralized on one key" from a single permit or a single
 weight-setter until a chain read shows the subnet runs Yuma
 (`SubnetEpochConsensus`). On a Null subnet that pattern is the protocol
 working as designed. It is not a negative claim about the team.
+
+---
+
+## Stake left on an old hotkey is not a stranded delegator
+
+A single-subnet hotkey swap moves a delegator's stake only when it can
+follow without adding a staking-list entry the delegator refuses or cannot
+take. A delegator with the growth opt-out on, or at the 128-entry
+third-party cap, keeps its stake on the old hotkey, and the chain emits
+`HotkeySwapStakeRetained`. The delegator can still exit or move it.
+
+Do not write that a validator "abandoned", "stranded" or "left behind" its
+delegators because stake remains on its old hotkey after a swap. That is
+the protocol respecting the delegator's list, not a failure by the team.

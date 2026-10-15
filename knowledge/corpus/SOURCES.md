@@ -6,23 +6,55 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | field | value |
 |---|---|
 | Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
-| Sync date | 2026-10-14 |
-| Coverage date | 2026-10-14 |
-| Grounded at | Finney `spec_version` **478** |
+| Sync date | 2026-10-16 |
+| Coverage date | 2026-10-16 |
+| Grounded at | Finney `spec_version` **479** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
 
-Verified 2026-10-14 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
+Verified 2026-10-16 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
 
-- Spec **478**. Knobs, emission-switch map, and dust-floor storage read
-  together at finalized block 9277041
-  (`0x03d9509323b0b4ecbc38c356a01648adf33bc22da31b550700acdcfa70481eb0`).
-  Chain-read probe clean at finalized block 9277043
-  (`0xe9f2c2adb02506abfdf20be0e1bf6f1fc4a35162c56f67c1b3c2da42df4115ab`).
-  Tracked clone `850f2755b` (`runtime/src/lib.rs` `spec_version: 478`,
-  bump `8677391fb`, merge PR #3237).
-- Spec 478 shipped:
+- Spec **479**. Knobs, emission-switch map, dust-floor storage and the
+  subnet registration rules read together at finalized block 9289187
+  (`0xf2a5c090d94a4948c7df4d54f4b573876d742314c13685d49f51f41d5400149c`).
+  Chain-read probe clean at finalized block 9289189
+  (`0x5db0e065a651bfe0aa05651eeb95ef4cdccc6614dfc2a2032e29336b6fad37a6`).
+  Tracked clone `f4786f908` (`runtime/src/lib.rs` `spec_version: 479`,
+  bump `e66c7eed7`, merge PR #3256).
+- Spec 479 shipped:
+  - Third-party staking-list growth opt-out:
+    `set_reject_staking_hotkey_growth` (call 153) sets bit 1 of
+    `AccountFlags` (off by default, follows a coldkey swap, moves no funds).
+    With it on, a stake transfer from another coldkey must land on a hotkey
+    the receiver lists or owns (`AccountRejectsStakingHotkeyGrowth`). EVM
+    staking precompile `setRejectStakingHotkeyGrowth(bool)` /
+    `getRejectStakingHotkeyGrowth(bytes32)`. Caps unchanged: 256 entries for
+    the coldkey's own actions, 128 through other accounts. Which coldkeys
+    set the flag was not read.
+  - Single-subnet hotkey swaps rename a delegator's entry when its old
+    position exists nowhere else. A delegator that would need a second entry
+    and is flagged or at the 128 cap keeps its stake, lock and auto-stake
+    target on the old hotkey (`HotkeySwapStakeRetained`). On root, its
+    earned basket shares stay claimable under the new hotkey through the new
+    storage item `HotkeySwapBasketCredits`, which `claim_root` and coldkey
+    swaps include within their bounds. The validator's own split is refused
+    past 256 entries before the swap fee. All-subnets swaps still rename.
+  - `StakingHotkeys` also keeps a hotkey that an `AutoStakeDestination`
+    points at; setting an auto-stake destination and creating a hotkey are
+    held to the 256-entry cap.
+  - EVM: EIP-7702 authorization lists capped at 255 entries on every entry
+    path, checked before signature recovery (`EVM.AuthorizationListTooLarge`);
+    the EVM nonce survives balance-account reaping
+    (`NoncePreservingAccountProvider`, new storage item `EVM.AccountNonces`).
+  - Not live: the benchmarked `swap_hotkey_v2` weight. Dispatch keeps the
+    shared `swap_hotkey` envelope until reference measurements exist, and
+    `set_reject_staking_hotkey_growth` reuses the `set_reject_locked_alpha`
+    weight.
+  - No storage item Atlas reads was added, removed, renamed or reshaped; the
+    probe is clean. The new items (`HotkeySwapBasketCredits`,
+    `EVM.AccountNonces`) are not read.
+- Carried from spec 478 and still live:
   - `StakingHotkeys` repair (`3010d1099`, PR #3235):
     `migrate_restore_staking_hotkeys_v1` re-adds hotkeys with an `AlphaV2`
     row or a nonzero `BasketClaimed` watermark to the coldkey's list, at most
@@ -36,9 +68,6 @@ Verified 2026-10-14 against Finney RPC (`https://entrypoint-finney.opentensor.ai
     declared bound) plus one sizing read, per envelope slot for
     `unstake_all*`. Signed extrinsic weights still reserve the walk at the
     cap.
-  - No storage item in the metadata was added, removed, renamed or
-    reshaped. The remaining 478 changes are node logging (vendored
-    `sc-informant`) and regenerated docs.
 - Carried from spec 477 and still live: the subnet owner or root sets
   `min_difficulty` (call 4) and `difficulty` (call 24) under the admin
   window and per-parameter owner rate limits; the `Owner` proxy admits them
@@ -91,14 +120,14 @@ Verified 2026-10-14 against Finney RPC (`https://entrypoint-finney.opentensor.ai
 - The legacy `Alpha`, `TotalHotkeyShares` and `AlphaMapLastKey` storage
   items are gone from metadata (`migrate_alpha_v2_and_unstake_dust_v1`);
   stake shares live in `AlphaV2` / `TotalHotkeySharesV2`.
-- Subnet registration rules, read at finalized block 9,278,789 on
-  2026-10-14 (change: registration-knob-watch): `NetworkImmunityPeriod`
-  **432,000** (60 days), `NetworkLockReductionInterval` **57,600** (8
-  days), `NetworkRateLimit` **14,400** (2 days), all explicit;
-  `NetworkMinLockCost` 1 TAO, `NetworkLastLockCost` 884.38 TAO. Root set
-  the first two the same day with no runtime upgrade; the subtensor
-  announcement gives the old values as 120 and 16 days. The
-  chain-parameter watch now reads all three.
+- Subnet registration rules at finalized block 9289187:
+  `NetworkImmunityPeriod` **432,000** (60 days),
+  `NetworkLockReductionInterval` **57,600** (8 days), `NetworkRateLimit`
+  **14,400** (2 days), all explicit. Root set the first two on 2026-10-14
+  with no runtime upgrade; the subtensor announcement gives the old values
+  as 120 and 16 days. `NetworkMinLockCost` (1 TAO) and
+  `NetworkLastLockCost` (884.38 TAO) are not in the knob read; those values
+  are from a one-off read at finalized block 9,278,789 on 2026-10-14.
 - Claim dust floors are unset on chain. Code defaults apply: row floor
   min(1 TAO, 10 bps of anchored NAV); slice floor 0.0001 TAO. Cash-first
   claims are not live.
