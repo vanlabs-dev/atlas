@@ -192,7 +192,7 @@
   "_tier_comment": "Every class carries a delivery tier (change: pulse-briefing): instant pages on the scan that finds the event; briefing records the event as `briefed`, advances the watermark, and surfaces it only through the pulse briefing. Ships with every class instant (today's behaviour); the planned demotion to briefing tier for econ-code/gate-crossing/repository-update/fleet-signal/schema-drift/knowledge-ingestion is one config commit, and flipping a tier back is the rollback.",
   "briefing": {
     "_comment": "Pulse briefing (change: pulse-briefing): a daily edition at daily_hour_utc, replaced by a weekly edition on weekly_weekday (Python weekday: Monday 0 .. Sunday 6). Composed ONLY from stores already on disk, read-only: no provider call, no model call. Edition watermarks live in the notifier ledger, so a restart cannot double-send and a missed hour catches up on the next scan that day. Figures persist per edition for deltas. Truncation drops whole lines from the lowest-priority section upward; the network section is never cut. Rollback: enabled false stops editions and touches nothing else.",
-    "enabled": true,
+    "enabled": false,
     "daily_hour_utc": 7,
     "weekly_weekday": 6,
     "max_messages_daily": 2,
