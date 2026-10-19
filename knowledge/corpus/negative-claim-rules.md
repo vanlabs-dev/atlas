@@ -154,6 +154,23 @@ working as designed. It is not a negative claim about the team.
 
 ---
 
+## A subnet's emission split is a chain read, not an inference
+
+Each subnet's owner sets its own owner / validator / miner split within
+chain bounds (`SubnetEmissionWeights`). Do not write that an owner "takes
+more than other owners", "starves miners" or "short-changes validators"
+unless a chain read of that subnet's vector supports the figure.
+Comparing a subnet with the 18/41/41 default is not evidence, because
+the default is only the starting point.
+
+Alpha validators on a subnet can receive nothing in a block when root's
+baseline share has grown past the validator slot. Root is paid off the
+top of the slot, capped at the whole slot. That is the protocol
+preserving root's share, not a team withholding dividends. Do not write
+it as a negative claim about the team.
+
+---
+
 ## Stake left on an old hotkey is not a stranded delegator
 
 A single-subnet hotkey swap moves a delegator's stake only when it can

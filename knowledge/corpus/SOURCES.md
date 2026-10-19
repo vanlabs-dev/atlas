@@ -6,23 +6,64 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | field | value |
 |---|---|
 | Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
-| Sync date | 2026-10-16 |
-| Coverage date | 2026-10-16 |
-| Grounded at | Finney `spec_version` **479** |
+| Sync date | 2026-10-20 |
+| Coverage date | 2026-10-20 |
+| Grounded at | Finney `spec_version` **481** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
 
-Verified 2026-10-16 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
+Verified 2026-10-20 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
 
-- Spec **479**. Knobs, emission-switch map, dust-floor storage and the
-  subnet registration rules read together at finalized block 9289187
-  (`0xf2a5c090d94a4948c7df4d54f4b573876d742314c13685d49f51f41d5400149c`).
-  Chain-read probe clean at finalized block 9289189
-  (`0x5db0e065a651bfe0aa05651eeb95ef4cdccc6614dfc2a2032e29336b6fad37a6`).
-  Tracked clone `f4786f908` (`runtime/src/lib.rs` `spec_version: 479`,
-  bump `e66c7eed7`, merge PR #3256).
-- Spec 479 shipped:
+- Spec **481**. Knobs, emission-switch map, dust-floor storage and the
+  subnet registration rules read together at finalized block 9319037
+  (`0x41308cb23634ca3dad81dacbcea9a492eeed14d39be1c4d2a25b7bcaa0aea534`).
+  Chain-read probe clean at finalized block 9319040
+  (`0xe3b1cd096f5408d8bc62603cbc0cb93ad5760e8d4f10ddbe776467c8b63c00b2`).
+  Tracked clone `6a972693a` (`runtime/src/lib.rs` `spec_version: 481`,
+  merge PR #3264; spec 481 change `bb845ca1b`).
+- Spec 481 shipped (Finney moved from 479; per the removal migration's
+  comment, spec 480 ran on testnet only):
+  - Per-subnet emission weights: `SubnetEmissionWeights` holds
+    `[burn, recycle, owner, validator, miner]` in `u64::MAX` parts, seeded
+    at upgrade from each subnet's legacy owner-cut state
+    (`migrate_seed_subnet_emission_weights`; default `[0, 0, 0.18, 0.41,
+    0.41]`). The owner or root sets it with
+    `sudo_set_subnet_emission_weights` (call 114): burn and recycle 0,
+    owner at most 33% (lease-created subnets at least 18%), validator at
+    most 50%, miner at least 33%. Owners are limited to one change per
+    50,400 blocks per subnet; the first change is free, root is exempt,
+    dissolution clears the key. EVM subnet precompile
+    `setSubnetEmissionWeights` / `getSubnetEmissionWeights`.
+  - Root off the top: root is paid `min(V, r) x alpha_out` with
+    `r = V0 x root_tao x TaoWeight / (root_tao x TaoWeight + alpha_issuance)`,
+    `V0` the default validator share, recomputed every block. A set with
+    `V <= r` fails (`ValidatorEmissionTooLowToPreserveRoot`). Consensus,
+    dividend split, child/parent stake and the pool side use the global
+    `TaoWeight`.
+  - Legacy owner-cut setters (`sudo_set_subnet_owner_cut` call 28,
+    `sudo_set_owner_cut_enabled` call 92, precompile `setOwnerCutEnabled`)
+    return `Deprecated`. `SubnetOwnerCut` and `OwnerCutEnabled` stay in
+    metadata unchanged in shape, but no emission path reads them.
+  - The dissolution lock refund deducts accrued owner alpha
+    (`SubnetOwnerCutAccrued`), not the owner's current share.
+  - Not live: the per-subnet TAO-weight multiplier
+    (`SubnetTaoWeightMultiplier`, `BaseValidatorEmissionShare`,
+    `ValidatorEmissionBelowTaoWeightFloor`, `effective_tao_weight`) and
+    spec 480's frozen per-subnet `SubnetTaoWeight`. Both were dropped
+    before 481 shipped. `migrate_remove_subnet_tao_weight` clears any
+    leftover `SubnetTaoWeight` keys. `sudo_set_subnet_emission_weights`
+    has an interim weight envelope, not a benchmarked weight.
+  - No storage item Atlas reads was added, removed, renamed or reshaped; the
+    probe is clean. The new items (`SubnetEmissionWeights`,
+    `SubnetCreatedViaLease`, `SubnetOwnerCutAccrued`) are not read, so no
+    subnet's live split is stated.
+  - Open, outside the corpus: the mining screen
+    (`fleet/atlas_fleet_mining.py`) still derives miner share from
+    `SubnetOwnerCut` and `OwnerCutEnabled`. That is right only for subnets
+    still on their seeded vector. Correcting it needs a
+    `SubnetEmissionWeights` read and a `fleet/` change.
+- Carried from spec 479 and still live:
   - Third-party staking-list growth opt-out:
     `set_reject_staking_hotkey_growth` (call 153) sets bit 1 of
     `AccountFlags` (off by default, follows a coldkey swap, moves no funds).
@@ -51,9 +92,7 @@ Verified 2026-10-16 against Finney RPC (`https://entrypoint-finney.opentensor.ai
     shared `swap_hotkey` envelope until reference measurements exist, and
     `set_reject_staking_hotkey_growth` reuses the `set_reject_locked_alpha`
     weight.
-  - No storage item Atlas reads was added, removed, renamed or reshaped; the
-    probe is clean. The new items (`HotkeySwapBasketCredits`,
-    `EVM.AccountNonces`) are not read.
+  - `HotkeySwapBasketCredits` and `EVM.AccountNonces` are not read.
 - Carried from spec 478 and still live:
   - `StakingHotkeys` repair (`3010d1099`, PR #3235):
     `migrate_restore_staking_hotkeys_v1` re-adds hotkeys with an `AlphaV2`
@@ -101,8 +140,7 @@ Verified 2026-10-16 against Finney RPC (`https://entrypoint-finney.opentensor.ai
 - Emission bar is **rank-pinned**: `EmissionBarRank` unset (default 32),
   `EmissionBarQuantile` 0.75 explicit and inert, `EmissionGateExponent`
   unset (default 3).
-- `SubnetEmissionEnabled` is live. 128 keys; **29, 35, 36, 82, 92, 108,
-  116 off**; SN1 on.
+- `SubnetEmissionEnabled` is live. 128 keys; **only 82 off**; SN1 on.
 - `set_root_weights` is **retired** (`migrate_remove_root_weights`, spec
   469): `Weights[ROOT]` cleared, `RootWeightSettingEnabled` and
   `RootWeightsCap` removed. Dividends accumulate in place.
@@ -120,7 +158,7 @@ Verified 2026-10-16 against Finney RPC (`https://entrypoint-finney.opentensor.ai
 - The legacy `Alpha`, `TotalHotkeyShares` and `AlphaMapLastKey` storage
   items are gone from metadata (`migrate_alpha_v2_and_unstake_dust_v1`);
   stake shares live in `AlphaV2` / `TotalHotkeySharesV2`.
-- Subnet registration rules at finalized block 9289187:
+- Subnet registration rules at finalized block 9319037:
   `NetworkImmunityPeriod` **432,000** (60 days),
   `NetworkLockReductionInterval` **57,600** (8 days), `NetworkRateLimit`
   **14,400** (2 days), all explicit. Root set the first two on 2026-10-14

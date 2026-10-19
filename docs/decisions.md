@@ -48,11 +48,22 @@ during apply:
   ingestion are **removed**, not disabled. Their tables and rows stay. The
   `root-rotation` promotion item due 2026-11-04 is void.
 
-## Live chain (2026-10-16)
+## Live chain (2026-10-20)
 
-Finney `spec_version` **479** (knob and emission-switch read at finalized
-block 9289187; chain-read probe clean at finalized block 9289189).
-`SubnetEmissionEnabled` off netuids **29, 35, 36, 82, 92, 108, 116**. Emission bar
+Finney `spec_version` **481** (knob and emission-switch read at finalized
+block 9319037; chain-read probe clean at finalized block 9319040).
+Each subnet now has an emission weight vector
+`[burn, recycle, owner, validator, miner]` (`SubnetEmissionWeights`,
+seeded 0/0/18/41/41). The owner or root sets it with
+`sudo_set_subnet_emission_weights` (call 114, owner once per 50,400 blocks
+per subnet; owner at most 33%, validator at most 50%, miner at least 33%).
+Root is paid its baseline share (default 41% validator share and the
+global `TaoWeight`) off the top of the validator slot every block. There is
+no per-subnet TAO weight: the multiplier and spec 480's `SubnetTaoWeight`
+were dropped before 481 shipped. The legacy owner-cut setters return
+`Deprecated`; `SubnetOwnerCut` and `OwnerCutEnabled` stay in metadata but
+drive no emission. Atlas does not read the vectors.
+`SubnetEmissionEnabled` off netuid **82** only. Emission bar
 is rank-pinned (N unset, default 32; q 0.75 explicit and inert; h unset,
 default 3). `set_root_weights` is retired (`Weights[ROOT]` cleared, the
 curation switch removed). `BasketTradingEnabled` is **true** (explicit).
@@ -84,9 +95,13 @@ growing that list (`HotkeySwapStakeRetained`, root credits in
 `HotkeySwapBasketCredits`). EIP-7702 authorization lists are capped at 255
 entries before signature recovery, and EVM nonces survive balance-account
 reaping (`EVM.AccountNonces`). Registration rules are unchanged at block
-9289187 (immunity 432,000, lock reduction 57,600, rate limit 14,400, all
-explicit). Spec 479 renamed, removed or reshaped no item Atlas reads, so no
-reader changed.
+9319037 (immunity 432,000, lock reduction 57,600, rate limit 14,400, all
+explicit). Spec 481 renamed, removed or reshaped no item Atlas reads, so no
+reader changed. Still open: the mining screen's miner share
+(`fleet/atlas_fleet_mining.py`) still comes from `SubnetOwnerCut` and
+`OwnerCutEnabled`. That is correct only for subnets still on their seeded
+vector. The fix needs a `SubnetEmissionWeights` read and a `fleet/` change,
+both outside the upgrade job's scope.
 
 Runtime upgrades are automated; see the runtime-upgrade entry above.
 Web leads stay out of the confirmed knowledge base (ATLAS-WEB-003).
