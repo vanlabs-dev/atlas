@@ -18,7 +18,7 @@ Fix: Replace with what the source actually says, or write "details of the mechan
 ### 1. Emissions described as single-token
 Patterns: "emissions paid in tao", "earning tao from emissions", "tao emissions distributed to miners/validators", "receives tao as emissions", "emissions in tao" (but NOT "tao flow"), "emissions paid only in alpha", "emissions are only alpha"
 
-Fix: Both TAO and alpha are injected into the pool each block. At tempo, alpha is distributed to participants via the fixed 18/41/41 split (owner/miners/validators), and the injected TAO backs the pool reserve. Do not describe emissions as only one token.
+Fix: Both TAO and alpha are injected into the pool each block. At tempo, alpha is distributed to participants by the subnet's emission weight vector (owner/validators/miners, 18/41/41 by default), and the injected TAO backs the pool reserve. Do not describe emissions as only one token.
 
 ### 2. Outdated emission rate
 Pattern: "7,200 tao" or "7200 tao" when NOT preceded by "from" or "dropped from"
@@ -52,7 +52,7 @@ Pattern: a subnet with real demand (nonzero moving price, nonzero demand share) 
 
 **Check**: the bar is a continuous Hill function of demand share. The pool-side emission switch is a binary root-settable per-netuid bool. The chain draws the bar first, then zeroes TAO for subnets whose switch is off and redistributes that TAO to the rest. Alpha distribution continues either way. A subnet can sit above the bar and still earn no TAO.
 
-Fix: name the pool-side emission switch (`SubnetEmissionEnabled`). Live off set (2026-10-16, spec 479, finalized block 9289187): netuids 29, 35, 36, 82, 92, 108, 116. Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
+Fix: name the pool-side emission switch (`SubnetEmissionEnabled`). Live off set (2026-10-20, spec 481, finalized block 9319037): netuid 82 only. Read the switch before naming any other subnet as off. Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
 
 ### 5. Validators mine
 Pattern: "validators mine/mining/produce work"
@@ -92,7 +92,7 @@ Fix: a rank-pinned bar IS a demand share, so it moves on its own as the distribu
 ### 7f. Root Reborn curation described as live, or a validator described as setting root weights
 Pattern: "curation is on/live/enabled", "`RootWeightSettingEnabled` is true", "validators set root weights", "validator X steers root dividends with `set_root_weights`", or "the cap is `RootWeightsCap`".
 
-Fix: Spec 469 retired `set_root_weights`, cleared `Weights[ROOT]`, and removed the `RootWeightSettingEnabled` switch (upstream migration `migrate_remove_root_weights`). Root dividends accumulate in place, and a fund's composition changes only through basket trades: `swap_basket` (one leg) or `swap_basket_many` (1 to 64 atomic legs), both gated by `BasketTradingEnabled` (explicit true). The cap is `BasketConcentrationCap` (7865, about 12% of fund NAV, explicit at finalized block 9289187; the 4096 = 1/16 code default is not the live value) and it checks basket-trade buys only, per leg. Do not describe a validator as curating with a weight vector. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
+Fix: Spec 469 retired `set_root_weights`, cleared `Weights[ROOT]`, and removed the `RootWeightSettingEnabled` switch (upstream migration `migrate_remove_root_weights`). Root dividends accumulate in place, and a fund's composition changes only through basket trades: `swap_basket` (one leg) or `swap_basket_many` (1 to 64 atomic legs), both gated by `BasketTradingEnabled` (explicit true). The cap is `BasketConcentrationCap` (7865, about 12% of fund NAV, explicit at finalized block 9319037; the 4096 = 1/16 code default is not the live value) and it checks basket-trade buys only, per leg. Do not describe a validator as curating with a weight vector. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
 
 ### 7g. Multi-leg basket rebalance described as non-atomic or unavailable
 Pattern: "a validator must submit one `swap_basket` per leg", "a rebalance can fail halfway and leave the fund part-traded", "up to 128 legs", a multi-leg rebalance that skips the per-trade guardrails, or a basket trade of any size above the staking minimum described as accepted.
@@ -112,7 +112,7 @@ Fix: a queued registration prepays the full price into its own escrow account (`
 ### 7j. Every subnet described as running Yuma
 Pattern: "all subnets use Yuma Consensus", "the top 64 validators on subnet X", "consensus clipping/bonds on subnet X", or a single validator permit, absent bonds, or one weight-setting validator on a subnet described as a fault or centralization failure, with no check of the subnet's epoch consensus.
 
-Fix: each subnet runs Yuma (default) or Null (`SubnetEpochConsensus`, chosen by the owner or root through `sudo_set_epoch_consensus`). Under Null, the single largest-stake hotkey holds the only permit and is the only key that can set weights; miner incentive follows its weights alone; dividends go to every staked UID in proportion to stake; there are no bonds or consensus clipping. The tempo and 18/41/41 split are unchanged. Do not name a subnet's mode without a chain read.
+Fix: each subnet runs Yuma (default) or Null (`SubnetEpochConsensus`, chosen by the owner or root through `sudo_set_epoch_consensus`). Under Null, the single largest-stake hotkey holds the only permit and is the only key that can set weights; miner incentive follows its weights alone; dividends go to every staked UID in proportion to stake; there are no bonds or consensus clipping. The tempo and the subnet's emission weight vector are the same in both modes. Do not name a subnet's mode without a chain read.
 
 ### 7k. PoW registration described as gone, or as universal, or its difficulty as root-only
 Pattern: "registration always burns TAO", "proof-of-work registration was removed", "anyone can register by PoW on any subnet", or "only root/governance can set a subnet's (minimum) PoW difficulty".
@@ -128,6 +128,11 @@ Fix: some lists lost entries before the current retention rule. A bounded idle-b
 Pattern: "after the swap all stake sits on the new hotkey", "delegators' stake left on the old hotkey means the swap failed", "the validator stranded its delegators", or "anyone can send stake to any coldkey".
 
 Fix: an all-subnets hotkey swap renames every delegator's entry. A single-subnet swap renames an entry when the delegator's stake under the old hotkey exists nowhere else; when following would need a second staking-list entry and the delegator has the growth opt-out on (`set_reject_staking_hotkey_growth`, call index 153) or is at the 128-entry third-party cap, its stake on that subnet stays on the old hotkey with its lock and auto-stake target, and the chain emits `HotkeySwapStakeRetained`. That is the protocol protecting the delegator, not a fault. A receiver with the opt-out on accepts stake transfers only onto hotkeys it already lists or owns (`AccountRejectsStakingHotkeyGrowth` otherwise). Whether a coldkey has the flag on needs a chain read.
+
+### 7n. Emission split described as fixed, or root's cut as owner-controlled
+Patterns: "the split is fixed at 18/41/41", "every subnet pays miners 41%", "the protocol fixes the owner cut at 18%", "owners cannot change the split", a specific subnet's owner/validator/miner share stated without a chain read, "the owner lowered the validator share so root stakers earn less", "`OwnerCutEnabled` is false so the owner earns nothing", or "this subnet has its own TAO weight".
+
+Fix: since spec 481 each non-root subnet has an emission weight vector `[burn, recycle, owner, validator, miner]` (`SubnetEmissionWeights`), seeded at 0/0/18/41/41 and set by the owner or root through `sudo_set_subnet_emission_weights` (call index 114): burn and recycle 0, owner 0 to 33% (lease-created subnets at least 18%), validator at most 50%, miner at least 33%, at most one owner change per 50,400 blocks per subnet. Root is paid `min(V, r)` of emission off the top of the validator slot, where `r` is root's baseline share computed with the default 41% validator share and the global `TaoWeight`. Lowering the validator share takes the difference from alpha validators, not from root, and a change that leaves alpha validators nothing at that block is rejected (`ValidatorEmissionTooLowToPreserveRoot`). The legacy `SubnetOwnerCut` / `OwnerCutEnabled` setters fail with `Deprecated` and no emission path reads those items. There is one global `TaoWeight`. Atlas does not read the vectors: never state a subnet's live split without a chain read.
 
 ## WARNINGS (verify but don't block)
 
