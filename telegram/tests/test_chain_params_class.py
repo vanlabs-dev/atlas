@@ -142,14 +142,14 @@ class GateBarModeTests(_Base):
         add_state(self.live_db, bar_mode="rank", rank=32)
         add_crossing(self.live_db, 49, "rose-above", 0.0090, 0.0073, 0.0088)
         text = self.body()
-        self.assertIn("Bar: 0.730% (the 32nd largest demand share)", text)
+        self.assertIn("Reward cutoff: 0.730% (the 32nd largest demand)", text)
         self.assertNotIn("q 0.75", text)
 
     def test_q_mass_mode_is_named(self):
         add_state(self.live_db, bar_mode="q-mass", rank=0, q=0.75)
         add_crossing(self.live_db, 49, "rose-above", 0.0090, 0.0073, 0.0088)
-        self.assertIn("Bar: 0.730% (a quantile of the demand-share "
-                      "distribution, q 0.75)", self.body())
+        self.assertIn("Reward cutoff: 0.730% (a quantile of the "
+                      "demand-share distribution, q 0.75)", self.body())
 
     def test_bar_driven_crossing_is_attributed_to_the_bar(self):
         # SN49's real 2026-08-03 numbers: share 0.0086 sat BELOW the old bar
@@ -158,26 +158,26 @@ class GateBarModeTests(_Base):
         add_state(self.live_db, bar_mode="rank", rank=32)
         add_crossing(self.live_db, 49, "rose-above", 0.0086, 0.0073, 0.0088)
         text = self.body()
-        self.assertIn("the bar moved onto this subnet", text)
-        self.assertIn("Bar moved " + tg.MINUS + "17.0%", text)
+        self.assertIn("the reward cutoff moved onto this subnet", text)
+        self.assertIn("Cutoff moved " + tg.MINUS + "17.0%", text)
 
     def test_share_driven_crossing_is_attributed_to_the_subnet(self):
         # SN9's real shape: bar near-static, share vaults across it.
         add_state(self.live_db, bar_mode="rank", rank=32)
         add_crossing(self.live_db, 9, "rose-above", 0.0192, 0.0079, 0.0078)
         text = self.body()
-        self.assertIn("the subnet's own demand share moved across", text)
-        self.assertNotIn("the bar moved onto", text)
+        self.assertIn("the subnet's own demand moved across", text)
+        self.assertNotIn("the reward cutoff moved onto", text)
 
     def test_legacy_crossing_asserts_neither_mode_nor_movement(self):
         # Recorded before the migration: no gate_state row, no prev_theta.
         add_crossing(self.live_db, 42, "fell-below", 0.005, 0.010, None)
         text = self.body()
-        self.assertIn("Bar: 1.000%\n", text)
-        self.assertNotIn("largest demand share", text)
-        self.assertNotIn("Bar moved", text)
+        self.assertIn("Reward cutoff: 1.000%\n", text)
+        self.assertNotIn("largest demand", text)
+        self.assertNotIn("Cutoff moved", text)
         self.assertNotIn("Cause:", text)
-        self.assertIn("Subnet 42 fell below the emission bar", text)
+        self.assertIn("Subnet 42 fell below the reward cutoff", text)
 
     def test_house_style_holds(self):
         add_state(self.live_db, bar_mode="rank", rank=32)
@@ -232,6 +232,48 @@ class ChainParameterClassTests(_Base):
         self.assertIn("Setting: BasketConcentrationCap, 4,096 → 2,048", text)
         self.assertNotIn("days", text)
 
+    def shipped(self):
+        shipped = tg.load_config()["classes"]["chain-parameter-change"]
+        self.spec["governs"] = shipped["governs"]
+        self.spec["display"] = shipped["display"]
+
+    def test_collateral_lock_share_reads_as_percentage(self):
+        self.shipped()
+        add_param_event(self.live_db, "CollateralLockShare", "0", "62258",
+                        netuid=82)
+        text = self.events()[0][0]["text"]
+        self.assertIn("Registration collateral lock changed: 0% → 95%",
+                      text.split("\n")[0])
+        self.assertIn("Setting: CollateralLockShare, 0 → 62,258 (of 65,535)",
+                      text)
+        self.assertNotIn("65535 = 100%", text)
+
+    def test_basket_cap_reads_as_percentage(self):
+        self.shipped()
+        add_param_event(self.live_db, "BasketConcentrationCap", "4096",
+                        "7865")
+        text = self.events()[0][0]["text"]
+        self.assertIn("Fund holding cap: 6.25% → 12%", text)
+        self.assertIn("4,096 → 7,865 (of 65,535)", text)
+
+    def test_filler_and_duplicate_description_removed(self):
+        self.shipped()
+        add_param_event(self.live_db, "SubnetEmissionEnabled", "true",
+                        "false", netuid=103)
+        add_param_event(self.live_db, "CollateralLockShare", "0", "62258",
+                        netuid=82)
+        for event in self.events()[0]:
+            text = event["text"]
+            outside = text.split("\n\nSetting:")[0]
+            self.assertNotIn("Before:", text)
+            self.assertNotIn("Governs:", text)
+            self.assertNotIn("SubnetEmissionEnabled", outside)
+            self.assertNotIn("CollateralLockShare", outside)
+            self.assertNotIn("Block ", outside)
+            # the description appears at most once
+            for line in text.split("\n"):
+                self.assertLessEqual(text.count(line), 1) if len(line) > 40 else None
+
     def test_missing_table_is_inert(self):
         bare = os.path.join(self.tmp.name, "bare.db")
         sqlite3.connect(bare).close()
@@ -250,12 +292,12 @@ class ChainParameterClassTests(_Base):
                          "chain-parameter-change:%d" % row_id)
         text = event["text"]
         self.assertIn("Setting: BasketConcentrationCap, 4,096 → 2,048", text)
-        self.assertIn("Before: chain default, not stored. After: stored "
-                      "value.", text)
+        self.assertNotIn("Before:", text)
+        self.assertNotIn("stored value", text)
+        self.assertNotIn("Governs:", text)
         self.assertIn("Block 8,766,216", text)
-        self.assertIn("swap_basket concentration cap", text)
-        self.assertIn("Next: review root basket positions", text)
-        self.assertIn("concentration cap moved", text)
+        self.assertIn("Swap_basket concentration cap", text)
+        self.assertIn("Next: review your basket positions", text)
         self.assertNotIn("re-priced", text)   # not a bar parameter
         self.assertNotIn(EM_DASH, text)
         self.assertIn("<b>", event["html"])
@@ -265,7 +307,10 @@ class ChainParameterClassTests(_Base):
         # glosses, the cap gains one, and the root-rotation class is gone.
         shipped = tg.load_config()
         governs = shipped["classes"]["chain-parameter-change"]["governs"]
-        self.assertIn("1/16", governs["BasketConcentrationCap"])
+        # The description is value-free: the cap moved from 4096 (1/16) to
+        # 7865 on 2026-10-08, so a figure in the text would go stale.
+        self.assertIn("swap_basket", governs["BasketConcentrationCap"])
+        self.assertNotIn("1/16", governs["BasketConcentrationCap"])
         for item in ("RootWeightSettingEnabled", "RootWeightsCap"):
             self.assertNotIn(item, governs)
         self.assertNotIn("root-rotation", shipped["classes"])
@@ -399,3 +444,4 @@ class ChainParameterClassTests(_Base):
 
 if __name__ == "__main__":
     unittest.main()
+

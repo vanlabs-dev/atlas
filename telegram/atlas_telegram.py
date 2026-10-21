@@ -1164,14 +1164,14 @@ def _both_clocks_line(new_spec: Optional[int],
     """The repo-vs-live-chain distinction, stated on every repo alert as
     one plain sentence: is this code live yet?"""
     if live is None:
-        return ("Live runtime spec n/a, so Atlas cannot compare. This is a "
+        return ("The live version is n/a, so Atlas cannot compare. This is a "
                 "repo (source code) event only.")
     live_spec = live["spec_version"]
     if new_spec is None:
-        return ("The live chain runs spec %d. This repo range records no "
-                "runtime spec, so it is not live on chain." % live_spec)
+        return ("The live chain runs version %d. This repo range records no "
+                "version, so it is not live on chain." % live_spec)
     if new_spec > live_spec:
-        return ("The live chain runs spec %d. These repo changes go live "
+        return ("The live chain runs version %d. These repo changes go live "
                 "only when the chain upgrades." % live_spec)
     if new_spec == live_spec:
         return ("The live chain already runs spec %d. This repo range is "
@@ -1379,11 +1379,11 @@ def _repo_headline(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
     if (prev_spec is not None and new_spec is not None
             and prev_spec != new_spec):
         if live is None:
-            return "Subtensor code moved to runtime spec %d" % new_spec
+            return "Subtensor code moved to version %d" % new_spec
         if new_spec > live["spec_version"]:
-            return ("Subtensor code for runtime spec %d is ready. Not live "
+            return ("Subtensor code for version %d is ready. Not live "
                     "yet." % new_spec)
-        return ("Subtensor code moved to runtime spec %d (live chain: %d)"
+        return ("Subtensor code moved to version %d (live chain: %d)"
                 % (new_spec, live["spec_version"]))
     if verdict.startswith("large or incomplete"):
         return "Large or incomplete subtensor update: review it"
@@ -1397,6 +1397,15 @@ def _repo_headline(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
     if verdict.startswith("node"):
         return "Subtensor node code changed"
     return "Subtensor code changed"
+
+
+def _fold_extra_facts(facts: List[Tuple[str, str]], details: List[str],
+                      keep: int = 2) -> Tuple[List[Tuple[str, str]],
+                                              List[str]]:
+    """At most `keep` key figures stay outside the fold; the rest lead the
+    details fold as `Label: value` lines (change: plain-english-alerts)."""
+    extra = ["%s: %s" % (label, value) for label, value in facts[keep:]]
+    return list(facts[:keep]), extra + list(details)
 
 
 def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
@@ -1424,13 +1433,14 @@ def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
         "at least " if rng["commits_truncated"] else "",
         plural(len(rng["commits"]), "commit"),
         at_least, plural(len(rng["files"]), "file")))]
+    protocol_fact: Optional[Tuple[str, str]] = None
     if core:
         adds = sum(a["adds"] for a in core)
         dels = sum(a["dels"] for a in core)
-        facts.append(("Protocol code", "%s+%s / %s%s lines" % (
+        protocol_fact = ("Protocol code", "%s+%s / %s%s lines" % (
             at_least, _compact(adds), MINUS, _compact(dels))
             if adds or dels else "%s%s" % (
-                at_least, plural(sum(a["files"] for a in core), "file"))))
+                at_least, plural(sum(a["files"] for a in core), "file")))
         words: List[str] = []
         for entry in _pallet_domains(rng["file_entries"],
                                      policy["pallet_map"]):
@@ -1446,6 +1456,8 @@ def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
                     words.append(word)
         if words:
             facts.append(("Areas", " · ".join(rec(w) for w in words[:5])))
+    if protocol_fact:
+        facts.append(protocol_fact)
     if unknown:
         facts.append(("New area", " · ".join(
             rec(a["area"]) for a in unknown[:4])))
@@ -1496,6 +1508,7 @@ def _build_repo_event(rng: Dict[str, Any], live: Optional[Dict[str, Any]],
         details.extend(_digest_details(pending))
     details.append("Built from recorded change data. Effects not verified.")
 
+    facts, details = _fold_extra_facts(facts, details)
     msg = Message(severity="watch",
                   headline=_repo_headline(rng, live, verdict, areas),
                   meaning=_both_clocks_line(rng["new_spec"], live),
@@ -1692,9 +1705,8 @@ def chain_runtime_upgrade_events(source_db: str, watermark: Optional[str],
     for row_id, observed_at, prev_spec, new_spec, block in rows:
         high = max(high, int(row_id))
         crossed = prev_spec < threshold <= new_spec
-        meaning = ("The live chain now runs new code (was %s). This is an "
-                   "enacted live chain change, not a repo change."
-                   % prev_spec)
+        meaning = ("The network itself changed (was version %s), not only "
+                   "the code on GitHub." % prev_spec)
         next_action = None
         if crossed:
             meaning += (" Governance spec %d is crossed: conviction-based "
@@ -1706,18 +1718,19 @@ def chain_runtime_upgrade_events(source_db: str, watermark: Optional[str],
         # touched areas; its absence is stated, never guessed around.
         release = _release_for_upgrade(spec.get("repo_db"), new_spec)
         facts = [("Release", rec(release["subject"]) if release else
-                  "not matched to a tracked repo range yet")]
-        if release and release["areas"]:
-            facts.append(("Touched", rec(release["areas"])))
-        facts.append(("When", fmt_time(observed_at)))
+                  "not matched to a tracked repo range yet"),
+                 ("When", fmt_time(observed_at))]
+        touched = ["Touched: %s" % rec(release["areas"])] if (
+            release and release["areas"]) else []
         msg = Message(
             severity=severity_for("chain-runtime-upgrade",
                                   governance_crossed=crossed),
-            headline="Bittensor upgraded to runtime spec %s" % new_spec,
+            headline="Bittensor just updated its software (version %s)" % new_spec,
             meaning=meaning, facts=facts,
-            details=["Block %s" % fmt_int(block),
-                     "Runtime spec %s → %s" % (prev_spec, new_spec),
-                     "Source: livedata spec record (live chain)"],
+            details=touched + ["Block %s" % fmt_int(block),
+                               "Runtime spec %s → %s" % (prev_spec,
+                                                         new_spec),
+                               "Source: livedata spec record (live chain)"],
             next_action=next_action,
             buttons=button(config, "Subtensor releases",
                            "subtensor_releases"))
@@ -1761,9 +1774,10 @@ def schema_drift_events(source_db: str, watermark: Optional[str],
             meaning=("Atlas rejects the new replies rather than guess, so "
                      "this source shows n/a until the expected format is "
                      "updated."),
-            facts=[("What changed", rec(_clip_words(detail or "n/a", 300))),
-                   ("Since", fmt_time(ts))],
-            details=["Provider: %s · operation: %s" % (rec(provider),
+            facts=[("Since", fmt_time(ts))],
+            details=["What changed: %s" % rec(_clip_words(detail or "n/a",
+                                                          300)),
+                     "Provider: %s · operation: %s" % (rec(provider),
                                                         rec(operation)),
                      "Source: livedata integration health"],
             next_action="update the pinned schema for %s %s under %s."
@@ -1787,10 +1801,10 @@ def provider_name(provider: Any) -> str:
 def knowledge_ingestion_events(source_db: str, watermark: Optional[str],
                                ctx: Optional[Dict[str, Any]] = None
                                ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    """A knowledge intake run staged new units. Staged units are not
-    active until the operator reviews the run and activates it, so the
-    next-action rides the recorded staged count (zero staged: nothing to
-    review, no action line)."""
+    """A knowledge intake run added units (change: plain-english-alerts).
+    The upgrade job ingests and activates a run itself, so the message
+    states whether the run is already in use and asks for an action only
+    when the audit trail shows the run was never activated."""
     conn = open_source_ro(source_db)
     if conn is None:
         return [], watermark
@@ -1803,10 +1817,18 @@ def knowledge_ingestion_events(source_db: str, watermark: Optional[str],
             "WHERE run_id > ? ORDER BY run_id ASC LIMIT 50",
             (watermark or "",)).fetchall()
         staged_counts = {}
+        activated = {}
+        has_audit = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND "
+            "name = 'audit'").fetchone() is not None
         for rid, _intake_date, _coverage_date in rows:
             staged_counts[rid] = conn.execute(
-                "SELECT COUNT(*) FROM units WHERE run_id = ? AND active = 0",
+                "SELECT COUNT(*) FROM units WHERE run_id = ?",
                 (rid,)).fetchone()[0]
+            activated[rid] = bool(has_audit and conn.execute(
+                "SELECT 1 FROM audit WHERE action = 'activate' AND "
+                "detail LIKE ? LIMIT 1",
+                ("run %s activated%%" % rid,)).fetchone())
     finally:
         conn.close()
 
@@ -1821,22 +1843,26 @@ def knowledge_ingestion_events(source_db: str, watermark: Optional[str],
         details = ["Run %s" % mono(rid), "Ingested %s" % rec(intake_date),
                    "Source: knowledge intake store"]
         if staged > 0:
+            in_use = activated.get(rid, False)
+            if not in_use:
+                details.append("Activate: %s" % mono(
+                    "python3 knowledge/atlas_kb.py activate --run %s" % rid))
             msg = Message(
-                severity=severity_for("knowledge-ingestion", staged=staged),
-                headline="%s new knowledge unit%s waiting for review"
-                         % (fmt_int(staged), "s are" if staged != 1
-                            else " is"),
-                meaning="Staged units stay inactive until you activate "
-                        "them.",
+                severity=severity_for("knowledge-ingestion",
+                                      staged=0 if in_use else staged),
+                headline="Atlas learned %s new Bittensor fact%s"
+                         % (fmt_int(staged), "" if staged == 1 else "s"),
+                meaning=("They are already in use. Nothing for you to do."
+                         if in_use else
+                         "They are saved but not switched on yet."),
                 facts=[("Covers", "up to %s" % rec(coverage))],
                 details=details,
-                next_action="review the units, then run %s"
-                            % mono("python3 knowledge/atlas_kb.py activate "
-                                   "--run %s" % rid))
+                next_action=None if in_use else
+                "review the new facts, then activate them.")
         else:
             msg = Message(
                 severity=severity_for("knowledge-ingestion", staged=0),
-                headline="Knowledge ingest finished, nothing new to review",
+                headline="Knowledge check finished, nothing new",
                 facts=[("Covers", "up to %s" % rec(coverage))],
                 details=details)
         events.append(message_event(msg, "knowledge-ingestion:%s" % rid,
@@ -2031,54 +2057,58 @@ def _gate_crossing_event(event_id: str, observed_at: str, netuid: int,
         bar_move = (theta - prev_theta) / prev_theta * 100.0
         crossed_by_bar = ((prev_theta > share >= theta) if not fell
                           else (prev_theta < share <= theta))
-        cause = ("the bar moved onto this subnet, its demand share did not "
-                 "cross on its own" if crossed_by_bar else
-                 "the subnet's own demand share moved across the bar")
-        details.append("Bar moved %s this poll (%s → %s)" % (
+        cause = ("the reward cutoff moved onto this subnet, its demand did "
+                 "not cross on its own" if crossed_by_bar else
+                 "the subnet's own demand moved across the reward cutoff")
+        details.append("Cutoff moved %s this poll (%s → %s)" % (
             fmt_change(bar_move), fmt_pct(prev_theta), fmt_pct(theta)))
-    details.append("Shares: TaoSwap panel. Bar: chain RPC.")
+    details.append("Demand: TaoSwap panel. Cutoff (the emission bar): chain RPC.")
     details.append("Block %s · %s" % (fmt_int(block_number),
                                       fmt_time(observed_at)))
     buttons = button(config, "Subnet %d on taostats" % netuid,
                      "taostats_subnet", netuid=netuid)
-    above_below = "%s %s the bar" % (fmt_change(abs(margin_pct)).lstrip("+"),
+    above_below = "%s %s the cutoff" % (fmt_change(abs(margin_pct)).lstrip("+"),
                                      "below" if margin_pct < 0 else "above")
     if emission_enabled == 0:
         msg = Message(
             severity=severity_for("gate-crossing", emission_enabled=0,
                                   direction=direction),
-            headline="%s %s the emission bar, no effect" % (label, verb),
+            headline="%s %s the reward cutoff, no effect" % (label, verb),
             meaning="Emission is switched off for this subnet, so it earns "
                     "zero either way.",
-            details=["Demand share %s, bar %s (%s)" % (
+            details=["Demand share %s, emission bar %s (%s)" % (
                 fmt_pct(share), fmt_pct(theta), above_below)] + details,
             buttons=buttons)
         return message_event(msg, event_id, "gate-crossing", _utc_now(),
                              max_chars, glosses)
-    meaning = ("Its demand share dropped under the bar, so its gated "
-               "emission collapses toward zero." if fell else
-               "Its demand share passed the bar, so it now earns an "
-               "amplified emission share instead of a collapsing one.")
+    meaning = ("Demand for this subnet dropped under the reward cutoff, "
+               "so its rewards shrink toward zero." if fell else
+               "Demand for this subnet rose past the reward cutoff. "
+               "Subnets above it get boosted rewards. Subnets below it get "
+               "shrinking rewards.")
     # The bar's selection rule (change: network-drift-443). Never infer it:
     # a q recorded while rank mode is active is inert.
     if bar_mode == "rank":
-        bar_value = "%s (the %s largest demand share)" % (
+        bar_value = "%s (the %s largest demand)" % (
             fmt_pct(theta), _ordinal(bar_rank))
     elif bar_mode == "q-mass":
         bar_value = ("%s (a quantile of the demand-share distribution, "
                      "q %s)" % (fmt_pct(theta), rec(bar_q)))
     else:
         bar_value = fmt_pct(theta)
-    facts = [("Demand share", "%s, %s" % (fmt_pct(share), above_below)),
-             ("Bar", bar_value)]
+    facts = [("Its demand", fmt_pct(share)),
+             ("Reward cutoff", bar_value)]
+    details.insert(0, "Demand share is %s" % above_below.replace(
+        "the cutoff", "the emission bar"))
     if cause:
         facts.append(("Cause", cause))
     if price is not None:
         facts.append(("Price", fmt_tao(price)))
+    facts, details = _fold_extra_facts(facts, details)
     msg = Message(
         severity=severity_for("gate-crossing", emission_enabled=1,
                               direction=direction),
-        headline="%s %s the emission bar" % (label, verb),
+        headline="%s %s the reward cutoff" % (label, verb),
         meaning=meaning, facts=facts, details=details,
         next_action=("review your subnet %d position." % netuid
                      if fell else None),
@@ -2528,6 +2558,23 @@ def _switch_body_line(base_item: str, new_value: str) -> Optional[str]:
 
 
 BLOCKS_PER_DAY = 7200
+U16_MAX = 65535
+
+
+def _u16_share(value: Any) -> Optional[str]:
+    """`95%` for a u16 fixed-point fraction of 65,535, or None when the
+    value is not one. Two decimals at most, trailing zeros dropped."""
+    text = rec(value)
+    if not text.isdigit() or int(text) > U16_MAX:
+        return None
+    share = ("%.2f" % (int(text) * 100.0 / U16_MAX)).rstrip("0").rstrip(".")
+    return share + "%"
+
+
+def _sentence(text: Any) -> str:
+    """A recorded description opened with a capital letter."""
+    text = rec(text).strip()
+    return text[:1].upper() + text[1:]
 
 
 def _block_days(value: Any) -> Optional[str]:
@@ -2574,13 +2621,24 @@ def _render_param_event(item: str, prev_value: str, new_value: str,
     shown = (display or {}).get(base_item) or {}
     label = shown.get("label") if isinstance(shown, dict) else None
     in_days = None
+    as_share = None
+    raw_change = change
     if label and shown.get("unit") == "blocks":
         prev_days, new_days = _block_days(prev_value), _block_days(new_value)
         if prev_days and new_days:
             in_days = (prev_days, new_days)
-            change = "%s blocks (%s) → %s blocks (%s)" % (
+            raw_change = "%s blocks (%s) → %s blocks (%s)" % (
                 _param_value(prev_value), prev_days,
                 _param_value(new_value), new_days)
+            change = "%s → %s" % in_days
+    elif label and shown.get("unit") == "u16-fraction":
+        prev_share, new_share = _u16_share(prev_value), _u16_share(new_value)
+        if prev_share and new_share:
+            as_share = (prev_share, new_share)
+            raw_change = "%s → %s (of %s)" % (
+                _param_value(prev_value), _param_value(new_value),
+                fmt_int(U16_MAX))
+            change = "%s → %s" % as_share
 
     meaning: Optional[str] = None
     next_action: Optional[str] = None
@@ -2599,20 +2657,23 @@ def _render_param_event(item: str, prev_value: str, new_value: str,
                 "Its ", "Their ")
     elif base_item in ("EmissionBarRank", "EmissionBarQuantile",
                        "EmissionGateExponent"):
-        headline = "Emission bar rule changed: %s %s" % (base_item, change)
+        headline = "Reward cutoff rule changed: %s" % change
         parts = []
         if base_item == "EmissionBarRank":
             if str(new_value) == "0":
-                parts.append("The bar has fallen back to q-mass selection.")
+                parts.append("The cutoff has fallen back to q-mass selection.")
             elif str(prev_value) == "0":
-                parts.append("The bar is now rank-pinned; q is inert.")
-        parts.append("The bar was re-priced for every subnet. Per-subnet "
+                parts.append("The cutoff is now rank-pinned; q is inert.")
+        parts.append("The cutoff was re-priced for every subnet. Per-subnet "
                      "crossing alerts were withheld for that pass by "
                      "design.")
         meaning = " ".join(parts)
         next_action = "review your subnet positions against the new gate terms."
     elif in_days and not collapsed and single is None:
-        headline = "%s changed: %s → %s" % (label, in_days[0], in_days[1])
+        headline = "%s changed: %s" % (label, change)
+    elif as_share and not collapsed:
+        headline = "%s%s changed: %s" % (
+            (where + ": ") if where else "", label, change)
     elif collapsed:
         headline = "%s changed on %d subnets" % (base_item, count)
     elif where:
@@ -2620,37 +2681,44 @@ def _render_param_event(item: str, prev_value: str, new_value: str,
     else:
         headline = "Chain setting changed: %s" % base_item
     if base_item == "BasketConcentrationCap":
-        next_action = ("review root basket positions; the swap_basket "
-                       "concentration cap moved.")
+        next_action = "review your basket positions."
     elif base_item == "SubnetEmissionEnabled":
         next_action = ("if you hold %s alpha, review that position."
                        % (("subnet %d" % single) if single is not None
                           else "an affected subnet's"))
     if meaning is None:
-        meaning = (rec(description) if description else
+        meaning = (_sentence(description) if description else
                    "Atlas has no plain description of this setting yet.")
     if not description and next_action is None:
         next_action = ("add %s to %s in telegram/config.json."
                        % (base_item, mono("classes.chain-parameter-change"
                                           ".governs")))
 
-    facts = [("Setting", "%s, %s%s" % (
-        base_item, change,
-        " (pool-side emission switch)"
-        if base_item == "SubnetEmissionEnabled" else ""))]
+    # At most two key figures; the setting name, block and raw values sit
+    # in the fold (change: plain-english-alerts).
+    facts = []
+    if as_share or in_days:
+        facts.append((label, change))
+    elif base_item != "SubnetEmissionEnabled":
+        facts.append(("Change", change))
     if collapsed:
         facts.append(("Subnets", fmt_int(count)))
-    facts.append(("When", fmt_time(observed_at)))
-    details = ["Block %s" % fmt_int(block_number),
-               "Before: %s. After: %s." % (
-                   _PROVENANCE_WORDS.get(prev_prov, rec(prev_prov)),
-                   _PROVENANCE_WORDS.get(new_prov, rec(new_prov)))]
-    if description and base_item in ("SubnetEmissionEnabled",
-                                     "EmissionBarRank",
-                                     "EmissionBarQuantile",
-                                     "EmissionGateExponent",
-                                     "BasketConcentrationCap"):
-        details.append("Governs: %s" % rec(description))
+    if len(facts) < 2:
+        facts.append(("When", fmt_time(observed_at)))
+    details = ["Setting: %s, %s%s" % (
+        base_item, raw_change,
+        " (pool-side emission switch)"
+        if base_item == "SubnetEmissionEnabled" else ""),
+               "Block %s" % fmt_int(block_number)]
+    if len(facts) == 2 and facts[-1][0] != "When":
+        details.append("Changed: %s" % fmt_time(observed_at))
+    if (description and _sentence(description) != meaning
+            and base_item in ("SubnetEmissionEnabled",
+                              "EmissionBarRank",
+                              "EmissionBarQuantile",
+                              "EmissionGateExponent",
+                              "BasketConcentrationCap")):
+        details.append(_sentence(description))
     if collapsed and netuids:
         shown = netuids[:_NETUID_LIST_CAP]
         listing = ", ".join(subnet_tag(n, names) for n in shown)

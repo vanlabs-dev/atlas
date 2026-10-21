@@ -79,6 +79,26 @@ def _canon_tables():
     return lexicon, glosses
 
 
+def _alert_terms():
+    """Alert plain terms from voice.md section 2a: concept -> (alert word,
+    technical term kept in the fold)."""
+    with open(VOICE_MD, "r", encoding="utf-8") as handle:
+        doc = handle.read()
+    rows = []
+    for line in doc.split("Alert plain terms:", 1)[1].splitlines():
+        if line.strip().startswith("|"):
+            rows.append(line)
+        elif rows:
+            break
+    terms = {}
+    for row in rows[2:]:
+        concept, word, technical = [c.strip() for c in
+                                    row.strip().strip("|").split("|")][:3]
+        terms[concept] = (re.findall(r"`([^`]+)`", word)[0],
+                          re.findall(r"`([^`]+)`", technical)[0])
+    return terms
+
+
 def _banned_hits(text, banned):
     """Banned tokens per the voice.md matching rules: word boundaries,
     case-insensitive for all-lowercase tokens, case-sensitive for tokens
@@ -115,6 +135,17 @@ class CanonConformanceTests(unittest.TestCase):
                           "config gloss term not in canon: %s" % term)
             self.assertEqual(glosses[term], gloss,
                              "gloss text drifted for: %s" % term)
+
+    def test_alert_terms_match_canon(self):
+        with open(tg.CONFIG_FILE, "r", encoding="utf-8") as handle:
+            shipped = json.load(handle)
+        canon = _alert_terms()
+        self.assertEqual(
+            shipped["voice"]["alert_terms"],
+            {concept: word for concept, (word, _tech) in canon.items()})
+        lexicon, _glosses = _canon_tables()
+        for concept in canon:
+            self.assertIn(concept, lexicon)
 
     def test_voice_maps_fail_closed(self):
         with self.assertRaises(tg.FatalTelegramError):
@@ -173,6 +204,10 @@ CREATE TABLE intake_runs (
 );
 CREATE TABLE units (
     id INTEGER PRIMARY KEY, run_id TEXT NOT NULL, active INTEGER NOT NULL
+);
+CREATE TABLE audit (
+    id INTEGER PRIMARY KEY, timestamp TEXT, actor TEXT, action TEXT,
+    detail TEXT
 );
 """
 
@@ -272,9 +307,20 @@ class RenderedClassBase(unittest.TestCase):
             "INSERT INTO intake_runs VALUES "
             "('20260813T020000Z-cd34', '2026-08-13', '2026-08-12', "
             "'1', '1', '{}')")
+        conn.execute(
+            "INSERT INTO intake_runs VALUES "
+            "('20260813T030000Z-ef56', '2026-08-13', '2026-08-12', "
+            "'1', '1', '{}')")
         for _ in range(2):
             conn.execute("INSERT INTO units (run_id, active) VALUES "
                          "('20260813T010000Z-ab12', 0)")
+        conn.execute("INSERT INTO units (run_id, active) VALUES "
+                     "('20260813T030000Z-ef56', 1)")
+        conn.execute(
+            "INSERT INTO audit (timestamp, actor, action, detail) VALUES "
+            "('2026-08-13T03:00:05+00:00', 'atlas-upgrade', 'activate', "
+            "'run 20260813T030000Z-ef56 activated (1 units); prior active "
+            "runs deactivated')")
         conn.commit()
         conn.close()
 
@@ -343,14 +389,40 @@ class RenderedClassBase(unittest.TestCase):
 class PerClassVoiceTests(RenderedClassBase):
     def test_every_event_layout_invariants(self):
         events = self.all_events()
-        self.assertEqual(len(events), 13)
+        self.assertEqual(len(events), 14)
         for event in events:
             self.assert_layout_invariants(event)
 
+    def test_technical_detail_stays_in_the_fold(self):
+        # change: plain-english-alerts. At most two labelled key figures
+        # outside the fold, and no block, run id, SHA or setting name.
+        for event in self.all_events():
+            html = event["html"]
+            outside = re.sub(r"<blockquote expandable>.*?</blockquote>", "",
+                             html, flags=re.S)
+            figures = [m for m in re.findall(r"<b>([^<]+):</b>", outside)
+                       if m != "Next"]
+            self.assertLessEqual(len(figures), 2, event["event_id"])
+            self.assertNotRegex(outside, r"\bBlock [\d,]+", event["event_id"])
+            self.assertNotRegex(re.sub(r"<[^>]+>", "", outside),
+                                r"\b(?=[0-9]*[a-f])[0-9a-f]{8,}\b",
+                                event["event_id"])
+            self.assertNotIn("Before:", event["text"])
+            self.assertNotIn("Governs:", event["text"])
+            headline = event["text"].split("\n")[0].lower()
+            for old in ("emission bar", "demand share", "runtime spec"):
+                self.assertNotIn(old, headline, event["event_id"])
+            self.assertNotRegex(outside, r"[A-Z][a-z]+[A-Z][A-Za-z]+Enabled",
+                                event["event_id"])
+
     def test_no_banned_synonyms_anywhere(self):
         lexicon, _glosses = _canon_tables()
+        # An alert plain term is approved in alerts even where the chat
+        # lexicon bans it (voice.md section 2a).
+        plain = {word for word, _tech in _alert_terms().values()}
         banned = [token for entry in lexicon.values()
-                  for token in entry["banned"]]
+                  for token in entry["banned"]
+                  if not any(token in word.split() for word in plain)]
         for event in self.all_events():
             for rendered in (event["text"], event["html"]):
                 self.assertEqual(_banned_hits(rendered, banned), [],
@@ -359,13 +431,13 @@ class PerClassVoiceTests(RenderedClassBase):
     def test_gate_crossing_voice(self):
         fell, rose = self.events["gate-crossing"]
         self.assertEqual(fell["text"].split("\n")[0],
-                         "🔴 Subnet 42 fell below the emission bar")
-        self.assertIn("gated emission collapses toward zero", fell["text"])
-        for word in ("demand share", "bar"):
+                         "🔴 Subnet 42 fell below the reward cutoff")
+        self.assertIn("its rewards shrink toward zero", fell["text"])
+        for word in ("demand", "reward cutoff"):
             self.assertIn(word, fell["text"])
-        self.assertIn("Shares: TaoSwap panel. Bar: chain RPC.",
-                      fell["text"])
-        self.assertIn("Bar: 0.930% (the 32nd largest demand share)",
+        self.assertIn("Demand: TaoSwap panel. Cutoff (the emission bar): "
+                      "chain RPC.", fell["text"])
+        self.assertIn("Reward cutoff: 0.930% (the 32nd largest demand)",
                       fell["text"])
         self.assertEqual(fell["text"].split("\n")[-1],
                          "Next: review your subnet 42 position.")
@@ -379,7 +451,7 @@ class PerClassVoiceTests(RenderedClassBase):
     def test_chain_runtime_upgrade_voice(self):
         crossing, plain = self.events["chain-runtime-upgrade"]
         self.assertEqual(crossing["text"].split("\n")[0],
-                         "🔴 Bittensor upgraded to runtime spec 430")
+                         "🔴 Bittensor just updated its software (version 430)")
         for word in ("live chain", "governance spec"):
             self.assertIn(word.lower(), crossing["text"].lower())
         self.assertIn("Block 8,612,004", crossing["text"])
@@ -398,12 +470,10 @@ class PerClassVoiceTests(RenderedClassBase):
     def test_chain_parameter_change_voice(self):
         bar, knob = self.events["chain-parameter-change"]
         self.assertEqual(bar["text"].split("\n")[0],
-                         "🔴 Emission bar rule changed: EmissionBarRank "
-                         "0 → 3")
-        self.assertIn("emission gate", bar["text"])
-        self.assertIn("Governs:", bar["text"])
-        self.assertIn("Before: chain default, not stored. After: stored "
-                      "value.", bar["text"])
+                         "🔴 Reward cutoff rule changed: 0 → 3")
+        self.assertIn("Emission gate", bar["text"])
+        self.assertNotIn("Governs:", bar["text"])
+        self.assertNotIn("Before:", bar["text"])
         self.assertIn("Next: review your subnet positions against the "
                       "new gate terms", bar["text"])
         # no governs entry: says so, and the action names the config key
@@ -414,8 +484,8 @@ class PerClassVoiceTests(RenderedClassBase):
     def test_repository_update_voice(self):
         spec_bump = self.events["repository-update"][0]
         headline = spec_bump["text"].split("\n")[0]
-        self.assertTrue(headline.startswith("🟠 Subtensor code for runtime "
-                                            "spec 428"))
+        self.assertTrue(headline.startswith("🟠 Subtensor code for version "
+                                            "428"))
         # glosses never reach a headline or recorded data
         self.assertNotIn("(the chain's runtime code version)",
                          spec_bump["text"])
@@ -445,18 +515,28 @@ class PerClassVoiceTests(RenderedClassBase):
         self.assertIn("What changed: n/a", no_detail["text"])
 
     def test_knowledge_ingestion_voice(self):
-        staged, empty = self.events["knowledge-ingestion"]
+        staged, empty, in_use = self.events["knowledge-ingestion"]
+        # never activated: says so and asks for the one real action
         self.assertEqual(staged["text"].split("\n")[0],
-                         "🟠 2 new knowledge units are waiting for review")
+                         "🟠 Atlas learned 2 new Bittensor facts")
+        self.assertIn("not switched on yet", staged["text"])
         self.assertIn("Source: knowledge intake store", staged["text"])
-        self.assertIn("python3 knowledge/atlas_kb.py activate --run "
-                      "20260813T010000Z-ab12", staged["text"].split(
-                          "\n")[-1])
+        self.assertIn("Next: review the new facts, then activate them.",
+                      staged["text"])
         self.assertIn("<code>python3 knowledge/atlas_kb.py activate --run "
                       "20260813T010000Z-ab12</code>", staged["html"])
-        # zero staged: nothing to review, no action line
+        # zero units: nothing new, no action line
         self.assertTrue(empty["text"].startswith("🔵 "))
+        self.assertIn("nothing new", empty["text"])
         self.assertNotIn("Next:", empty["text"])
+        # activated by the upgrade job: already in use, no action, no
+        # command in the message body
+        self.assertEqual(in_use["text"].split("\n")[0],
+                         "🔵 Atlas learned 1 new Bittensor fact")
+        self.assertIn("already in use. Nothing for you to do.",
+                      in_use["text"])
+        self.assertNotIn("Next:", in_use["text"])
+        self.assertNotIn("activate --run", in_use["text"])
 
 
 class GlossFrameTests(unittest.TestCase):

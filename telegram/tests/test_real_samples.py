@@ -108,7 +108,7 @@ class RealSampleTests(unittest.TestCase):
         self.assertTrue(events)
         for event in events:
             self.check(event)
-            self.assertIn("emission bar", event["text"].split("\n")[0])
+            self.assertIn("reward cutoff", event["text"].split("\n")[0])
 
     def test_schema_drift(self):
         events, _ = tg.schema_drift_events(self.live, None, self.ctx())
