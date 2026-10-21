@@ -95,6 +95,23 @@ all-lowercase tokens match case-insensitively, tokens containing uppercase
 template text; recorded free text (commit subjects, provider detail) is
 data and is exempt.
 
+### 2a. Alert plain terms (change: plain-english-alerts)
+
+Paged alerts are read by a non-specialist, so their headlines, meaning
+sentences, key figures and body lines use the plain word below. The
+technical term stays in the details fold, where it is data. Chat is
+unchanged: it keeps the approved word in the table above. The pulse
+briefing keeps the approved word until its editions return. A plain word
+here is exempt from the banned list above, in alerts only.
+
+Alert plain terms:
+
+| Concept | Alert word | Technical term, kept in the fold |
+|---|---|---|
+| emission-gate bar | `reward cutoff` | `emission bar` |
+| demand share | `demand` | `demand share` |
+| runtime spec | `version` | `runtime spec` |
+
 Jargon glosses (terms with no plain approved word; gloss in parentheses at
 first use in a message, bare after). In alerts the gloss attaches only
 inside the meaning sentence: never in a headline, a label, or recorded

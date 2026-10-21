@@ -440,10 +440,10 @@ class FourHeadsTests(unittest.TestCase):
         self.assertEqual(wm, "4")
         self.assertEqual(len(events), 2)
         first, second = events
-        self.assertIn("Subtensor code for runtime spec 428", first["text"])
+        self.assertIn("Subtensor code for version 428", first["text"])
         self.assertIn("Repo spec 425 → 428", first["text"])
         self.assertEqual(first["digest_range_ids"], [])
-        self.assertIn("Subtensor code for runtime spec 429", second["text"])
+        self.assertIn("Subtensor code for version 429", second["text"])
         self.assertIn("Repo spec 428 → 429", second["text"])
         # The sdk/-only churn (range 2) rides the second significant alert.
         self.assertEqual(second["digest_range_ids"], [2])
@@ -477,7 +477,7 @@ class FourHeadsTests(unittest.TestCase):
         events, _ = tg.repository_update_events(
             self.config["classes"]["repository-update"]["source_db"], None,
             repo_ctx(self.config, self.store))
-        self.assertIn("The live chain runs spec 424. These repo changes go "
+        self.assertIn("The live chain runs version 424. These repo changes go "
                       "live only when the chain upgrades.", events[0]["text"])
         self.assertIn("Repo spec 425 → 428 · live spec 424",
                       events[0]["text"])
@@ -512,7 +512,7 @@ class FourHeadsTests(unittest.TestCase):
             self.assertIsNotNone(live)
             assert live is not None  # narrow for type checkers
             self.assertEqual(live["spec_version"], 431)
-            self.assertIn("The live chain runs spec 431",
+            self.assertIn("The live chain runs version 431",
                           tg._both_clocks_line(432, live))
         finally:
             tg._REPO_ROOT = old_root
@@ -606,7 +606,7 @@ class InterpretiveBreakdownTests(unittest.TestCase):
         seed_livedata(self.live, live_spec=424)
         event = self.only_event()
         self.assertTrue(event["text"].startswith(
-            "🟠 Subtensor code for runtime spec 430 is ready."))
+            "🟠 Subtensor code for version 430 is ready."))
         self.assertIn("Repo spec 429 → 430 · live spec 424", event["text"])
 
     def test_commit_filter_keeps_signal_drops_noise(self):
@@ -729,9 +729,10 @@ class InterpretiveBreakdownTests(unittest.TestCase):
         # Facts, body, and the details fold are separate blocks.
         self.assertIn("\n\nSize: 2 commits, 2 files", text)
         self.assertIn("\n\nMain changes\n• Guard weights (subtensor)", text)
-        self.assertIn("\n\nRange 14bc6f90 → 647ca2b0", text)
-        self.assertIn("<blockquote expandable>Range <code>14bc6f90</code>",
-                      html)
+        self.assertIn("\n\nProtocol code: +7 / −0 lines\nRange 14bc6f90 "
+                      "→ 647ca2b0", text)
+        self.assertIn("<blockquote expandable>Protocol code: +7 / −0 "
+                      "lines\nRange <code>14bc6f90</code>", html)
         self.assertIn("<code>%s</code> → <code>%s</code>"
                       % (SHA_BASE[:8], SHA_1[:8]), html)
         self.assertNotIn("\x01", text)
@@ -811,13 +812,13 @@ class ChainUpgradeTests(unittest.TestCase):
         self.assertEqual(wm, "1")
         text = events[0]["text"]
         self.assertEqual(text.split("\n")[0],
-                         "🔴 Bittensor upgraded to runtime spec 425")
+                         "🔴 Bittensor just updated its software (version 425)")
         self.assertIn("Runtime spec 424 → 425", text)
         self.assertIn("8,612,004", text)
         self.assertIn("Governance spec 425 is crossed", text)
         self.assertIn("conviction-based (weighted by how long a position "
                       "is held) subnet ownership is now enforced", text)
-        self.assertIn("enacted live chain change, not a repo change", text)
+        self.assertIn("not only the code on GitHub", text)
         self.assertIn("Next: review your subnet positions", text)
         self.assertNotIn("—", text)
         self.assertNotIn("—", events[0]["html"])
@@ -944,7 +945,7 @@ class TierRoutingTests(unittest.TestCase):
         self.scan(posts)
         import urllib.parse
         decoded = [urllib.parse.unquote_plus(p) for p in posts]
-        self.assertTrue(any("Bittensor upgraded" in p for p in decoded))
+        self.assertTrue(any("Bittensor just updated" in p for p in decoded))
         self.assertIn(("chain-runtime-upgrade", "delivered"), self.ledger())
 
 
@@ -1324,7 +1325,7 @@ class EndToEndTests(unittest.TestCase):
             self.assertEqual(
                 summary["classes"]["repository-update"]["delivered"], 2)
             # Priority: the chain upgrade is the FIRST message out.
-            self.assertIn("Bittensor+upgraded",
+            self.assertIn("Bittensor+just+updated",
                           posts[0].replace("%20", "+"))
             # Exactly three messages: no churn ever paged.
             self.assertEqual(len(posts), 3)

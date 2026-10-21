@@ -113,11 +113,11 @@ class GateAdapterTests(unittest.TestCase):
                          "gate-crossing:42:%d" % row_id)
         self.assertEqual(event["event_class"], "gate-crossing")
         text = event["text"]
-        self.assertIn("Subnet 42 fell below the emission bar", text)
-        self.assertIn("gated emission collapses toward zero", text)
-        self.assertIn("Demand share: 0.520%", text)
-        self.assertIn("Bar: 0.930%", text)
-        self.assertIn("Shares: TaoSwap panel. Bar: chain RPC.", text)
+        self.assertIn("Subnet 42 fell below the reward cutoff", text)
+        self.assertIn("its rewards shrink toward zero", text)
+        self.assertIn("Its demand: 0.520%", text)
+        self.assertIn("Reward cutoff: 0.930%", text)
+        self.assertIn("Demand: TaoSwap panel. Cutoff (the emission bar): chain RPC.", text)
         self.assertIn("Next: review your subnet 42 position", text)
         self.assertNotIn("—", text)  # em dash
         self.assertNotIn("–", text)  # en dash
@@ -130,7 +130,7 @@ class GateAdapterTests(unittest.TestCase):
         events, _wm = tg.gate_crossing_events(self.live_db, None,
                                               self.ctx())
         text = events[0]["text"]
-        self.assertIn("rose above the emission bar, no effect", text)
+        self.assertIn("rose above the reward cutoff, no effect", text)
         self.assertIn("Emission is switched off", text)
         self.assertIn("earns zero either way", text)
         self.assertNotIn("Next:", text)  # informational: no action

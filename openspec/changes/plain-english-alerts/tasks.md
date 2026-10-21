@@ -2,10 +2,10 @@
 
 ## 1. Layout and units
 
-- [ ] 1.1 Move setting names, blocks, run ids, SHAs, file counts, raw values, sources and ISO times into the details fold in every builder. Cap key figures at two. Remove the `Before: stored value. After: stored value.` line and the repeated `Governs:` line. Verify with a test per class that the body outside the fold carries none of them.
-- [ ] 1.2 Add `unit: "u16-fraction"` to the `display` map for `CollateralLockShare` and `BasketConcentrationCap` and render percentages. Capitalise and de-duplicate `governs` text. Verify the `0% → 95%` and `6.25% → 12%` scenarios.
-- [ ] 1.3 Reword the `knowledge-ingestion` template to "already in use, nothing to do" and drop its `Next:` and microsecond timestamp. Verify a test on a staged-count fixture.
-- [ ] 1.4 Update `voice.lexicon`, `voice.gloss` and `telegram/docs/voice.md` section 2 for the plain terms (`reward cutoff`, `demand`, `version`). Verify the voice conformance test passes and a test that alert headlines hold none of the old terms.
+- [x] 1.1 Move setting names, blocks, run ids, SHAs, file counts, raw values, sources and ISO times into the details fold in every builder. Cap key figures at two. Remove the `Before: stored value. After: stored value.` line and the repeated `Governs:` line. Verify with a test per class that the body outside the fold carries none of them.
+- [x] 1.2 Add `unit: "u16-fraction"` to the `display` map for `CollateralLockShare` and `BasketConcentrationCap` and render percentages. Capitalise and de-duplicate `governs` text. Verify the `0% → 95%` and `6.25% → 12%` scenarios.
+- [x] 1.3 Reword the `knowledge-ingestion` template to "already in use, nothing to do" and drop its `Next:` and microsecond timestamp. Verify a test on a staged-count fixture.
+- [x] 1.4 Update `voice.lexicon`, `voice.gloss` and `telegram/docs/voice.md` section 2 for the plain terms (`reward cutoff`, `demand`, `version`). Verify the voice conformance test passes and a test that alert headlines hold none of the old terms.
 
 ## 2. Rewrite pass
 
