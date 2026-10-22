@@ -1637,12 +1637,17 @@ def repository_update_events(source_db: str, watermark: Optional[str],
     return events, new_wm
 
 
-def _release_for_upgrade(repo_db: Optional[str], new_spec: int
-                         ) -> Optional[Dict[str, str]]:
-    """The tracked repository range whose recorded spec delta covers this
-    upgrade: release commit subject plus top touched areas. None when the
-    store, table, or a matching range is absent; the caller states that
-    rather than inventing repository facts."""
+def _release_for_upgrade(repo_db: Optional[str], new_spec: int,
+                         prev_spec: Optional[int] = None
+                         ) -> Optional[Dict[str, Any]]:
+    """The tracked repository ranges whose recorded spec delta covers this
+    upgrade: release commit subject, top touched areas and (change:
+    plain-english-alerts) the substantive commit subjects, so the upgrade
+    alert can say what changed. With `prev_spec`, every range overlapping
+    (prev_spec, new_spec] is read, oldest first, so an upgrade that skips
+    versions still lists all of it. None when the store, table, or a
+    matching range is absent; the caller states that rather than inventing
+    repository facts."""
     if not repo_db:
         return None
     conn = open_source_ro(resolve(repo_db))
@@ -1654,21 +1659,31 @@ def _release_for_upgrade(repo_db: Optional[str], new_spec: int
             "name = 'change_ranges'").fetchone()
         if present is None:
             return None
-        row = conn.execute(
-            "SELECT commits_json, files_json FROM change_ranges "
-            "WHERE prev_spec IS NOT NULL AND new_spec IS NOT NULL "
-            "AND prev_spec < ? AND new_spec >= ? "
-            "ORDER BY id DESC LIMIT 1", (new_spec, new_spec)).fetchone()
+        if prev_spec is None:
+            rows = conn.execute(
+                "SELECT commits_json, files_json FROM change_ranges "
+                "WHERE prev_spec IS NOT NULL AND new_spec IS NOT NULL "
+                "AND prev_spec < ? AND new_spec >= ? "
+                "ORDER BY id DESC LIMIT 1", (new_spec, new_spec)).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT commits_json, files_json FROM change_ranges "
+                "WHERE prev_spec IS NOT NULL AND new_spec IS NOT NULL "
+                "AND prev_spec < ? AND new_spec > ? "
+                "ORDER BY id ASC LIMIT 8", (new_spec, prev_spec)).fetchall()
     except sqlite3.Error:
         return None
     finally:
         conn.close()
-    if row is None:
-        return None
+    commits: List[Dict[str, Any]] = []
+    files: List[Any] = []
     try:
-        commits = (json.loads(row[0]) or {}).get("commits") or []
-        subject = str(commits[0]["subject"]) if commits else None
-        files = (json.loads(row[1]) or {}).get("files") or []
+        for commits_json, files_json in rows:
+            commits.extend((json.loads(commits_json) or {}).get("commits")
+                           or [])
+            files.extend((json.loads(files_json) or {}).get("files") or [])
+        subject = str(commits[-1]["subject"]) if commits and prev_spec is None \
+            else (str(commits[0]["subject"]) if commits else None)
     except (ValueError, TypeError, KeyError, IndexError):
         return None
     if not subject:
@@ -1682,7 +1697,9 @@ def _release_for_upgrade(repo_db: Optional[str], new_spec: int
         counts[top] = counts.get(top, 0) + 1
     areas = " · ".join("%s (%d)" % (name, count) for name, count in
                        sorted(counts.items(), key=lambda kv: -kv[1])[:3])
-    return {"subject": subject, "areas": areas}
+    changes = [_tidy_subject(c) for c in _filter_commits(commits)[:6]]
+    return {"subject": subject, "areas": areas, "changes": changes,
+            "commits": len(commits)}
 
 
 def chain_runtime_upgrade_events(source_db: str, watermark: Optional[str],
@@ -1730,17 +1747,22 @@ def chain_runtime_upgrade_events(source_db: str, watermark: Optional[str],
         # One message explains the upgrade (change: pulse-briefing): the
         # matching repository range supplies the release subject and the
         # touched areas; its absence is stated, never guessed around.
-        release = _release_for_upgrade(spec.get("repo_db"), new_spec)
-        facts = [("Release", rec(release["subject"]) if release else
-                  "not matched to a tracked repo range yet"),
+        release = _release_for_upgrade(spec.get("repo_db"), new_spec,
+                                       prev_spec)
+        facts = [("Changes", plural(release["commits"], "commit")
+                  if release else "not matched to a tracked repo range yet"),
                  ("When", fmt_time(observed_at))]
-        touched = ["Touched: %s" % rec(release["areas"])] if (
-            release and release["areas"]) else []
+        touched = (["Release commit: %s" % rec(release["subject"])]
+                   + (["Touched: %s" % rec(release["areas"])]
+                      if release["areas"] else [])) if release else []
+        body = ([bold("What changed")]
+                + ["\u2022 " + rec(c) for c in release["changes"]]
+                if release and release["changes"] else [])
         msg = Message(
             severity=severity_for("chain-runtime-upgrade",
                                   governance_crossed=crossed),
             headline="Bittensor just updated its software (version %s)" % new_spec,
-            meaning=meaning, facts=facts,
+            meaning=meaning, facts=facts, body=body,
             details=touched + ["Block %s" % fmt_int(block),
                                "Runtime spec %s → %s" % (prev_spec,
                                                          new_spec),

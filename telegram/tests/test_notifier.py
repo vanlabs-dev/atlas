@@ -981,7 +981,7 @@ class RuntimeMergeTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def seed_range(self, prev_spec, new_spec, subject):
+    def seed_range(self, prev_spec, new_spec, subject, more=()):
         conn = sqlite3.connect(self.repo_db)
         conn.execute(
             "CREATE TABLE IF NOT EXISTS change_ranges (id INTEGER PRIMARY "
@@ -990,8 +990,8 @@ class RuntimeMergeTests(unittest.TestCase):
         conn.execute(
             "INSERT INTO change_ranges (commits_json, files_json, "
             "prev_spec, new_spec) VALUES (?, ?, ?, ?)",
-            (json.dumps({"commits": [{"sha": "a" * 40,
-                                      "subject": subject}]}),
+            (json.dumps({"commits": [{"sha": "a" * 40, "subject": subject}]
+                         + [{"sha": "b" * 40, "subject": m} for m in more]}),
              json.dumps({"files": [{"path": "pallets/subtensor/src/a.rs"},
                                    {"path": "pallets/subtensor/src/b.rs"},
                                    {"path": "runtime/src/lib.rs"}]}),
@@ -1003,14 +1003,48 @@ class RuntimeMergeTests(unittest.TestCase):
         self.seed_range(450, 452, "Bump spec_version to 452. (#3131)")
         events, _ = tg.chain_runtime_upgrade_events(self.db, None, self.ctx)
         text = events[0]["text"]
-        self.assertIn("Release: Bump spec_version to 452. (#3131)", text)
+        self.assertIn("Release commit: Bump spec_version to 452. (#3131)",
+                      text)
         self.assertIn("Touched: pallets (2)", text)
+        self.assertIn("Changes: 1 commit", text)
         self.assertNotIn("not yet tracked", text)
+
+    def test_upgrade_lists_what_changed(self):
+        # change: plain-english-alerts. The substantive commit subjects
+        # ride the body; merges, ci and docs commits do not.
+        self.seed_range(450, 452, "Merge pull request #1 release-452",
+                        more=["fix(coldkey-swap): keep policy after expiry",
+                              "feat: enable emission switch on register",
+                              "ci: cache cargo", "docs: typo",
+                              "Merge pull request #2 from x/y"])
+        events, _ = tg.chain_runtime_upgrade_events(self.db, None, self.ctx)
+        text = events[0]["text"]
+        self.assertIn("What changed\n\u2022 Keep policy after expiry "
+                      "(coldkey-swap)\n\u2022 Enable emission switch on "
+                      "register", text)
+        self.assertNotIn("cache cargo", text)
+        self.assertNotIn("typo", text)
+        self.assertIn("Changes: 6 commits", text)
+
+    def test_upgrade_that_skips_versions_reads_every_range(self):
+        self.seed_range(450, 451, "Merge a", more=["fix: first fix"])
+        self.seed_range(451, 452, "Merge b", more=["fix: second fix"])
+        self.seed_range(452, 452, "Merge c", more=["fix: later fix"])
+        events, _ = tg.chain_runtime_upgrade_events(self.db, None, self.ctx)
+        text = events[0]["text"]
+        self.assertIn("First fix", text)
+        self.assertIn("Second fix", text)
+        self.assertNotIn("Later fix", text)
 
     def test_missing_range_is_stated(self):
         events, _ = tg.chain_runtime_upgrade_events(self.db, None, self.ctx)
-        self.assertIn("Release: not matched to a tracked repo range yet",
+        self.assertIn("Changes: not matched to a tracked repo range yet",
                       events[0]["text"])
+        self.assertNotIn("What changed", events[0]["text"])
+
+    def test_shipped_config_points_the_upgrade_class_at_repotrack(self):
+        shipped = tg.load_config()["classes"]["chain-runtime-upgrade"]
+        self.assertEqual(shipped["repo_db"], "var/repotrack/repotrack.db")
 
 
 def seed_snapshot(path, rows):
