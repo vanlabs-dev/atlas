@@ -2622,9 +2622,9 @@ def _render_param_event(item: str, prev_value: str, new_value: str,
                         config: Optional[Dict[str, Any]] = None,
                         display: Optional[Dict[str, Any]] = None
                         ) -> Tuple[str, str, Optional[str],
-                                   List[Tuple[str, str]]]:
-    """Return (plain, html, next_action, buttons) for one page, single or
-    collapsed. A netuid-keyed item always names its subnet."""
+                                   List[Tuple[str, str]], "Message"]:
+    """Return (plain, html, next_action, buttons, message) for one page,
+    single or collapsed. A netuid-keyed item always names its subnet."""
     names = names or {}
     base_item, item_netuid = parse_netuid_item(item)
     if netuids is None and item_netuid is not None:
@@ -2753,7 +2753,7 @@ def _render_param_event(item: str, prev_value: str, new_value: str,
                   headline=headline, meaning=meaning, facts=facts,
                   details=details, next_action=next_action, buttons=buttons)
     return (render_plain(msg, max_chars, glosses),
-            render_html(msg, max_chars, glosses), next_action, buttons)
+            render_html(msg, max_chars, glosses), next_action, buttons, msg)
 def chain_parameter_change_events(source_db: str, watermark: Optional[str],
                                   ctx: Optional[Dict[str, Any]] = None
                                   ) -> Tuple[List[Dict[str, Any]],
@@ -2834,7 +2834,7 @@ def chain_parameter_change_events(source_db: str, watermark: Optional[str],
                     "mixed",
                     "%d on, %d off" % (on_count, off_count))
             item = key[1]
-        plain, html, _next, buttons = _render_param_event(
+        plain, html, _next, buttons, message = _render_param_event(
             item, prev_value, new_value, prev_prov, new_prov,
             observed_at, block_number, governs, max_chars, glosses,
             netuids=netuids, names=names, config=config, display=display)
@@ -2842,7 +2842,7 @@ def chain_parameter_change_events(source_db: str, watermark: Optional[str],
             "event_id": member_ids[0],
             "event_class": "chain-parameter-change",
             "created_at": _utc_now(), "text": plain, "html": html,
-            "buttons": buttons}
+            "buttons": buttons, "message": message.to_dict()}
         if len(member_ids) > 1:
             event["member_ids"] = member_ids
         events.append(event)
