@@ -628,6 +628,15 @@ class QuotaLedger:
 # ---------------------------------------------------------------------------
 
 
+def query_string(params: Dict[str, Any]) -> str:
+    """URL-encode request params. A boolean goes out as `true` or `false`:
+    Python's `True` made CoinGecko drop `last_updated_at` from the reply
+    from 2026-09-28, which failed the pinned schema closed."""
+    return urllib.parse.urlencode(
+        {k: ("true" if v is True else "false" if v is False else v)
+         for k, v in params.items() if v is not None})
+
+
 def http_get(config: Dict[str, Any], provider: str, path: str,
              params: Optional[Dict[str, Any]] = None,
              headers: Optional[Dict[str, str]] = None,
@@ -641,8 +650,7 @@ def http_get(config: Dict[str, Any], provider: str, path: str,
     spec = config["providers"][provider]
     url = (base_url or spec["base_url"]).rstrip("/") + path
     if params:
-        url += "?" + urllib.parse.urlencode(
-            {k: v for k, v in params.items() if v is not None})
+        url += "?" + query_string(params)
     retry = config["retry"]
     max_attempts = attempts or retry["default_attempts"]
     request_headers = {"User-Agent": USER_AGENT,
