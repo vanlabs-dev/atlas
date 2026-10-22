@@ -881,3 +881,35 @@ job only runs on a spec change. Read at finalized block 9,278,789.
   `CollateralLockShare` got the description its alerts lacked.
 - The corpus states 60-day immunity and the exact lock-cost rule. The
   external source of truth needs the same edit before its next sync.
+
+## Plain-English alerts (2026-10-22, change: plain-english-alerts)
+
+The operator found the alerts too technical. A review of 28 days of alerts
+(page: https://claude.ai/artifact/XPVhGFAp3eJnUaTehcdrBi) led to this change,
+approved in full the same day.
+
+- A Hermes one-shot (no tools) rewrites the headline, meaning, key figures,
+  body and, for chain-parameter alerts with no code-written action, the
+  `Next:` line. Code converts units first and then refuses any reply with a
+  number, subnet id or subnet name not in the input. A refusal, timeout or
+  Hermes error sends the template. The check also refuses rounded and
+  derived figures, so some replies fall back. The ledger records `used`,
+  `cached` or `fallback:<reason>` per alert.
+- Replay on the Pi on 2026-10-22: 21 of 21 events accepted, 6 to 13 s each.
+  The replay found three defects, all fixed: model-made block figures,
+  repeated headings and speculation.
+- Plain terms in alerts: `reward cutoff`, `demand`, `version`
+  (`telegram/docs/voice.md` section 2a). Chat keeps `bar`.
+- `knowledge-ingestion` is now briefing tier. The upgrade job activates every
+  run itself, so the old "review and activate" alert asked for nothing real.
+- A crossing for a subnet whose TAO switch is already off is recorded as
+  `briefed` under `gate-crossing-no-effect`. The cooldown is untouched.
+- CoinGecko prices were down from 2026-09-28: Python sent
+  `include_last_updated_at=True` and CoinGecko ignores that form. Booleans
+  now go out as `true` and `false`.
+- Hermes on the Pi uses `claude-opus-5-5` via the Claude subscription
+  DirectSDK. Its login had expired (`unjudged` econ verdicts from 20 Oct) and
+  the operator refreshed it on 2026-10-22. When it expires again, alerts fall
+  back to templates and the econ judge returns `unjudged`.
+- Rollback: `rewrite.enabled` false; set the two tiers back to `instant`.
+
