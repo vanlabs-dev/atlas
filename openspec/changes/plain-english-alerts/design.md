@@ -125,18 +125,28 @@ chat path are untouched.
   registered `delivery_only` at `briefing`. Cooldown and eligibility keys
   stay on `gate-crossing`. Task 3.2 checks that the new class neither reads
   nor writes the cooldown state.
-- LLM-written `Next:`: allowed only where the builder passes
-  `next_allowed: true`. Initially `chain-parameter-change` settings that
-  have no `governs` entry, and no other class. The check refuses a `Next`
-  that names a command or file path.
+- LLM-written `Next:`: allowed only for classes in
+  `rewrite.next_allowed_classes` (initially `chain-parameter-change`) and
+  only when the template has no `Next:` of its own. A code-written
+  `Next:` is never replaced. The check refuses a `Next` that names a
+  command or file path.
+
+### 8a. The check refuses derived and rounded figures
+
+Built and tested: a reply that rounds a figure (`0.834%` to `0.83%`) or
+derives one (`6.25%` to "9 holdings instead of 16") is refused and the
+template is sent. Hand-drafted examples on the review page did both, so
+real replies will fall back more often than those examples suggest until
+the prompt and the replay (task 2.7) show the rate. Allowing a derived
+figure needs code to compute it and put it in the input.
 
 ### 9. CoinGecko repair
 
-Capture one live `simple/price` reply read-only, record it as a fixture,
-then fix the request (add `include_last_updated_at=true`) if the field is
-only returned on request, or relax the pinned schema if the provider dropped
-it. Pick by what the reply shows. A regression test holds the schema
-against the fixture.
+Found: CoinGecko returns `last_updated_at` for
+`include_last_updated_at=true` and drops it for `True`, which is what
+Python's urlencode sent. Fix: `query_string` in `livedata/atlas_live.py`
+sends booleans in lowercase. The pinned schema stays. A regression test
+holds the recorded reply (2026-10-22) against the schema.
 
 ## Risks / Trade-offs
 
