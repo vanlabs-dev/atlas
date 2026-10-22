@@ -3182,8 +3182,11 @@ def _rewritten_message(msg: "Message", reply: Dict[str, Any],
     if msg.body and reply["body"]:
         head = ([msg.body[0]] if _strip_mono(msg.body[0]) == "Main changes"
                 else [])
-        body = head + ["\u2022 " + rec(_BULLET_RE.sub("", line))
-                       for line in reply["body"]]
+        lines = [_BULLET_RE.sub("", line) for line in reply["body"]]
+        lines = [line for line in lines
+                 if line.strip().rstrip(":").lower() != "main changes"]
+        body = head + ["\u2022 " + rec(line) for line in lines] if lines \
+            else list(msg.body)
     next_action = msg.next_action
     if next_action is None and allow_next and reply.get("next"):
         next_action = rec(reply["next"])

@@ -182,6 +182,22 @@ class NextLineTests(unittest.TestCase):
         new = tg._rewritten_message(msg, self.REPLY, [], True)
         self.assertEqual(new.next_action, "review your position.")
 
+    def test_model_heading_line_is_not_repeated(self):
+        msg = tg.Message("watch", "h", body=[tg.bold("Main changes"),
+                                             "\u2022 one", "\u2022 two"])
+        reply = dict(self.REPLY, body=["Main changes:", "- Fixed one",
+                                       "- Fixed two"])
+        new = tg._rewritten_message(msg, reply, [], False)
+        plain = [tg._strip_mono(b) for b in new.body]
+        self.assertEqual(plain, ["Main changes", "\u2022 Fixed one",
+                                 "\u2022 Fixed two"])
+
+    def test_only_a_heading_keeps_the_template_body(self):
+        msg = tg.Message("watch", "h", body=["\u2022 one"])
+        new = tg._rewritten_message(
+            msg, dict(self.REPLY, body=["Main changes"]), [], False)
+        self.assertEqual(new.body, ["\u2022 one"])
+
     def test_time_fact_survives_and_facts_are_capped(self):
         reply = dict(self.REPLY, facts=[["A", "1"], ["B", "2"]])
         new = tg._rewritten_message(self.MSG, reply, [self.MSG.facts[0]], True)

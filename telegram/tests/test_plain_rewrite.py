@@ -199,6 +199,11 @@ class RequestTests(unittest.TestCase):
     def request(self, runner, **kw):
         return pr.request_rewrite(LOCK_INPUT, TERMS, True, RCFG, runner, **kw)
 
+    def test_prompt_forbids_advice_and_speculation(self):
+        prompt = pr.build_prompt(LOCK_INPUT, TERMS, False)
+        self.assertIn("Give no advice and no speculation", prompt)
+        self.assertIn("No action line is allowed", prompt)
+
     def test_success_and_command_line(self):
         runner = runner_returning(ok(LOCK_REPLY))
         reply = self.request(runner)
