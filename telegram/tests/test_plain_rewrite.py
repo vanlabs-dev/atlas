@@ -181,6 +181,24 @@ class ReviewPageDraftTests(unittest.TestCase):
         self.assertIn("16", pr.check_reply(reply, inp, False))
 
 
+class BodyLineLimitTests(unittest.TestCase):
+    INPUT = dict(LOCK_INPUT, body=["one"])
+
+    def reply(self, line):
+        return dict(LOCK_REPLY, body=[line], next=None)
+
+    def test_plain_explanations_fit(self):
+        line = "Sending tiny amounts to a wallet can no longer erase its " \
+               "auto-stake setting, which stakes funds automatically. " * 2
+        self.assertLess(len(line), 240)
+        self.assertIsNone(pr.check_reply(self.reply(line), self.INPUT, False))
+
+    def test_a_paragraph_is_refused(self):
+        self.assertEqual(pr.check_reply(self.reply("word " * 60),
+                                        self.INPUT, False),
+                         "body line too long")
+
+
 class ParseTests(unittest.TestCase):
     def test_parses_fenced_json(self):
         raw = "```json\n%s\n```" % json.dumps(LOCK_REPLY)
