@@ -199,6 +199,11 @@ class RequestTests(unittest.TestCase):
     def request(self, runner, **kw):
         return pr.request_rewrite(LOCK_INPUT, TERMS, True, RCFG, runner, **kw)
 
+    def test_prompt_asks_for_everyday_words(self):
+        prompt = pr.build_prompt(LOCK_INPUT, TERMS, False)
+        self.assertIn("everyday words", prompt)
+        self.assertIn("Do not repeat the version numbers", prompt)
+
     def test_prompt_forbids_advice_and_speculation(self):
         prompt = pr.build_prompt(LOCK_INPUT, TERMS, False)
         self.assertIn("Give no advice and no speculation", prompt)

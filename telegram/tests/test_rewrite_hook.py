@@ -198,6 +198,14 @@ class NextLineTests(unittest.TestCase):
         self.assertEqual(plain, ["Main changes", "\u2022 Fixed one",
                                  "\u2022 Fixed two"])
 
+    def test_what_changed_heading_is_kept(self):
+        msg = tg.Message("watch", "h", body=[tg.bold("What changed"),
+                                             "\u2022 one"])
+        reply = dict(self.REPLY, body=["What changed", "Plain line one"])
+        new = tg._rewritten_message(msg, reply, [], False)
+        self.assertEqual([tg._strip_mono(b) for b in new.body],
+                         ["What changed", "\u2022 Plain line one"])
+
     def test_only_a_heading_keeps_the_template_body(self):
         msg = tg.Message("watch", "h", body=["\u2022 one"])
         new = tg._rewritten_message(
