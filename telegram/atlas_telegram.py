@@ -3171,12 +3171,19 @@ def _plain_input(event_class: str, msg: "Message"
             time_facts)
 
 
+_PROVENANCE_FACT_RE = re.compile(
+    r"\b(block|setting|run|range|sha|hash|source|spec)\b", re.IGNORECASE)
+
+
 def _rewritten_message(msg: "Message", reply: Dict[str, Any],
                        time_facts: List[Tuple[str, str]],
                        allow_next: bool) -> "Message":
+    # Provenance belongs in the fold: a model-made figure about the block,
+    # setting, run, range or hash is dropped, not shown.
+    wanted = [(l, v) for l, v in reply["facts"]
+              if not _PROVENANCE_FACT_RE.search(l)]
     facts = [(rec(l), rec(v)) for l, v in
-             reply["facts"][:max(0, plain_rewrite.MAX_FACTS
-                                 - len(time_facts))]]
+             wanted[:max(0, plain_rewrite.MAX_FACTS - len(time_facts))]]
     facts += time_facts
     body = list(msg.body)
     if msg.body and reply["body"]:
