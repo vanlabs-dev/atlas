@@ -6,24 +6,86 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | field | value |
 |---|---|
 | Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
-| Sync date | 2026-10-20 |
-| Coverage date | 2026-10-20 |
-| Grounded at | Finney `spec_version` **481** |
+| Sync date | 2026-10-22 |
+| Coverage date | 2026-10-22 |
+| Grounded at | Finney `spec_version` **482** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
 
-Verified 2026-10-20 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
+Verified 2026-10-22 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
 
-- Spec **481**. Knobs, emission-switch map, dust-floor storage and the
-  subnet registration rules read together at finalized block 9319037
-  (`0x41308cb23634ca3dad81dacbcea9a492eeed14d39be1c4d2a25b7bcaa0aea534`).
-  Chain-read probe clean at finalized block 9319040
-  (`0xe3b1cd096f5408d8bc62603cbc0cb93ad5760e8d4f10ddbe776467c8b63c00b2`).
-  Tracked clone `6a972693a` (`runtime/src/lib.rs` `spec_version: 481`,
-  merge PR #3264; spec 481 change `bb845ca1b`).
-- Spec 481 shipped (Finney moved from 479; per the removal migration's
-  comment, spec 480 ran on testnet only):
+- Spec **482**. Knobs, emission-switch map, dust-floor storage and the
+  subnet registration rules read together at finalized block 9336052
+  (`0xb7191c565dba135c69c76a22c43ccacaf455813ce9fc220a88b7fa6c79ae0ae7`).
+  Chain-read probe clean at finalized block 9336053
+  (`0x2d3d45eabc1676d28e24d9e3eca0a7ba9abf7f36161cc06a1f2a8ff96c67a8b9`).
+  Tracked clone `25b3866e1` (`runtime/src/lib.rs` `spec_version: 482`).
+- Spec 482 shipped (Finney moved from 481):
+  - Coldkey swaps merge into an already-used destination
+    (`ColdKeyAlreadyAssociated` retired). Shares and basket watermarks add
+    together (an overflow fails the swap), and staking lists merge. Queued
+    subnet registrations, their escrow, miner collateral and leases move
+    with the coldkey. The destination keeps its identity, its decaying-lock
+    choices and any auto-stake destination it set. It also keeps its
+    `AccountFlags` when it is in use or has flags set. The source's
+    auto-stake setting moves only onto a blank destination, and lineage is
+    recorded only onto a destination with no staking associations and no
+    lineage. Rate-limit clocks and hotkey-swap cooldowns keep the later
+    stamp. Proxy grants and `RealPaysFee` stay with the old coldkey. Still
+    refused: a hotkey destination, a destination with any lock holding mass
+    or residual conviction, a breached destination opt-out (locked alpha,
+    staking-list growth), and work above one call (256 hotkeys across both
+    lists, 1,024 positions, 128 destination lock rows, 32 owned queued
+    registrations, a 256-entry registration queue).
+  - `announce_coldkey_swap_v2` (call 155, EVM `announceColdkeySwapV2`)
+    checks the cleartext destination before the fee and reserves it
+    (`ColdkeySwapDestinationReservations` / `ColdkeySwapReservedDestination`)
+    against hotkey registration, hotkey swaps onto it, cross-coldkey stake
+    and lock transfers, and other announcements
+    (`ColdkeySwapDestinationReserved`). The reservation ends at execute,
+    clear, reset, destination release
+    (`release_own_coldkey_swap_destination_reservation`, call 154), or at
+    the execution block plus `ColdkeySwapReannouncementDelay`. Every V2
+    call pays the key-swap cost. The legacy hash announce (call 125) stays
+    and neither checks nor reserves. A failed `swap_coldkey_announced` keeps
+    its announcement.
+  - Root `reset_coldkey_swap_keep_locked` (call 156) clears the
+    announcement and dispute but keeps the coldkey restricted to announce,
+    dispute, execute and `submit_encrypted` (`ColdkeySwapDisputes` = 0).
+    A swap to another coldkey or a full `reset_coldkey_swap` releases it.
+  - Proxy types `Validate` (19: weights, serving, `associate_evm_key`,
+    `Commitments.set_commitment`) and `Weights` (20: weights calls only),
+    granted by the hotkey (#3194). Neither admits value movement or
+    wrappers.
+  - `RealPaysFee` redirection follows up to three `proxy` levels with
+    consent at every hop; a homogeneous proxy batch can be the last level.
+  - New subnets register with `SubnetEmissionEnabled` true (also on a
+    reused netuid). Existing subnets are untouched; root can still switch
+    any subnet off.
+  - A due Null epoch takes the block's single epoch slot first.
+  - Yuma miner payouts apportion the accumulated miner budget in full by
+    incentive (remainders in UID order).
+  - The validator-share floor check compares in `u64` parts; the smallest
+    accepted share is `root_baseline_share + 1`.
+  - Not live: the first Validate proxy merge (#3041, `d8921c2e0`) and its
+    follow-ups, reverted (`768c79ce3`) before 482 shipped, and the
+    coldkey-keyed proxy merge on coldkey swap (`6b2d0e356`), replaced by
+    `043f17768`, which leaves proxies with the old coldkey. Also not live:
+    benchmarked weights for `announce_coldkey_swap_v2`, the reservation
+    release and `reset_coldkey_swap_keep_locked`. They dispatch with
+    aliased weights from the existing coldkey-swap calls.
+  - No storage item Atlas reads was added, removed, renamed or reshaped; the
+    probe is clean. The new items (`ColdkeySwapDestinationReservations`,
+    `ColdkeySwapReservedDestination`, `ColdkeySwapV2PolicySnapshots`) are
+    not read.
+  - Open, outside the corpus: `livedata/atlas_live.py`
+    `SUBNET_PARAM_DEFAULTS` records an absent `SubnetEmissionEnabled` key
+    as `false`. The runtime's storage default is `DefaultTrue` (unchanged
+    by 482). Every live subnet has an explicit key (128 of 128), so no
+    reading is affected today. Fixing it means changing a livedata test
+    that pins the `false` default.
+- Carried from spec 481 and still live:
   - Per-subnet emission weights: `SubnetEmissionWeights` holds
     `[burn, recycle, owner, validator, miner]` in `u64::MAX` parts, seeded
     at upgrade from each subnet's legacy owner-cut state
@@ -54,10 +116,9 @@ Verified 2026-10-20 against Finney RPC (`https://entrypoint-finney.opentensor.ai
     before 481 shipped. `migrate_remove_subnet_tao_weight` clears any
     leftover `SubnetTaoWeight` keys. `sudo_set_subnet_emission_weights`
     has an interim weight envelope, not a benchmarked weight.
-  - No storage item Atlas reads was added, removed, renamed or reshaped; the
-    probe is clean. The new items (`SubnetEmissionWeights`,
-    `SubnetCreatedViaLease`, `SubnetOwnerCutAccrued`) are not read, so no
-    subnet's live split is stated.
+  - `SubnetEmissionWeights`, `SubnetCreatedViaLease` and
+    `SubnetOwnerCutAccrued` are not read, so no subnet's live split is
+    stated.
   - Open, outside the corpus: the mining screen
     (`fleet/atlas_fleet_mining.py`) still derives miner share from
     `SubnetOwnerCut` and `OwnerCutEnabled`. That is right only for subnets
@@ -66,7 +127,8 @@ Verified 2026-10-20 against Finney RPC (`https://entrypoint-finney.opentensor.ai
 - Carried from spec 479 and still live:
   - Third-party staking-list growth opt-out:
     `set_reject_staking_hotkey_growth` (call 153) sets bit 1 of
-    `AccountFlags` (off by default, follows a coldkey swap, moves no funds).
+    `AccountFlags` (off by default, moves no funds; follows a coldkey swap
+    onto a fresh key, while a merge keeps the destination's flags).
     With it on, a stake transfer from another coldkey must land on a hotkey
     the receiver lists or owns (`AccountRejectsStakingHotkeyGrowth`). EVM
     staking precompile `setRejectStakingHotkeyGrowth(bool)` /
@@ -140,7 +202,8 @@ Verified 2026-10-20 against Finney RPC (`https://entrypoint-finney.opentensor.ai
 - Emission bar is **rank-pinned**: `EmissionBarRank` unset (default 32),
   `EmissionBarQuantile` 0.75 explicit and inert, `EmissionGateExponent`
   unset (default 3).
-- `SubnetEmissionEnabled` is live. 128 keys; **only 82 off**; SN1 on.
+- `SubnetEmissionEnabled` is live. 128 keys for 128 subnets; **82 and 103
+  off**; SN1 on.
 - `set_root_weights` is **retired** (`migrate_remove_root_weights`, spec
   469): `Weights[ROOT]` cleared, `RootWeightSettingEnabled` and
   `RootWeightsCap` removed. Dividends accumulate in place.
@@ -158,7 +221,7 @@ Verified 2026-10-20 against Finney RPC (`https://entrypoint-finney.opentensor.ai
 - The legacy `Alpha`, `TotalHotkeyShares` and `AlphaMapLastKey` storage
   items are gone from metadata (`migrate_alpha_v2_and_unstake_dust_v1`);
   stake shares live in `AlphaV2` / `TotalHotkeySharesV2`.
-- Subnet registration rules at finalized block 9319037:
+- Subnet registration rules at finalized block 9336052:
   `NetworkImmunityPeriod` **432,000** (60 days),
   `NetworkLockReductionInterval` **57,600** (8 days), `NetworkRateLimit`
   **14,400** (2 days), all explicit. Root set the first two on 2026-10-14

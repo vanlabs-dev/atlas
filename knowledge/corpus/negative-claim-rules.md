@@ -138,6 +138,11 @@ because it is below the bar" unless the switch is on and the share is
 below the bar. A zero TAO reading with nonzero demand is first a switch
 question, then a bar question.
 
+New subnets register with the switch on. Only root turns it off on an
+existing subnet; the owner cannot. A subnet with the switch off is
+therefore a root decision, not evidence that the team neglected or
+abandoned the subnet. Do not write it as a negative claim about the team.
+
 ---
 
 ## One validator is not a validator outage
@@ -182,3 +187,19 @@ third-party cap, keeps its stake on the old hotkey, and the chain emits
 Do not write that a validator "abandoned", "stranded" or "left behind" its
 delegators because stake remains on its old hotkey after a swap. That is
 the protocol respecting the delegator's list, not a failure by the team.
+
+---
+
+## A coldkey merge or a delegated weight setter is not a fault
+
+A coldkey swap can merge into a coldkey that is already in use, so an
+owner's or validator's positions can move onto a key that already held
+stake. Do not describe that as funds being "mixed", "hijacked" or
+"consolidated suspiciously" without other evidence. A coldkey that root
+reset while keeping it locked can only announce, dispute, execute a swap
+or send encrypted transactions. That is a recovery lock, not a sign the
+team lost control.
+
+A validator can let an operator submit weights through a `Weights` or
+`Validate` proxy granted by its hotkey. Weights set by a proxy are not
+evidence that the validator is inactive or has handed over its stake.
