@@ -15,7 +15,7 @@
 - [x] 2.4 Add the `rewrite_cache` table and the `events.rewrite` column (guarded `ALTER TABLE`). Verify a same-content second call makes no runner call, and an old DB migrates.
 - [x] 2.5 Hook the pass into `notify_scan` after the tier and dedup checks, instant events only. Verify briefing and shadow events and deduped events make no call, and a Hermes-down run sends every alert from templates.
 - [x] 2.6 Add the `rewrite` block to `telegram/config.json` (`enabled`, `toolset`, `timeout_seconds`, `scan_budget_seconds`, `next_allowed_classes`), disabled until the toolset is set. Add rewrite figures to `atlas_telegram.py status`. Verify `rewrite.enabled: false` restores template-only sending.
-- [ ] 2.7 Run the pass against every real event from the 28-day replay on the Pi, read-only, no send. Verify the accept rate and read every refused and every accepted rewrite of the parameter and upgrade classes with the operator.
+- [x] 2.7 Run the pass against every real event from the 28-day replay on the Pi, read-only, no send. Verify the accept rate and read every refused and every accepted rewrite of the parameter and upgrade classes with the operator.
 
 ## 3. Behaviour changes
 
