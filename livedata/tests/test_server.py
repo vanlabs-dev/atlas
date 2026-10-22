@@ -76,7 +76,7 @@ class ServerTests(unittest.TestCase):
              "live_status", "live_subnets"])
 
     def test_price_two_providers_no_taostats(self):
-        before = self.fixture.count("/api/price/latest/v1")
+        before = self.fixture.count("/v1/price")
         db = al.open_store(self.config["db"])
         ledger_before = db.execute(
             "SELECT count(*) FROM calls WHERE provider = 'taostats'"
@@ -92,7 +92,7 @@ class ServerTests(unittest.TestCase):
         for price in result["prices"]:
             self.assertIn("upstream_timestamp", price)
         # the Q30 guarantee: zero TaoStats involvement in price checking
-        self.assertEqual(self.fixture.count("/api/price/latest/v1"),
+        self.assertEqual(self.fixture.count("/v1/price"),
                          before)
         db = al.open_store(self.config["db"])
         taostats_calls = db.execute(
@@ -198,6 +198,20 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(subnet["emission_miner_burn_unit"],
                          "percent_0_100")
 
+    def test_subnets_protocol_params_merge_both_taostats_routes(self):
+        payloads = call_server(self.config_path, [
+            tool_call(1, "live_subnets", {"netuid": 1,
+                                          "include_protocol_params": True}),
+        ])
+        params = payloads[1]["protocol_params"]
+        self.assertEqual(params["hyperparameters_status"], "ok")
+        row = params["values"]["subnets"][0]
+        self.assertEqual(row["owner_ss58"], "5H" + "d" * 46)
+        self.assertEqual(row["active_validators"], 64)
+        self.assertEqual(row["kappa"], "0.4999923704890516")
+        self.assertEqual(row["max_neurons"], 256)
+        self.assertEqual(row["immunity_period"], 5000)
+
     def test_chain_head_enactment_watch(self):
         payloads = call_server(self.config_path,
                                [tool_call(1, "live_chain_head")])
@@ -221,7 +235,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn("LOCAL estimate", status["note"])
 
     def test_auth_failure_never_leaks_the_key(self):
-        self.fixture.set_override("/api/block/v1", 401,
+        self.fixture.set_override("/v1/blocks", 401,
                                   b'{"detail": "unauthorized"}')
         payloads = call_server(self.config_path,
                                [tool_call(1, "live_chain_head")])

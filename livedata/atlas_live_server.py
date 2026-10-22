@@ -236,6 +236,24 @@ def structured_error(category: str, message: str,
     }
 
 
+
+def _merge_hyperparameters(subnets: Dict[str, Any],
+                           hyper: Dict[str, Any]) -> Dict[str, Any]:
+    """Fill the chain-settings keys of a subnets_taostats result
+    (/v1/subnets/metrics) from subnet_hyperparameters_taostats
+    (/v1/subnets/hyperparameters), joined on netuid. The new TaoStats API
+    split the old /api/subnet/latest/v1 across these two routes."""
+    subnets["hyperparameters_status"] = hyper.get("status")
+    if hyper.get("status") != "ok":
+        return subnets
+    by_netuid = {row["netuid"]: row for row in hyper["values"]["subnets"]}
+    for row in subnets["values"]["subnets"]:
+        found = by_netuid.get(row["netuid"]) or {}
+        for key in ("kappa", "immunity_period", "activity_cutoff",
+                    "max_neurons"):
+            row[key] = found.get(key)
+    return subnets
+
 class LiveTools:
     def __init__(self, config_path: str):
         self.config_path = config_path
@@ -336,6 +354,10 @@ class LiveTools:
                 and netuid is not None):
             params = self._run("subnets_taostats",
                                dynamic_params={"netuid": netuid})
+            if params.get("status") == "ok":
+                hyper = self._run("subnet_hyperparameters_taostats",
+                                  dynamic_params={"netuid": netuid})
+                params = _merge_hyperparameters(params, hyper)
             result["protocol_params"] = params
         return result
 
