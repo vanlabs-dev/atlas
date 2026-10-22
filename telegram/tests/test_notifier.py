@@ -847,6 +847,23 @@ class ChainUpgradeTests(unittest.TestCase):
         self.assertIsNone(wm)
 
 
+class KnowledgeTierTests(unittest.TestCase):
+    def test_shipped_knowledge_class_is_briefing_tier(self):
+        # change: plain-english-alerts. The upgrade job activates every
+        # run, so the alert never asks the operator for anything.
+        shipped = tg.load_config()
+        spec = shipped["classes"]["knowledge-ingestion"]
+        tier = tg.event_tier(shipped, spec, "knowledge-ingestion")
+        self.assertEqual(tier, "briefing")
+        self.assertEqual(tg.NON_PAGING_STATUS[tier], "briefed")
+
+    def test_shipped_gate_no_effect_class_is_briefing_tier(self):
+        shipped = tg.load_config()
+        self.assertEqual(
+            tg.event_tier(shipped, shipped["classes"]["gate-crossing"],
+                          "gate-crossing-no-effect"), "briefing")
+
+
 class TierRoutingTests(unittest.TestCase):
     def setUp(self):
         tg._SECRET_VALUES.clear()
