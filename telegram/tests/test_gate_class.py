@@ -135,6 +135,57 @@ class GateAdapterTests(unittest.TestCase):
         self.assertIn("earns zero either way", text)
         self.assertNotIn("Next:", text)  # informational: no action
 
+    def scan_with_shipped_tiers(self):
+        shipped = tg.load_config()["classes"]
+        self.config["classes"] = {
+            "gate-crossing": dict(self.spec, tier="instant"),
+            "gate-crossing-no-effect": shipped["gate-crossing-no-effect"]}
+        posts = []
+
+        def poster(url, data, timeout):
+            posts.append(data.decode("utf-8"))
+            return 200, '{"ok":true}'
+        tg.notify_scan(self.config, "tok", "chat", self.store, poster=poster)
+        return posts
+
+    def test_no_effect_crossing_is_recorded_and_not_sent(self):
+        # change: plain-english-alerts. Emission already off: nothing pages.
+        add_crossing(self.live_db, 7, "rose-above", share=0.0121,
+                     theta=0.0093, emission_enabled=0)
+        self.assertEqual(self.scan_with_shipped_tiers(), [])
+        rows = self.store.execute(
+            "SELECT event_class, status, tier FROM events").fetchall()
+        self.assertEqual(rows, [("gate-crossing-no-effect", "briefed",
+                                 "briefing")])
+
+    def test_no_effect_crossing_leaves_cooldown_alone(self):
+        add_crossing(self.live_db, 7, "rose-above", share=0.0121,
+                     theta=0.0093, emission_enabled=0)
+        add_crossing(self.live_db, 7, "fell-below", share=0.005,
+                     theta=0.010, emission_enabled=1)
+        posts = self.scan_with_shipped_tiers()
+        self.assertEqual(len(posts), 1)
+        self.assertIn("fell+below+the+reward+cutoff", posts[0])
+        classes = {r[0] for r in self.store.execute(
+            "SELECT event_class FROM events")}
+        self.assertEqual(classes, {"gate-crossing", "gate-crossing-no-effect"})
+
+    def test_restoring_the_tier_restores_the_page(self):
+        add_crossing(self.live_db, 7, "rose-above", share=0.0121,
+                     theta=0.0093, emission_enabled=0)
+        shipped = tg.load_config()["classes"]
+        self.config["classes"] = {
+            "gate-crossing": dict(self.spec, tier="instant"),
+            "gate-crossing-no-effect": dict(
+                shipped["gate-crossing-no-effect"], tier="instant")}
+        posts = []
+
+        def poster(url, data, timeout):
+            posts.append(data.decode("utf-8"))
+            return 200, '{"ok":true}'
+        tg.notify_scan(self.config, "tok", "chat", self.store, poster=poster)
+        self.assertEqual(len(posts), 1)
+
     def test_watermark_excludes_seen_rows(self):
         first = add_crossing(self.live_db, 1)
         second = add_crossing(self.live_db, 2)

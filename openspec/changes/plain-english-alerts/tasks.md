@@ -9,19 +9,19 @@
 
 ## 2. Rewrite pass
 
-- [ ] 2.1 Add `message` to `message_event` output (`Message.to_dict()`) and a rebuild helper using `Message.from_dict`. Verify existing renderer tests pass unchanged.
-- [ ] 2.2 Write `telegram/atlas_plain_rewrite.py`: converter, `build_prompt` (fenced data, lexicon, fixed JSON shape), `parse_reply`, `rewrite` with injectable runner, per-event and per-scan time bounds. Verify with a stub runner: success, timeout, non-zero exit, unparseable reply, budget spent.
-- [ ] 2.3 Write `check_reply`: numbers, percentages, dates, `Subnet N` ids, subnet name, length, links, markup, em dash, `Next` with a command or path. Verify tests for the invented-number, changed-name, injected-instruction and em-dash scenarios, and that each real sample from the review page passes with its drafted proposal.
-- [ ] 2.4 Add the `rewrite_cache` table and the `events.rewrite` column (guarded `ALTER TABLE`). Verify a same-content second call makes no runner call, and an old DB migrates.
-- [ ] 2.5 Hook the pass into `notify_scan` after the tier and dedup checks, instant events only. Verify briefing and shadow events and deduped events make no call, and a Hermes-down run sends every alert from templates.
-- [ ] 2.6 Add the `rewrite` block to `telegram/config.json` (`enabled`, `toolset`, `timeout_seconds`, `scan_budget_seconds`, `next_allowed_classes`), disabled until the toolset is set. Add rewrite figures to `atlas_telegram.py status`. Verify `rewrite.enabled: false` restores template-only sending.
+- [x] 2.1 Add `message` to `message_event` output (`Message.to_dict()`) and a rebuild helper using `Message.from_dict`. Verify existing renderer tests pass unchanged.
+- [x] 2.2 Write `telegram/atlas_plain_rewrite.py`: converter, `build_prompt` (fenced data, lexicon, fixed JSON shape), `parse_reply`, `rewrite` with injectable runner, per-event and per-scan time bounds. Verify with a stub runner: success, timeout, non-zero exit, unparseable reply, budget spent.
+- [x] 2.3 Write `check_reply`: numbers, percentages, dates, `Subnet N` ids, subnet name, length, links, markup, em dash, `Next` with a command or path. Verify tests for the invented-number, changed-name, injected-instruction and em-dash scenarios, and that each real sample from the review page passes with its drafted proposal.
+- [x] 2.4 Add the `rewrite_cache` table and the `events.rewrite` column (guarded `ALTER TABLE`). Verify a same-content second call makes no runner call, and an old DB migrates.
+- [x] 2.5 Hook the pass into `notify_scan` after the tier and dedup checks, instant events only. Verify briefing and shadow events and deduped events make no call, and a Hermes-down run sends every alert from templates.
+- [x] 2.6 Add the `rewrite` block to `telegram/config.json` (`enabled`, `toolset`, `timeout_seconds`, `scan_budget_seconds`, `next_allowed_classes`), disabled until the toolset is set. Add rewrite figures to `atlas_telegram.py status`. Verify `rewrite.enabled: false` restores template-only sending.
 - [ ] 2.7 Run the pass against every real event from the 28-day replay on the Pi, read-only, no send. Verify the accept rate and read every refused and every accepted rewrite of the parameter and upgrade classes with the operator.
 
 ## 3. Behaviour changes
 
-- [ ] 3.1 Set `knowledge-ingestion` `tier` to `briefing` in `telegram/config.json`. Verify a scan test records `briefed` and sends nothing.
-- [ ] 3.2 Emit class `gate-crossing-no-effect` for `emission_enabled == 0`, register it `delivery_only` at `briefing`. Verify a test that it sends nothing, the cooldown and eligibility state of `gate-crossing` is untouched, and an emission-on crossing still pages.
-- [ ] 3.3 Allow an LLM `Next:` only for classes in `next_allowed_classes`. Verify a test that other classes drop a model-written `Next`.
+- [x] 3.1 Set `knowledge-ingestion` `tier` to `briefing` in `telegram/config.json`. Verify a scan test records `briefed` and sends nothing.
+- [x] 3.2 Emit class `gate-crossing-no-effect` for `emission_enabled == 0`, register it `delivery_only` at `briefing`. Verify a test that it sends nothing, the cooldown and eligibility state of `gate-crossing` is untouched, and an emission-on crossing still pages.
+- [x] 3.3 Allow an LLM `Next:` only for classes in `next_allowed_classes`. Verify a test that other classes drop a model-written `Next`.
 
 ## 4. CoinGecko schema
 

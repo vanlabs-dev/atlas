@@ -169,6 +169,12 @@
       "cooldown_hours": 24,
       "tier": "instant"
     },
+    "gate-crossing-no-effect": {
+      "_comment": "A confirmed crossing for a subnet whose pool-side emission switch is off (change: plain-english-alerts). It earns zero either way, so the event is recorded as briefed and not sent. Flip the tier to instant to restore the page. Cooldown and eligibility stay on gate-crossing.",
+      "enabled": true,
+      "tier": "briefing",
+      "delivery_only": true
+    },
     "fleet-signal": {
       "_comment": "Fleet-signals queue (change: fleet-signals): narrative-cluster / watchlist / econ-code instant alerts + durable signal digest lines from the fleet store, read STRICTLY read-only. Priority below chain upgrades, above subtensor repo alerts. digest_backstop_hours flushes pending digest lines as a standalone summary when no instant alert rides them.",
       "enabled": true,
@@ -190,7 +196,8 @@
     "knowledge-ingestion": {
       "enabled": true,
       "source_db": "var/knowledge/knowledge.db",
-      "tier": "instant"
+      "tier": "briefing",
+      "_tier_comment": "DEMOTED to briefing 2026-10-22 (change: plain-english-alerts). The runtime upgrade job ingests and activates every run itself, so the alert never asked the operator for anything real. Flip back to instant to roll back."
     },
     "econ-code": {
       "_comment": "DEMOTED 2026-09-09 on its own effectiveness read: at n=212 (1d) and n=185 (7d) the class median was -0.278% vs a -0.305% fleet baseline at one day and -2.175% vs -1.873% at seven, so no edge at one day and worse than baseline at seven. Detection, the econ judge, the cooldown and the ledger all continue: the 30-day horizon is still half-pending and is the only thing that could reverse this. Flip back to instant to roll back.",
@@ -228,5 +235,16 @@
     "fleet_db": "var/fleet/fleet.db",
     "repo_db": "var/repotrack/repotrack.db",
     "knowledge_db": "var/knowledge/knowledge.db"
+  },
+  "rewrite": {
+    "_comment": "Plain-English rewrite pass (change: plain-english-alerts). A Hermes one-shot reworded each paged alert; code checks every number and subnet name against the input and falls back to the template on any failure. DISABLED at ship time: enable on the Pi after the first replay is read. `enabled` false is the whole rollback. `toolset` is the no-tools identifier from `hermes tools list` (the econ judge uses the same one); one-shot mode bypasses approvals, so a restriction is mandatory and an empty toolset keeps the pass off. A model-written Next line is allowed only for the classes in next_allowed_classes and only when the template has none. scan_budget_seconds bounds the total model time in one scan.",
+    "enabled": false,
+    "hermes_path": "/home/pi/.local/bin/hermes",
+    "toolset": "todo",
+    "timeout_seconds": 25,
+    "scan_budget_seconds": 180,
+    "next_allowed_classes": [
+      "chain-parameter-change"
+    ]
   }
 }

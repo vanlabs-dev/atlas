@@ -53,6 +53,8 @@ import secrets as secretsmod
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import atlas_plain_rewrite as plain_rewrite
+
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_MODULE_DIR)
 
@@ -368,6 +370,12 @@ def open_store(db_path: str) -> sqlite3.Connection:
         "PRAGMA table_info(events)")}
     if "tier" not in columns:
         connection.execute("ALTER TABLE events ADD COLUMN tier TEXT")
+    # Additive (change: plain-english-alerts): NULL for rows written before
+    # the rewrite pass; `used`, `cached` or `fallback:<reason>` afterwards.
+    if "rewrite" not in columns:
+        connection.execute("ALTER TABLE events ADD COLUMN rewrite TEXT")
+        connection.execute("ALTER TABLE events ADD COLUMN rewrite_ms INTEGER")
+    connection.executescript(plain_rewrite.CACHE_SQL)
     connection.commit()
     return connection
 
@@ -423,20 +431,25 @@ def ledger_record(connection: sqlite3.Connection, event_id: str,
                   event_class: str, created_at: str, attempted_at: Optional[str],
                   status: str, retry_count: int,
                   final_failure: Optional[str],
-                  tier: Optional[str] = None) -> None:
+                  tier: Optional[str] = None,
+                  rewrite: Optional[str] = None,
+                  rewrite_ms: Optional[int] = None) -> None:
     """Record one event's outcome. `tier` names the delivery tier that
     governed it (change: rotation-signal-gate), so the ledger stays a
-    complete account of what was detected and why it was or was not sent."""
+    complete account of what was detected and why it was or was not sent.
+    `rewrite` records whether the plain-English rewrite or the template
+    was sent (change: plain-english-alerts)."""
     connection.execute(
         "INSERT INTO events (event_id, event_class, created_at, attempted_at, "
-        "status, retry_count, final_failure, tier) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+        "status, retry_count, final_failure, tier, rewrite, rewrite_ms) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(event_id) DO UPDATE SET attempted_at = excluded.attempted_at, "
         "status = excluded.status, retry_count = excluded.retry_count, "
-        "final_failure = excluded.final_failure, tier = excluded.tier",
+        "final_failure = excluded.final_failure, tier = excluded.tier, "
+        "rewrite = excluded.rewrite, rewrite_ms = excluded.rewrite_ms",
         (event_id, event_class, created_at, attempted_at, status,
          retry_count, redact(final_failure)[:400] if final_failure else None,
-         tier))
+         tier, redact(rewrite)[:200] if rewrite else None, rewrite_ms))
     connection.commit()
 
 
@@ -978,7 +991,8 @@ def message_event(msg: Message, event_id: str, event_class: str,
              "created_at": created_at,
              "text": render_plain(msg, max_chars, glosses),
              "html": render_html(msg, max_chars, glosses),
-             "buttons": list(msg.buttons)}
+             "buttons": list(msg.buttons),
+             "message": msg.to_dict()}
     event.update(extra)
     return event
 
@@ -2079,8 +2093,13 @@ def _gate_crossing_event(event_id: str, observed_at: str, netuid: int,
             details=["Demand share %s, emission bar %s (%s)" % (
                 fmt_pct(share), fmt_pct(theta), above_below)] + details,
             buttons=buttons)
-        return message_event(msg, event_id, "gate-crossing", _utc_now(),
-                             max_chars, glosses)
+        # Own delivery-only class (change: plain-english-alerts): a subnet
+        # that earns zero either way pages nobody. The class is registered
+        # at the briefing tier, so flipping it restores the page. The
+        # cooldown reads class `gate-crossing` only, so these events
+        # neither start nor extend it.
+        return message_event(msg, event_id, "gate-crossing-no-effect",
+                             _utc_now(), max_chars, glosses)
     meaning = ("Demand for this subnet dropped under the reward cutoff, "
                "so its rewards shrink toward zero." if fell else
                "Demand for this subnet rose past the reward cutoff. "
@@ -3037,7 +3056,9 @@ def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
             assert_sendable(html)
     except ScrubRefusal as refusal:
         ledger_record(connection, event_id, event_class, created_at,
-                      _utc_now(), STATUS_SCRUB_REFUSED, 0, str(refusal))
+                      _utc_now(), STATUS_SCRUB_REFUSED, 0, str(refusal),
+                      rewrite=event.get("rewrite"),
+                      rewrite_ms=event.get("rewrite_ms"))
         return STATUS_SCRUB_REFUSED
 
     result, fallback_note = send_with_fallback(
@@ -3047,11 +3068,14 @@ def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
     if result["delivered"]:
         ledger_record(connection, event_id, event_class, created_at,
                       _utc_now(), STATUS_DELIVERED, result["attempts"],
-                      fallback_note, tier=tier)
+                      fallback_note, tier=tier,
+                      rewrite=event.get("rewrite"),
+                      rewrite_ms=event.get("rewrite_ms"))
         return STATUS_DELIVERED
     ledger_record(connection, event_id, event_class, created_at, _utc_now(),
                   STATUS_FAILED, result["attempts"], result["detail"],
-                  tier=tier)
+                  tier=tier, rewrite=event.get("rewrite"),
+                  rewrite_ms=event.get("rewrite_ms"))
     return STATUS_FAILED
 
 
@@ -3119,14 +3143,107 @@ def seed_watermarks(config: Dict[str, Any],
     return seeded
 
 
+# ---------------------------------------------------------------------------
+# Plain-English rewrite hook (change: plain-english-alerts)
+# ---------------------------------------------------------------------------
+
+_BULLET_RE = re.compile(r"^[\u2022*\-\s]+")
+
+
+def _plain_input(event_class: str, msg: "Message"
+                 ) -> Tuple[Dict[str, Any], List[Tuple[str, str]]]:
+    """The model's input for one message, as plain strings, and the time
+    facts that stay code-owned (they carry the reader's local time)."""
+    time_facts = [f for f in msg.facts if _TIME_OPEN in f[1]]
+    facts = [[_strip_mono(l), _strip_mono(v)] for l, v in msg.facts
+             if _TIME_OPEN not in v]
+    details = [_strip_mono(d) for d in msg.details]
+    details += ["%s: %s" % (_strip_mono(l), _strip_mono(v))
+                for l, v in time_facts]
+    return ({"class": event_class,
+             "headline": _strip_mono(msg.headline),
+             "meaning": _strip_mono(msg.meaning) if msg.meaning else None,
+             "facts": facts,
+             "body": [_strip_mono(b) for b in msg.body],
+             "details": details,
+             "next_action": (_strip_mono(msg.next_action)
+                             if msg.next_action else None)},
+            time_facts)
+
+
+def _rewritten_message(msg: "Message", reply: Dict[str, Any],
+                       time_facts: List[Tuple[str, str]],
+                       allow_next: bool) -> "Message":
+    facts = [(rec(l), rec(v)) for l, v in
+             reply["facts"][:max(0, plain_rewrite.MAX_FACTS
+                                 - len(time_facts))]]
+    facts += time_facts
+    body = list(msg.body)
+    if msg.body and reply["body"]:
+        head = ([msg.body[0]] if _strip_mono(msg.body[0]) == "Main changes"
+                else [])
+        body = head + ["\u2022 " + rec(_BULLET_RE.sub("", line))
+                       for line in reply["body"]]
+    next_action = msg.next_action
+    if next_action is None and allow_next and reply.get("next"):
+        next_action = rec(reply["next"])
+        next_action = next_action[:1].lower() + next_action[1:]
+    return Message(
+        severity=msg.severity, headline=rec(reply["headline"]),
+        meaning=rec(reply["meaning"]) if reply.get("meaning")
+        else msg.meaning,
+        facts=facts, body=body,
+        details=list(msg.details) + ["Original: " + _strip_mono(msg.headline)],
+        next_action=next_action, buttons=list(msg.buttons))
+
+
+def apply_rewrite(connection: sqlite3.Connection, config: Dict[str, Any],
+                  event: Dict[str, Any], deadline: Optional[float] = None,
+                  runner: Optional[Callable[..., Any]] = None) -> None:
+    """Replace the wording of one paged event with the checked rewrite, in
+    place. Sets `event["rewrite"]` to `used`, `cached` or `fallback:<reason>`
+    and leaves the template untouched on any failure. Never raises for a
+    model, parse or check failure."""
+    if not event.get("message"):
+        return  # not a house-layout message (a CLI test alert)
+    rcfg = config.get("rewrite") or {}
+    started = time.monotonic()
+    try:
+        msg = Message.from_dict(event["message"])
+        max_chars = int(config.get("message_max_chars", 3500))
+        allow_next = (event["event_class"]
+                      in (rcfg.get("next_allowed_classes") or [])
+                      and msg.next_action is None)
+        inp, time_facts = _plain_input(event["event_class"], msg)
+        terms = (config.get("voice") or {}).get("alert_terms") or {}
+        reply, cached = plain_rewrite.rewrite(
+            inp, terms, allow_next, rcfg, connection, runner, deadline,
+            created_at=_utc_now(), max_chars=max_chars)
+        new = _rewritten_message(msg, reply, time_facts, allow_next)
+        _lexicon, glosses = voice_maps(config)
+        event["html"] = render_html(new, max_chars, glosses)
+        event["text"] = render_plain(new, max_chars, glosses)
+        event["rewrite"] = "cached" if cached else "used"
+    except plain_rewrite.RewriteFailure as failure:
+        note = failure.reason + (": " + failure.detail if failure.detail
+                                 else "")
+        event["rewrite"] = "fallback:" + redact(note)[:150]
+    event["rewrite_ms"] = int((time.monotonic() - started) * 1000)
+
+
 def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
                 connection: sqlite3.Connection,
-                poster: Optional[Callable[..., Tuple[int, str]]] = None
+                poster: Optional[Callable[..., Tuple[int, str]]] = None,
+                rewrite_runner: Optional[Callable[..., Any]] = None
                 ) -> Dict[str, Any]:
     """Scan every enabled class, deliver new events, advance watermarks.
     Per-event failures are isolated: one bad event or a Telegram outage
     never aborts the scan or touches core Atlas state."""
     summary: Dict[str, Any] = {"run_id": run_id(), "classes": {}}
+    # Wall-clock budget for model calls in this scan (change:
+    # plain-english-alerts): once spent, the rest send from templates.
+    budget_end = time.monotonic() + float(
+        (config.get("rewrite") or {}).get("scan_budget_seconds", 180))
     for event_class, spec in config["classes"].items():
         if not spec.get("enabled"):
             continue
@@ -3178,6 +3295,11 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
                     non_paging_status, 0) + 1
                 continue
             try:
+                if not ledger_seen_recent(
+                        connection, event["event_id"],
+                        int(config.get("coalesce_window_seconds", 3600))):
+                    apply_rewrite(connection, config, event, budget_end,
+                                  rewrite_runner)
                 status = deliver_event(connection, config, token, chat_id,
                                        event, poster=poster, tier=tier)
                 ledger_collapsed_members(
@@ -3284,14 +3406,44 @@ def _cmd_status(config: Dict[str, Any]) -> int:
         ).fetchall()
         wm = connection.execute(
             "SELECT source, value, updated_at FROM watermarks").fetchall()
+        rewrite = rewrite_status(connection)
     finally:
         connection.close()
     print(json.dumps(
         {"ledger": [{"class": c, "status": s, "count": n} for c, s, n in rows],
+         "rewrite": rewrite,
          "watermarks": [{"source": s, "value": v, "updated_at": u}
                         for s, v, u in wm]},
         indent=2, sort_keys=True))
     return 0
+
+
+REWRITE_WINDOW_DAYS = 28
+
+
+def rewrite_status(connection: sqlite3.Connection,
+                   days: int = REWRITE_WINDOW_DAYS) -> Dict[str, Any]:
+    """How the plain-English pass fared in the last `days` days: used,
+    cached, fallbacks by reason, and the median latency it added."""
+    since = (datetime.datetime.now(tz=datetime.timezone.utc)
+             - datetime.timedelta(days=days)).isoformat()
+    rows = connection.execute(
+        "SELECT rewrite, rewrite_ms FROM events WHERE rewrite IS NOT NULL "
+        "AND created_at >= ?", (since,)).fetchall()
+    used = sum(1 for r, _ms in rows if r == "used")
+    cached = sum(1 for r, _ms in rows if r == "cached")
+    reasons: Dict[str, int] = {}
+    for note, _ms in rows:
+        if note.startswith("fallback:"):
+            reason = note[len("fallback:"):].split(":", 1)[0]
+            reasons[reason] = reasons.get(reason, 0) + 1
+    times = sorted(ms for note, ms in rows
+                   if ms is not None and note in ("used", "cached"))
+    median = (times[len(times) // 2] if len(times) % 2 else
+              (times[len(times) // 2 - 1] + times[len(times) // 2]) // 2
+              ) if times else None
+    return {"window_days": days, "used": used, "cached": cached,
+            "fallback": reasons, "median_ms": median}
 
 
 def main(argv: Optional[List[str]] = None) -> int:
