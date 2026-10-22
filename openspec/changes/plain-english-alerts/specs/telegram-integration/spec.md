@@ -188,3 +188,33 @@ test SHALL hold the repaired schema against a recorded reply.
 - **WHEN** the `price_spot_coingecko` operation is called after the repair
 - **THEN** the reply validates against the pinned schema and no new
   `schema-drift` event is recorded
+
+### Requirement: A runtime upgrade alert says what changed
+
+The `chain-runtime-upgrade` alert SHALL list the substantive changes of the
+upgrade, read from the tracked repository ranges whose recorded spec delta
+overlaps the upgrade (from the previous live version, exclusive, to the new
+one, inclusive), oldest first. Merge, ci, test, docs and build commits SHALL
+be left out. At most six change lines SHALL be shown, and the commit count
+SHALL be a key figure. When no tracked range matches, the alert SHALL say so
+and SHALL NOT invent changes. The class SHALL be configured with the
+repository store it reads (`repo_db`).
+
+#### Scenario: Upgrade lists the changes
+
+- **WHEN** the live version moves from 481 to 482 and a tracked range covers
+  that delta
+- **THEN** the alert body lists up to six substantive commit subjects under
+  `What changed`, and the plain-English pass explains them in everyday words
+
+#### Scenario: Upgrade skips versions
+
+- **WHEN** the live version moves from 479 to 481 across two tracked ranges
+- **THEN** the changes of both ranges are read, and a range for a later
+  version is not
+
+#### Scenario: No range matches
+
+- **WHEN** no tracked range covers the upgrade
+- **THEN** the alert states that the changes are not matched yet and lists no
+  changes
