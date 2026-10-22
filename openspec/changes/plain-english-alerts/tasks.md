@@ -31,6 +31,6 @@
 ## 5. Deploy
 
 - [x] 5.1 Run every suite off-device. Verify telegram, livedata, upgrade, knowledge and repotrack are green.
-- [ ] 5.2 After the push is approved, pull on the Pi, run every suite, set `rewrite.toolset` from `hermes tools list`, run `scan` with `rewrite.enabled` true against the replay. Verify the service `TimeoutStartSec` exceeds the scan budget.
+- [x] 5.2 After the push is approved, pull on the Pi, run every suite, set `rewrite.toolset` from `hermes tools list`, run `scan` with `rewrite.enabled` true against the replay. Verify the service `TimeoutStartSec` exceeds the scan budget.
 - [ ] 5.3 Send one test per changed class to the real chat. Verify on a phone that buttons open, times show local, and the fold opens.
-- [ ] 5.4 Record the change in `docs/decisions.md` and `README.md`, then watch `status` for a week: rewrite used, fallbacks by reason, added latency.
+- [x] 5.4 Record the change in `docs/decisions.md` and `README.md`, then watch `status` for a week: rewrite used, fallbacks by reason, added latency.

@@ -8,6 +8,18 @@ running on a Raspberry Pi. Built methodically in gated phases via OpenSpec.
 (resolved/open decisions), `openspec/specs/` (accepted capability specs), and
 `openspec/changes/archive/` (completed changes with their proposal/design/tasks).
 
+## Plain-English alerts (2026-10-22)
+
+Paged Telegram alerts are reworded in plain language by a checked Hermes
+pass (`telegram/atlas_plain_rewrite.py`, change `plain-english-alerts`).
+Code builds every alert from stored rows, then the model rewrites the words
+only. Every number and subnet name in the reply must come from the input, or
+the template is sent. Technical detail (setting names, blocks, SHAs, raw
+values) sits in the details fold. Knowledge ingests and "no effect" gate
+crossings no longer page. `atlas_telegram.py status` reports use and
+fallbacks. `rewrite.enabled: false` in `telegram/config.json` is the
+rollback. See [docs/decisions.md](docs/decisions.md).
+
 ## Runtime upgrades (2026-09-24)
 
 `upgrade/atlas_upgrade.py` runs on the Pi every 30 minutes. When the live
@@ -23,7 +35,8 @@ It replaced the Hermes cron job "Atlas runtime upgrade", removed
 ## Current status (2026-09-24, Finney spec 469)
 
 **Phases 0–5 are complete and accepted on the device.** Hermes Agent
-v0.20.0 runs on the Pi (Grok `grok-4.6` via X OAuth), answering Bittensor
+v0.20.0 runs on the Pi (model `claude-opus-5-5` through the Claude subscription
+DirectSDK provider, checked 2026-10-22), answering Bittensor
 questions from the local knowledge base (`atlas-kb`), the tracked
 subtensor clone (`atlas-repo`), and live provider data (`atlas-live`:
 TaoSwap/TaoStats/CoinGecko). Fail-closed. Telegram handles inbound chat
@@ -102,7 +115,10 @@ unit) — both to close before production acceptance.
   unattended security updates on (no auto-reboot).
 - **Hermes on the Pi:** runs as user `pi`, started manually (no service unit
   yet). CLI `~/.local/bin/hermes`, data/config in `~/.hermes/`, code clone at
-  `~/.hermes/hermes-agent`, model Grok (`grok-4.6`) via X OAuth — validated
+  `~/.hermes/hermes-agent`, model `claude-opus-5-5` via the Claude subscription DirectSDK provider (the
+  subscription login expires and needs an interactive refresh; `claude` is at
+  `~/.local/bin`, not on a non-login PATH). It was Grok `grok-4.6` via X OAuth
+  when validated
   per ATLAS-HERMES-003. Memory and skill writes are **approval-gated**
   (`memory.write_approval` / `skills.write_approval: on`). The production
   knowledge tools are registered as stdio MCP server **`atlas-kb`**
