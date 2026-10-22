@@ -182,6 +182,12 @@ class NextLineTests(unittest.TestCase):
         new = tg._rewritten_message(msg, self.REPLY, [], True)
         self.assertEqual(new.next_action, "review your position.")
 
+    def test_provenance_facts_are_dropped(self):
+        reply = dict(self.REPLY, facts=[["Block", "9,321,592"],
+                                        ["Locked", "95%"]])
+        new = tg._rewritten_message(self.MSG, reply, [], False)
+        self.assertEqual(new.facts, [("Locked", "95%")])
+
     def test_model_heading_line_is_not_repeated(self):
         msg = tg.Message("watch", "h", body=[tg.bold("Main changes"),
                                              "\u2022 one", "\u2022 two"])
