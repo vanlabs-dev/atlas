@@ -237,8 +237,8 @@
     "knowledge_db": "var/knowledge/knowledge.db"
   },
   "rewrite": {
-    "_comment": "Plain-English rewrite pass (change: plain-english-alerts). A Hermes one-shot reworded each paged alert; code checks every number and subnet name against the input and falls back to the template on any failure. DISABLED at ship time: enable on the Pi after the first replay is read. `enabled` false is the whole rollback. `toolset` is the no-tools identifier from `hermes tools list` (the econ judge uses the same one); one-shot mode bypasses approvals, so a restriction is mandatory and an empty toolset keeps the pass off. A model-written Next line is allowed only for the classes in next_allowed_classes and only when the template has none. scan_budget_seconds bounds the total model time in one scan.",
-    "enabled": false,
+    "_comment": "Plain-English rewrite pass (change: plain-english-alerts). A Hermes one-shot reworded each paged alert; code checks every number and subnet name against the input and falls back to the template on any failure. ENABLED 2026-10-22 after a 21-event replay on the Pi: 21 accepted, none fell back. `enabled` false is the whole rollback. `toolset` is the no-tools identifier from `hermes tools list` (the econ judge uses the same one); one-shot mode bypasses approvals, so a restriction is mandatory and an empty toolset keeps the pass off. A model-written Next line is allowed only for the classes in next_allowed_classes and only when the template has none. scan_budget_seconds bounds the total model time in one scan.",
+    "enabled": true,
     "hermes_path": "/home/pi/.local/bin/hermes",
     "toolset": "todo",
     "timeout_seconds": 25,
