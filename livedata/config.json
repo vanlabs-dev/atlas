@@ -308,7 +308,7 @@
     },
     "subnets_taostats": {
       "provider": "taostats",
-      "path": "/api/subnet/latest/v1",
+      "path": "/v1/subnets/metrics",
       "params": {},
       "schema": "taostats/subnets.v1",
       "envelope": {
@@ -316,11 +316,25 @@
         "max_upstream_age_s": 3600,
         "max_local_age_s": 60,
         "expected_cadence": "near-live (latest)"
-      }
+      },
+      "_note": "Migrated 2026-10 from /api/subnet/latest/v1 (switch-off 2026-11-09). Activity figures only; chain settings come from subnet_hyperparameters_taostats."
+    },
+    "subnet_hyperparameters_taostats": {
+      "provider": "taostats",
+      "path": "/v1/subnets/hyperparameters",
+      "params": {},
+      "schema": "taostats/subnet-hyperparameters.v1",
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 3600,
+        "max_local_age_s": 60,
+        "expected_cadence": "near-live (latest)"
+      },
+      "_note": "Chain settings half of the old /api/subnet/latest/v1 (kappa, immunity_period, activity_cutoff, max_allowed_uids)."
     },
     "metagraph_taostats": {
       "provider": "taostats",
-      "path": "/api/metagraph/latest/v1",
+      "path": "/v1/subnets/metagraph",
       "params": {},
       "schema": "taostats/metagraph.v1",
       "envelope": {
@@ -332,10 +346,11 @@
     },
     "chain_head_taostats": {
       "provider": "taostats",
-      "path": "/api/block/v1",
+      "path": "/v1/blocks",
       "params": {
         "limit": 1,
-        "order": "block_number_desc"
+        "order_by": "timestamp",
+        "order_dir": "desc"
       },
       "schema": "taostats/blocks.v1",
       "envelope": {
@@ -344,11 +359,11 @@
         "max_local_age_s": 60,
         "expected_cadence": "~12s block cadence"
       },
-      "_note": "order pinned explicitly \u2014 the conviction enactment watch (spec_version >= 425)"
+      "_note": "order pinned explicitly (newest first) \u2014 the conviction enactment watch (spec_version >= 425); /v1/blocks sorts by timestamp only"
     },
     "subnet_identity_taostats": {
       "provider": "taostats",
-      "path": "/api/subnet/identity/v1",
+      "path": "/v1/subnets/identities",
       "params": {
         "limit": 200
       },

@@ -1,0 +1,63 @@
+{
+  "_source": "TaoStats /v1/subnets/hyperparameters (new API, 2026-10). Chain settings half of the old /api/subnet/latest/v1. kappa is a fraction of 65535 as a string (old API: raw integer); max_neurons is now max_allowed_uids.",
+  "type": "object",
+  "required": [
+    "data"
+  ],
+  "properties": {
+    "pagination": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "data": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "netuid",
+          "block_number"
+        ],
+        "properties": {
+          "netuid": {
+            "type": "integer"
+          },
+          "block_number": {
+            "type": "integer"
+          },
+          "kappa": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "immunity_period": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "activity_cutoff": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_allowed_uids": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "tempo": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

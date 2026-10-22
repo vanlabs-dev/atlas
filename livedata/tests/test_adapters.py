@@ -176,10 +176,10 @@ class FailClosedTests(AdapterHarness):
     def test_quota_exhaustion_blocks_before_http(self):
         self.config["providers"]["taostats"]["quota"]["window_limit"] = 1
         self.run_op("chain_head_taostats")
-        before = self.fixture.count("/api/block/v1")
+        before = self.fixture.count("/v1/blocks")
         result = self.run_op("chain_head_taostats")
         self.assertEqual(result["error"]["category"], "quota-exhausted")
-        self.assertEqual(self.fixture.count("/api/block/v1"), before)
+        self.assertEqual(self.fixture.count("/v1/blocks"), before)
 
     def test_quota_persists_across_reopen(self):
         self.run_op("chain_head_taostats")
@@ -203,7 +203,7 @@ class FailClosedTests(AdapterHarness):
         self.assertIn("NOT live data", explicit["snapshot_warning"])
 
     def test_key_redacted_in_audit_and_errors(self):
-        self.fixture.set_override("/api/block/v1", 401,
+        self.fixture.set_override("/v1/blocks", 401,
                                   b'{"detail": "bad key"}')
         result = self.run_op("chain_head_taostats")
         self.assertNotIn(TEST_KEY, json.dumps(result))
@@ -240,7 +240,7 @@ class SpecUpgradeTests(AdapterHarness):
 
     def test_change_records_one_upgrade_same_value_none(self):
         self.run_op("chain_head_taostats")
-        self.fixture.set_override("/api/block/v1", 200,
+        self.fixture.set_override("/v1/blocks", 200,
                                   self._head_payload(425, 8612004))
         self.run_op("chain_head_taostats")
         self.assertEqual(self._upgrades(), [(424, 425, 8612004)])
@@ -252,7 +252,7 @@ class SpecUpgradeTests(AdapterHarness):
 
     def test_restart_does_not_reemit(self):
         self.run_op("chain_head_taostats")
-        self.fixture.set_override("/api/block/v1", 200,
+        self.fixture.set_override("/v1/blocks", 200,
                                   self._head_payload(425, 8612004))
         self.run_op("chain_head_taostats")
         # Simulate a restart: reopen the store, observe the same spec.
@@ -264,9 +264,9 @@ class SpecUpgradeTests(AdapterHarness):
 
     def test_failed_or_invalid_response_records_nothing(self):
         self.run_op("chain_head_taostats")
-        self.fixture.set_override("/api/block/v1", 503)
+        self.fixture.set_override("/v1/blocks", 503)
         self.run_op("chain_head_taostats")
-        self.fixture.set_override("/api/block/v1", 200,
+        self.fixture.set_override("/v1/blocks", 200,
                                   b'{"data": [{"bogus": true}]}')
         self.run_op("chain_head_taostats")
         self.assertEqual(self._upgrades(), [])
