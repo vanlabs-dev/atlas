@@ -221,7 +221,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn("LOCAL estimate", status["note"])
 
     def test_auth_failure_never_leaks_the_key(self):
-        self.fixture.set_override("/api/block/v1", 401,
+        self.fixture.set_override("/v1/blocks", 401,
                                   b'{"detail": "unauthorized"}')
         payloads = call_server(self.config_path,
                                [tool_call(1, "live_chain_head")])

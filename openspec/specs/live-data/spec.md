@@ -304,7 +304,7 @@ re-emit an upgrade for an already-recorded `spec_version`.
 
 The live-data component SHALL provide a named operation that returns the
 subnet-identity map — for each netuid, its on-chain `github_repo`, subnet name,
-and owner — obtained from TaoStats (`GET /api/subnet/identity/v1`). The operation
+and owner — obtained from TaoStats (`GET /v1/subnets/identities`, formerly `/api/subnet/identity/v1`). The operation
 SHALL be built only after its contract is established through the discovery gate
 (real sampled calls under the free-tier budget, recording fields, nullability,
 pagination, and the real quota window, operator-approved in the decision log),

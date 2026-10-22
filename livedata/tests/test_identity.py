@@ -56,7 +56,7 @@ class SubnetIdentityOperationTests(unittest.TestCase):
             "pagination": {"current_page": 1, "total_pages": 1,
                            "next_page": None},
             "data": [{"subnet_name": "x", "github_repo": None}]}).encode()
-        self.provider.set_override("/api/subnet/identity/v1", 200, bad)
+        self.provider.set_override("/v1/subnets/identities", 200, bad)
         result = self._run()
         self.assertEqual(result["status"], "live-unavailable")
         self.assertEqual(result["error"]["category"], "schema-drift")
@@ -80,7 +80,7 @@ class RunSubnetIdentityAggregatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "ok")
         self.assertTrue(result["values"]["complete"])
         self.assertEqual(result["values"]["count"], 2)
-        self.assertEqual(self.provider.count("/api/subnet/identity/v1"), 1)
+        self.assertEqual(self.provider.count("/v1/subnets/identities"), 1)
 
     def test_multi_page_aggregates_to_completion(self):
         pages = [
