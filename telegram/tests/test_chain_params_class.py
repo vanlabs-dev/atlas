@@ -256,6 +256,14 @@ class ChainParameterClassTests(_Base):
         self.assertIn("Fund holding cap: 6.25% → 12%", text)
         self.assertIn("4,096 → 7,865 (of 65,535)", text)
 
+    def test_param_events_carry_their_message_for_the_rewrite(self):
+        self.shipped()
+        add_param_event(self.live_db, "CollateralLockShare", "0", "62258",
+                        netuid=82)
+        event = self.events()[0][0]
+        self.assertEqual(event["message"]["headline"],
+                         event["text"].split("\n")[0].split(" ", 1)[1])
+
     def test_filler_and_duplicate_description_removed(self):
         self.shipped()
         add_param_event(self.live_db, "SubnetEmissionEnabled", "true",
