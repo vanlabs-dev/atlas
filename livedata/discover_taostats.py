@@ -40,52 +40,52 @@ def discover(taoswap_report_path: Optional[str]) -> int:
     rid = al.run_id()
     try:
         # -- the four Q25 candidates (one call + one variant sample each)
-        session.probe("price-latest", "/api/price/latest/v1",
+        session.probe("price-latest", "/v1/price",
                       params={"asset": "tao"}, timeout=45,
                       note="discovery-only: production price checking "
                            "spends NO TaoStats quota (Q30 refinement); "
                            "45s timeout — first run timed out at 20s")
-        session.probe("subnets-latest", "/api/subnet/latest/v1",
+        session.probe("subnets-latest", "/v1/subnets/hyperparameters",
                       params={"limit": 5})
-        session.probe("subnets-latest-one", "/api/subnet/latest/v1",
+        session.probe("subnets-latest-one", "/v1/subnets/hyperparameters",
                       params={"netuid": 1},
                       note="single-subnet shape sample (ATLAS-API-004)")
-        session.probe("metagraph-latest", "/api/metagraph/latest/v1",
+        session.probe("metagraph-latest", "/v1/subnets/metagraph",
                       params={"netuid": 1, "limit": 5})
-        session.probe("blocks", "/api/block/v1", params={"limit": 1},
+        session.probe("blocks", "/v1/blocks", params={"limit": 1},
                       note="chain-head freshness anchor; check for "
                            "spec_version/runtime fields (conviction "
                            "enactment bonus)")
-        session.probe("blocks-page2", "/api/block/v1",
+        session.probe("blocks-page2", "/v1/blocks",
                       params={"limit": 1, "page": 2},
                       note="pagination sample")
-        session.probe("subnet-identity", "/api/subnet/identity/v1",
+        session.probe("subnet-identity", "/v1/subnets/identities",
                       params={"limit": 2},
                       note="subnet-repo-fleet source: netuid -> "
                            "SubnetIdentity.github_repo; confirm the endpoint "
                            "does NOT carry the owner ss58 (fingerprint keys "
                            "on the repo URL)")
-        session.probe("subnet-identity-page2", "/api/subnet/identity/v1",
+        session.probe("subnet-identity-page2", "/v1/subnets/identities",
                       params={"limit": 2, "page": 2},
                       note="identity pagination shape (next_page / "
                            "total_pages / total_items)")
 
         # -- safe negative tests (ATLAS-API-005): auth + params
-        session.probe("missing-auth", "/api/price/latest/v1",
+        session.probe("missing-auth", "/v1/price",
                       params={"asset": "tao"},
                       headers={config["providers"][PROVIDER]
                                ["auth_header"]: ""},
                       expect="error", note="missing authentication")
-        session.probe("invalid-auth", "/api/price/latest/v1",
+        session.probe("invalid-auth", "/v1/price",
                       params={"asset": "tao"},
                       headers={config["providers"][PROVIDER]
                                ["auth_header"]: "invalid-key-test"},
                       expect="error", note="invalid authentication")
-        session.probe("invalid-param", "/api/price/latest/v1",
+        session.probe("invalid-param", "/v1/price",
                       params={"asset": "not-an-asset"}, expect="error",
                       note="invalid parameter value")
         session.probe("nonexistent-resource",
-                      "/api/metagraph/latest/v1",
+                      "/v1/subnets/metagraph",
                       params={"netuid": 99999}, expect="error",
                       note="nonexistent netuid")
 

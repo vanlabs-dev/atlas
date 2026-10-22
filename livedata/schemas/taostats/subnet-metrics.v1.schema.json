@@ -1,0 +1,70 @@
+{
+  "_source": "TaoStats GET /v1/subnets/metrics, live probe 2026-10-23 (activity half of the old /api/subnet/latest/v1): owner is a plain SS58 string; emission and neuron_registration_cost as strings",
+  "type": "object",
+  "required": [
+    "data"
+  ],
+  "properties": {
+    "pagination": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "data": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "netuid",
+          "block_number"
+        ],
+        "properties": {
+          "netuid": {
+            "type": "integer"
+          },
+          "block_number": {
+            "type": "integer"
+          },
+          "owner": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "emission": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ]
+          },
+          "active_validators": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "active_miners": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "active_keys": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "neuron_registration_cost": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

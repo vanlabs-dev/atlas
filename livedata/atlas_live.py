@@ -1096,17 +1096,36 @@ def _pp_network_stats_taoswap(payload, params):
 
 
 def _pp_subnets_taostats(payload, params):
+    """Chain settings from /v1/subnets/hyperparameters (the settings half of
+    the retired /api/subnet/latest/v1). Owner, emission and activity come
+    from _pp_subnet_metrics_taostats. kappa is a fraction of 65535."""
     rows = payload["data"]
     pruned = [{
         "netuid": row["netuid"],
-        "owner_ss58": (row.get("owner") or {}).get("ss58"),
-        "emission": row.get("emission"),
         "kappa": row.get("kappa"),
         "immunity_period": row.get("immunity_period"),
         "activity_cutoff": row.get("activity_cutoff"),
+        "max_neurons": row.get("max_allowed_uids"),
+        "tempo": row.get("tempo"),
+    } for row in rows[:50]]
+    block = max((row["block_number"] for row in rows), default=None)
+    return {"values": {"subnets": pruned, "count": len(pruned)},
+            "units": "chain settings; kappa as a fraction of 65535 "
+                     "(string), counts as integers",
+            "upstream_timestamp": None,
+            "block_reference": block}
+
+
+def _pp_subnet_metrics_taostats(payload, params):
+    """Activity figures from /v1/subnets/metrics (the activity half of the
+    retired /api/subnet/latest/v1). owner is a plain SS58 string."""
+    rows = payload["data"]
+    pruned = [{
+        "netuid": row["netuid"],
+        "owner_ss58": row.get("owner"),
+        "emission": row.get("emission"),
         "active_validators": row.get("active_validators"),
         "active_miners": row.get("active_miners"),
-        "max_neurons": row.get("max_neurons"),
         "registration_cost_rao": row.get("neuron_registration_cost"),
     } for row in rows[:50]]
     block = max((row["block_number"] for row in rows), default=None)
@@ -1120,13 +1139,13 @@ def _pp_subnets_taostats(payload, params):
 def _pp_metagraph_taostats(payload, params):
     rows = payload["data"]
     pruned = [{
-        "hotkey": row["hotkey"]["ss58"],
-        "coldkey": row["coldkey"]["ss58"],
+        "hotkey": row["hotkey"],
+        "coldkey": row["coldkey"],
         "active": row["active"],
         "alpha_stake_rao": row.get("alpha_stake"),
-        "daily_reward_rao": row.get("daily_reward"),
+        "emission_rao": row.get("emission"),
         "is_owner_hotkey": row.get("is_owner_hotkey"),
-        "is_immunity_period": row.get("is_immunity_period"),
+        "is_immune": row.get("is_immune"),
     } for row in rows[:25]]
     block = max((row["block_number"] for row in rows), default=None)
     return {"values": {"neurons": pruned, "count": len(pruned)},
@@ -1184,6 +1203,7 @@ POSTPROCESSORS = {
     "portfolio_balance_taoswap": _pp_portfolio_balance_taoswap,
     "portfolio_pnl_apy_taoswap": _pp_portfolio_pnl_apy_taoswap,
     "subnets_taostats": _pp_subnets_taostats,
+    "subnet_metrics_taostats": _pp_subnet_metrics_taostats,
     "metagraph_taostats": _pp_metagraph_taostats,
     "chain_head_taostats": _pp_chain_head_taostats,
     "subnet_identity_taostats": _pp_subnet_identity_taostats,

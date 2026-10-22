@@ -143,33 +143,37 @@ def payloads() -> Dict[str, Any]:
             "subnets_stake_tao": 2002172.0, "subnets_share_pct": 27.11,
             "sum_alpha_price": 1.41, "subnet_reg_cost_tao": 1251.8,
             "total_accounts": 100, "new_accounts_today": 2},
-        "/api/subnet/latest/v1": {
+        "/v1/subnets/hyperparameters": {
             "pagination": {"current_page": 1},
             "data": [{"netuid": 1, "block_number": 8602000,
-                      "owner": {"ss58": "5H" + "d" * 46, "hex": "0x1"},
-                      "emission": "1", "kappa": 32767,
+                      "kappa": "0.4999923704890516517891203174",
                       "immunity_period": 5000, "activity_cutoff": 5000,
-                      "active_validators": 64, "active_miners": 192,
-                      "active_keys": 256, "max_neurons": 256,
-                      "neuron_registration_cost": "500000"}]},
-        "/api/metagraph/latest/v1": {
+                      "max_allowed_uids": 256, "tempo": 99}]},
+        "/v1/subnets/metrics": {
             "pagination": {"current_page": 1},
-            "data": [{"hotkey": {"ss58": "5A" + "e" * 46, "hex": "0x2"},
-                      "coldkey": {"ss58": "5B" + "f" * 46, "hex": "0x3"},
+            "data": [{"netuid": 1, "block_number": 8602000,
+                      "owner": "5H" + "d" * 46, "emission": "1",
+                      "active_validators": 64, "active_miners": 192,
+                      "active_keys": 256,
+                      "neuron_registration_cost": "500000"}]},
+        "/v1/subnets/metagraph": {
+            "pagination": {"current_page": 1},
+            "data": [{"hotkey": "5A" + "e" * 46,
+                      "coldkey": "5B" + "f" * 46,
                       "block_number": 8602000, "active": True,
                       "alpha_stake": "123000000000",
-                      "daily_reward": "456000000",
+                      "emission": "456000000",
                       "incentive": "0", "dividends": "0",
                       "is_owner_hotkey": False,
-                      "is_immunity_period": False}]},
-        "/api/block/v1": {
+                      "is_immune": False}]},
+        "/v1/blocks": {
             "pagination": {"current_page": 1},
             "data": [{"block_number": 8602147, "spec_version": 424,
                       "spec_name": "node-subtensor",
-                      "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                      "timestamp": now.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
                       "hash": "0x" + "d" * 64, "events_count": 1,
                       "extrinsics_count": 1}]},
-        "/api/subnet/identity/v1": {
+        "/v1/subnets/identities": {
             "pagination": {"current_page": 1, "next_page": None,
                            "prev_page": None, "per_page": 200,
                            "total_items": 2, "total_pages": 1},
