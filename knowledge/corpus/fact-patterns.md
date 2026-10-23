@@ -52,7 +52,7 @@ Pattern: a subnet with real demand (nonzero moving price, nonzero demand share) 
 
 **Check**: the bar is a continuous Hill function of demand share. The pool-side emission switch is a binary root-settable per-netuid bool. The chain draws the bar first, then zeroes TAO for subnets whose switch is off and redistributes that TAO to the rest. Alpha distribution continues either way. A subnet can sit above the bar and still earn no TAO.
 
-Fix: name the pool-side emission switch (`SubnetEmissionEnabled`). Live off set (2026-10-24, spec 483, finalized block 9345956): netuids 82 and 103. Read the switch before naming any other subnet as off. New subnets register with the switch on, so do not assume a new subnet is switched off. Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
+Fix: name the pool-side emission switch (`SubnetEmissionEnabled`). Live off set (2026-10-24, spec 484, finalized block 9348505): netuids 82 and 103. Read the switch before naming any other subnet as off. New subnets register with the switch on, so do not assume a new subnet is switched off. Do not answer with the bar alone. Positive demand share does not imply the subnet earns TAO.
 
 ### 5. Validators mine
 Pattern: "validators mine/mining/produce work"
@@ -92,7 +92,7 @@ Fix: a rank-pinned bar IS a demand share, so it moves on its own as the distribu
 ### 7f. Root Reborn curation described as live, or a validator described as setting root weights
 Pattern: "curation is on/live/enabled", "`RootWeightSettingEnabled` is true", "validators set root weights", "validator X steers root dividends with `set_root_weights`", or "the cap is `RootWeightsCap`".
 
-Fix: Spec 469 retired `set_root_weights`, cleared `Weights[ROOT]`, and removed the `RootWeightSettingEnabled` switch (upstream migration `migrate_remove_root_weights`). Root dividends accumulate in place, and a fund's composition changes only through basket trades: `swap_basket` (one leg) or `swap_basket_many` (1 to 64 atomic legs), both gated by `BasketTradingEnabled` (explicit true). The cap is `BasketConcentrationCap` (7865, about 12% of fund NAV, explicit at finalized block 9345956; the 4096 = 1/16 code default is not the live value) and it checks basket-trade buys only, per leg. Do not describe a validator as curating with a weight vector. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
+Fix: Spec 469 retired `set_root_weights`, cleared `Weights[ROOT]`, and removed the `RootWeightSettingEnabled` switch (upstream migration `migrate_remove_root_weights`). Root dividends accumulate in place, and a fund's composition changes only through basket trades: `swap_basket` (one leg) or `swap_basket_many` (1 to 64 atomic legs), both gated by `BasketTradingEnabled` (explicit true). The cap is `BasketConcentrationCap` (7865, about 12% of fund NAV, explicit at finalized block 9348505; the 4096 = 1/16 code default is not the live value) and it checks basket-trade buys only, per leg. Do not describe a validator as curating with a weight vector. Only root-registered hotkeys earn root dividends (the remainder is recycled); root unstakes sit behind a hold interval; calls 122/123 are retired.
 
 ### 7g. Multi-leg basket rebalance described as non-atomic or unavailable
 Pattern: "a validator must submit one `swap_basket` per leg", "a rebalance can fail halfway and leave the fund part-traded", "up to 128 legs", a multi-leg rebalance that skips the per-trade guardrails, or a basket trade of any size above the staking minimum described as accepted.
@@ -143,6 +143,11 @@ Fix: a coldkey swap can merge into an already-used coldkey. Shares on the same `
 Patterns: "the operator holds the validator's hotkey", "weights can only be delegated through an `Any` / `NonTransfer` proxy", or "a weights proxy can move the validator's stake".
 
 Fix: a validator hotkey can grant a `Weights` proxy (type index 20: set, commit, reveal, timelocked, per-mechanism and batched weights calls only) or a `Validate` proxy (type index 19: those calls plus `serve_axon`, `serve_axon_tls`, `serve_prometheus`, `associate_evm_key` and `Commitments.set_commitment`). The hotkey is the real account and signs the grant. Neither type admits stake, transfers, registration, key swaps, take or child-key changes, or wrapper calls, so neither can move or lock value. Who holds such a grant needs a chain read.
+
+### 7q. A subnet in the reporting APIs described as live
+Patterns: "subnet X is still running" or "subnet X still has N TAO staked" drawn only from a metagraph, dynamic-info, neuron or stake-info runtime API (or a mirror built on them) for a subnet that has been deregistered, or "the stakers' alpha is stuck / was not paid out" because a dissolving subnet still lists stake.
+
+Fix: a dissolved subnet stays in the reporting runtime APIs until its background cleanup finishes (`SubnetState` `PendingDissolution` or `Dissolving`). It no longer operates: `NetworksAdded` is cleared at dissolution. During cleanup each hotkey's stake drops to zero as that hotkey is paid out, and no stake is reported as available. Listed stake on a dissolving subnet is pending settlement, not lost or stuck. Check whether the subnet was deregistered before treating its API rows as a live subnet.
 
 ## WARNINGS (verify but don't block)
 

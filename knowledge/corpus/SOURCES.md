@@ -8,30 +8,49 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
 | Sync date | 2026-10-24 |
 | Coverage date | 2026-10-24 |
-| Grounded at | Finney `spec_version` **483** |
+| Grounded at | Finney `spec_version` **484** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
 
 Verified 2026-10-24 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
 
-- Spec **483**. Knobs, emission-switch map, dust-floor storage and the
-  subnet registration rules read together at finalized block 9345956
-  (`0xdc554fed7b4038c7b2e2fa4ba1ed7f312273cae7fedf8b27083001d864ebdc7e`).
-  Chain-read probe clean at finalized block 9345958
-  (`0xdc5f4025fd46c8478d23c1f8cb187e3229e092e5f2969745938b23c86c4cf53e`).
-  Tracked clone `db3fdeb98` (`runtime/src/lib.rs` `spec_version: 483`).
-- Correction to the spec 482 snapshot. It listed the coldkey-swap merge,
-  `announce_coldkey_swap_v2` with destination reservations,
-  `reset_coldkey_swap_keep_locked`, the `Validate` / `Weights` proxy types,
-  three-level `RealPaysFee`, `SubnetEmissionEnabled` on at registration,
-  and Null-first epoch ordering as shipped in 482. The 482 → 483 diff
-  (`spec-483.diff`, base `spec_version: 482`) adds every one of them, so
-  they first went live at 483. While 482 was live the corpus overstated
-  them. For example, a swap into a used coldkey still failed with
-  `ColdKeyAlreadyAssociated`, and registration still wrote the emission
-  switch off. The corpus text now states them as live at 483.
-- Spec 483 shipped (Finney moved from 482):
+- Spec **484**. Knobs, emission-switch map, dust-floor storage and the
+  subnet registration rules read together at finalized block 9348505
+  (`0x9e1b8b95cc3bc80cacfa42a5cbaf06fcfaac617711a9180c0985cac8c9a2b6a6`).
+  Chain-read probe clean at finalized block 9348506
+  (`0x9e82da9035779a116f94b2f1a02ddbddbc33ebaf61615b2c2b7dfa54b19c7822`).
+  Tracked clone `5749dbfbe` (`runtime/src/lib.rs` `spec_version: 484`).
+  `spec-484.diff` has base `spec_version: 482`, so it repeats the 483
+  changes; the items below are the ones absent from `spec-483.diff`.
+- Spec 484 shipped (Finney moved from 483):
+  - Subnet lifecycle for reporting: new storage item `SubnetState`
+    (netuid → `Registered`, `Started`, `PendingDissolution`, `Dissolving`),
+    backfilled at upgrade by `migrate_subnet_state`
+    (`backfill_subnet_lifecycle_state_v1`). `NetworksAdded` still decides
+    what runtime operations may target. Reporting runtime APIs (metagraph,
+    selective metagraph and mechagraph, dynamic info, neuron info, subnet
+    state, emissions history, stake info, delegate info,
+    `current_alpha_price_all`) list every subnet with a `SubnetState`
+    entry, so a dissolved subnet stays visible until its idle-block cleanup
+    finishes. Once cleanup settles stake, each hotkey's stake reads as zero
+    as soon as that hotkey has been paid out. While a subnet is pending or
+    dissolving, the stake-availability API reports nothing available.
+  - `claim_root_with_hotkey` admission budget is 130 units (one validator,
+    128 subnet slots and the root slot; was 129).
+  - EVM subnet precompile `getLiquidAlphaConsensusMode(uint16)` and
+    `setLiquidAlphaConsensusMode(uint16,uint8)` (0 Current, 1 Previous,
+    2 Auto). The setter dispatches `sudo_set_liquid_alpha_consensus_mode`
+    signed by the caller, so in practice only the subnet owner succeeds.
+  - The swap pallet writes `SwapBalancer` and the balancer reservoirs only
+    when the value changes. Values are unchanged.
+  - `SubnetState` is not read. No storage item Atlas reads was added,
+    removed, renamed or reshaped; the probe is clean.
+  - The rest of the 484-only diff is SDK, btcli, docs and fee-snapshot
+    tests (for example `bdaa99a27`, the btcli identity prompts). It
+    changes no chain mechanic.
+- Carried from spec 483 and still live (the 484 diff carries the same
+  coldkey-swap, proxy, fee-wrapper and precompile hunks as the 483 diff):
   - Coldkey swaps merge into an already-used destination
     (`ColdKeyAlreadyAssociated` retired). Shares and basket watermarks add
     together (an overflow fails the swap), and staking lists merge. Queued
@@ -83,7 +102,8 @@ Verified 2026-10-24 against Finney RPC (`https://entrypoint-finney.opentensor.ai
     input longer than the normal block length. An over-weight call spends
     only its own frame's remaining gas.
   - Not live: the first Validate proxy merge (#3041, `d8921c2e0`) and its
-    follow-ups, reverted (`768c79ce3`) before 483 shipped. The live
+    follow-ups, reverted (`768c79ce3`) before 483 shipped, and still
+    reverted at 484. The live
     `Validate` / `Weights` types are #3194. Also not live: the
     coldkey-keyed proxy merge on coldkey swap (`6b2d0e356`), replaced by
     `043f17768` and `c6bbc008c`, which leave proxies with the old coldkey.
@@ -91,19 +111,19 @@ Verified 2026-10-24 against Finney RPC (`https://entrypoint-finney.opentensor.ai
     reservation release and `reset_coldkey_swap_keep_locked`. They dispatch
     with aliased weights from the existing coldkey-swap calls
     (`pallets/subtensor/src/weights.rs`).
-  - No storage item Atlas reads was added, removed, renamed or reshaped; the
-    probe is clean. The new items (`ColdkeySwapDestinationReservations`,
+  - The coldkey-swap items (`ColdkeySwapDestinationReservations`,
     `ColdkeySwapReservedDestination`, `ColdkeySwapV2PolicySnapshots`) are
-    not read. `ColdkeySwapDisputes` now uses block 0 as the recovery-lock
+    not read. `ColdkeySwapDisputes` uses block 0 as the recovery-lock
     marker; Atlas does not read it.
   - Open, outside the corpus: `livedata/atlas_live.py`
     `SUBNET_PARAM_DEFAULTS` records an absent `SubnetEmissionEnabled` key
     as `false`. The runtime's storage default is `DefaultTrue` (unchanged
-    at 483). Every live subnet has an explicit key (128 of 128), so no
+    at 484). Every live subnet has an explicit key (128 of 128), so no
     reading is affected today. Fixing it means changing a livedata test
     that pins the `false` default, which is outside the upgrade job's
     scope.
-- Carried from spec 482 and still live (not touched by the 483 diff):
+- Carried from spec 482 and still live (not touched by the 483 or 484
+  diffs):
   - Yuma miner payouts apportion the accumulated miner budget in full by
     incentive (remainders in UID order).
   - The validator-share floor check compares in `u64` parts; the smallest
@@ -196,8 +216,8 @@ Verified 2026-10-24 against Finney RPC (`https://entrypoint-finney.opentensor.ai
   `min_difficulty` (call 4) and `difficulty` (call 24) under the admin
   window and per-parameter owner rate limits; the `Owner` proxy admits them
   and the PoW toggle; root can override the owner cooldown; netuid 0 stays
-  root-only. The `claim_root_with_hotkey` admission budget is 129 units on
-  every network.
+  root-only. The `claim_root_with_hotkey` admission budget is 130 units on
+  every network since spec 484.
 - Carried from specs 474 and 475 and still live:
   - Per-subnet epoch consensus (`SubnetEpochConsensus`, Yuma default,
     owner/root `sudo_set_epoch_consensus` call 111). Null mode: one permit
@@ -244,7 +264,7 @@ Verified 2026-10-24 against Finney RPC (`https://entrypoint-finney.opentensor.ai
 - The legacy `Alpha`, `TotalHotkeyShares` and `AlphaMapLastKey` storage
   items are gone from metadata (`migrate_alpha_v2_and_unstake_dust_v1`);
   stake shares live in `AlphaV2` / `TotalHotkeySharesV2`.
-- Subnet registration rules at finalized block 9345956:
+- Subnet registration rules at finalized block 9348505:
   `NetworkImmunityPeriod` **432,000** (60 days),
   `NetworkLockReductionInterval` **57,600** (8 days), `NetworkRateLimit`
   **14,400** (2 days), all explicit. Root set the first two on 2026-10-14
