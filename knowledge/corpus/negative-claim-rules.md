@@ -203,3 +203,17 @@ team lost control.
 A validator can let an operator submit weights through a `Weights` or
 `Validate` proxy granted by its hotkey. Weights set by a proxy are not
 evidence that the validator is inactive or has handed over its stake.
+
+---
+
+## A dissolving subnet's rows are not stuck funds
+
+A deregistered subnet stays in the chain's reporting APIs until its
+background cleanup finishes. Its metagraph and stake rows can still show
+stake while settlement pays holders out hotkey by hotkey, and no stake is
+reported as available to unstake meanwhile.
+
+Do not write that a team "left stakers stuck", "froze withdrawals" or
+"has not paid out" because a deregistered subnet still lists stake, and
+do not describe it as still operating. Pending cleanup is the protocol
+settling the subnet, not a decision by the team.

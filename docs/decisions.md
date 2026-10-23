@@ -50,13 +50,15 @@ during apply:
 
 ## Live chain (2026-10-24)
 
-Finney `spec_version` **483** (knob and emission-switch read at finalized
-block 9345956; chain-read probe clean at finalized block 9345958).
-The coldkey-swap merge, V2 announce and reservations, the keep-locked
-reset, the `Validate` / `Weights` proxies, three-level `RealPaysFee`,
-emission-on at registration and Null-first epoch ordering first went live
-at 483. The 482 snapshot had stated them as shipped in 482, and the
-482 → 483 diff shows they were not.
+Finney `spec_version` **484** (knob and emission-switch read at finalized
+block 9348505; chain-read probe clean at finalized block 9348506).
+Spec 484 adds a reporting-only subnet lifecycle (`SubnetState`): a
+dissolved subnet stays in the metagraph, dynamic-info, neuron and stake
+runtime APIs until its cleanup finishes, and each hotkey's stake reads
+zero once it is paid out. `NetworksAdded` still gates operations. The
+`claim_root_with_hotkey` budget is 130 units, and the EVM subnet precompile
+gets and sets the liquid-alpha consensus mode. Atlas does not read
+`SubnetState`.
 Coldkey swaps merge into an already-used destination
 (`ColdKeyAlreadyAssociated` retired). Stake and basket watermarks add up,
 and the destination keeps its own flags, identity and auto-stake settings.
@@ -114,8 +116,8 @@ growing that list (`HotkeySwapStakeRetained`, root credits in
 `HotkeySwapBasketCredits`). EIP-7702 authorization lists are capped at 255
 entries before signature recovery, and EVM nonces survive balance-account
 reaping (`EVM.AccountNonces`). Registration rules are unchanged at block
-9345956 (immunity 432,000, lock reduction 57,600, rate limit 14,400, all
-explicit). Spec 483 renamed, removed or reshaped no item Atlas reads, so no
+9348505 (immunity 432,000, lock reduction 57,600, rate limit 14,400, all
+explicit). Spec 484 renamed, removed or reshaped no item Atlas reads, so no
 reader changed. Still open: the mining screen's miner share
 (`fleet/atlas_fleet_mining.py`) still comes from `SubnetOwnerCut` and
 `OwnerCutEnabled`. That is correct only for subnets still on their seeded
