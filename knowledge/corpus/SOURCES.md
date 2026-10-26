@@ -6,24 +6,36 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | field | value |
 |---|---|
 | Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
-| Sync date | 2026-10-24 |
-| Coverage date | 2026-10-24 |
-| Grounded at | Finney `spec_version` **484** |
+| Sync date | 2026-10-27 |
+| Coverage date | 2026-10-27 |
+| Grounded at | Finney `spec_version` **486** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
 
-Verified 2026-10-24 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
+Verified 2026-10-27 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
 
-- Spec **484**. Knobs, emission-switch map, dust-floor storage and the
-  subnet registration rules read together at finalized block 9348505
-  (`0x9e1b8b95cc3bc80cacfa42a5cbaf06fcfaac617711a9180c0985cac8c9a2b6a6`).
-  Chain-read probe clean at finalized block 9348506
-  (`0x9e82da9035779a116f94b2f1a02ddbddbc33ebaf61615b2c2b7dfa54b19c7822`).
-  Tracked clone `5749dbfbe` (`runtime/src/lib.rs` `spec_version: 484`).
-  `spec-484.diff` has base `spec_version: 482`, so it repeats the 483
-  changes; the items below are the ones absent from `spec-483.diff`.
-- Spec 484 shipped (Finney moved from 483):
+- Spec **486**. Knobs, emission-switch map, dust-floor storage and the
+  subnet registration rules read together at finalized block 9369802
+  (`0xa4f5e96389b63715f7592f1b85288939243033fdcf065f804936a834b6fefab7`).
+  Chain-read probe clean at finalized block 9369804
+  (`0xc9f7450d8a565cbc98639aee738e9452812470cdeeaa59cfffb4831e9951a4a9`).
+  Tracked clone `72323e132` (`runtime/src/lib.rs` `spec_version: 486`).
+  `spec-486.diff` has base `spec_version: 482`, so it repeats the 483 and
+  484 changes. Against `spec-484.diff`, every pallet, runtime, precompile
+  and `common/` blob is identical except `runtime/src/lib.rs` (the version
+  bump) and `chain-extensions/src/lib.rs`.
+- Spec 486 shipped (Finney moved from 484):
+  - The contracts chain extension's stake-availability query
+    (`GetStakeAvailabilityV1`) now charges weight before it runs: one read,
+    then the `StakingHotkeys` walk for the coldkey's actual list length
+    plus one entry. The walk is not clamped at the 256-entry cap. It
+    charged nothing before. Returned values are unchanged.
+  - No storage item Atlas reads was added, removed, renamed or reshaped;
+    the probe is clean. All knob values match the 484 read.
+  - The rest of the 486-only diff is CI scripts (deployed-runtime
+    publishing) and test files. It changes no chain mechanic.
+- Carried from spec 484 and still live:
   - Subnet lifecycle for reporting: new storage item `SubnetState`
     (netuid → `Registered`, `Started`, `PendingDissolution`, `Dissolving`),
     backfilled at upgrade by `migrate_subnet_state`
@@ -44,12 +56,8 @@ Verified 2026-10-24 against Finney RPC (`https://entrypoint-finney.opentensor.ai
     signed by the caller, so in practice only the subnet owner succeeds.
   - The swap pallet writes `SwapBalancer` and the balancer reservoirs only
     when the value changes. Values are unchanged.
-  - `SubnetState` is not read. No storage item Atlas reads was added,
-    removed, renamed or reshaped; the probe is clean.
-  - The rest of the 484-only diff is SDK, btcli, docs and fee-snapshot
-    tests (for example `bdaa99a27`, the btcli identity prompts). It
-    changes no chain mechanic.
-- Carried from spec 483 and still live (the 484 diff carries the same
+  - `SubnetState` is not read.
+- Carried from spec 483 and still live (the 486 diff carries the same
   coldkey-swap, proxy, fee-wrapper and precompile hunks as the 483 diff):
   - Coldkey swaps merge into an already-used destination
     (`ColdKeyAlreadyAssociated` retired). Shares and basket watermarks add
@@ -103,7 +111,7 @@ Verified 2026-10-24 against Finney RPC (`https://entrypoint-finney.opentensor.ai
     only its own frame's remaining gas.
   - Not live: the first Validate proxy merge (#3041, `d8921c2e0`) and its
     follow-ups, reverted (`768c79ce3`) before 483 shipped, and still
-    reverted at 484. The live
+    reverted at 486. The live
     `Validate` / `Weights` types are #3194. Also not live: the
     coldkey-keyed proxy merge on coldkey swap (`6b2d0e356`), replaced by
     `043f17768` and `c6bbc008c`, which leave proxies with the old coldkey.
@@ -118,12 +126,12 @@ Verified 2026-10-24 against Finney RPC (`https://entrypoint-finney.opentensor.ai
   - Open, outside the corpus: `livedata/atlas_live.py`
     `SUBNET_PARAM_DEFAULTS` records an absent `SubnetEmissionEnabled` key
     as `false`. The runtime's storage default is `DefaultTrue` (unchanged
-    at 484). Every live subnet has an explicit key (128 of 128), so no
+    at 486). Every live subnet has an explicit key (128 of 128), so no
     reading is affected today. Fixing it means changing a livedata test
     that pins the `false` default, which is outside the upgrade job's
     scope.
-- Carried from spec 482 and still live (not touched by the 483 or 484
-  diffs):
+- Carried from spec 482 and still live (not touched by the 483, 484 or
+  486 diffs):
   - Yuma miner payouts apportion the accumulated miner budget in full by
     incentive (remainders in UID order).
   - The validator-share floor check compares in `u64` parts; the smallest
@@ -211,7 +219,8 @@ Verified 2026-10-24 against Finney RPC (`https://entrypoint-finney.opentensor.ai
     walk is reserved for the signer's current list plus one (capped at the
     declared bound) plus one sizing read, per envelope slot for
     `unstake_all*`. Signed extrinsic weights still reserve the walk at the
-    cap.
+    cap. Since spec 486 the chain extension's stake-availability query
+    also charges for the walk.
 - Carried from spec 477 and still live: the subnet owner or root sets
   `min_difficulty` (call 4) and `difficulty` (call 24) under the admin
   window and per-parameter owner rate limits; the `Owner` proxy admits them
@@ -264,7 +273,7 @@ Verified 2026-10-24 against Finney RPC (`https://entrypoint-finney.opentensor.ai
 - The legacy `Alpha`, `TotalHotkeyShares` and `AlphaMapLastKey` storage
   items are gone from metadata (`migrate_alpha_v2_and_unstake_dust_v1`);
   stake shares live in `AlphaV2` / `TotalHotkeySharesV2`.
-- Subnet registration rules at finalized block 9348505:
+- Subnet registration rules at finalized block 9369802:
   `NetworkImmunityPeriod` **432,000** (60 days),
   `NetworkLockReductionInterval` **57,600** (8 days), `NetworkRateLimit`
   **14,400** (2 days), all explicit. Root set the first two on 2026-10-14

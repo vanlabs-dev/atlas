@@ -48,11 +48,15 @@ during apply:
   ingestion are **removed**, not disabled. Their tables and rows stay. The
   `root-rotation` promotion item due 2026-11-04 is void.
 
-## Live chain (2026-10-24)
+## Live chain (2026-10-27)
 
-Finney `spec_version` **484** (knob and emission-switch read at finalized
-block 9348505; chain-read probe clean at finalized block 9348506).
-Spec 484 adds a reporting-only subnet lifecycle (`SubnetState`): a
+Finney `spec_version` **486** (knob and emission-switch read at finalized
+block 9369802; chain-read probe clean at finalized block 9369804).
+Spec 486 meters the contracts chain extension's stake-availability query
+(one read plus the coldkey's actual `StakingHotkeys` walk); every other
+pallet, runtime and precompile source matches 484, and every knob value is
+unchanged.
+A reporting-only subnet lifecycle (`SubnetState`) is live: a
 dissolved subnet stays in the metagraph, dynamic-info, neuron and stake
 runtime APIs until its cleanup finishes, and each hotkey's stake reads
 zero once it is paid out. `NetworksAdded` still gates operations. The
@@ -116,8 +120,8 @@ growing that list (`HotkeySwapStakeRetained`, root credits in
 `HotkeySwapBasketCredits`). EIP-7702 authorization lists are capped at 255
 entries before signature recovery, and EVM nonces survive balance-account
 reaping (`EVM.AccountNonces`). Registration rules are unchanged at block
-9348505 (immunity 432,000, lock reduction 57,600, rate limit 14,400, all
-explicit). Spec 484 renamed, removed or reshaped no item Atlas reads, so no
+9369802 (immunity 432,000, lock reduction 57,600, rate limit 14,400, all
+explicit). Spec 486 renamed, removed or reshaped no item Atlas reads, so no
 reader changed. Still open: the mining screen's miner share
 (`fleet/atlas_fleet_mining.py`) still comes from `SubnetOwnerCut` and
 `OwnerCutEnabled`. That is correct only for subnets still on their seeded
