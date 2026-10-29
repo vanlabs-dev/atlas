@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRef, useState, type KeyboardEvent } from "react";
 import type { FleetTier } from "@/data/types";
+import { verdict } from "@/lib/format";
 
 export interface Slot {
   netuid: number;
@@ -106,7 +107,7 @@ export function SubnetPicker({ slots, initial }: { slots: Slot[]; initial: numbe
             </div>
             <div>
               <dt className="text-muted">Mining code</dt>
-              <dd className="text-body">{slot.verdict ?? "-"}</dd>
+              <dd className="text-body">{verdict(slot.verdict)}</dd>
             </div>
             <div>
               <dt className="text-muted">Gross, TAO/mo</dt>

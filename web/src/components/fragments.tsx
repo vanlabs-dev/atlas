@@ -2,6 +2,7 @@
 // Each root carries data-ui: it follows the app-screen rules inside.
 
 import type { Fleet, MiningRow, Network, SignalEvent, Upgrades } from "@/data/types";
+import { verdict } from "@/lib/format";
 
 const n = (v: number | null, digits = 0) =>
   v === null ? "-" : v.toLocaleString("en-GB", { maximumFractionDigits: digits });
@@ -34,7 +35,7 @@ export function MiningFragment({ rows }: { rows: MiningRow[] }) {
           {top.map((r) => (
             <tr key={r.netuid}>
               <td className="py-1">SN{r.netuid} {r.name}</td>
-              <td className="py-1 text-muted">{r.verdict ?? "-"}</td>
+              <td className="py-1 text-muted">{verdict(r.verdict)}</td>
               <td className="py-1 text-right">{n(r.grossTaoMonth, 1)}</td>
             </tr>
           ))}
