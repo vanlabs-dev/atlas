@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comp E: Strata</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Schibsted+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#08090a;--s1:#0f1113;--s2:#15181b;--line:rgba(255,255,255,.08);--tx:#f2f3f5;--tx2:#a3a8b1;--tx3:#7d838d;--ac:#5d93ff;--ac2:#a8c8ff;--dn:#f0646a}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--tx);font:16px/1.55 "Schibsted Grotesk",system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.disp{font-family:Newsreader,Georgia,serif;font-optical-sizing:auto;font-weight:500}
+.wrap{max-width:1320px;margin:0 auto;padding:0 32px}
+header{position:relative;z-index:3}
+header .wrap{display:flex;align-items:center;height:72px;gap:36px}
+.wm{font-family:Newsreader,serif;font-size:24px;font-weight:500;letter-spacing:-.01em;color:var(--tx);text-decoration:none}
+header nav{display:flex;gap:28px}
+header nav a{color:var(--tx2);text-decoration:none;font-size:15px}
+header nav a:hover{color:var(--tx)}
+.sp{flex:1}
+.blk b,dd,td.r,.panel dd{font-variant-numeric:tabular-nums}
+th{white-space:nowrap}
+.blk{font-size:13px;color:var(--tx3);display:flex;gap:10px;align-items:baseline}
+.blk b{font-weight:500;color:var(--tx2)}
+.blk i{font-style:normal;display:inline-block;width:46px;height:2px;background:var(--line);position:relative;top:-3px;overflow:hidden}
+.blk i::after{content:"";position:absolute;inset:0;background:var(--ac);transform-origin:left;transform:scaleX(var(--p,0))}
+.hero{position:relative;min-height:min(100svh,940px);margin-top:-72px;padding-top:72px;display:flex;flex-direction:column}
+canvas#strata{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+.hero .wrap{position:relative;z-index:2;flex:1;display:grid;grid-template-columns:7fr 1fr 4fr;align-items:end;padding-bottom:64px;pointer-events:none}
+.copy{pointer-events:auto;max-width:640px;padding-top:120px}
+.copy::before{content:"";position:absolute;inset:-40px -60px -40px -400px;z-index:-1;background:radial-gradient(closest-side,rgba(8,9,10,.92),rgba(8,9,10,.75) 60%,transparent);pointer-events:none}
+h1{font-size:clamp(48px,6.6vw,104px);line-height:.96;letter-spacing:-.025em}
+.sub{font-size:20px;color:var(--tx2);margin-top:28px;max-width:34ch}
+.sub strong{color:var(--tx);font-weight:500}
+.acts{display:flex;gap:28px;align-items:center;margin-top:36px}
+.b1{height:46px;padding:0 20px;display:inline-flex;align-items:center;background:var(--tx);color:var(--bg);border-radius:4px;font-weight:500;text-decoration:none}
+.b1:hover{background:var(--ac2)}
+.b2{color:var(--tx);text-decoration:none;font-weight:500;border-bottom:1px solid var(--tx3);padding-bottom:2px}
+.panel{grid-column:3;pointer-events:auto;background:var(--s1);border-radius:10px;padding:24px}
+.panel .k{display:flex;justify-content:space-between;font-size:13px;color:var(--tx3)}
+.panel h2{font-size:40px;line-height:1;margin-top:14px}
+.panel p{color:var(--tx2);font-size:15px;margin-top:8px}
+.panel dl{display:grid;grid-template-columns:1fr 1fr;gap:18px 16px;margin-top:22px}
+.panel dt{font-size:13px;color:var(--tx3)}.panel dd{font-size:22px;margin-top:2px}
+.hint{font-size:13px;color:var(--tx3);margin-top:20px}
+.dn{color:var(--dn)}.up{color:var(--ac2)}
+.board{padding:160px 0 140px}
+.bgrid{display:grid;grid-template-columns:4fr 8fr;gap:64px;align-items:start}
+.bh{font-size:clamp(40px,4.4vw,64px);line-height:1;letter-spacing:-.02em}
+.bf{color:var(--tx2);font-size:18px;margin-top:20px;max-width:30ch}
+.nums{margin-top:48px;display:grid;gap:28px}
+.nums div{display:grid;grid-template-columns:120px 1fr;align-items:baseline;gap:16px}
+.nums dd{font-family:Newsreader,serif;font-size:64px;line-height:.9}
+.nums dt{color:var(--tx2);font-size:15px}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th{font-weight:400;font-size:13px;color:var(--tx3);text-align:left;padding:0 12px 14px}
+td{padding:16px 12px;border-top:1px solid var(--line)}
+tbody tr{cursor:pointer}tbody tr:hover td{background:var(--s1)}
+td.n span{color:var(--tx3);margin-right:10px}
+.r{text-align:right}
+.lane{display:block;height:14px;width:180px;margin-left:auto}
+.why{color:var(--tx2)}
+@media (max-width:900px){.hero .wrap{grid-template-columns:1fr;align-items:start}.panel{grid-column:1;margin-top:40px}.copy{padding-top:56px}.bgrid{grid-template-columns:1fr;gap:40px}header nav,.blk{display:none}.hide{display:none}.lane{width:90px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><a class="wm" href="#">Atlas</a><nav><a href="#">Mining</a><a href="#">Fleet</a><a href="#">Network</a><a href="#">Upgrades</a></nav><span class="sp"></span><span class="blk" aria-live="off">est. block <b id="blk"></b><i id="bar"></i></span></div></header>
+<section class="hero" aria-labelledby="t">
+  <canvas id="strata" aria-label="Commit activity of all 128 subnets over 90 days, one line per subnet"></canvas>
+  <div class="wrap">
+    <div class="copy">
+      <h1 class="disp" id="t">Atlas reads all 128 Bittensor subnets.</h1>
+      <p class="sub" id="sub"></p>
+      <div class="acts"><a class="b1" href="#">Open the fleet board</a><a class="b2" href="#">What it reads</a></div>
+    </div>
+    <aside class="panel" id="panel" aria-live="polite"></aside>
+  </div>
+</section>
+<main class="wrap">
+<section class="board" aria-labelledby="fa">
+  <div class="bgrid">
+    <div><h2 class="disp bh" id="fa">Fleet attention</h2><p class="bf" id="bf"></p><dl class="nums" id="nums"></dl></div>
+    <table><thead><tr><th>Subnet</th><th class="r">Score</th><th class="hide">Why it ranks</th><th class="r hide">Commits, 30 d</th><th class="r">Price, 30 d</th><th class="r">Last 30 days</th></tr></thead><tbody id="rows"></tbody></table>
+  </div>
+</section>
+</main>
+<script>
+const D = DATA_PLACEHOLDER;
+const WHY={emission:"Emission route changed",divergence:"Code and price apart",abandon:"Code gone quiet"};
+const f=(v,d=0)=>v==null?"-":v.toLocaleString("en-GB",{maximumFractionDigits:d});
+const s=(v,d=0,u="")=>v==null?"-":(v>0?"+":v<0?"−":"")+f(Math.abs(v),d)+u;
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+document.getElementById("sub").innerHTML=`Code, chain and market, from one Raspberry Pi at home. In the last 30 days it read <strong>${f(D.commits30)} commits</strong> across <strong>${D.repos} repositories</strong>.`;
+
+// Deterministic per-day activity from the 7- and 30-day counts (comp only;
+// the build exports real daily counts from fleet.db change_ranges).
+const DAYS=90;
+function rnd(a){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}
+const rows=D.activity.map((a,i)=>{const day=new Float32Array(DAYS);if(!a)return day;const [c7,c30]=a;
+  for(let d=0;d<DAYS;d++){const age=DAYS-1-d;const base=age<7?c7/7:age<30?Math.max(0,c30-c7)/23:c30/30*0.6;
+    const r=rnd(i*977+d*31);day[d]=base*(r<0.55?0:r*2.2)}return day});
+const tier=D.slots;
+let sel=D.lead.netuid-1, hover=-1, shift=0;
+
+const cv=document.getElementById("strata"),cx=cv.getContext("2d");
+function size(){const r=cv.getBoundingClientRect(),dpr=Math.min(2,devicePixelRatio||1);cv.width=r.width*dpr;cv.height=r.height*dpr;cx.setTransform(dpr,0,0,dpr,0,0);draw()}
+function draw(){
+  const W=cv.clientWidth,H=cv.clientHeight,top=96,bottom=24,rh=(H-top-bottom)/128,cw=W/DAYS;
+  cx.clearRect(0,0,W,H);
+  for(let i=0;i<128;i++){
+    const y=top+i*rh+rh/2,row=rows[i],t=tier[i],on=i===sel||i===hover;
+    cx.fillStyle=on?"rgba(255,255,255,.07)":"rgba(255,255,255,.025)";cx.fillRect(0,y-.5,W,1);
+    for(let d=0;d<DAYS;d++){const v=row[d];if(!v)continue;
+      const a=Math.min(1,Math.log1p(v)/2.2);const x=(d-shift)*cw;
+      cx.fillStyle=on?`rgba(168,200,255,${.35+a*.65})`:t==="head"?`rgba(93,147,255,${.25+a*.7})`:`rgba(210,214,222,${.08+a*.42})`;
+      cx.fillRect(x+1,y-Math.max(.5,rh*.32*a),Math.max(1,cw-2),Math.max(1,rh*.64*a))}
+  }
+  // the newest column, sealed by the last block
+  cx.fillStyle="rgba(93,147,255,.5)";cx.fillRect(W-cw*(1-shift)-1,top,1,H-top-bottom);
+}
+function rowAt(e){const r=cv.getBoundingClientRect(),H=r.height,top=96,rh=(H-top-24)/128;const i=Math.floor((e.clientY-r.top-top)/rh);return i>=0&&i<128?i:-1}
+cv.addEventListener("mousemove",e=>{const i=rowAt(e);if(i!==hover){hover=i;draw()}});
+cv.addEventListener("mouseleave",()=>{hover=-1;draw()});
+cv.addEventListener("click",e=>{const i=rowAt(e);if(i>=0){sel=i;panel();draw()}});
+
+const byN=Object.fromEntries(D.rows.map(r=>[r.netuid,r]));
+function panel(){const n=sel+1,a=D.activity[sel],r=byN[n],t=tier[sel];
+  document.getElementById("panel").innerHTML=`<div class="k"><span>Subnet ${n}</span><span>${t==="none"?"not on the fleet board":t+" of the fleet board"}</span></div>
+  <h2 class="disp">${r?r.name:"SN"+n}</h2><p>${r?WHY[r.why]+".":a?"Scored, outside the top six.":"No public repository Atlas can read."}</p>
+  <dl><div><dt>Commits, 7 d</dt><dd>${a?a[0]:"-"}</dd></div><div><dt>Commits, 30 d</dt><dd>${a?a[1]:"-"}</dd></div>
+  ${r?`<div><dt>Code vs price</dt><dd>${s(r.divergence)}</dd></div><div><dt>Price, 30 d</dt><dd class="${r.momentum30d<0?"dn":"up"}">${s(r.momentum30d,1,"%")}</dd></div>`:""}</dl>
+  <p class="hint">Point at any line in the field to read that subnet.</p>`}
+panel();
+
+// Bittensor seals a block every 12 seconds. Each block advances the field.
+const t0=Date.parse(D.blockAt);
+function tick(){const now=Date.now(),el=(now-t0)/12000;document.getElementById("blk").textContent=f(D.block+Math.floor(el));
+  document.getElementById("bar").style.setProperty("--p",(el%1).toFixed(3));
+  if(!reduce){shift=(el%1)*0;}requestAnimationFrame(tick)}
+let lastBlock=-1;
+function blockLoop(){const el=Math.floor((Date.now()-t0)/12000);if(el!==lastBlock&&lastBlock!==-1&&!reduce){
+  for(const row of rows){row.copyWithin(0,1);row[DAYS-1]=0}
+  rows.forEach((row,i)=>{const a=D.activity[i];if(a&&rnd(el*7+i)<a[0]/30)row[DAYS-1]=1+rnd(i+el)*3});
+  const start=performance.now();(function slide(t){const p=Math.min(1,(t-start)/600);shift=1-(1-(1-p)**3);draw();if(p<1)requestAnimationFrame(slide);else{shift=0;draw()}})(start)}
+  lastBlock=el;setTimeout(blockLoop,250)}
+addEventListener("resize",size);size();tick();blockLoop();
+
+document.getElementById("bf").textContent=`${D.counts.diverging} subnets show code and price moving 40 points or more apart. ${D.lead.name} leads.`;
+document.getElementById("nums").innerHTML=[[D.counts.diverging,"code and price apart"],[D.counts.cold,"gone cold this month"],[D.counts.emission,"emission routes changed"],[D.counts.invisible,"with no public repository"]].map(([v,k])=>`<div><dd>${v}</dd><dt>${k}</dt></div>`).join("");
+document.getElementById("rows").innerHTML=D.rows.map(r=>`<tr><td class="n"><span>${r.netuid}</span>${r.name}</td><td class="r">${r.score}</td><td class="why hide">${WHY[r.why]}</td><td class="r hide">${f(r.commits30)}</td><td class="r ${r.momentum30d<0?"dn":"up"}">${s(r.momentum30d,1,"%")}</td><td><canvas class="lane" data-n="${r.netuid}"></canvas></td></tr>`).join("");
+document.querySelectorAll("canvas.lane").forEach(c=>{const n=+c.dataset.n,row=rows[n-1],dpr=2,w=c.clientWidth,h=c.clientHeight;c.width=w*dpr;c.height=h*dpr;const g=c.getContext("2d");g.scale(dpr,dpr);
+  const cw=w/30;for(let d=0;d<30;d++){const v=row[DAYS-30+d];const a=v?Math.min(1,Math.log1p(v)/2.2):0;g.fillStyle=a?`rgba(168,200,255,${.3+a*.7})`:"rgba(255,255,255,.08)";const bh=a?Math.max(2,h*a):1;g.fillRect(d*cw,(h-bh)/2,Math.max(1,cw-1.5),bh)}});
+</script>
+</body>
+</html>

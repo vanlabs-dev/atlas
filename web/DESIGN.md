@@ -1,63 +1,146 @@
 # subnt.dev design
 
-Chosen 2026-10-30 at task 4.1 of the `subnt-dev-site` change. Approved by
-the owner the same day. Dealt with `design-taste-frontend`; the sheets are
-reprinted with `node ~/.claude/skills/design-taste-frontend/scripts/draw.mjs --show`
-(working files in `.taste-skill/`, not committed).
+Approved: 2026-10-30 (owner, comp E "Strata").
 
-## Home page: One motif
+Reference comp: `docs/greenfield/subnt-dev-site/comps/e-strata.html`
+(screenshots beside it). The comp reads a `DATA_PLACEHOLDER` built from
+the fixtures. It is a picture of the system, not code to copy.
 
-- Direction `one-motif`, seed 1003367883, sector dev-tool, tone technical.
-- Idea: on this page, the subnet slots Atlas clones and scores become the
-  one motif, a square cell. The hero is a field of cells tinted by Atlas's
-  own fleet tier. The cell returns as the button, the list bullet and one
-  full-width band.
-- Live thing: pick a subnet (a cell, or its number) and see its row on all
-  four boards. It works without script as plain links.
-- Hero: "Fragment on a shaped stage". Sections: showcase (object on a
-  disc, here the cell), how-it-works (one card, four fields), list
-  (statement, table pushed right), about (inset panel), footer (the mark,
-  built large).
-- Signature motion: shutter on the hero stage. Section entrances, control
-  feedback. All of it drops under `prefers-reduced-motion`.
+## History
 
-## Data boards: Data terminal
+- First build: `design-taste-frontend` direction "One motif", bottle
+  green and gold, General Sans. Rejected by the owner as flat and
+  boring, with a two-colour system that did not work.
+- Comps A (Instrument), B (Telemetry), C (Aurora) and D (C's layout in
+  A's colours) were rendered on real data. B was rejected. D was
+  rejected for AI tells: the "X, watched" headline formula, the italic
+  serif keyword, and a generic aurora background.
+- E replaced those with the choices below, after research into 2026
+  AI-default patterns (Paralect's 21 patterns, the Sailop 2026 report).
 
-- App style `data-terminal`, seed 1194055999, kind markets, palette and
-  type kept from the home page.
-- The move: every selection is a 1px gold line as wide as its label.
-  Numbers stay ink or muted and carry their sign in the text.
-- Face: the gold accent line from the palette, and the cell field as the
-  signature element on the fleet board.
-- Shell: icon rail with tooltips and accessible names; a bottom bar on a
-  phone.
-- Each board leads with its one question and one finding, shows its data
-  age, and shows a stale label past 48 hours.
+## Rules relaxed from design-taste-frontend
+
+The owner relaxed the house rules for this site. They are allowed:
+
+- tabular figures with a slightly technical feel, and a monospace face
+  inside real data tables;
+- one scrim gradient behind the hero copy, for legibility over the
+  strata;
+- a living background (the strata), which the inspector may read as
+  motion or decoration.
+
+Pass `inspect.mjs --allow <rule>` only for those rules, and use a
+same-line `taste-skill-ignore` in lint. Every other house rule still
+holds.
+
+## Never use (AI tells)
+
+- Headline formulas ("X, watched", "Transform your X", "The future of X").
+- An italic or coloured keyword in a headline. Gradient text.
+- Aurora or blurred colour blobs, glow, neon, background grids.
+- Frosted glass on static cards.
+- Geist, Inter, Instrument Serif, Space Grotesk.
+- Pill badges, eyebrow labels, pulsing "live" dots, scroll-reveal on
+  every block, icon-topped feature cards.
+- Teal or green as a brand colour: it reads as taostats.
+
+## Copy
+
+- h1: "Atlas reads all 128 Bittensor subnets."
+- Under it, one sentence with real figures from the data layer: "Code,
+  chain and market, from one Raspberry Pi at home. In the last 30 days
+  it read {commits30} commits across {repos} repositories."
+- Plain, specific sentences. Digits, not words. No "we". No hype verbs.
 
 ## Type
 
-General Sans (Fontshare), 400, 500, 700. One family. Display 700,
-tracking -0.02em, leading 0.9. Text 400, leading 1.45. Tabular figures on
-every number. No monospace.
+- Display: Newsreader (Google, optical size axis), weight 500, upright
+  only. h1 clamp(48px, 6.6vw, 104px), leading 0.96, tracking -0.025em.
+  Section heads clamp(40px, 4.4vw, 64px). Large figures (KPIs) at 64px.
+- Text and UI: Schibsted Grotesk 400, 500, 600. Body 16px, lead 20px,
+  small 13px.
+- Tabular figures on numbers only (`dd`, numeric `td`, block readout).
+  Not on body text: Schibsted's tabular punctuation spaces commas apart.
+- Load both with `next/font/google` (self-hosted at build). Drop the
+  Fontshare link.
 
-## Colour
+## Colour (dark is the target; light follows the system)
 
-| Role | Dark (default) | Light |
-|---|---|---|
-| ground | `#133621` | `#f3f6ef` |
-| surface | `#1a4429` | `#e4ebdf` |
-| card (boards) | `#0e2a19` | `#ffffff` |
-| ink | `#f4d96c` | `#133621` |
-| muted | `#c0b26a` | `#4d5a3c` |
-| accent | `#f4d96c` | `#133621` |
-| accent ink | `#133621` | `#f4d96c` |
+| Role | Dark |
+|---|---|
+| ground | `#08090a` |
+| surface 1 (panels) | `#0f1113` |
+| surface 2 (row hover) | `#15181b` |
+| rule | `rgba(255,255,255,.08)` |
+| ink | `#f2f3f5` |
+| ink 2 (secondary) | `#a3a8b1` |
+| ink 3 (labels) | `#7d838d` |
+| accent (signal blue) | `#5d93ff` |
+| accent 2 (active line) | `#a8c8ff` |
+| down | `#f0646a` |
 
-Bottle green ground, gold type. Under 3% colour on board screens beyond
-the ink. Text meets WCAG AA in both schemes.
+- No gradients except the hero scrim. Surfaces separate by tone, not
+  border. Rules only in tables.
+- Polarity colour only on "what moved" figures (price change). Positive
+  uses accent 2, negative uses down. Everything else stays ink.
+- Light scheme: derive it in the restyle (ground near white, ink near
+  black, same blue). Keep WCAG AA in both.
 
-## Rejected
+## Shape
 
-`ui-ux-pro-max` recommended glassmorphism and Fira Code. Both break the
-house rules (no glass, no monospace). Kept from it: label data with its
-update time and a stale state, and render a static final frame under
-reduced motion.
+- Primary button: solid ink, radius 4px, 46px tall. Secondary action:
+  a text link with an underline. Panels: radius 10px, no border, no
+  shadow. Different radii per element type on purpose.
+
+## The strata (signature element and live control)
+
+- A full-bleed `<canvas>` behind the hero. 128 rows, one per subnet
+  (netuid 1 to 128). 90 columns, one per day, newest on the right.
+- Each cell's mark height and alpha scale with `log1p(commits that day)`.
+  Head-tier rows are drawn in accent, the rest in ink at low alpha. The
+  selected or hovered row draws in accent 2 with a lit baseline.
+- Block clock: Bittensor seals a block every 12 s. On each block the
+  field slides one column left (600 ms ease-out) and seals the newest
+  column. The header shows "est. block N" and a 12 s progress line.
+  "est." stays until a live block source exists.
+- Interaction: pointing at a row opens that subnet in the panel. Click
+  selects it. Keyboard: the panel holds a subnet picker (arrow keys or
+  a number field) that drives the same selection. The canvas has an
+  `aria-label`, and the panel is `aria-live="polite"`.
+- Reduced motion: a still frame, with no slide and no block advance.
+  The block number still updates as text.
+- Data: needs real daily commit counts per subnet for 90 days. Add them
+  to the export (allowlisted field `daily`, an array of 90 integers per
+  subnet, from `change_ranges` commit timestamps in `fleet.db`, aged
+  like the other series). The comp derives days from the 7- and 30-day
+  counts. The build must not.
+
+## Boards (mining, fleet, network, upgrades)
+
+- Same tokens and type. Shell: a slim top bar (wordmark, four links,
+  block readout). No icon rail.
+- Each board: a Newsreader title, one finding sentence, the data age
+  and stale label, then the content.
+- Layout: asymmetric, with a 4/8 split where a board has a figure
+  column. Large Newsreader figures for the counts. Tables with rules,
+  right-aligned tabular numbers, and a 30-day activity lane (a tiny
+  strata strip) per subnet where daily data exists.
+- Filters: text tabs, with the selected one marked by a 1px accent
+  underline as wide as its label.
+- Charts: flat accent bars or lines, a faint 3-line scale, dates on the
+  ends, no legend for a single series.
+
+## Motion list
+
+1. The strata block tick (signature).
+2. Hover and press feedback on rows, links and buttons (opacity or
+   colour only, under 200 ms).
+3. Panel content swap on selection (150 ms crossfade).
+
+That is all. No entrance animations on sections.
+
+## Checks to keep
+
+Lighthouse a11y of 95 or more in both schemes, AA contrast, the reduced
+motion check, the first-screen check at 1280x720 and 390x844, the
+fixture scrub and allowlist tests, and operator-free data.
