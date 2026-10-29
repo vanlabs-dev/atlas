@@ -96,12 +96,12 @@ and `atlas-fleet`. Scheduled work runs as user-level systemd timers.
 | [`fleet/`](fleet/README.md) | Clones every subnet's repository, indexes it, scores rotation and mining signals, serves the LAN board and `atlas-fleet` |
 | [`telegram/`](telegram/README.md) | Alert classes, tiers, delivery ledger, plain-English rewrite, daily briefing |
 | [`upgrade/`](upgrade/README.md) | Runtime upgrade job: detects a new spec, edits the corpus in a worktree, gates and pushes |
-| [`subnt/`](subnt/README.md) | Public-edition exporter (retired, code kept) |
+| [`subnt/`](subnt/README.md) | Old subnt.dev exporter (retired, code kept; the site is now `web/`) |
 | [`hermes/`](hermes/README.md) | Read-only verifiers for the Hermes agent baseline, memory and model |
 | [`inventory/`](inventory/README.md) | Read-only device inventory collector |
 | [`hardening/`](hardening/README.md) | Read-only security-posture assessor and the operator-approved apply scripts |
 | [`tools/`](tools/) | Repository tooling, including this README generator |
-| [`web/`](web/) | The subnt.dev site: Next.js pages over a typed data layer |
+| [`web/`](web/README.md) | The subnt.dev site: Next.js pages over a typed data layer |
 <!-- END:components -->
 
 ## What it does
@@ -128,7 +128,7 @@ and `atlas-fleet`. Scheduled work runs as user-level systemd timers.
 | [`runtime-upgrade`](openspec/specs/runtime-upgrade/spec.md) | Brings Atlas up to date on the Pi, without an operator, when the live runtime spec changes, with every gate enforced in code rather than in a model prompt. |
 | [`signal-effectiveness-gate`](openspec/specs/signal-effectiveness-gate/spec.md) | Governs which alert classes are allowed to page the operator, by requiring every netuid-scoped class to be measured against the fleet baseline before it earns an instant tier and to keep being measured after it loses one. |
 | [`subnet-repo-fleet`](openspec/specs/subnet-repo-fleet/spec.md) | Maintain a chain-driven fleet of local subnet repository clones. |
-| [`subnt-publish`](openspec/specs/subnt-publish/spec.md) | **Retired.** Composes the public subnt.dev edition from facts already recorded in the Atlas stores as schema-valid data files and publishes them into the subnt checkout, so that the page anyone can read carries only recorded, dated, operator-free figures and names every input it does not have. |
+| [`subnt-publish`](openspec/specs/subnt-publish/spec.md) | **Retired, replaced by `web/`.** Composes the public subnt.dev edition from facts already recorded in the Atlas stores as schema-valid data files and publishes them into the subnt checkout, so that the page anyone can read carries only recorded, dated, operator-free figures and names every input it does not have. |
 | [`subtensor-repo-tracking`](openspec/specs/subtensor-repo-tracking/spec.md) | Track the mainnet subtensor repository on the device. |
 | [`telegram-integration`](openspec/specs/telegram-integration/spec.md) | Deliver Atlas alerts to Telegram through a scrubbed, de-duplicated, tiered outbound notifier, with inbound chat handled by the native Hermes gateway. |
 <!-- END:capabilities -->
@@ -145,7 +145,7 @@ every change are in [`openspec/changes/archive/`](openspec/changes/archive/).
 | `atlas-poll-chain-head` | Every hour | Live chain-head poll |
 | `atlas-probe` | Every hour | Chain-read probe |
 | `atlas-repotrack-update` | Every hour | Subtensor repository update |
-| `atlas-subnt` | Every 6 hours, at :55 | Subnt public edition (retired, masked) |
+| `atlas-subnt` | Every 6 hours, at :55 | Subnt public edition (retired, masked; replaced by `web/`) |
 | `atlas-upgrade` | Every 30 minutes | Runtime upgrade job |
 <!-- END:schedule -->
 
