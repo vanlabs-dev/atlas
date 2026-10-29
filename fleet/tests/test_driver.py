@@ -107,6 +107,47 @@ class BasicReconcileTests(DriverTestBase):
             0)
 
 
+class NoRepoTeardownTests(DriverTestBase):
+    def test_no_repo_after_clone_then_new_repo_gets_fresh_epoch_and_clone(self):
+        self.reconcile(identity_result([subnet(1, "https://github.com/test/a")]))
+        old_sha = fleet.get_slot(self.conn, 1)["local_sha"]
+        self.reconcile(identity_result([subnet(1, None)]))
+        slot = fleet.get_slot(self.conn, 1)
+        self.assertEqual(slot["status"], "no-repo")
+        self.assertIsNone(slot["epoch"])
+        self.assertIsNone(slot["local_sha"])
+        self.assertFalse(os.path.isdir(os.path.join(self.clone_root, "1")))
+        self.assertFalse(self.q(
+            "SELECT 1 FROM epochs WHERE netuid=1 AND closed_at IS NULL"))
+        self.reconcile(identity_result([subnet(1, "https://github.com/test/b")]))
+        slot = fleet.get_slot(self.conn, 1)
+        self.assertEqual(slot["status"], "active")
+        self.assertEqual(slot["epoch"], 2)
+        self.assertNotEqual(slot["local_sha"], old_sha)
+        self.assertEqual(
+            self.q("SELECT github_repo FROM epochs WHERE netuid=1 "
+                   "AND closed_at IS NULL"),
+            [("https://github.com/test/b",)])
+
+
+class OriginMismatchTests(unittest.TestCase):
+    def test_mismatch_only_for_a_different_github_repo(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        origin = h.make_origin(tmp, name="o")
+        clone = os.path.join(tmp, "c")
+        fleet.setup_clone(clone, origin)
+        # local-path origin never counts as a mismatch
+        self.assertFalse(fleet._origin_mismatch(
+            clone, "https://github.com/test/a"))
+        fleet._run_git(clone, ["remote", "set-url", "origin",
+                               "https://github.com/Old/Repo.git"])
+        self.assertFalse(fleet._origin_mismatch(
+            clone, "https://github.com/old/repo"))
+        self.assertTrue(fleet._origin_mismatch(
+            clone, "https://github.com/new/repo"))
+
+
 class ChurnTests(DriverTestBase):
     def test_repoint_discards_bumps_epoch_and_keeps_old_history(self):
         self.reconcile(identity_result([subnet(1, "https://github.com/test/a")]))
