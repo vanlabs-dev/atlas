@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-29T22:12:48.946634+00:00",
+  "generatedAt": "2026-10-29T22:31:10.376524+00:00",
   "data": {
     "rows": [
       {
@@ -17,7 +17,6 @@
         "daysSinceCommit": 0,
         "momentum7d": -10.87,
         "momentum30d": -24.15,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -36,7 +35,6 @@
         "daysSinceCommit": 382,
         "momentum7d": 0.4003,
         "momentum30d": -0.05883,
-        "quadrant": "fade",
         "activityClass": "fade-eligible",
         "emissionOpaque": false
       },
@@ -55,7 +53,6 @@
         "daysSinceCommit": 94,
         "momentum7d": -0.7815,
         "momentum30d": -1.56,
-        "quadrant": "fade",
         "activityClass": "fade-eligible",
         "emissionOpaque": false
       },
@@ -74,7 +71,6 @@
         "daysSinceCommit": 370,
         "momentum7d": -0.397,
         "momentum30d": -1.082,
-        "quadrant": "fade",
         "activityClass": "fade-eligible",
         "emissionOpaque": false
       },
@@ -93,7 +89,6 @@
         "daysSinceCommit": 157,
         "momentum7d": -0.6385,
         "momentum30d": -4.652,
-        "quadrant": "fade",
         "activityClass": "fade-eligible",
         "emissionOpaque": false
       },
@@ -112,7 +107,6 @@
         "daysSinceCommit": 175,
         "momentum7d": -1.078,
         "momentum30d": 1.728,
-        "quadrant": "fade",
         "activityClass": "fade-eligible",
         "emissionOpaque": false
       },
@@ -131,7 +125,6 @@
         "daysSinceCommit": 0,
         "momentum7d": -33.69,
         "momentum30d": 1344,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -150,7 +143,6 @@
         "daysSinceCommit": 0,
         "momentum7d": -9.677,
         "momentum30d": -29.95,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -169,7 +161,6 @@
         "daysSinceCommit": 0,
         "momentum7d": -5.935,
         "momentum30d": -22.91,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -188,7 +179,6 @@
         "daysSinceCommit": 2,
         "momentum7d": -17.27,
         "momentum30d": -36.78,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -207,7 +197,6 @@
         "daysSinceCommit": 0,
         "momentum7d": -6.885,
         "momentum30d": -22.59,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -226,7 +215,6 @@
         "daysSinceCommit": 14,
         "momentum7d": 21.68,
         "momentum30d": 7.737,
-        "quadrant": "fade",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -245,7 +233,6 @@
         "daysSinceCommit": 107,
         "momentum7d": -1.287,
         "momentum30d": -21.03,
-        "quadrant": "fade",
         "activityClass": "fade-eligible",
         "emissionOpaque": false
       },
@@ -264,7 +251,6 @@
         "daysSinceCommit": 9,
         "momentum7d": 48.51,
         "momentum30d": 92.58,
-        "quadrant": "fade",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -283,7 +269,6 @@
         "daysSinceCommit": 136,
         "momentum7d": -2.486,
         "momentum30d": -10.57,
-        "quadrant": "ignore",
         "activityClass": "fade-eligible",
         "emissionOpaque": false
       },
@@ -302,7 +287,6 @@
         "daysSinceCommit": 6,
         "momentum7d": -21.27,
         "momentum30d": 13.65,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -321,7 +305,6 @@
         "daysSinceCommit": 8,
         "momentum7d": 8.357,
         "momentum30d": 415.8,
-        "quadrant": "fade",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -340,7 +323,6 @@
         "daysSinceCommit": 30,
         "momentum7d": -2.255,
         "momentum30d": -15.44,
-        "quadrant": "fade",
         "activityClass": "idle",
         "emissionOpaque": false
       },
@@ -359,7 +341,6 @@
         "daysSinceCommit": 13,
         "momentum7d": -3.96,
         "momentum30d": -25.21,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -378,7 +359,6 @@
         "daysSinceCommit": 0,
         "momentum7d": -3.16,
         "momentum30d": -0.5524,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -397,7 +377,6 @@
         "daysSinceCommit": 1,
         "momentum7d": -3.488,
         "momentum30d": -8.619,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -416,7 +395,6 @@
         "daysSinceCommit": 3,
         "momentum7d": -6.256,
         "momentum30d": 37.43,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -435,7 +413,6 @@
         "daysSinceCommit": 1,
         "momentum7d": 43.04,
         "momentum30d": 32.52,
-        "quadrant": "fade",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -454,7 +431,6 @@
         "daysSinceCommit": 13,
         "momentum7d": 7.759,
         "momentum30d": 7.237,
-        "quadrant": "fade",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -473,7 +449,6 @@
         "daysSinceCommit": 0,
         "momentum7d": -7.176,
         "momentum30d": -28.5,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -492,7 +467,6 @@
         "daysSinceCommit": 0,
         "momentum7d": -14.75,
         "momentum30d": -3.377,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -511,7 +485,6 @@
         "daysSinceCommit": 16,
         "momentum7d": -26.07,
         "momentum30d": -23.7,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -530,7 +503,6 @@
         "daysSinceCommit": 79,
         "momentum7d": -2.416,
         "momentum30d": -5.496,
-        "quadrant": "ignore",
         "activityClass": "idle",
         "emissionOpaque": false
       },
@@ -549,7 +521,6 @@
         "daysSinceCommit": 54,
         "momentum7d": -4.989,
         "momentum30d": -20.12,
-        "quadrant": "ignore",
         "activityClass": "idle",
         "emissionOpaque": false
       },
@@ -568,7 +539,6 @@
         "daysSinceCommit": 6,
         "momentum7d": -13.96,
         "momentum30d": -21.2,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -587,7 +557,6 @@
         "daysSinceCommit": 49,
         "momentum7d": -3.281,
         "momentum30d": -0.9405,
-        "quadrant": "ignore",
         "activityClass": "idle",
         "emissionOpaque": false
       },
@@ -606,7 +575,6 @@
         "daysSinceCommit": 0,
         "momentum7d": -3.45,
         "momentum30d": -31.36,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -625,7 +593,6 @@
         "daysSinceCommit": 0,
         "momentum7d": 0.948,
         "momentum30d": -3.193,
-        "quadrant": "fade",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -644,7 +611,6 @@
         "daysSinceCommit": 0,
         "momentum7d": -2.414,
         "momentum30d": -5.437,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -663,7 +629,6 @@
         "daysSinceCommit": 2,
         "momentum7d": -4.929,
         "momentum30d": -18.5,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -682,7 +647,6 @@
         "daysSinceCommit": 25,
         "momentum7d": 13.12,
         "momentum30d": -4.62,
-        "quadrant": "fade",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -701,7 +665,6 @@
         "daysSinceCommit": 6,
         "momentum7d": -68.06,
         "momentum30d": -71.1,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -720,7 +683,6 @@
         "daysSinceCommit": 6,
         "momentum7d": 1.305,
         "momentum30d": 4.879,
-        "quadrant": "fade",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -739,7 +701,6 @@
         "daysSinceCommit": 14,
         "momentum7d": -1.005,
         "momentum30d": -4.817,
-        "quadrant": "fade",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -758,7 +719,6 @@
         "daysSinceCommit": 126,
         "momentum7d": -3.7,
         "momentum30d": -8.312,
-        "quadrant": "ignore",
         "activityClass": "fade-eligible",
         "emissionOpaque": false
       },
@@ -777,7 +737,6 @@
         "daysSinceCommit": 72,
         "momentum7d": -3.78,
         "momentum30d": -16.44,
-        "quadrant": "ignore",
         "activityClass": "idle",
         "emissionOpaque": false
       },
@@ -796,7 +755,6 @@
         "daysSinceCommit": 100,
         "momentum7d": -4.068,
         "momentum30d": -12.45,
-        "quadrant": "ignore",
         "activityClass": "fade-eligible",
         "emissionOpaque": false
       },
@@ -815,7 +773,6 @@
         "daysSinceCommit": 30,
         "momentum7d": -6.121,
         "momentum30d": -20.68,
-        "quadrant": "ignore",
         "activityClass": "idle",
         "emissionOpaque": false
       },
@@ -834,7 +791,6 @@
         "daysSinceCommit": 1,
         "momentum7d": -8.593,
         "momentum30d": -6.298,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -853,7 +809,6 @@
         "daysSinceCommit": 8,
         "momentum7d": 8.006,
         "momentum30d": -1.237,
-        "quadrant": "fade",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -872,7 +827,6 @@
         "daysSinceCommit": 7,
         "momentum7d": -15.66,
         "momentum30d": 835.3,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -891,7 +845,6 @@
         "daysSinceCommit": 1,
         "momentum7d": -2.043,
         "momentum30d": -20.14,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -910,7 +863,6 @@
         "daysSinceCommit": 3,
         "momentum7d": -1.064,
         "momentum30d": -1.991,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -929,7 +881,6 @@
         "daysSinceCommit": 3,
         "momentum7d": -15.93,
         "momentum30d": -32.47,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -948,7 +899,6 @@
         "daysSinceCommit": 9,
         "momentum7d": -2.048,
         "momentum30d": -28.61,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -967,7 +917,6 @@
         "daysSinceCommit": 56,
         "momentum7d": -5.85,
         "momentum30d": -10.01,
-        "quadrant": "ignore",
         "activityClass": "idle",
         "emissionOpaque": false
       },
@@ -986,7 +935,6 @@
         "daysSinceCommit": 1,
         "momentum7d": 4.691,
         "momentum30d": -0.4447,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1005,7 +953,6 @@
         "daysSinceCommit": 0,
         "momentum7d": -1.883,
         "momentum30d": -24.34,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1024,7 +971,6 @@
         "daysSinceCommit": 1,
         "momentum7d": -3.173,
         "momentum30d": -10.77,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1043,7 +989,6 @@
         "daysSinceCommit": 2,
         "momentum7d": -10.34,
         "momentum30d": 16.02,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1062,7 +1007,6 @@
         "daysSinceCommit": 21,
         "momentum7d": -10.78,
         "momentum30d": 5.213,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1081,7 +1025,6 @@
         "daysSinceCommit": 1,
         "momentum7d": -2.925,
         "momentum30d": -9.877,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1100,7 +1043,6 @@
         "daysSinceCommit": 14,
         "momentum7d": -10.98,
         "momentum30d": -32.53,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1119,7 +1061,6 @@
         "daysSinceCommit": 50,
         "momentum7d": -6.662,
         "momentum30d": -4.26,
-        "quadrant": "ignore",
         "activityClass": "idle",
         "emissionOpaque": false
       },
@@ -1138,7 +1079,6 @@
         "daysSinceCommit": 1,
         "momentum7d": -3.522,
         "momentum30d": -4.876,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1157,7 +1097,6 @@
         "daysSinceCommit": 6,
         "momentum7d": 0.4706,
         "momentum30d": 1.837,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1176,7 +1115,6 @@
         "daysSinceCommit": 29,
         "momentum7d": -13.55,
         "momentum30d": -42.7,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1195,7 +1133,6 @@
         "daysSinceCommit": 14,
         "momentum7d": -1.972,
         "momentum30d": -7.891,
-        "quadrant": "fade",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1214,7 +1151,6 @@
         "daysSinceCommit": 5,
         "momentum7d": 1.751,
         "momentum30d": -9.861,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1233,7 +1169,6 @@
         "daysSinceCommit": 1,
         "momentum7d": -1.595,
         "momentum30d": -3.359,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1252,7 +1187,6 @@
         "daysSinceCommit": 1,
         "momentum7d": 7.824,
         "momentum30d": 5.366,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1271,7 +1205,6 @@
         "daysSinceCommit": 20,
         "momentum7d": -19.36,
         "momentum30d": -40.13,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1290,7 +1223,6 @@
         "daysSinceCommit": 8,
         "momentum7d": -23.22,
         "momentum30d": -23.68,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1309,7 +1241,6 @@
         "daysSinceCommit": 6,
         "momentum7d": 5.709,
         "momentum30d": 15.83,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1328,7 +1259,6 @@
         "daysSinceCommit": 2,
         "momentum7d": 2.776,
         "momentum30d": 0.01778,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1347,7 +1277,6 @@
         "daysSinceCommit": 8,
         "momentum7d": -3.684,
         "momentum30d": -5.788,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1366,7 +1295,6 @@
         "daysSinceCommit": 8,
         "momentum7d": -2.204,
         "momentum30d": -9.963,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1385,7 +1313,6 @@
         "daysSinceCommit": 16,
         "momentum7d": 10.64,
         "momentum30d": 73.17,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1404,7 +1331,6 @@
         "daysSinceCommit": 24,
         "momentum7d": -22.01,
         "momentum30d": -37.04,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1423,7 +1349,6 @@
         "daysSinceCommit": 98,
         "momentum7d": -12.02,
         "momentum30d": 3.249,
-        "quadrant": "ignore",
         "activityClass": "fade-eligible",
         "emissionOpaque": false
       },
@@ -1442,7 +1367,6 @@
         "daysSinceCommit": 9,
         "momentum7d": -0.9584,
         "momentum30d": -0.5524,
-        "quadrant": "fade",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1461,7 +1385,6 @@
         "daysSinceCommit": 8,
         "momentum7d": -3.642,
         "momentum30d": -23.78,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1480,7 +1403,6 @@
         "daysSinceCommit": 9,
         "momentum7d": -0.2859,
         "momentum30d": -24.36,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1499,7 +1421,6 @@
         "daysSinceCommit": 0,
         "momentum7d": -0.1419,
         "momentum30d": -2.94,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1518,7 +1439,6 @@
         "daysSinceCommit": 3,
         "momentum7d": -2.027,
         "momentum30d": -30.18,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1537,7 +1457,6 @@
         "daysSinceCommit": 7,
         "momentum7d": 4.083,
         "momentum30d": 9.56,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1556,7 +1475,6 @@
         "daysSinceCommit": 0,
         "momentum7d": -3.637,
         "momentum30d": -6.829,
-        "quadrant": "accumulate",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1575,7 +1493,6 @@
         "daysSinceCommit": 25,
         "momentum7d": -3.072,
         "momentum30d": -37.82,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1594,7 +1511,6 @@
         "daysSinceCommit": 1,
         "momentum7d": 1.242,
         "momentum30d": 10.28,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1613,7 +1529,6 @@
         "daysSinceCommit": 6,
         "momentum7d": -0.5881,
         "momentum30d": -13.41,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1632,7 +1547,6 @@
         "daysSinceCommit": 27,
         "momentum7d": -1.208,
         "momentum30d": 0.6601,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1651,7 +1565,6 @@
         "daysSinceCommit": 2,
         "momentum7d": -1.699,
         "momentum30d": 13.7,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1670,7 +1583,6 @@
         "daysSinceCommit": 14,
         "momentum7d": -0.2447,
         "momentum30d": -15,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1689,7 +1601,6 @@
         "daysSinceCommit": 9,
         "momentum7d": -0.6412,
         "momentum30d": -4.068,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1708,7 +1619,6 @@
         "daysSinceCommit": 1,
         "momentum7d": -10.78,
         "momentum30d": -19.44,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1727,7 +1637,6 @@
         "daysSinceCommit": 0,
         "momentum7d": 11.9,
         "momentum30d": -31.43,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1746,7 +1655,6 @@
         "daysSinceCommit": 0,
         "momentum7d": 11.39,
         "momentum30d": 31.78,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1765,7 +1673,6 @@
         "daysSinceCommit": 0,
         "momentum7d": 18.07,
         "momentum30d": -5.963,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1784,7 +1691,6 @@
         "daysSinceCommit": 0,
         "momentum7d": 10.07,
         "momentum30d": 13.41,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1803,7 +1709,6 @@
         "daysSinceCommit": 0,
         "momentum7d": -5.994,
         "momentum30d": -33.39,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1822,7 +1727,6 @@
         "daysSinceCommit": 15,
         "momentum7d": -3.504,
         "momentum30d": -10.49,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1841,7 +1745,6 @@
         "daysSinceCommit": 13,
         "momentum7d": -4.125,
         "momentum30d": -11.77,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1860,7 +1763,6 @@
         "daysSinceCommit": 2,
         "momentum7d": 0.02847,
         "momentum30d": -20.1,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1879,7 +1781,6 @@
         "daysSinceCommit": 16,
         "momentum7d": 2.53,
         "momentum30d": -8.434,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1898,7 +1799,6 @@
         "daysSinceCommit": 22,
         "momentum7d": 55.21,
         "momentum30d": 1668,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1917,7 +1817,6 @@
         "daysSinceCommit": 0,
         "momentum7d": 6.249,
         "momentum30d": 53.01,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1936,7 +1835,6 @@
         "daysSinceCommit": 5,
         "momentum7d": 3.663,
         "momentum30d": -6.441,
-        "quadrant": "ride",
         "activityClass": "active",
         "emissionOpaque": false
       },
@@ -1955,7 +1853,6 @@
         "daysSinceCommit": 2,
         "momentum7d": -3.633,
         "momentum30d": -15.01,
-        "quadrant": "ignore",
         "activityClass": "active",
         "emissionOpaque": false
       }
