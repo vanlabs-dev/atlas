@@ -18,7 +18,7 @@
 
 ## 4. Design direction
 
-- [ ] 4.1 Run `design-taste-frontend` `draw.mjs` and `ui-ux-pro-max` design-system search; record the chosen direction in `web/DESIGN.md`; verify the owner approved it; the inspector uses `/snap/bin/chromium`
+- [x] 4.1 Run `design-taste-frontend` `draw.mjs` and `ui-ux-pro-max` design-system search; record the chosen direction in `web/DESIGN.md`; verify the owner approved it; the inspector uses `/snap/bin/chromium`
 - [ ] 4.2 Build the shell: layout, nav, theme tokens, dark mode, reduced-motion handling; verify `inspect.mjs` runs clean on the shell
 
 ## 5. Pages
