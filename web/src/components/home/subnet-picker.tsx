@@ -30,7 +30,8 @@ const TIER_WORD: Record<string, string> = {
   none: "not scored: no public repository",
 };
 
-const fmt = (v: number | null, unit = "") => (v === null ? "-" : `${v.toLocaleString("en-GB")}${unit}`);
+const fmt = (v: number | null, digits = 0) =>
+  v === null ? "-" : v.toLocaleString("en-GB", { maximumFractionDigits: digits });
 
 // The live thing: pick a subnet slot and read its row across the boards.
 // Each cell is a plain link to the fleet board, so it works without script.
@@ -109,7 +110,7 @@ export function SubnetPicker({ slots, initial }: { slots: Slot[]; initial: numbe
             </div>
             <div>
               <dt className="text-muted">Gross, TAO/mo</dt>
-              <dd className="text-body">{fmt(slot.grossTaoMonth)}</dd>
+              <dd className="text-body">{fmt(slot.grossTaoMonth, 1)}</dd>
             </div>
           </dl>
         </div>
