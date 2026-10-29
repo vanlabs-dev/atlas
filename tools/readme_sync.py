@@ -43,6 +43,7 @@ COMPONENTS: Dict[str, str] = {
     "inventory": "Read-only device inventory collector",
     "hardening": "Read-only security-posture assessor and the operator-approved apply scripts",
     "tools": "Repository tooling, including this README generator",
+    "web": "The subnt.dev site: Next.js pages over a typed data layer",
 }
 
 # Retired work stays in the tree but is labelled in the generated tables.
