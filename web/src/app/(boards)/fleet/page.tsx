@@ -27,7 +27,7 @@ export default async function FleetPage() {
     { label: "Code and price apart", value: counts.diverging },
     { label: "Emission route flags", value: counts.emission },
     { label: "Gone cold", value: counts.cold },
-    { label: "No public repository", value: counts.invisible },
+    { label: "No public repository, root included", value: counts.invisible },
   ];
 
   return (
@@ -52,7 +52,7 @@ export default async function FleetPage() {
             <div
               className="grid grid-cols-16 gap-[2px]"
               role="img"
-              aria-label={`128 subnet slots: ${counts.invisible} without a public repository, the rest by tier as in the table`}
+              aria-label={`128 subnet slots: ${128 - rows.length} not on the board, the rest by tier as in the table`}
             >
               {Array.from({ length: 128 }, (_, i) => {
                 const r = byNetuid.get(i + 1);
@@ -63,7 +63,7 @@ export default async function FleetPage() {
               <li className="flex items-center gap-1.5"><span className="cell text-tier-head" aria-hidden="true" />Head</li>
               <li className="flex items-center gap-1.5"><span className="cell text-tier-mid" aria-hidden="true" />Middle</li>
               <li className="flex items-center gap-1.5"><span className="cell text-tier-quiet" aria-hidden="true" />Quiet</li>
-              <li className="flex items-center gap-1.5"><span className="cell text-tier-none" aria-hidden="true" />No repository</li>
+              <li className="flex items-center gap-1.5"><span className="cell text-tier-none" aria-hidden="true" />Not on the board</li>
             </ul>
           </Block>
           <Block title="Rotation signals">

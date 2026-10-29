@@ -28,7 +28,7 @@ const TIER_WORD: Record<string, string> = {
   head: "at the head of the fleet board",
   mid: "in the middle of the fleet board",
   quiet: "quiet on the fleet board",
-  none: "not scored: no public repository",
+  none: "not on the fleet board",
 };
 
 const fmt = (v: number | null, digits = 0) =>
