@@ -38,7 +38,6 @@ export const ALLOWLIST = {
     daysSinceCommit: "days_since",
     momentum7d: "momentum_7d",
     momentum30d: "momentum_30d",
-    quadrant: "quadrant",
     activityClass: "activity_class",
     emissionOpaque: "emission_opaque",
   },

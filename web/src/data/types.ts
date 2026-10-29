@@ -50,7 +50,6 @@ export interface FleetRow {
   daysSinceCommit: number | null;
   momentum7d: number | null;
   momentum30d: number | null;
-  quadrant: string | null;
   activityClass: string | null;
   emissionOpaque: boolean;
 }
