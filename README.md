@@ -1,6 +1,32 @@
+<div align="center">
+
 # Atlas
 
 **A self-hosted Bittensor analyst that runs on a Raspberry Pi.**
+
+Cited answers. Fail-closed data. No third-party dependencies.
+
+<p>
+  <img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-3776AB?style=flat-square&logo=python&logoColor=white">
+  <img alt="Dependencies: none" src="https://img.shields.io/badge/dependencies-none-2ea44f?style=flat-square">
+  <img alt="SQLite" src="https://img.shields.io/badge/store-SQLite%20%2B%20FTS5-003B57?style=flat-square&logo=sqlite&logoColor=white">
+  <img alt="Raspberry Pi 5" src="https://img.shields.io/badge/runs%20on-Raspberry%20Pi%205-A22846?style=flat-square&logo=raspberrypi&logoColor=white">
+  <img alt="MCP" src="https://img.shields.io/badge/agent%20tools-MCP-6E56CF?style=flat-square">
+  <img alt="Bittensor" src="https://img.shields.io/badge/network-Bittensor-111111?style=flat-square">
+  <img alt="Spec driven: OpenSpec" src="https://img.shields.io/badge/spec--driven-OpenSpec-0969DA?style=flat-square">
+  <a href="https://github.com/vanlabs-dev/atlas/actions/workflows/readme.yml"><img alt="README check" src="https://img.shields.io/github/actions/workflow/status/vanlabs-dev/atlas/readme.yml?branch=main&label=readme&style=flat-square"></a>
+</p>
+
+<p>
+  <a href="#how-it-fits-together">Architecture</a> ·
+  <a href="#components">Components</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#documentation">Docs</a>
+</p>
+
+</div>
+
+---
 
 Atlas keeps a verified knowledge base, the subtensor source, live market data
 and every subnet's code repository on one small device. An LLM agent answers
