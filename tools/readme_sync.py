@@ -38,7 +38,7 @@ COMPONENTS: Dict[str, str] = {
     "fleet": "Clones every subnet's repository, indexes it, scores rotation and mining signals, serves the LAN board and `atlas-fleet`",
     "telegram": "Alert classes, tiers, delivery ledger, plain-English rewrite, daily briefing",
     "upgrade": "Runtime upgrade job: detects a new spec, edits the corpus in a worktree, gates and pushes",
-    "subnt": "Public-edition exporter (retired, code kept)",
+    "subnt": "Old subnt.dev exporter (retired, code kept; the site is now `web/`)",
     "hermes": "Read-only verifiers for the Hermes agent baseline, memory and model",
     "inventory": "Read-only device inventory collector",
     "hardening": "Read-only security-posture assessor and the operator-approved apply scripts",
@@ -48,6 +48,10 @@ COMPONENTS: Dict[str, str] = {
 
 # Retired work stays in the tree but is labelled in the generated tables.
 RETIRED = {"subnt-publish", "atlas-subnt"}
+
+# Retired work with a successor names it, so a reader is not told the
+# thing itself is gone.
+REPLACED_BY = {"subnt-publish": "`web/`", "atlas-subnt": "`web/`"}
 
 # Directories that never count as components.
 IGNORED = {".git", ".github", "docs", "openspec", "triage", "var", "node_modules"}
@@ -102,7 +106,10 @@ def render_capabilities() -> str:
         if os.path.isfile(spec):
             text = _purpose(spec).replace("|", "\\|")
             if name in RETIRED:
-                text = "**Retired.** " + text
+                label = "Retired"
+                if name in REPLACED_BY:
+                    label += ", replaced by %s" % REPLACED_BY[name]
+                text = "**%s.** %s" % (label, text)
             rows.append("| [`%s`](openspec/specs/%s/spec.md) | %s |"
                         % (name, name, text))
     return "\n".join(rows)
@@ -149,7 +156,8 @@ def render_schedule() -> str:
         unit = os.path.basename(path)[:-len(".timer")]
         desc = desc[:1].upper() + desc[1:]
         if unit in RETIRED:
-            desc += " (retired, masked)"
+            desc += " (retired, masked%s)" % (
+                "; replaced by " + REPLACED_BY[unit] if unit in REPLACED_BY else "")
         rows.append("| `%s` | %s | %s |" % (unit, _humanize(when), desc))
     return "\n".join(rows)
 

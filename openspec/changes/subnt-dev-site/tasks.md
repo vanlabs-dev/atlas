@@ -32,6 +32,6 @@
 ## 6. Ship checks
 
 - [ ] 6.1 Run Lighthouse accessibility and a reduced-motion check on every page; verify Lighthouse accessibility >= 95 and no AA contrast failures
-- [ ] 6.2 Fix the README line that calls subnt.dev retired; verify `python3 tools/readme_sync.py` leaves no diff
+- [x] 6.2 Fix the README line that calls subnt.dev retired; verify `python3 tools/readme_sync.py` leaves no diff
 - [ ] 6.3 Deploy to a Vercel preview URL (owner action); verify the preview serves the home page. The subnt.dev domain cutover is a later owner step
 - [ ] 6.4 Capture `web/` `npm test`, `tsc --noEmit`, `npm run build` and Lighthouse output into `docs/greenfield/subnt-dev-site/08-verify.md`, beside the `verify.sh` output
