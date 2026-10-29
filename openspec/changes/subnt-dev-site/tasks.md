@@ -2,19 +2,19 @@
 
 ## 1. Scaffold web/
 
-- [ ] 1.1 Create `web/` with Next.js 16, TypeScript strict, Tailwind v4, shadcn/ui, Motion; add `node_modules/`, `.next/`, `.vercel/`, `web/.env*`, `*.tsbuildinfo` to `.gitignore`; verify `npm run build` passes in `web/`
-- [ ] 1.2 Add `web/vercel.json` ignoreCommand; use `VERCEL_GIT_PREVIOUS_SHA` and build when unset; verify with dry runs: a diff outside `web/` skips, a diff inside `web/` builds, a multi-commit push with `web/` in an earlier commit builds, an unset SHA builds
-- [ ] 1.3 Add `COMPONENTS["web"]` and `web/tests`, then run `python3 tools/readme_sync.py`; verify the `web/` row appears and `tools/tests` pass
+- [x] 1.1 Create `web/` with Next.js 16, TypeScript strict, Tailwind v4, shadcn/ui, Motion; add `node_modules/`, `.next/`, `.vercel/`, `web/.env*`, `*.tsbuildinfo` to `.gitignore`; verify `npm run build` passes in `web/`
+- [x] 1.2 Add `web/vercel.json` ignoreCommand; use `VERCEL_GIT_PREVIOUS_SHA` and build when unset; verify with dry runs: a diff outside `web/` skips, a diff inside `web/` builds, a multi-commit push with `web/` in an earlier commit builds, an unset SHA builds
+- [x] 1.3 Add `COMPONENTS["web"]` and `web/tests`, then run `python3 tools/readme_sync.py`; verify the `web/` row appears and `tools/tests` pass
 
 ## 2. Isolation test
 
-- [ ] 2.1 Add a test in `upgrade/tests` that the scope gate rejects `web/package.json` and `web/src/app/page.tsx`; verify the upgrade test suite passes
+- [x] 2.1 Add a test in `upgrade/tests` that the scope gate rejects `web/package.json` and `web/src/app/page.tsx`; verify the upgrade test suite passes
 
 ## 3. Data layer and fixtures
 
-- [ ] 3.1 Define types and data-layer modules in `web/src/data/` for the four boards; verify `tsc --noEmit` passes
-- [ ] 3.2 Write the export script in `web/scripts/`: read-only over SSH from `var/fleet/fleet.db` (`mode=ro`) and the `board` JSON, build records from a named field allowlist, round and age values; run it once; verify JSON lands in `web/src/data/fixtures/` with no owner-specific field
-- [ ] 3.3 Add the scrub test (tokens, addresses outside allowlist, IPs, hostnames) and an allowlist test (a planted extra field is dropped); wire both into `web/package.json` `test`; verify they pass on the fixtures and fail on a planted secret
+- [x] 3.1 Define types and data-layer modules in `web/src/data/` for the four boards; verify `tsc --noEmit` passes
+- [x] 3.2 Write the export script in `web/scripts/`: read-only over SSH from `var/fleet/fleet.db` (`mode=ro`) and the `board` JSON, build records from a named field allowlist, round and age values; run it once; verify JSON lands in `web/src/data/fixtures/` with no owner-specific field
+- [x] 3.3 Add the scrub test (tokens, addresses outside allowlist, IPs, hostnames) and an allowlist test (a planted extra field is dropped); wire both into `web/package.json` `test`; verify they pass on the fixtures and fail on a planted secret
 
 ## 4. Design direction
 
