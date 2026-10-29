@@ -48,6 +48,10 @@ export const ALLOWLIST = {
     quiet: "quiet",
     invisible: "invisible",
   },
+  activity: {
+    netuid: "netuid",
+    daily: "daily",
+  },
   signal: {
     class: "class",
     tier: "tier",
@@ -100,7 +104,10 @@ export const ALLOWLIST = {
 
 export type Kind = keyof typeof ALLOWLIST;
 
-type Value = string | number | boolean | null;
+type Value = string | number | boolean | null | number[];
+
+/** Fields that hold a day series, oldest first. Every other field is scalar. */
+export const SERIES: Record<string, number> = { daily: 90 };
 
 /** Four significant digits: values are rounded, never exact live state. */
 export function round(value: number): number {
@@ -116,11 +123,21 @@ function clean(value: unknown): Value {
   throw new Error(`non-scalar value ${JSON.stringify(value)}`);
 }
 
+function series(field: string, value: unknown): number[] | null {
+  if (value === null || value === undefined) return null;
+  const ok =
+    Array.isArray(value) &&
+    value.length === SERIES[field] &&
+    value.every((v) => Number.isInteger(v) && v >= 0);
+  if (!ok) throw new Error(`${field} must be ${SERIES[field]} non-negative integers`);
+  return value as number[];
+}
+
 /** Build a record from the allowlist alone. Unlisted source fields drop. */
 export function pick(kind: Kind, source: Record<string, unknown>): Record<string, Value> {
   const out: Record<string, Value> = {};
   for (const [field, from] of Object.entries(ALLOWLIST[kind])) {
-    out[field] = clean(source[from]);
+    out[field] = field in SERIES ? series(field, source[from]) : clean(source[from]);
   }
   return out;
 }
