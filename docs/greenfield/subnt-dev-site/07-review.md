@@ -71,9 +71,8 @@ in with `/opsx:update`.
     Alternative: build the home page before the export script.
 13. **Next.js 16.** Verified: `latest` is 16.4.3. The choice is sound.
 14. **Isolation test is sound.** `ALLOWED` is an allowlist, so `web/` is
-    rejected already. The test only guards future edits to `ALLOWED`. Also
-    deny `web/**` explicitly in `DENIED` is not possible (the job may not
-    edit `upgrade/`, and a human edit is needed anyway). Keep as planned.
+    rejected already. The test guards against a future edit to `ALLOWED`.
+    Keep as planned.
 
 ## Verdict
 
