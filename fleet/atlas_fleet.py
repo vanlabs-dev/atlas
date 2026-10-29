@@ -854,6 +854,19 @@ def _bump(summary: Dict[str, int], key: str) -> None:
     summary[key] = summary.get(key, 0) + 1
 
 
+def _origin_mismatch(clone_dir: str, url: Optional[str]) -> bool:
+    """True when the clone's `origin` is a different GitHub repo than `url`.
+    Unreadable or non-GitHub origins (local fixtures) never count."""
+    want, _ = normalize_repo_url(url)
+    if want is None:
+        return False
+    code, out, _err = _run_git(clone_dir, ["remote", "get-url", "origin"])
+    if code != 0:
+        return False
+    have, _ = normalize_repo_url(out.strip())
+    return have is not None and have != want
+
+
 def _apply_action(connection: sqlite3.Connection, action: Dict[str, Any],
                   ctx: "_Pass", summary: Dict[str, int]) -> None:
     kind = action["action"]
@@ -866,7 +879,16 @@ def _apply_action(connection: sqlite3.Connection, action: Dict[str, Any],
                 "changed_paths": changed_paths, "local_sha": local_sha}
 
     if kind == NO_REPO:
+        # Tear down like DISCARD but keep the slot row: the old project's
+        # clone, epoch and SHA must not survive into whatever repo the
+        # netuid is next given (a later CLONE would reuse them).
+        _rmtree(clone_dir)
+        _close_epoch_all(connection, netuid, ctx.now)
+        _fleet_index().purge_slot(connection, netuid)
         upsert_slot(connection, {"netuid": netuid, "github_repo": None,
+                                 "fingerprint": None, "epoch": None,
+                                 "default_branch": None, "local_sha": None,
+                                 "clone_size_bytes": None,
                                  "status": _norepo_status(action["reason"]),
                                  "last_reconciled": ctx.now})
         audit(connection, ctx.actor, "no-repo", netuid, action["reason"])
@@ -955,6 +977,11 @@ def _apply_action(connection: sqlite3.Connection, action: Dict[str, Any],
         if not slot or not slot.get("default_branch") or not slot.get(
                 "local_sha"):
             return None  # not a cloned slot yet; a later pass will clone it
+        if _origin_mismatch(clone_dir, action.get("url")):
+            # the clone belongs to another project than the slot says
+            return _apply_action(
+                connection, {**action, "action": REPOINT,
+                             "reason": "origin-mismatch"}, ctx, summary)
         result = ctx.update(clone_dir, slot["default_branch"],
                             slot["local_sha"], token=ctx.token)
         _persist_update(connection, netuid, slot["epoch"], result, ctx.now)
