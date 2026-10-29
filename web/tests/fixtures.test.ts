@@ -60,3 +60,31 @@ test("allowlist rounds and strips em dashes", () => {
 test("allowlist rejects nested values", () => {
   assert.throws(() => pick("signal", { class: { nested: true } }));
 });
+
+test("allowlist accepts only a 90-day integer series", () => {
+  const good = Array.from({ length: 90 }, (_, i) => i % 3);
+  assert.deepEqual(pick("activity", { netuid: 1, daily: good }).daily, good);
+  assert.equal(pick("activity", { netuid: 1, daily: null }).daily, null);
+  assert.throws(() => pick("activity", { netuid: 1, daily: good.slice(1) }));
+  assert.throws(() => pick("activity", { netuid: 1, daily: [...good.slice(1), -1] }));
+  assert.throws(() => pick("activity", { netuid: 1, daily: [...good.slice(1), 0.5] }));
+  assert.throws(() => pick("activity", { netuid: 1, daily: [...good.slice(1), "x"] }));
+});
+
+test("daily series cover 128 subnets and match the board counts", () => {
+  const fleet = JSON.parse(readFileSync(join(DIR, "fleet.json"), "utf8")).data;
+  assert.deepEqual(
+    fleet.activity.map((a: { netuid: number }) => a.netuid),
+    Array.from({ length: 128 }, (_, i) => i + 1),
+  );
+  const daily = new Map(fleet.activity.map((a: { netuid: number; daily: number[] | null }) => [a.netuid, a.daily]));
+  const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+  for (const row of fleet.rows) {
+    const d = daily.get(row.netuid) as number[] | null;
+    assert.ok(d, `SN${row.netuid} is on the board but has no series`);
+    // The activity metric counts age <= window, the bins age < window: a
+    // commit at exactly the edge may land on either side.
+    assert.ok(Math.abs(sum(d.slice(-7)) - row.commits7) <= 1, `SN${row.netuid} 7 d`);
+    assert.ok(Math.abs(sum(d.slice(-30)) - row.commits30) <= 1, `SN${row.netuid} 30 d`);
+  }
+});

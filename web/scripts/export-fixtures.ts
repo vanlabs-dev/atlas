@@ -15,14 +15,17 @@ import { pick, type Kind } from "./allowlist.ts";
 const TARGET = process.argv[2] ?? "pi@192.168.0.150";
 const KEY = join(process.env.HOME ?? "", ".ssh/id_ed25519_pi5");
 const AGE_DAYS = 7;
+const DAYS = 90;
 const OUT = join(import.meta.dirname, "../src/data/fixtures");
 
 const REMOTE = String.raw`
-import datetime, json, sqlite3, sys
+import datetime, json, os, sqlite3, sys
 sys.path.insert(0, "fleet")
 import atlas_fleet as fleet, atlas_fleet_dashboard as dash
+import atlas_fleet_metrics as metrics
 
 AGE_DAYS = ${AGE_DAYS}
+DAYS = ${DAYS}
 cutoff = (datetime.datetime.now(datetime.timezone.utc)
           - datetime.timedelta(days=AGE_DAYS)).isoformat()
 
@@ -58,6 +61,27 @@ for tier in ("head", "mid", "quiet"):
                    cold=bool(row.get("cold")),
                    emission_opaque=bool(row.get("emission_opaque")))
         fleet_rows.append(row)
+# Daily commits for 90 days per subnet, from the same git log the activity
+# metric reads, binned back from that subnet's latest activity pass. The sums
+# of the last 7 and 30 bins then match the board's c7 and c30.
+clone_root = cfg.get("clone_root") or fleet.DEFAULT_CLONE_ROOT
+passes = dict(f.execute("SELECT netuid, MAX(pass_ts) FROM metric_activity "
+                        "GROUP BY netuid").fetchall())
+activity = []
+for nid in range(1, 129):
+    daily = None
+    if nid in passes:
+        code, out, _ = fleet._run_git(os.path.join(clone_root, str(nid)),
+                                      ["log", "--no-merges", "--format=%cI"])
+        if code == 0:
+            anchor = metrics._parse_iso(passes[nid])
+            daily = [0] * DAYS
+            for line in out.split():
+                age = (anchor - metrics._parse_iso(line)).total_seconds() / 86400
+                if 0 <= age < DAYS:
+                    daily[DAYS - 1 - int(age)] += 1
+    activity.append({"netuid": nid, "daily": daily})
+
 signals = rows(f, "SELECT class, tier, netuid, created_at FROM signal_events "
                "WHERE created_at <= ? ORDER BY id DESC LIMIT 40", cutoff)
 
@@ -78,7 +102,7 @@ with open("var/upgrade/state.json") as handle:
 
 print(json.dumps({
     "cutoff": cutoff, "mining_at": ts, "fleet_at": board["generated_at"],
-    "mining": mining, "fleet": fleet_rows, "counts": board["counts"],
+    "mining": mining, "fleet": fleet_rows, "counts": board["counts"], "activity": activity,
     "signals": signals, "vitals": vitals, "gate": gate[0] if gate else None,
     "rotations": rotations, "params": params, "upgrades": upgrades, "job": job,
 }))
@@ -101,6 +125,7 @@ const fixtures = {
     rows: all("fleet", src.fleet),
     counts: pick("fleetCounts", src.counts),
     signals: all("signal", src.signals),
+    activity: all("activity", src.activity),
   }),
   network: board(src.cutoff, {
     vitals: all("vitals", src.vitals),
@@ -114,7 +139,10 @@ const fixtures = {
   }),
 };
 
+// Day series stay on one line each; everything else is indented as usual.
+const flat = (text: string) => text.replace(/\[\s+([\d,\s]+?)\s+\]/g, (_, xs: string) => `[${xs.split(/,\s*/).join(", ")}]`);
+
 for (const [name, value] of Object.entries(fixtures)) {
-  writeFileSync(join(OUT, `${name}.json`), JSON.stringify(value, null, 2) + "\n");
+  writeFileSync(join(OUT, `${name}.json`), flat(JSON.stringify(value, null, 2)) + "\n");
   console.log(`wrote fixtures/${name}.json`);
 }

@@ -70,10 +70,17 @@ export interface SignalEvent {
   createdAt: Iso;
 }
 
+/** Commits per day for 90 days, oldest first. Null: no clone Atlas can read. */
+export interface SubnetActivity {
+  netuid: number;
+  daily: number[] | null;
+}
+
 export interface Fleet {
   rows: FleetRow[];
   counts: FleetCounts;
   signals: SignalEvent[];
+  activity: SubnetActivity[];
 }
 
 // Network pulse: daily vitals, the emission gate, root rotation, chain params.

@@ -1,24 +1,24 @@
 {
-  "generatedAt": "2026-10-22T17:25:21.304549+00:00",
+  "generatedAt": "2026-10-22T23:33:21.428777+00:00",
   "data": [
     {
       "netuid": 1,
       "name": "Apex",
-      "rank": 23,
+      "rank": 21,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
       "vramGb": null,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 53.3,
+      "minerBurnPct": 52.04,
       "earnerCount": 4,
-      "top1SharePct": 43.03,
+      "top1SharePct": 40.29,
       "top10SharePct": 100,
-      "regCostTao": 0.0005,
-      "grossTaoMonth": 52.98,
+      "regCostTao": 0.001346,
+      "grossTaoMonth": 54.43,
       "netTaoMonth": null,
-      "priceTao": 0.006406
+      "priceTao": 0.006408
     },
     {
       "netuid": 2,
@@ -37,7 +37,7 @@
       "regCostTao": 0.0005,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.003528
+      "priceTao": 0.003557
     },
     {
       "netuid": 3,
@@ -54,9 +54,9 @@
       "top1SharePct": 45.46,
       "top10SharePct": 100,
       "regCostTao": 1,
-      "grossTaoMonth": 335.9,
+      "grossTaoMonth": 335.5,
       "netTaoMonth": null,
-      "priceTao": 0.02276
+      "priceTao": 0.02274
     },
     {
       "netuid": 4,
@@ -68,14 +68,14 @@
       "vramGb": null,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 0.003185,
+      "minerBurnPct": 0.004106,
       "earnerCount": 4,
-      "top1SharePct": 69.58,
+      "top1SharePct": 69.62,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 934,
+      "grossTaoMonth": 935.4,
       "netTaoMonth": null,
-      "priceTao": 0.05275
+      "priceTao": 0.05282
     },
     {
       "netuid": 5,
@@ -88,11 +88,11 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 0,
-      "earnerCount": 242,
-      "top1SharePct": 0.5035,
-      "top10SharePct": 4.762,
-      "regCostTao": 0.9576,
-      "grossTaoMonth": 4.579,
+      "earnerCount": 243,
+      "top1SharePct": 0.5204,
+      "top10SharePct": 4.78,
+      "regCostTao": 0.8221,
+      "grossTaoMonth": 4.557,
       "netTaoMonth": null,
       "priceTao": 0.01256
     },
@@ -110,34 +110,34 @@
       "earnerCount": 0,
       "top1SharePct": null,
       "top10SharePct": null,
-      "regCostTao": 0.2,
+      "regCostTao": 0.2917,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.002163
+      "priceTao": 0.002177
     },
     {
       "netuid": 7,
       "name": "Allways",
-      "rank": null,
+      "rank": 64,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
       "vramGb": null,
-      "cutReason": "owner-capture",
+      "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 99.09,
+      "minerBurnPct": 98.53,
       "earnerCount": 3,
-      "top1SharePct": 90.62,
+      "top1SharePct": 91.7,
       "top10SharePct": 100,
       "regCostTao": 0.15,
-      "grossTaoMonth": 0.4421,
+      "grossTaoMonth": 0.7147,
       "netTaoMonth": null,
-      "priceTao": 0.002192
+      "priceTao": 0.002194
     },
     {
       "netuid": 8,
       "name": "Vanta",
-      "rank": 18,
+      "rank": 16,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -146,12 +146,12 @@
       "confidence": "ok",
       "minerBurnPct": 0,
       "earnerCount": 23,
-      "top1SharePct": 77.52,
+      "top1SharePct": 77.42,
       "top10SharePct": 99.96,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 115.7,
+      "grossTaoMonth": 116.5,
       "netTaoMonth": null,
-      "priceTao": 0.03135
+      "priceTao": 0.03158
     },
     {
       "netuid": 9,
@@ -168,9 +168,9 @@
       "top1SharePct": 60.23,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 700,
+      "grossTaoMonth": 703.5,
       "netTaoMonth": null,
-      "priceTao": 0.02372
+      "priceTao": 0.02384
     },
     {
       "netuid": 10,
@@ -182,14 +182,14 @@
       "vramGb": null,
       "cutReason": "winner-take-all",
       "confidence": "ok",
-      "minerBurnPct": 51.64,
+      "minerBurnPct": 52.09,
       "earnerCount": 1,
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 102.4,
+      "grossTaoMonth": 97.57,
       "netTaoMonth": null,
-      "priceTao": 0.004782
+      "priceTao": 0.0046
     },
     {
       "netuid": 11,
@@ -206,9 +206,9 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.02,
-      "grossTaoMonth": 295.6,
+      "grossTaoMonth": 289.5,
       "netTaoMonth": null,
-      "priceTao": 0.006679
+      "priceTao": 0.006541
     },
     {
       "netuid": 12,
@@ -222,31 +222,31 @@
       "confidence": "ok",
       "minerBurnPct": 99.38,
       "earnerCount": 2,
-      "top1SharePct": 50.74,
+      "top1SharePct": 80.2,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 0.8739,
+      "grossTaoMonth": 0.8696,
       "netTaoMonth": null,
       "priceTao": 0.004778
     },
     {
       "netuid": 13,
       "name": "Data Universe",
-      "rank": 65,
+      "rank": 66,
       "gateState": "enabled",
-      "verdict": null,
+      "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 70.48,
+      "minerBurnPct": 70.49,
       "earnerCount": 235,
-      "top1SharePct": 0.5049,
-      "top10SharePct": 5.022,
-      "regCostTao": 0.04268,
-      "grossTaoMonth": 0.4529,
+      "top1SharePct": 0.5597,
+      "top10SharePct": 5.22,
+      "regCostTao": 0.03145,
+      "grossTaoMonth": 0.4547,
       "netTaoMonth": null,
-      "priceTao": 0.004139
+      "priceTao": 0.00414
     },
     {
       "netuid": 14,
@@ -263,9 +263,9 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 383.3,
+      "grossTaoMonth": 383.4,
       "netTaoMonth": null,
-      "priceTao": 0.00866
+      "priceTao": 0.008663
     },
     {
       "netuid": 15,
@@ -281,10 +281,10 @@
       "earnerCount": 75,
       "top1SharePct": 95.45,
       "top10SharePct": 96.47,
-      "regCostTao": 0.5001,
-      "grossTaoMonth": 23.48,
+      "regCostTao": 0.2321,
+      "grossTaoMonth": 23.18,
       "netTaoMonth": null,
-      "priceTao": 0.02015
+      "priceTao": 0.01989
     },
     {
       "netuid": 16,
@@ -301,7 +301,7 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 1,
-      "grossTaoMonth": 32.34,
+      "grossTaoMonth": 32.33,
       "netTaoMonth": null,
       "priceTao": 0.000733
     },
@@ -320,9 +320,9 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 330.2,
+      "grossTaoMonth": 329.5,
       "netTaoMonth": null,
-      "priceTao": 0.007461
+      "priceTao": 0.007445
     },
     {
       "netuid": 18,
@@ -334,19 +334,19 @@
       "vramGb": 0,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 1.073,
+      "minerBurnPct": 1.225,
       "earnerCount": 24,
-      "top1SharePct": 27.79,
-      "top10SharePct": 97.31,
+      "top1SharePct": 44.77,
+      "top10SharePct": 97.36,
       "regCostTao": 1,
-      "grossTaoMonth": 13.08,
+      "grossTaoMonth": 13.05,
       "netTaoMonth": null,
-      "priceTao": 0.003733
+      "priceTao": 0.003729
     },
     {
       "netuid": 19,
       "name": "blockmachine",
-      "rank": 37,
+      "rank": 35,
       "gateState": "enabled",
       "verdict": "unknown",
       "gpuFloor": null,
@@ -354,13 +354,13 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 0,
-      "earnerCount": 37,
-      "top1SharePct": 22.15,
-      "top10SharePct": 88.73,
+      "earnerCount": 38,
+      "top1SharePct": 20.74,
+      "top10SharePct": 88.75,
       "regCostTao": 1,
-      "grossTaoMonth": 21.19,
+      "grossTaoMonth": 20.66,
       "netTaoMonth": null,
-      "priceTao": 0.009093
+      "priceTao": 0.0091
     },
     {
       "netuid": 20,
@@ -377,14 +377,14 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.2,
-      "grossTaoMonth": 102.5,
+      "grossTaoMonth": 103.1,
       "netTaoMonth": null,
-      "priceTao": 0.002317
+      "priceTao": 0.002329
     },
     {
       "netuid": 21,
       "name": "AdTAO",
-      "rank": 38,
+      "rank": 36,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -396,28 +396,28 @@
       "top1SharePct": 40.29,
       "top10SharePct": 93.98,
       "regCostTao": 0.1,
-      "grossTaoMonth": 19.95,
+      "grossTaoMonth": 20.1,
       "netTaoMonth": null,
-      "priceTao": 0.00473
+      "priceTao": 0.004766
     },
     {
       "netuid": 22,
       "name": "Desearch",
-      "rank": 64,
+      "rank": 65,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
       "vramGb": null,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 50.25,
-      "earnerCount": 240,
-      "top1SharePct": 1.443,
-      "top10SharePct": 10.63,
-      "regCostTao": 0.02147,
-      "grossTaoMonth": 0.5334,
+      "minerBurnPct": 50.15,
+      "earnerCount": 239,
+      "top1SharePct": 1.504,
+      "top10SharePct": 10.73,
+      "regCostTao": 0.02511,
+      "grossTaoMonth": 0.5352,
       "netTaoMonth": null,
-      "priceTao": 0.002928
+      "priceTao": 0.002919
     },
     {
       "netuid": 23,
@@ -434,9 +434,9 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.1,
-      "grossTaoMonth": 60.58,
+      "grossTaoMonth": 61.01,
       "netTaoMonth": null,
-      "priceTao": 0.006841
+      "priceTao": 0.006891
     },
     {
       "netuid": 24,
@@ -455,12 +455,12 @@
       "regCostTao": 0.0005,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.007639
+      "priceTao": 0.008102
     },
     {
       "netuid": 25,
       "name": "UR",
-      "rank": 16,
+      "rank": 15,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -472,9 +472,9 @@
       "top1SharePct": 45,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 121.7,
+      "grossTaoMonth": 122,
       "netTaoMonth": null,
-      "priceTao": 0.0055
+      "priceTao": 0.005512
     },
     {
       "netuid": 26,
@@ -493,7 +493,7 @@
       "regCostTao": 0.1,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.00152
+      "priceTao": 0.001505
     },
     {
       "netuid": 27,
@@ -512,26 +512,26 @@
       "regCostTao": 0.0005,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.002223
+      "priceTao": 0.002277
     },
     {
       "netuid": 28,
       "name": "SayGM",
-      "rank": 36,
+      "rank": 37,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
       "vramGb": null,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 0.09552,
-      "earnerCount": 125,
-      "top1SharePct": 14.08,
-      "top10SharePct": 53.8,
+      "minerBurnPct": 0.1103,
+      "earnerCount": 134,
+      "top1SharePct": 25.85,
+      "top10SharePct": 59.97,
       "regCostTao": 0.1,
-      "grossTaoMonth": 22.12,
+      "grossTaoMonth": 19.74,
       "netTaoMonth": null,
-      "priceTao": 0.0315
+      "priceTao": 0.03012
     },
     {
       "netuid": 29,
@@ -555,7 +555,7 @@
     {
       "netuid": 30,
       "name": "Endure Network",
-      "rank": 68,
+      "rank": 69,
       "gateState": "enabled",
       "verdict": "possible",
       "gpuFloor": null,
@@ -569,7 +569,7 @@
       "regCostTao": 1,
       "grossTaoMonth": 0.1056,
       "netTaoMonth": null,
-      "priceTao": 0.003265
+      "priceTao": 0.003266
     },
     {
       "netuid": 31,
@@ -588,12 +588,12 @@
       "regCostTao": 0.5,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.003821
+      "priceTao": 0.003543
     },
     {
       "netuid": 32,
       "name": "ItsAI",
-      "rank": 62,
+      "rank": 63,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -601,11 +601,11 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 0,
-      "earnerCount": 214,
-      "top1SharePct": 0.6281,
-      "top10SharePct": 6.06,
-      "regCostTao": 0.012,
-      "grossTaoMonth": 1.056,
+      "earnerCount": 243,
+      "top1SharePct": 0.5304,
+      "top10SharePct": 5.189,
+      "regCostTao": 0.004419,
+      "grossTaoMonth": 0.9304,
       "netTaoMonth": null,
       "priceTao": 0.002563
     },
@@ -620,13 +620,13 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 0,
-      "earnerCount": 241,
-      "top1SharePct": 0.5987,
-      "top10SharePct": 5.782,
-      "regCostTao": 0.05929,
-      "grossTaoMonth": 1.146,
+      "earnerCount": 243,
+      "top1SharePct": 0.5989,
+      "top10SharePct": 5.769,
+      "regCostTao": 0.05505,
+      "grossTaoMonth": 1.142,
       "netTaoMonth": null,
-      "priceTao": 0.00313
+      "priceTao": 0.003148
     },
     {
       "netuid": 34,
@@ -640,12 +640,12 @@
       "confidence": "ok",
       "minerBurnPct": 0,
       "earnerCount": 3,
-      "top1SharePct": 84.66,
+      "top1SharePct": 84.84,
       "top10SharePct": 100,
       "regCostTao": 0.5,
-      "grossTaoMonth": 269.7,
+      "grossTaoMonth": 270.7,
       "netTaoMonth": null,
-      "priceTao": 0.01218
+      "priceTao": 0.01223
     },
     {
       "netuid": 35,
@@ -662,9 +662,9 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 1,
-      "grossTaoMonth": 45.26,
+      "grossTaoMonth": 45.12,
       "netTaoMonth": null,
-      "priceTao": 0.001028
+      "priceTao": 0.001025
     },
     {
       "netuid": 36,
@@ -681,9 +681,9 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.1,
-      "grossTaoMonth": 44.1,
+      "grossTaoMonth": 43.97,
       "netTaoMonth": null,
-      "priceTao": 0.001003
+      "priceTao": 0.0009997
     },
     {
       "netuid": 37,
@@ -695,19 +695,19 @@
       "vramGb": null,
       "cutReason": "winner-take-all",
       "confidence": "ok",
-      "minerBurnPct": 71.01,
+      "minerBurnPct": 71,
       "earnerCount": 1,
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 35.34,
+      "grossTaoMonth": 33.73,
       "netTaoMonth": null,
-      "priceTao": 0.002754
+      "priceTao": 0.002628
     },
     {
       "netuid": 38,
       "name": "ChronoLLM",
-      "rank": 12,
+      "rank": 10,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -719,9 +719,9 @@
       "top1SharePct": 52.03,
       "top10SharePct": 100,
       "regCostTao": 0.74,
-      "grossTaoMonth": 143.7,
+      "grossTaoMonth": 148.3,
       "netTaoMonth": null,
-      "priceTao": 0.01786
+      "priceTao": 0.01844
     },
     {
       "netuid": 39,
@@ -740,7 +740,7 @@
       "regCostTao": 0.0005,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.009759
+      "priceTao": 0.009555
     },
     {
       "netuid": 40,
@@ -757,9 +757,9 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.99,
-      "grossTaoMonth": 85.07,
+      "grossTaoMonth": 85.02,
       "netTaoMonth": null,
-      "priceTao": 0.001925
+      "priceTao": 0.001924
     },
     {
       "netuid": 41,
@@ -772,13 +772,13 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 0,
-      "earnerCount": 160,
-      "top1SharePct": 3.483,
-      "top10SharePct": 20.93,
+      "earnerCount": 159,
+      "top1SharePct": 3.138,
+      "top10SharePct": 20.64,
       "regCostTao": 0.1,
-      "grossTaoMonth": 4.168,
+      "grossTaoMonth": 4.482,
       "netTaoMonth": null,
-      "priceTao": 0.007578
+      "priceTao": 0.008098
     },
     {
       "netuid": 42,
@@ -797,12 +797,12 @@
       "regCostTao": 0.0005,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.002167
+      "priceTao": 0.002255
     },
     {
       "netuid": 43,
       "name": "Graphite",
-      "rank": 44,
+      "rank": 45,
       "gateState": "enabled",
       "verdict": "possible",
       "gpuFloor": null,
@@ -811,7 +811,7 @@
       "confidence": "ok",
       "minerBurnPct": 79.03,
       "earnerCount": 5,
-      "top1SharePct": 57.09,
+      "top1SharePct": 57,
       "top10SharePct": 100,
       "regCostTao": 0.1,
       "grossTaoMonth": 12.19,
@@ -830,36 +830,36 @@
       "confidence": "ok",
       "minerBurnPct": 0,
       "earnerCount": 12,
-      "top1SharePct": 41.42,
-      "top10SharePct": 96.38,
-      "regCostTao": 0.05167,
-      "grossTaoMonth": 235.1,
+      "top1SharePct": 40.69,
+      "top10SharePct": 96.44,
+      "regCostTao": 0.06192,
+      "grossTaoMonth": 233,
       "netTaoMonth": null,
-      "priceTao": 0.03451
+      "priceTao": 0.03421
     },
     {
       "netuid": 45,
       "name": "AlphaRidge.ai",
-      "rank": 67,
+      "rank": 68,
       "gateState": "enabled",
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 54.3,
-      "earnerCount": 237,
-      "top1SharePct": 0.691,
-      "top10SharePct": 6.442,
-      "regCostTao": 0.01135,
-      "grossTaoMonth": 0.3877,
+      "minerBurnPct": 51.17,
+      "earnerCount": 241,
+      "top1SharePct": 0.6617,
+      "top10SharePct": 6.235,
+      "regCostTao": 0.005269,
+      "grossTaoMonth": 0.3989,
       "netTaoMonth": null,
-      "priceTao": 0.002292
+      "priceTao": 0.002242
     },
     {
       "netuid": 46,
       "name": "Instant",
-      "rank": 39,
+      "rank": 38,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -868,12 +868,12 @@
       "confidence": "ok",
       "minerBurnPct": 0,
       "earnerCount": 14,
-      "top1SharePct": 8.058,
-      "top10SharePct": 76.13,
+      "top1SharePct": 9.009,
+      "top10SharePct": 74.91,
       "regCostTao": 0.1,
-      "grossTaoMonth": 18.9,
+      "grossTaoMonth": 18.93,
       "netTaoMonth": null,
-      "priceTao": 0.003201
+      "priceTao": 0.003207
     },
     {
       "netuid": 47,
@@ -890,32 +890,13 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.05,
-      "grossTaoMonth": 76.26,
+      "grossTaoMonth": 75.73,
       "netTaoMonth": null,
-      "priceTao": 0.001727
+      "priceTao": 0.001715
     },
     {
       "netuid": 48,
       "name": "Quantum Compute",
-      "rank": 20,
-      "gateState": "enabled",
-      "verdict": "possible",
-      "gpuFloor": null,
-      "vramGb": null,
-      "cutReason": null,
-      "confidence": "ok",
-      "minerBurnPct": 0,
-      "earnerCount": 4,
-      "top1SharePct": 44.46,
-      "top10SharePct": 100,
-      "regCostTao": 0.0005,
-      "grossTaoMonth": 89.09,
-      "netTaoMonth": null,
-      "priceTao": 0.005031
-    },
-    {
-      "netuid": 49,
-      "name": "Nepher Robotics",
       "rank": 17,
       "gateState": "enabled",
       "verdict": "possible",
@@ -924,18 +905,37 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 0,
+      "earnerCount": 3,
+      "top1SharePct": 34.69,
+      "top10SharePct": 100,
+      "regCostTao": 0.0005,
+      "grossTaoMonth": 115.1,
+      "netTaoMonth": null,
+      "priceTao": 0.0052
+    },
+    {
+      "netuid": 49,
+      "name": "Nepher Robotics",
+      "rank": 18,
+      "gateState": "enabled",
+      "verdict": "possible",
+      "gpuFloor": null,
+      "vramGb": null,
+      "cutReason": null,
+      "confidence": "ok",
+      "minerBurnPct": 0,
       "earnerCount": 4,
-      "top1SharePct": 69.36,
+      "top1SharePct": 69.3,
       "top10SharePct": 100,
       "regCostTao": 0.05,
-      "grossTaoMonth": 116,
+      "grossTaoMonth": 112.6,
       "netTaoMonth": null,
-      "priceTao": 0.006558
+      "priceTao": 0.006365
     },
     {
       "netuid": 50,
       "name": "Synth",
-      "rank": 63,
+      "rank": 62,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -943,18 +943,18 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 22,
-      "earnerCount": 244,
-      "top1SharePct": 2.257,
-      "top10SharePct": 19,
+      "earnerCount": 243,
+      "top1SharePct": 2.226,
+      "top10SharePct": 18.83,
       "regCostTao": 0.8,
-      "grossTaoMonth": 1.029,
+      "grossTaoMonth": 1.044,
       "netTaoMonth": null,
-      "priceTao": 0.003653
+      "priceTao": 0.003688
     },
     {
       "netuid": 51,
       "name": "lium.io",
-      "rank": 11,
+      "rank": 12,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -962,13 +962,13 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 0,
-      "earnerCount": 66,
-      "top1SharePct": 83.31,
-      "top10SharePct": 95.11,
+      "earnerCount": 71,
+      "top1SharePct": 79.59,
+      "top10SharePct": 95,
       "regCostTao": 0.5,
-      "grossTaoMonth": 148.7,
+      "grossTaoMonth": 138.5,
       "netTaoMonth": null,
-      "priceTao": 0.1125
+      "priceTao": 0.1126
     },
     {
       "netuid": 52,
@@ -987,12 +987,12 @@
       "regCostTao": 1,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.006052
+      "priceTao": 0.006051
     },
     {
       "netuid": 53,
       "name": "engy",
-      "rank": 21,
+      "rank": 20,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -1004,9 +1004,9 @@
       "top1SharePct": 11.22,
       "top10SharePct": 75.16,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 75.08,
+      "grossTaoMonth": 76.7,
       "netTaoMonth": null,
-      "priceTao": 0.03137
+      "priceTao": 0.03205
     },
     {
       "netuid": 54,
@@ -1018,38 +1018,38 @@
       "vramGb": null,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 30.4,
-      "earnerCount": 165,
-      "top1SharePct": 50.5,
-      "top10SharePct": 58.95,
+      "minerBurnPct": 30.16,
+      "earnerCount": 161,
+      "top1SharePct": 50.3,
+      "top10SharePct": 59.14,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 1.801,
+      "grossTaoMonth": 1.865,
       "netTaoMonth": null,
-      "priceTao": 0.004852
+      "priceTao": 0.004887
     },
     {
       "netuid": 55,
       "name": "NIOME",
-      "rank": 41,
+      "rank": 39,
       "gateState": "enabled",
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 1.004,
+      "minerBurnPct": 0.9993,
       "earnerCount": 10,
       "top1SharePct": 30,
       "top10SharePct": 100,
-      "regCostTao": 0.001106,
-      "grossTaoMonth": 18.38,
+      "regCostTao": 0.001293,
+      "grossTaoMonth": 18.34,
       "netTaoMonth": null,
-      "priceTao": 0.002306
+      "priceTao": 0.002302
     },
     {
       "netuid": 56,
       "name": "Gradients",
-      "rank": 13,
+      "rank": 14,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -1061,9 +1061,9 @@
       "top1SharePct": 45.86,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 132.5,
+      "grossTaoMonth": 133.2,
       "netTaoMonth": null,
-      "priceTao": 0.01497
+      "priceTao": 0.01504
     },
     {
       "netuid": 57,
@@ -1082,12 +1082,12 @@
       "regCostTao": 0.0005,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.002333
+      "priceTao": 0.00228
     },
     {
       "netuid": 58,
       "name": "Attune",
-      "rank": 24,
+      "rank": 23,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -1099,9 +1099,9 @@
       "top1SharePct": 40,
       "top10SharePct": 100,
       "regCostTao": 0.3,
-      "grossTaoMonth": 52.45,
+      "grossTaoMonth": 51.8,
       "netTaoMonth": null,
-      "priceTao": 0.009951
+      "priceTao": 0.009827
     },
     {
       "netuid": 59,
@@ -1117,15 +1117,15 @@
       "earnerCount": 0,
       "top1SharePct": null,
       "top10SharePct": null,
-      "regCostTao": 0.0005,
+      "regCostTao": 0.000545,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.01111
+      "priceTao": 0.01113
     },
     {
       "netuid": 60,
       "name": "Bitsec.ai",
-      "rank": 26,
+      "rank": 25,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -1137,9 +1137,9 @@
       "top1SharePct": 77,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 50.13,
+      "grossTaoMonth": 50.16,
       "netTaoMonth": null,
-      "priceTao": 0.003398
+      "priceTao": 0.003399
     },
     {
       "netuid": 61,
@@ -1152,13 +1152,13 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 0,
-      "earnerCount": 135,
-      "top1SharePct": 42.35,
-      "top10SharePct": 63.6,
-      "regCostTao": 0.04241,
-      "grossTaoMonth": 7.752,
+      "earnerCount": 131,
+      "top1SharePct": 41.72,
+      "top10SharePct": 64.1,
+      "regCostTao": 0.06252,
+      "grossTaoMonth": 7.642,
       "netTaoMonth": null,
-      "priceTao": 0.01191
+      "priceTao": 0.01139
     },
     {
       "netuid": 62,
@@ -1174,10 +1174,10 @@
       "earnerCount": 43,
       "top1SharePct": 17.5,
       "top10SharePct": 57.57,
-      "regCostTao": 0.0007877,
-      "grossTaoMonth": 17.26,
+      "regCostTao": 0.0005,
+      "grossTaoMonth": 17.16,
       "netTaoMonth": null,
-      "priceTao": 0.008574
+      "priceTao": 0.008527
     },
     {
       "netuid": 63,
@@ -1189,14 +1189,14 @@
       "vramGb": null,
       "cutReason": "winner-take-all",
       "confidence": "ok",
-      "minerBurnPct": 0.003266,
+      "minerBurnPct": 0.003321,
       "earnerCount": 7,
       "top1SharePct": 99.98,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 41.72,
+      "grossTaoMonth": 41.69,
       "netTaoMonth": null,
-      "priceTao": 0.003769
+      "priceTao": 0.003767
     },
     {
       "netuid": 64,
@@ -1210,12 +1210,12 @@
       "confidence": "ok",
       "minerBurnPct": 0,
       "earnerCount": 18,
-      "top1SharePct": 20.1,
-      "top10SharePct": 86.73,
+      "top1SharePct": 20.23,
+      "top10SharePct": 86.9,
       "regCostTao": 0.0005,
       "grossTaoMonth": 316.3,
       "netTaoMonth": null,
-      "priceTao": 0.06787
+      "priceTao": 0.06786
     },
     {
       "netuid": 65,
@@ -1232,14 +1232,14 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.2,
-      "grossTaoMonth": 28.33,
+      "grossTaoMonth": 26.99,
       "netTaoMonth": null,
-      "priceTao": 0.00256
+      "priceTao": 0.002439
     },
     {
       "netuid": 66,
       "name": "conjectures",
-      "rank": 27,
+      "rank": 26,
       "gateState": "enabled",
       "verdict": "unknown",
       "gpuFloor": null,
@@ -1250,10 +1250,10 @@
       "earnerCount": 4,
       "top1SharePct": 80.27,
       "top10SharePct": 100,
-      "regCostTao": 0.007142,
-      "grossTaoMonth": 44.18,
+      "regCostTao": 0.001688,
+      "grossTaoMonth": 44.21,
       "netTaoMonth": null,
-      "priceTao": 0.002495
+      "priceTao": 0.002497
     },
     {
       "netuid": 67,
@@ -1265,14 +1265,14 @@
       "vramGb": null,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 3.651,
-      "earnerCount": 45,
-      "top1SharePct": 11.58,
-      "top10SharePct": 45.69,
-      "regCostTao": 0.03157,
-      "grossTaoMonth": 5.767,
+      "minerBurnPct": 0,
+      "earnerCount": 46,
+      "top1SharePct": 11.16,
+      "top10SharePct": 44.02,
+      "regCostTao": 0.03694,
+      "grossTaoMonth": 5.759,
       "netTaoMonth": null,
-      "priceTao": 0.00311
+      "priceTao": 0.003056
     },
     {
       "netuid": 68,
@@ -1288,10 +1288,10 @@
       "earnerCount": 1,
       "top1SharePct": 100,
       "top10SharePct": 100,
-      "regCostTao": 0.1749,
-      "grossTaoMonth": 529.6,
+      "regCostTao": 0.1624,
+      "grossTaoMonth": 528.8,
       "netTaoMonth": null,
-      "priceTao": 0.01675
+      "priceTao": 0.01672
     },
     {
       "netuid": 69,
@@ -1310,7 +1310,7 @@
       "regCostTao": 0.0005,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.005367
+      "priceTao": 0.005253
     },
     {
       "netuid": 70,
@@ -1326,15 +1326,15 @@
       "earnerCount": 1,
       "top1SharePct": 100,
       "top10SharePct": 100,
-      "regCostTao": 0.000001111,
-      "grossTaoMonth": 21.81,
+      "regCostTao": 0.0005243,
+      "grossTaoMonth": 23.24,
       "netTaoMonth": null,
-      "priceTao": 0.0004947
+      "priceTao": 0.0005273
     },
     {
       "netuid": 71,
       "name": "Leadpoet",
-      "rank": 31,
+      "rank": 29,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -1346,9 +1346,9 @@
       "top1SharePct": 50,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 35.06,
+      "grossTaoMonth": 34.69,
       "netTaoMonth": null,
-      "priceTao": 0.00396
+      "priceTao": 0.003918
     },
     {
       "netuid": 72,
@@ -1367,7 +1367,7 @@
       "regCostTao": 0.0005,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.002132
+      "priceTao": 0.002112
     },
     {
       "netuid": 73,
@@ -1418,13 +1418,13 @@
       "cutReason": "winner-take-all",
       "confidence": "ok",
       "minerBurnPct": 0,
-      "earnerCount": 91,
+      "earnerCount": 92,
       "top1SharePct": 99.58,
       "top10SharePct": 99.68,
       "regCostTao": 1,
-      "grossTaoMonth": 16.58,
+      "grossTaoMonth": 16.5,
       "netTaoMonth": null,
-      "priceTao": 0.01722
+      "priceTao": 0.01733
     },
     {
       "netuid": 76,
@@ -1436,19 +1436,19 @@
       "vramGb": null,
       "cutReason": "owner-capture",
       "confidence": "ok",
-      "minerBurnPct": 100,
-      "earnerCount": 0,
-      "top1SharePct": null,
-      "top10SharePct": null,
+      "minerBurnPct": 99.92,
+      "earnerCount": 1,
+      "top1SharePct": 100,
+      "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": null,
+      "grossTaoMonth": 0.1664,
       "netTaoMonth": null,
-      "priceTao": 0.004666
+      "priceTao": 0.004646
     },
     {
       "netuid": 77,
       "name": "Liquidity",
-      "rank": 33,
+      "rank": 32,
       "gateState": "enabled",
       "verdict": "unknown",
       "gpuFloor": null,
@@ -1457,12 +1457,12 @@
       "confidence": "ok",
       "minerBurnPct": 0,
       "earnerCount": 14,
-      "top1SharePct": 21.66,
-      "top10SharePct": 97.72,
+      "top1SharePct": 21.45,
+      "top10SharePct": 96.91,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 28.61,
+      "grossTaoMonth": 28.62,
       "netTaoMonth": null,
-      "priceTao": 0.004847
+      "priceTao": 0.004848
     },
     {
       "netuid": 78,
@@ -1479,9 +1479,9 @@
       "top1SharePct": 10.71,
       "top10SharePct": 57.06,
       "regCostTao": 0.375,
-      "grossTaoMonth": 1.338,
+      "grossTaoMonth": 1.342,
       "netTaoMonth": null,
-      "priceTao": 0.001992
+      "priceTao": 0.001998
     },
     {
       "netuid": 79,
@@ -1494,13 +1494,13 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 0,
-      "earnerCount": 246,
-      "top1SharePct": 1.713,
-      "top10SharePct": 10.11,
-      "regCostTao": 0.07246,
-      "grossTaoMonth": 1.1,
+      "earnerCount": 247,
+      "top1SharePct": 1.796,
+      "top10SharePct": 11.21,
+      "regCostTao": 0.06728,
+      "grossTaoMonth": 1.097,
       "netTaoMonth": null,
-      "priceTao": 0.003068
+      "priceTao": 0.003071
     },
     {
       "netuid": 80,
@@ -1517,9 +1517,9 @@
       "top1SharePct": 25,
       "top10SharePct": 99.68,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 164.1,
+      "grossTaoMonth": 159.6,
       "netTaoMonth": null,
-      "priceTao": 0.02226
+      "priceTao": 0.02164
     },
     {
       "netuid": 81,
@@ -1531,14 +1531,14 @@
       "vramGb": null,
       "cutReason": "owner-capture",
       "confidence": "ok",
-      "minerBurnPct": 99.98,
-      "earnerCount": 3,
-      "top1SharePct": 71.43,
-      "top10SharePct": 100,
-      "regCostTao": 0.03155,
-      "grossTaoMonth": 0.01191,
+      "minerBurnPct": 99.53,
+      "earnerCount": 14,
+      "top1SharePct": 56.61,
+      "top10SharePct": 97.29,
+      "regCostTao": 0.01845,
+      "grossTaoMonth": 0.1341,
       "netTaoMonth": null,
-      "priceTao": 0.005036
+      "priceTao": 0.005044
     },
     {
       "netuid": 82,
@@ -1554,10 +1554,10 @@
       "earnerCount": 62,
       "top1SharePct": 1.696,
       "top10SharePct": 16.93,
-      "regCostTao": 12.28,
-      "grossTaoMonth": 64.42,
+      "regCostTao": 11.86,
+      "grossTaoMonth": 69.41,
       "netTaoMonth": null,
-      "priceTao": 0.04587
+      "priceTao": 0.04942
     },
     {
       "netuid": 83,
@@ -1570,13 +1570,13 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 0,
-      "earnerCount": 243,
-      "top1SharePct": 1.732,
-      "top10SharePct": 12.63,
+      "earnerCount": 244,
+      "top1SharePct": 2.033,
+      "top10SharePct": 13,
       "regCostTao": 0.1,
-      "grossTaoMonth": 2.726,
+      "grossTaoMonth": 2.721,
       "netTaoMonth": null,
-      "priceTao": 0.00751
+      "priceTao": 0.007528
     },
     {
       "netuid": 84,
@@ -1595,7 +1595,7 @@
       "regCostTao": 0.9,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.002315
+      "priceTao": 0.002345
     },
     {
       "netuid": 85,
@@ -1612,9 +1612,9 @@
       "top1SharePct": 67.23,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 114.4,
+      "grossTaoMonth": 106.9,
       "netTaoMonth": null,
-      "priceTao": 0.005169
+      "priceTao": 0.004829
     },
     {
       "netuid": 86,
@@ -1631,9 +1631,9 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.1,
-      "grossTaoMonth": 132,
+      "grossTaoMonth": 130.6,
       "netTaoMonth": null,
-      "priceTao": 0.003014
+      "priceTao": 0.002981
     },
     {
       "netuid": 87,
@@ -1652,12 +1652,12 @@
       "regCostTao": 0.001,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.002877
+      "priceTao": 0.002673
     },
     {
       "netuid": 88,
       "name": "Investing",
-      "rank": 52,
+      "rank": 51,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -1669,14 +1669,14 @@
       "top1SharePct": 22.15,
       "top10SharePct": 75.87,
       "regCostTao": 0.01,
-      "grossTaoMonth": 3.494,
+      "grossTaoMonth": 3.532,
       "netTaoMonth": null,
-      "priceTao": 0.002604
+      "priceTao": 0.002632
     },
     {
       "netuid": 89,
       "name": "InfiniteQuant",
-      "rank": 57,
+      "rank": 56,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -1685,8 +1685,8 @@
       "confidence": "ok",
       "minerBurnPct": 0,
       "earnerCount": 30,
-      "top1SharePct": 14.6,
-      "top10SharePct": 70.51,
+      "top1SharePct": 14.06,
+      "top10SharePct": 69.88,
       "regCostTao": 0.025,
       "grossTaoMonth": 1.696,
       "netTaoMonth": null,
@@ -1704,12 +1704,12 @@
       "confidence": "ok",
       "minerBurnPct": 0,
       "earnerCount": 2,
-      "top1SharePct": 56.8,
+      "top1SharePct": 60.72,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 550.9,
+      "grossTaoMonth": 527,
       "netTaoMonth": null,
-      "priceTao": 0.01873
+      "priceTao": 0.01792
     },
     {
       "netuid": 91,
@@ -1726,14 +1726,14 @@
       "top1SharePct": 51.61,
       "top10SharePct": 100,
       "regCostTao": 0.1,
-      "grossTaoMonth": 56.12,
+      "grossTaoMonth": 54.41,
       "netTaoMonth": null,
-      "priceTao": 0.003805
+      "priceTao": 0.003688
     },
     {
       "netuid": 92,
       "name": "REAX",
-      "rank": 45,
+      "rank": 44,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -1741,13 +1741,13 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 0,
-      "earnerCount": 248,
-      "top1SharePct": 17.42,
-      "top10SharePct": 45.3,
-      "regCostTao": 2.383,
-      "grossTaoMonth": 10.9,
+      "earnerCount": 226,
+      "top1SharePct": 17.27,
+      "top10SharePct": 45.18,
+      "regCostTao": 2.21,
+      "grossTaoMonth": 12.22,
       "netTaoMonth": null,
-      "priceTao": 0.03065
+      "priceTao": 0.03134
     },
     {
       "netuid": 93,
@@ -1759,14 +1759,14 @@
       "vramGb": null,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 0.9383,
+      "minerBurnPct": 0.9066,
       "earnerCount": 2,
-      "top1SharePct": 54.48,
+      "top1SharePct": 55.87,
       "top10SharePct": 100,
       "regCostTao": 0.005,
-      "grossTaoMonth": 5.983,
+      "grossTaoMonth": 6.093,
       "netTaoMonth": null,
-      "priceTao": 0.01908
+      "priceTao": 0.01887
     },
     {
       "netuid": 94,
@@ -1785,7 +1785,7 @@
       "regCostTao": 0.0005,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.004322
+      "priceTao": 0.003815
     },
     {
       "netuid": 95,
@@ -1804,7 +1804,7 @@
       "regCostTao": 0.0005,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.03423
+      "priceTao": 0.03457
     },
     {
       "netuid": 96,
@@ -1816,19 +1816,19 @@
       "vramGb": 24,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 85.45,
-      "earnerCount": 22,
-      "top1SharePct": 37.42,
-      "top10SharePct": 89.8,
+      "minerBurnPct": 85.47,
+      "earnerCount": 23,
+      "top1SharePct": 35.47,
+      "top10SharePct": 90.89,
       "regCostTao": 0.1,
-      "grossTaoMonth": 2.009,
+      "grossTaoMonth": 1.884,
       "netTaoMonth": null,
-      "priceTao": 0.00359
+      "priceTao": 0.003518
     },
     {
       "netuid": 97,
       "name": "Ingot",
-      "rank": 10,
+      "rank": 11,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -1839,10 +1839,10 @@
       "earnerCount": 2,
       "top1SharePct": 50,
       "top10SharePct": 100,
-      "regCostTao": 0.55,
-      "grossTaoMonth": 154.3,
+      "regCostTao": 0.1479,
+      "grossTaoMonth": 147.9,
       "netTaoMonth": null,
-      "priceTao": 0.01308
+      "priceTao": 0.01253
     },
     {
       "netuid": 98,
@@ -1859,14 +1859,14 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.1,
-      "grossTaoMonth": 97.67,
+      "grossTaoMonth": 96.41,
       "netTaoMonth": null,
-      "priceTao": 0.002207
+      "priceTao": 0.002179
     },
     {
       "netuid": 99,
       "name": "Thirty Spokes",
-      "rank": 28,
+      "rank": 27,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -1878,7 +1878,7 @@
       "top1SharePct": 85,
       "top10SharePct": 100,
       "regCostTao": 0.5,
-      "grossTaoMonth": 42.51,
+      "grossTaoMonth": 42.5,
       "netTaoMonth": null,
       "priceTao": 0.001444
     },
@@ -1899,7 +1899,7 @@
       "regCostTao": 0.0005,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.002816
+      "priceTao": 0.002767
     },
     {
       "netuid": 101,
@@ -1912,13 +1912,13 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 0,
-      "earnerCount": 242,
-      "top1SharePct": 0.5642,
-      "top10SharePct": 5.642,
-      "regCostTao": 0.03398,
-      "grossTaoMonth": 1.314,
+      "earnerCount": 245,
+      "top1SharePct": 0.5871,
+      "top10SharePct": 5.871,
+      "regCostTao": 0.03975,
+      "grossTaoMonth": 1.263,
       "netTaoMonth": null,
-      "priceTao": 0.003605
+      "priceTao": 0.003509
     },
     {
       "netuid": 102,
@@ -1931,13 +1931,13 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 25.01,
-      "earnerCount": 7,
-      "top1SharePct": 43.09,
+      "earnerCount": 8,
+      "top1SharePct": 35.64,
       "top10SharePct": 100,
-      "regCostTao": 0.1676,
-      "grossTaoMonth": 38.29,
+      "regCostTao": 0.0778,
+      "grossTaoMonth": 33.46,
       "netTaoMonth": null,
-      "priceTao": 0.004615
+      "priceTao": 0.004536
     },
     {
       "netuid": 103,
@@ -1950,13 +1950,13 @@
       "cutReason": "pool-side-switch-off",
       "confidence": "ok",
       "minerBurnPct": 0,
-      "earnerCount": 2,
-      "top1SharePct": 77.78,
+      "earnerCount": 4,
+      "top1SharePct": 50,
       "top10SharePct": 100,
-      "regCostTao": 0.008578,
-      "grossTaoMonth": 187.6,
+      "regCostTao": 0.00199,
+      "grossTaoMonth": 106.2,
       "netTaoMonth": null,
-      "priceTao": 0.00643
+      "priceTao": 0.006034
     },
     {
       "netuid": 104,
@@ -1975,12 +1975,12 @@
       "regCostTao": 0.5,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.00409
+      "priceTao": 0.004089
     },
     {
       "netuid": 105,
       "name": "Beam",
-      "rank": 56,
+      "rank": 57,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -1988,18 +1988,18 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 0,
-      "earnerCount": 217,
-      "top1SharePct": 2.29,
-      "top10SharePct": 20.46,
-      "regCostTao": 0.008019,
-      "grossTaoMonth": 1.712,
+      "earnerCount": 224,
+      "top1SharePct": 2.345,
+      "top10SharePct": 20.71,
+      "regCostTao": 0.008936,
+      "grossTaoMonth": 1.619,
       "netTaoMonth": null,
-      "priceTao": 0.004215
+      "priceTao": 0.004114
     },
     {
       "netuid": 106,
       "name": "Nodexo",
-      "rank": 34,
+      "rank": 33,
       "gateState": "enabled",
       "verdict": "possible",
       "gpuFloor": null,
@@ -2008,17 +2008,17 @@
       "confidence": "ok",
       "minerBurnPct": 0,
       "earnerCount": 8,
-      "top1SharePct": 41.91,
+      "top1SharePct": 41.3,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 24.22,
+      "grossTaoMonth": 23.66,
       "netTaoMonth": null,
-      "priceTao": 0.002462
+      "priceTao": 0.002404
     },
     {
       "netuid": 107,
       "name": "Minos",
-      "rank": 14,
+      "rank": 13,
       "gateState": "enabled",
       "verdict": "possible",
       "gpuFloor": "0 GB VRAM (min_vram)",
@@ -2027,12 +2027,12 @@
       "confidence": "ok",
       "minerBurnPct": 0,
       "earnerCount": 20,
-      "top1SharePct": 79.89,
-      "top10SharePct": 94.16,
+      "top1SharePct": 79.76,
+      "top10SharePct": 94.12,
       "regCostTao": 0.99,
-      "grossTaoMonth": 129.1,
+      "grossTaoMonth": 135.8,
       "netTaoMonth": null,
-      "priceTao": 0.03061
+      "priceTao": 0.03222
     },
     {
       "netuid": 108,
@@ -2051,7 +2051,7 @@
       "regCostTao": 0.05,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.006418
+      "priceTao": 0.006413
     },
     {
       "netuid": 109,
@@ -2067,10 +2067,10 @@
       "earnerCount": 0,
       "top1SharePct": null,
       "top10SharePct": null,
-      "regCostTao": 0.5977,
+      "regCostTao": 0.5769,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.003025
+      "priceTao": 0.002903
     },
     {
       "netuid": 110,
@@ -2087,14 +2087,14 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 1095,
+      "grossTaoMonth": 1094,
       "netTaoMonth": null,
-      "priceTao": 0.0248
+      "priceTao": 0.02479
     },
     {
       "netuid": 111,
       "name": "Claims",
-      "rank": 25,
+      "rank": 24,
       "gateState": "enabled",
       "verdict": "possible",
       "gpuFloor": null,
@@ -2106,9 +2106,9 @@
       "top1SharePct": 89.57,
       "top10SharePct": 100,
       "regCostTao": 0.05,
-      "grossTaoMonth": 51.55,
+      "grossTaoMonth": 51.49,
       "netTaoMonth": null,
-      "priceTao": 0.004076
+      "priceTao": 0.004071
     },
     {
       "netuid": 112,
@@ -2125,9 +2125,9 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.99,
-      "grossTaoMonth": 400.9,
+      "grossTaoMonth": 405.9,
       "netTaoMonth": null,
-      "priceTao": 0.009071
+      "priceTao": 0.009185
     },
     {
       "netuid": 113,
@@ -2146,7 +2146,7 @@
       "regCostTao": 0.001,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.002984
+      "priceTao": 0.003237
     },
     {
       "netuid": 114,
@@ -2163,9 +2163,9 @@
       "top1SharePct": 74.99,
       "top10SharePct": 100,
       "regCostTao": 0.25,
-      "grossTaoMonth": 213.8,
+      "grossTaoMonth": 211.5,
       "netTaoMonth": null,
-      "priceTao": 0.02174
+      "priceTao": 0.02151
     },
     {
       "netuid": 115,
@@ -2184,7 +2184,7 @@
       "regCostTao": 0.0005,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.002333
+      "priceTao": 0.002293
     },
     {
       "netuid": 116,
@@ -2200,34 +2200,34 @@
       "earnerCount": 0,
       "top1SharePct": null,
       "top10SharePct": null,
-      "regCostTao": 0.002565,
+      "regCostTao": 0.0007494,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.02397
+      "priceTao": 0.02297
     },
     {
       "netuid": 117,
       "name": "everyframe.studio",
-      "rank": 51,
+      "rank": 52,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
       "vramGb": null,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 77.01,
-      "earnerCount": 10,
-      "top1SharePct": 33.67,
+      "minerBurnPct": 82.45,
+      "earnerCount": 9,
+      "top1SharePct": 20.35,
       "top10SharePct": 100,
       "regCostTao": 0.05,
-      "grossTaoMonth": 4.018,
+      "grossTaoMonth": 2.974,
       "netTaoMonth": null,
-      "priceTao": 0.002172
+      "priceTao": 0.001914
     },
     {
       "netuid": 118,
       "name": "Ditto",
-      "rank": 40,
+      "rank": 41,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -2239,9 +2239,9 @@
       "top1SharePct": 50.01,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 18.73,
+      "grossTaoMonth": 17.95,
       "netTaoMonth": null,
-      "priceTao": 0.00423
+      "priceTao": 0.004055
     },
     {
       "netuid": 119,
@@ -2260,12 +2260,12 @@
       "regCostTao": 0.0005,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.002309
+      "priceTao": 0.002298
     },
     {
       "netuid": 120,
       "name": "Affine",
-      "rank": 15,
+      "rank": 40,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -2273,13 +2273,13 @@
       "cutReason": null,
       "confidence": "ok",
       "minerBurnPct": 9.999,
-      "earnerCount": 25,
-      "top1SharePct": 9.464,
-      "top10SharePct": 66.11,
-      "regCostTao": 0.6785,
-      "grossTaoMonth": 127.3,
+      "earnerCount": 178,
+      "top1SharePct": 1.629,
+      "top10SharePct": 15.79,
+      "regCostTao": 0.878,
+      "grossTaoMonth": 18.28,
       "netTaoMonth": null,
-      "priceTao": 0.04154
+      "priceTao": 0.04105
     },
     {
       "netuid": 121,
@@ -2291,14 +2291,14 @@
       "vramGb": null,
       "cutReason": "winner-take-all",
       "confidence": "ok",
-      "minerBurnPct": 60.58,
+      "minerBurnPct": 60,
       "earnerCount": 1,
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 62.57,
+      "grossTaoMonth": 63.46,
       "netTaoMonth": null,
-      "priceTao": 0.003586
+      "priceTao": 0.003584
     },
     {
       "netuid": 122,
@@ -2315,33 +2315,33 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 45.57,
+      "grossTaoMonth": 45.52,
       "netTaoMonth": null,
-      "priceTao": 0.003435
+      "priceTao": 0.003431
     },
     {
       "netuid": 123,
       "name": "MANTIS",
-      "rank": 66,
+      "rank": 67,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
       "vramGb": null,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 46.32,
+      "minerBurnPct": 46.28,
       "earnerCount": 250,
-      "top1SharePct": 6.513,
-      "top10SharePct": 25.25,
+      "top1SharePct": 6.554,
+      "top10SharePct": 25.16,
       "regCostTao": 0.15,
-      "grossTaoMonth": 0.4275,
+      "grossTaoMonth": 0.4206,
       "netTaoMonth": null,
-      "priceTao": 0.002261
+      "priceTao": 0.002223
     },
     {
       "netuid": 124,
       "name": "Swarm",
-      "rank": 32,
+      "rank": 31,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
@@ -2352,29 +2352,29 @@
       "earnerCount": 25,
       "top1SharePct": 10.14,
       "top10SharePct": 63.21,
-      "regCostTao": 0.5137,
-      "grossTaoMonth": 31.9,
+      "regCostTao": 0.5,
+      "grossTaoMonth": 31.86,
       "netTaoMonth": null,
-      "priceTao": 0.009366
+      "priceTao": 0.009355
     },
     {
       "netuid": 125,
       "name": "Refinery",
-      "rank": 29,
+      "rank": 28,
       "gateState": "enabled",
       "verdict": null,
       "gpuFloor": null,
       "vramGb": null,
       "cutReason": null,
       "confidence": "ok",
-      "minerBurnPct": 23.17,
+      "minerBurnPct": 25.77,
       "earnerCount": 3,
-      "top1SharePct": 65.08,
+      "top1SharePct": 67.36,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 42.38,
+      "grossTaoMonth": 40.28,
       "netTaoMonth": null,
-      "priceTao": 0.002492
+      "priceTao": 0.002452
     },
     {
       "netuid": 126,
@@ -2393,7 +2393,7 @@
       "regCostTao": 0.2,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.004507
+      "priceTao": 0.004385
     },
     {
       "netuid": 127,
@@ -2412,12 +2412,12 @@
       "regCostTao": 0.0005,
       "grossTaoMonth": null,
       "netTaoMonth": null,
-      "priceTao": 0.002073
+      "priceTao": 0.002036
     },
     {
       "netuid": 128,
       "name": "ByteLeap",
-      "rank": 35,
+      "rank": 34,
       "gateState": "enabled",
       "verdict": "possible",
       "gpuFloor": null,
@@ -2429,9 +2429,9 @@
       "top1SharePct": 14.67,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "grossTaoMonth": 22.23,
+      "grossTaoMonth": 21.74,
       "netTaoMonth": null,
-      "priceTao": 0.002762
+      "priceTao": 0.002701
     }
   ]
 }

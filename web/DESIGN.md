@@ -100,20 +100,25 @@ holds.
   Head-tier rows are drawn in accent, the rest in ink at low alpha. The
   selected or hovered row draws in accent 2 with a lit baseline.
 - Block clock: Bittensor seals a block every 12 s. On each block the
-  field slides one column left (600 ms ease-out) and seals the newest
-  column. The header shows "est. block N" and a 12 s progress line.
+  newest column lights a seal line (see "Block tick" below). The header shows "est. block N" and a 12 s progress line.
   "est." stays until a live block source exists.
 - Interaction: pointing at a row opens that subnet in the panel. Click
   selects it. Keyboard: the panel holds a subnet picker (arrow keys or
   a number field) that drives the same selection. The canvas has an
   `aria-label`, and the panel is `aria-live="polite"`.
-- Reduced motion: a still frame, with no slide and no block advance.
-  The block number still updates as text.
-- Data: needs real daily commit counts per subnet for 90 days. Add them
-  to the export (allowlisted field `daily`, an array of 90 integers per
-  subnet, from `change_ranges` commit timestamps in `fleet.db`, aged
-  like the other series). The comp derives days from the 7- and 30-day
-  counts. The build must not.
+- Reduced motion: no seal line flash and no progress line. The block
+  number still updates as text.
+- Data: real daily commit counts per subnet for 90 days (allowlisted
+  field `daily` in `fleet.activity`, 90 integers, oldest first). The
+  export runs the activity metric's own `git log --no-merges` in each
+  clone and bins back from that subnet's latest activity pass, the same
+  instant the fleet board reads. So the last 7 and 30 bins match the
+  board's counts (a test checks this). A subnet with no readable clone
+  gets `null`, never zeros. The comp derived days from the 7- and
+  30-day counts. The build does not.
+- Block tick (owner, 2026-10-30): the field stays still. Each block
+  advances the counter and the progress line and lights a seal line on
+  the newest column. It never adds or removes activity.
 
 ## Boards (mining, fleet, network, upgrades)
 
@@ -132,7 +137,7 @@ holds.
 
 ## Motion list
 
-1. The strata block tick (signature).
+1. The strata block tick (signature): counter, progress line, seal line.
 2. Hover and press feedback on rows, links and buttons (opacity or
    colour only, under 200 ms).
 3. Panel content swap on selection (150 ms crossfade).

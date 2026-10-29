@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T22:31:10.367499+00:00",
+  "generatedAt": "2026-10-22T23:43:28.321789+00:00",
   "data": {
     "vitals": [
       {
@@ -454,10 +454,10 @@
       }
     ],
     "gate": {
-      "observedAt": "2026-10-22T22:04:28.198644+00:00",
+      "observedAt": "2026-10-22T23:09:27.893899+00:00",
       "active": true,
-      "theta": 0.007695,
-      "aboveCount": 31,
+      "theta": 0.007635,
+      "aboveCount": 32,
       "barMode": "rank"
     },
     "rotations": [
