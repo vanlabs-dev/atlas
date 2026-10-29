@@ -217,7 +217,7 @@ export default async function Home() {
           <Reveal step={2}>
             <h3 className="text-lead font-bold">It shows its work</h3>
             <p className="mt-3 text-body">
-              Of 128 subnets, {scored} have a public repository Atlas can score. The other {repoless} are listed as such, not guessed at.
+              Atlas scores {scored} of 128 subnet slots. The other {repoless} have no public repository or code it cannot read, and stay unscored rather than guessed at.
             </p>
             <h3 className="mt-16 text-lead font-bold">It gives no advice</h3>
             <p className="mt-3 text-body">
