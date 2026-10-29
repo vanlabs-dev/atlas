@@ -11,8 +11,8 @@ the owner glance at Atlas data, built on a typed data layer with fixtures.
 The site SHALL serve a home page that states what Atlas is without prior context.
 
 #### Scenario: First visit
-- **WHEN** a visitor opens the home page
-- **THEN** the first screen states what Atlas is and links to the four data pages
+- **WHEN** a visitor opens the home page at 1280x720 or 390x844
+- **THEN** the first screen shows one sentence stating what Atlas is and links to the four data pages, with no scrolling
 
 ### Requirement: Data pages
 The site SHALL serve pages for mining triage, fleet attention with rotation signals, network pulse, and the runtime-upgrade timeline.
@@ -21,6 +21,10 @@ The site SHALL serve pages for mining triage, fleet attention with rotation sign
 - **WHEN** a visitor opens any of the four data pages
 - **THEN** the page renders its data and shows when that data was produced
 
+#### Scenario: Stale data
+- **WHEN** the data is older than 48 hours
+- **THEN** the page shows a visible stale label next to the data age
+
 ### Requirement: Single typed data layer
 Every page SHALL read data only through one typed data layer, so that replacing fixtures with live data changes that layer alone.
 
@@ -28,12 +32,23 @@ Every page SHALL read data only through one typed data layer, so that replacing 
 - **WHEN** the fixture source is replaced by another source with the same types
 - **THEN** no page component changes
 
+### Requirement: Operator-free data
+Site data SHALL be subnet-level facts only. It SHALL NOT include the owner's holdings, positions, hotkeys, wallets, or rotation decisions. A private-party address is any address not on the public-identifier allowlist; the owner's own addresses are private.
+
+#### Scenario: Allowlisted export
+- **WHEN** the export script reads the live stores
+- **THEN** each record contains only fields on a named allowlist, and an unlisted field in the source is dropped
+
 ### Requirement: Fixture hygiene
-Committed fixtures SHALL contain no secrets, wallet addresses of private parties, tokens, or internal host details.
+Committed fixtures SHALL contain no secrets, private-party addresses, tokens, or internal host details, and SHALL use aged or rounded values, not live state.
 
 #### Scenario: Scrubbed export
 - **WHEN** fixtures are generated from the live Atlas stores
-- **THEN** a scrub check passes before the fixtures are committed
+- **THEN** the scrub test passes before the fixtures are committed
+
+#### Scenario: Planted leak
+- **WHEN** a token, IP, hostname, or private address is planted in a fixture
+- **THEN** the scrub test fails
 
 ### Requirement: Dark mode
 The site SHALL ship a dark theme as the default design target and honour the system colour scheme.
@@ -41,6 +56,13 @@ The site SHALL ship a dark theme as the default design target and honour the sys
 #### Scenario: System dark
 - **WHEN** the system prefers a dark scheme
 - **THEN** the site renders the dark theme with readable contrast
+
+### Requirement: Accessibility
+Every page SHALL score at least 95 in Lighthouse accessibility and meet WCAG AA text contrast in the dark theme.
+
+#### Scenario: Audit
+- **WHEN** Lighthouse and a contrast check run on each page
+- **THEN** each page scores 95 or higher and no text fails AA
 
 ### Requirement: Reduced motion
 The site SHALL disable non-essential animation when the visitor prefers reduced motion.
@@ -66,3 +88,7 @@ The runtime upgrade scope gate SHALL reject any change to a path under `web/`, a
 #### Scenario: Upgrade push
 - **WHEN** a commit changes only corpus or chain-reader paths
 - **THEN** the Vercel ignored-build step skips the build
+
+#### Scenario: Unknown previous commit
+- **WHEN** the previous deployed SHA is unavailable
+- **THEN** the ignored-build step builds
