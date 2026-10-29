@@ -1,7 +1,8 @@
 # device-inventory Specification
 
 ## Purpose
-TBD - created by archiving change atlas-phase-0-device-inventory. Update Purpose after archive.
+Collect a read-only inventory of the target device (hardware, OS, users, services, listening ports) as a redacted, schema-valid record.
+
 ## Requirements
 ### Requirement: Read-only operation
 The inventory process SHALL perform only read operations against the device. It MUST NOT install, remove, upgrade, stop, start, restart, enable, disable, reconfigure, or delete any package, container, service, file, user, firewall rule, scheduled job, or repository. Commands invoked by the inventory script MUST be individually reviewable and MUST NOT include mutating flags or subcommands.

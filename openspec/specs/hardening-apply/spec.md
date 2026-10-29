@@ -1,7 +1,8 @@
 # hardening-apply Specification
 
 ## Purpose
-TBD - created by archiving change atlas-phase-1-apply-hardening. Update Purpose after archive.
+Apply operator-approved hardening items to the device, one at a time, each verified afterwards. This is the only code in the repository that mutates the device.
+
 ## Requirements
 ### Requirement: Approved scope only
 The apply capability SHALL implement exactly the items carrying an operator approval record in the referenced hardening plan, and MUST NOT apply, bundle, or improvise any change outside that approved set. Each apply script SHALL name the plan run id and item it implements.

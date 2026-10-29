@@ -1,7 +1,7 @@
 # telegram-integration Specification
 
 ## Purpose
-TBD - created by archiving change atlas-phase-5-telegram. Update Purpose after archive.
+Deliver Atlas alerts to Telegram through a scrubbed, de-duplicated, tiered outbound notifier, with inbound chat handled by the native Hermes gateway.
 
 ## Requirements
 
