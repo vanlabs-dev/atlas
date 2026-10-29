@@ -11,3 +11,30 @@ __pycache__/
 .env
 .env.*
 *.local
+
+# Per-machine agent state (the shared .claude/commands and skills stay tracked)
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Python tooling
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Local data and logs
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

@@ -12,6 +12,7 @@ Cited answers. Fail-closed data. No third-party dependencies.
   <img alt="SQLite" src="https://img.shields.io/badge/store-SQLite%20%2B%20FTS5-003B57?style=flat-square&logo=sqlite&logoColor=white">
   <img alt="Raspberry Pi 5" src="https://img.shields.io/badge/runs%20on-Raspberry%20Pi%205-A22846?style=flat-square&logo=raspberrypi&logoColor=white">
   <img alt="MCP" src="https://img.shields.io/badge/agent%20tools-MCP-6E56CF?style=flat-square">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square"></a>
   <img alt="Bittensor" src="https://img.shields.io/badge/network-Bittensor-111111?style=flat-square">
   <img alt="Spec driven: OpenSpec" src="https://img.shields.io/badge/spec--driven-OpenSpec-0969DA?style=flat-square">
   <a href="https://github.com/vanlabs-dev/atlas/actions/workflows/readme.yml"><img alt="README check" src="https://img.shields.io/github/actions/workflow/status/vanlabs-dev/atlas/readme.yml?branch=main&label=readme&style=flat-square"></a>
