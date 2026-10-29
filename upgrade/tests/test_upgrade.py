@@ -485,6 +485,11 @@ class HelpersTest(unittest.TestCase):
                      "fleet/atlas_fleet.py"):
             self.assertFalse(ap.is_allowed(path), path)
 
+    def test_site_paths_out_of_scope(self):
+        # The upgrade job must never edit the subnt.dev site.
+        paths = ["web/package.json", "web/src/app/page.tsx"]
+        self.assertEqual(ap.out_of_scope(paths), sorted(paths))
+
     def test_tool_rules_mirror_lists(self):
         self.assertIn("Edit(docs/decisions.md)", ap.tool_rules())
         self.assertIn("Write(livedata/atlas_probe.py)", ap.tool_denials())
