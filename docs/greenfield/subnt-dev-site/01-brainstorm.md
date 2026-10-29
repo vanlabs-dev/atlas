@@ -48,19 +48,25 @@ Design shell first, on typed fixture data.
 - Fixtures sit behind one typed data layer. Swapping fixtures for the
   Supabase snapshot later changes that layer only.
 - Server render with about 1 hour revalidate once real data lands.
-- Design process: discovery before code, using `show-me` for visual
-  options and `ui-craft` rules. External design skills are candidates
-  (see open questions).
+- Design process: use only the owner's two skills, installed globally
+  2026-10-30. Do not use the local `ui-craft*` or `show-me` skills.
+  - `design-taste-frontend` (taste-skill v2, `~/.claude/skills/`):
+    deals directions with `scripts/draw.mjs`, inspects with
+    `scripts/inspect.mjs`. Needs Node 22+ (have 24) and Chrome, Edge or
+    Chromium (not found on this machine). Pages and app screens have
+    separate runs.
+  - `ui-ux-pro-max` (`~/.claude/skills/`): run
+    `python3 ~/.claude/skills/ui-ux-pro-max/scripts/search.py "<query>" --design-system`.
+    The SKILL.md path uses `${CLAUDE_PLUGIN_ROOT}`, which is unset here.
+    Use the full path.
 - Atlas README still calls subnt.dev retired. Fix when the site ships.
 
 ## Open questions
 
 1. Next.js version: owner asked for 15. A newer major may exist as of
    2026-10. Confirm 15 on purpose or take current stable.
-2. External skills (owner suggestion, not yet installed or read):
-   - https://github.com/nextlevelbuilder/ui-ux-pro-max-skill
-   - https://github.com/leonxlnx/taste-skill
-   Review their contents before install, then install globally or skip.
+2. Browser for the taste-skill inspector: install Chromium, or point
+   the scripts at an existing browser.
 3. Aesthetic direction (one word each from owner, or `show-me` options
    in Session 2): editorial, terminal-instrument, or something else.
 4. Fixtures: hand-written, or a one-off export from the live Atlas
