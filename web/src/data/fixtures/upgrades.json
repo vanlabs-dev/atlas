@@ -1,0 +1,256 @@
+{
+  "generatedAt": "2026-10-22T22:12:48.936151+00:00",
+  "data": {
+    "events": [
+      {
+        "observedAt": "2026-07-16T21:57:04.290939+00:00",
+        "prevSpec": 424,
+        "newSpec": 432,
+        "block": 8636921,
+        "source": null
+      },
+      {
+        "observedAt": "2026-07-22T19:04:15.043024+00:00",
+        "prevSpec": 432,
+        "newSpec": 437,
+        "block": 8679244,
+        "source": null
+      },
+      {
+        "observedAt": "2026-07-23T21:02:08.091694+00:00",
+        "prevSpec": 437,
+        "newSpec": 438,
+        "block": 8687032,
+        "source": null
+      },
+      {
+        "observedAt": "2026-07-27T12:08:35.140286+00:00",
+        "prevSpec": 438,
+        "newSpec": 439,
+        "block": 8713152,
+        "source": null
+      },
+      {
+        "observedAt": "2026-07-27T15:08:05.198419+00:00",
+        "prevSpec": 439,
+        "newSpec": 440,
+        "block": 8714049,
+        "source": null
+      },
+      {
+        "observedAt": "2026-08-03T20:07:35.215793+00:00",
+        "prevSpec": 440,
+        "newSpec": 441,
+        "block": 8765923,
+        "source": null
+      },
+      {
+        "observedAt": "2026-08-04T12:02:15.771070+00:00",
+        "prevSpec": 441,
+        "newSpec": 442,
+        "block": 8770689,
+        "source": null
+      },
+      {
+        "observedAt": "2026-08-04T19:09:35.832950+00:00",
+        "prevSpec": 442,
+        "newSpec": 443,
+        "block": 8772826,
+        "source": null
+      },
+      {
+        "observedAt": "2026-08-12T21:09:35.009173+00:00",
+        "prevSpec": 443,
+        "newSpec": 445,
+        "block": 8831016,
+        "source": null
+      },
+      {
+        "observedAt": "2026-08-14T15:05:54.313149+00:00",
+        "prevSpec": 445,
+        "newSpec": 446,
+        "block": 8843598,
+        "source": null
+      },
+      {
+        "observedAt": "2026-08-14T20:02:51.679363+00:00",
+        "prevSpec": 446,
+        "newSpec": 447,
+        "block": 8845081,
+        "source": null
+      },
+      {
+        "observedAt": "2026-08-21T18:09:04.419128+00:00",
+        "prevSpec": 447,
+        "newSpec": 448,
+        "block": 8894911,
+        "source": null
+      },
+      {
+        "observedAt": "2026-08-27T19:37:59.271187+00:00",
+        "prevSpec": 448,
+        "newSpec": 450,
+        "block": 8938556,
+        "source": null
+      },
+      {
+        "observedAt": "2026-08-29T15:01:14.273666+00:00",
+        "prevSpec": 450,
+        "newSpec": 452,
+        "block": 8951570,
+        "source": null
+      },
+      {
+        "observedAt": "2026-09-03T17:06:04.605113+00:00",
+        "prevSpec": 452,
+        "newSpec": 453,
+        "block": 8988192,
+        "source": null
+      },
+      {
+        "observedAt": "2026-09-04T22:08:34.649383+00:00",
+        "prevSpec": 453,
+        "newSpec": 454,
+        "block": 8996901,
+        "source": null
+      },
+      {
+        "observedAt": "2026-09-07T22:07:09.628479+00:00",
+        "prevSpec": 454,
+        "newSpec": 455,
+        "block": 9018443,
+        "source": null
+      },
+      {
+        "observedAt": "2026-09-14T15:02:49.746167+00:00",
+        "prevSpec": 455,
+        "newSpec": 456,
+        "block": 9066637,
+        "source": null
+      },
+      {
+        "observedAt": "2026-09-14T16:07:49.643361+00:00",
+        "prevSpec": 456,
+        "newSpec": 457,
+        "block": 9066962,
+        "source": null
+      },
+      {
+        "observedAt": "2026-09-14T17:03:18.660352+00:00",
+        "prevSpec": 457,
+        "newSpec": 458,
+        "block": 9067239,
+        "source": null
+      },
+      {
+        "observedAt": "2026-09-15T22:08:49.875436+00:00",
+        "prevSpec": 458,
+        "newSpec": 459,
+        "block": 9075928,
+        "source": null
+      },
+      {
+        "observedAt": "2026-09-17T17:00:55.058899+00:00",
+        "prevSpec": 459,
+        "newSpec": 464,
+        "block": 9088728,
+        "source": null
+      },
+      {
+        "observedAt": "2026-09-18T02:04:48.746629+00:00",
+        "prevSpec": 464,
+        "newSpec": 466,
+        "block": 9091435,
+        "source": null
+      },
+      {
+        "observedAt": "2026-09-18T17:05:18.647969+00:00",
+        "prevSpec": 466,
+        "newSpec": 467,
+        "block": 9095904,
+        "source": null
+      },
+      {
+        "observedAt": "2026-09-21T19:02:47.571572+00:00",
+        "prevSpec": 467,
+        "newSpec": 468,
+        "block": 9117906,
+        "source": null
+      },
+      {
+        "observedAt": "2026-09-22T11:07:47.462137+00:00",
+        "prevSpec": 468,
+        "newSpec": 469,
+        "block": 9122731,
+        "source": null
+      },
+      {
+        "observedAt": "2026-09-24T18:03:06.308406+00:00",
+        "prevSpec": 469,
+        "newSpec": 470,
+        "block": 9139201,
+        "source": "rpc"
+      },
+      {
+        "observedAt": "2026-10-02T19:02:20.932792+00:00",
+        "prevSpec": 470,
+        "newSpec": 472,
+        "block": 9197096,
+        "source": "rpc"
+      },
+      {
+        "observedAt": "2026-10-05T15:04:21.284813+00:00",
+        "prevSpec": 472,
+        "newSpec": 473,
+        "block": 9217506,
+        "source": "rpc"
+      },
+      {
+        "observedAt": "2026-10-07T22:02:20.915981+00:00",
+        "prevSpec": 473,
+        "newSpec": 475,
+        "block": 9233996,
+        "source": "rpc"
+      },
+      {
+        "observedAt": "2026-10-12T15:05:18.910561+00:00",
+        "prevSpec": 475,
+        "newSpec": 477,
+        "block": 9267906,
+        "source": "rpc"
+      },
+      {
+        "observedAt": "2026-10-13T22:05:18.827442+00:00",
+        "prevSpec": 477,
+        "newSpec": 478,
+        "block": 9277206,
+        "source": "rpc"
+      },
+      {
+        "observedAt": "2026-10-15T05:02:23.825203+00:00",
+        "prevSpec": 478,
+        "newSpec": 479,
+        "block": 9286491,
+        "source": "rpc"
+      },
+      {
+        "observedAt": "2026-10-19T17:39:30.789298+00:00",
+        "prevSpec": 479,
+        "newSpec": 481,
+        "block": 9319077,
+        "source": "taostats"
+      },
+      {
+        "observedAt": "2026-10-21T21:02:24.420101+00:00",
+        "prevSpec": 481,
+        "newSpec": 482,
+        "block": 9334410,
+        "source": "rpc"
+      }
+    ],
+    "job": {
+      "spec": 486,
+      "status": "idle"
+    }
+  }
+}

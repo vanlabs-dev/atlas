@@ -101,6 +101,7 @@ and `atlas-fleet`. Scheduled work runs as user-level systemd timers.
 | [`inventory/`](inventory/README.md) | Read-only device inventory collector |
 | [`hardening/`](hardening/README.md) | Read-only security-posture assessor and the operator-approved apply scripts |
 | [`tools/`](tools/) | Repository tooling, including this README generator |
+| [`web/`](web/) | The subnt.dev site: Next.js pages over a typed data layer |
 <!-- END:components -->
 
 ## What it does

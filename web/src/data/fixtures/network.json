@@ -1,0 +1,846 @@
+{
+  "generatedAt": "2026-10-22T22:12:48.936151+00:00",
+  "data": {
+    "vitals": [
+      {
+        "date": "2026-08-30",
+        "totalStakedTao": 7375000,
+        "rootStakeTao": 5349000,
+        "subnetsSharePct": 27.43,
+        "regCostTao": 849.7,
+        "totalAccounts": 788349,
+        "newAccountsToday": 711,
+        "taoUsd": 230.2
+      },
+      {
+        "date": "2026-08-31",
+        "totalStakedTao": 7376000,
+        "rootStakeTao": 5346000,
+        "subnetsSharePct": 27.48,
+        "regCostTao": 783.5,
+        "totalAccounts": 789148,
+        "newAccountsToday": 799,
+        "taoUsd": 220.1
+      },
+      {
+        "date": "2026-09-01",
+        "totalStakedTao": 7295000,
+        "rootStakeTao": 5262000,
+        "subnetsSharePct": 27.82,
+        "regCostTao": 717.4,
+        "totalAccounts": 789944,
+        "newAccountsToday": 796,
+        "taoUsd": 217.2
+      },
+      {
+        "date": "2026-09-03",
+        "totalStakedTao": 7308000,
+        "rootStakeTao": 5275000,
+        "subnetsSharePct": 27.78,
+        "regCostTao": 585.2,
+        "totalAccounts": 791436,
+        "newAccountsToday": 763,
+        "taoUsd": 225.8
+      },
+      {
+        "date": "2026-09-04",
+        "totalStakedTao": 7311000,
+        "rootStakeTao": 5274000,
+        "subnetsSharePct": 27.82,
+        "regCostTao": 519.1,
+        "totalAccounts": 792346,
+        "newAccountsToday": 910,
+        "taoUsd": 224.9
+      },
+      {
+        "date": "2026-09-05",
+        "totalStakedTao": 7310000,
+        "rootStakeTao": 5274000,
+        "subnetsSharePct": 27.8,
+        "regCostTao": 914.6,
+        "totalAccounts": 793286,
+        "newAccountsToday": 940,
+        "taoUsd": 236.2
+      },
+      {
+        "date": "2026-09-06",
+        "totalStakedTao": 7302000,
+        "rootStakeTao": 5271000,
+        "subnetsSharePct": 27.76,
+        "regCostTao": 857.2,
+        "totalAccounts": 794260,
+        "newAccountsToday": 974,
+        "taoUsd": 265.8
+      },
+      {
+        "date": "2026-09-07",
+        "totalStakedTao": 7295000,
+        "rootStakeTao": 5269000,
+        "subnetsSharePct": 27.74,
+        "regCostTao": 799.7,
+        "totalAccounts": 795307,
+        "newAccountsToday": 1047,
+        "taoUsd": 260
+      },
+      {
+        "date": "2026-09-08",
+        "totalStakedTao": 7313000,
+        "rootStakeTao": 5291000,
+        "subnetsSharePct": 27.61,
+        "regCostTao": 742.2,
+        "totalAccounts": 796235,
+        "newAccountsToday": 928,
+        "taoUsd": 255.3
+      },
+      {
+        "date": "2026-09-09",
+        "totalStakedTao": 7324000,
+        "rootStakeTao": 5294000,
+        "subnetsSharePct": 27.66,
+        "regCostTao": 684.7,
+        "totalAccounts": 797112,
+        "newAccountsToday": 877,
+        "taoUsd": 254.2
+      },
+      {
+        "date": "2026-09-10",
+        "totalStakedTao": 7323000,
+        "rootStakeTao": 5302000,
+        "subnetsSharePct": 27.56,
+        "regCostTao": 627.2,
+        "totalAccounts": 798073,
+        "newAccountsToday": 961,
+        "taoUsd": 235.3
+      },
+      {
+        "date": "2026-09-11",
+        "totalStakedTao": 7316000,
+        "rootStakeTao": 5303000,
+        "subnetsSharePct": 27.48,
+        "regCostTao": 1146,
+        "totalAccounts": 798906,
+        "newAccountsToday": 833,
+        "taoUsd": 235.6
+      },
+      {
+        "date": "2026-09-12",
+        "totalStakedTao": 7321000,
+        "rootStakeTao": 5307000,
+        "subnetsSharePct": 27.46,
+        "regCostTao": 1074,
+        "totalAccounts": 799562,
+        "newAccountsToday": 656,
+        "taoUsd": 231.4
+      },
+      {
+        "date": "2026-09-14",
+        "totalStakedTao": 7310000,
+        "rootStakeTao": 5301000,
+        "subnetsSharePct": 27.44,
+        "regCostTao": 929.7,
+        "totalAccounts": 801322,
+        "newAccountsToday": 950,
+        "taoUsd": 232.4
+      },
+      {
+        "date": "2026-09-15",
+        "totalStakedTao": 7478000,
+        "rootStakeTao": 5469000,
+        "subnetsSharePct": 26.82,
+        "regCostTao": 857.7,
+        "totalAccounts": 802367,
+        "newAccountsToday": 1045,
+        "taoUsd": 217.8
+      },
+      {
+        "date": "2026-09-16",
+        "totalStakedTao": 7479000,
+        "rootStakeTao": 5468000,
+        "subnetsSharePct": 26.84,
+        "regCostTao": 785.7,
+        "totalAccounts": 803327,
+        "newAccountsToday": 960,
+        "taoUsd": 221.9
+      },
+      {
+        "date": "2026-09-17",
+        "totalStakedTao": 7455000,
+        "rootStakeTao": 5451000,
+        "subnetsSharePct": 26.89,
+        "regCostTao": 713.7,
+        "totalAccounts": 804187,
+        "newAccountsToday": 860,
+        "taoUsd": 232.4
+      },
+      {
+        "date": "2026-09-18",
+        "totalStakedTao": 7451000,
+        "rootStakeTao": 5457000,
+        "subnetsSharePct": 26.76,
+        "regCostTao": 641.9,
+        "totalAccounts": 805107,
+        "newAccountsToday": 920,
+        "taoUsd": 249.7
+      },
+      {
+        "date": "2026-09-19",
+        "totalStakedTao": 7446000,
+        "rootStakeTao": 5465000,
+        "subnetsSharePct": 26.6,
+        "regCostTao": 570.5,
+        "totalAccounts": 579749,
+        "newAccountsToday": 1846,
+        "taoUsd": 261.7
+      },
+      {
+        "date": "2026-09-21",
+        "totalStakedTao": 7433000,
+        "rootStakeTao": 5464000,
+        "subnetsSharePct": 26.5,
+        "regCostTao": 945.2,
+        "totalAccounts": 580933,
+        "newAccountsToday": 2753,
+        "taoUsd": 317.1
+      },
+      {
+        "date": "2026-09-22",
+        "totalStakedTao": 7423000,
+        "rootStakeTao": 5456000,
+        "subnetsSharePct": 26.5,
+        "regCostTao": 881.7,
+        "totalAccounts": 581779,
+        "newAccountsToday": 2526,
+        "taoUsd": 314.8
+      },
+      {
+        "date": "2026-09-23",
+        "totalStakedTao": 7419000,
+        "rootStakeTao": 5450000,
+        "subnetsSharePct": 26.54,
+        "regCostTao": 818.1,
+        "totalAccounts": 582374,
+        "newAccountsToday": 1731,
+        "taoUsd": 287.1
+      },
+      {
+        "date": "2026-09-24",
+        "totalStakedTao": 7412000,
+        "rootStakeTao": 5439000,
+        "subnetsSharePct": 26.61,
+        "regCostTao": 754.6,
+        "totalAccounts": 582917,
+        "newAccountsToday": 1405,
+        "taoUsd": 318.1
+      },
+      {
+        "date": "2026-09-26",
+        "totalStakedTao": 7432000,
+        "rootStakeTao": 5458000,
+        "subnetsSharePct": 26.57,
+        "regCostTao": 1256,
+        "totalAccounts": 583963,
+        "newAccountsToday": 1534,
+        "taoUsd": 321.3
+      },
+      {
+        "date": "2026-09-27",
+        "totalStakedTao": 7435000,
+        "rootStakeTao": 5458000,
+        "subnetsSharePct": 26.59,
+        "regCostTao": 1177,
+        "totalAccounts": 584474,
+        "newAccountsToday": 1414,
+        "taoUsd": 319.8
+      },
+      {
+        "date": "2026-09-28",
+        "totalStakedTao": 7451000,
+        "rootStakeTao": 5474000,
+        "subnetsSharePct": 26.53,
+        "regCostTao": 1099,
+        "totalAccounts": 585074,
+        "newAccountsToday": 1544,
+        "taoUsd": 308.1
+      },
+      {
+        "date": "2026-09-29",
+        "totalStakedTao": 7464000,
+        "rootStakeTao": 5486000,
+        "subnetsSharePct": 26.51,
+        "regCostTao": 1024,
+        "totalAccounts": 585734,
+        "newAccountsToday": 1570,
+        "taoUsd": 300.8
+      },
+      {
+        "date": "2026-09-30",
+        "totalStakedTao": 7463000,
+        "rootStakeTao": 5489000,
+        "subnetsSharePct": 26.45,
+        "regCostTao": 978.5,
+        "totalAccounts": 586207,
+        "newAccountsToday": 630,
+        "taoUsd": 303.4
+      },
+      {
+        "date": "2026-10-02",
+        "totalStakedTao": 7458000,
+        "rootStakeTao": 5485000,
+        "subnetsSharePct": 26.47,
+        "regCostTao": 784.3,
+        "totalAccounts": 587252,
+        "newAccountsToday": 1397,
+        "taoUsd": 292.2
+      },
+      {
+        "date": "2026-10-03",
+        "totalStakedTao": 7468000,
+        "rootStakeTao": 5489000,
+        "subnetsSharePct": 26.5,
+        "regCostTao": 705.7,
+        "totalAccounts": 587699,
+        "newAccountsToday": 894,
+        "taoUsd": 307.2
+      },
+      {
+        "date": "2026-10-04",
+        "totalStakedTao": 7467000,
+        "rootStakeTao": 5488000,
+        "subnetsSharePct": 26.51,
+        "regCostTao": 1279,
+        "totalAccounts": 588133,
+        "newAccountsToday": 971,
+        "taoUsd": 304.5
+      },
+      {
+        "date": "2026-10-05",
+        "totalStakedTao": 7451000,
+        "rootStakeTao": 5470000,
+        "subnetsSharePct": 26.58,
+        "regCostTao": 1197,
+        "totalAccounts": 591036,
+        "newAccountsToday": 3573,
+        "taoUsd": 308.7
+      },
+      {
+        "date": "2026-10-07",
+        "totalStakedTao": 7444000,
+        "rootStakeTao": 5458000,
+        "subnetsSharePct": 26.67,
+        "regCostTao": 1034,
+        "totalAccounts": 592261,
+        "newAccountsToday": 1440,
+        "taoUsd": 291.4
+      },
+      {
+        "date": "2026-10-08",
+        "totalStakedTao": 7437000,
+        "rootStakeTao": 5454000,
+        "subnetsSharePct": 26.67,
+        "regCostTao": 952.6,
+        "totalAccounts": 592805,
+        "newAccountsToday": 1380,
+        "taoUsd": 275
+      },
+      {
+        "date": "2026-10-10",
+        "totalStakedTao": 7449000,
+        "rootStakeTao": 5455000,
+        "subnetsSharePct": 26.77,
+        "regCostTao": 1640,
+        "totalAccounts": 593798,
+        "newAccountsToday": 922,
+        "taoUsd": 284.8
+      },
+      {
+        "date": "2026-10-11",
+        "totalStakedTao": 7447000,
+        "rootStakeTao": 5453000,
+        "subnetsSharePct": 26.77,
+        "regCostTao": 1530,
+        "totalAccounts": 594203,
+        "newAccountsToday": 1041,
+        "taoUsd": 295.4
+      },
+      {
+        "date": "2026-10-12",
+        "totalStakedTao": 7450000,
+        "rootStakeTao": 5453000,
+        "subnetsSharePct": 26.81,
+        "regCostTao": 1419,
+        "totalAccounts": 594767,
+        "newAccountsToday": 1241,
+        "taoUsd": 271.6
+      },
+      {
+        "date": "2026-10-13",
+        "totalStakedTao": 7452000,
+        "rootStakeTao": 5455000,
+        "subnetsSharePct": 26.8,
+        "regCostTao": 848.2,
+        "totalAccounts": 595352,
+        "newAccountsToday": 1315,
+        "taoUsd": 277.7
+      },
+      {
+        "date": "2026-10-14",
+        "totalStakedTao": 7440000,
+        "rootStakeTao": 5442000,
+        "subnetsSharePct": 26.85,
+        "regCostTao": 627.1,
+        "totalAccounts": 595995,
+        "newAccountsToday": 1329,
+        "taoUsd": 270.6
+      },
+      {
+        "date": "2026-10-15",
+        "totalStakedTao": 7438000,
+        "rootStakeTao": 5447000,
+        "subnetsSharePct": 26.77,
+        "regCostTao": 938.8,
+        "totalAccounts": 596713,
+        "newAccountsToday": 1534,
+        "taoUsd": 278.8
+      },
+      {
+        "date": "2026-10-16",
+        "totalStakedTao": 7441000,
+        "rootStakeTao": 5450000,
+        "subnetsSharePct": 26.76,
+        "regCostTao": 815.3,
+        "totalAccounts": 597324,
+        "newAccountsToday": 1342,
+        "taoUsd": 268.6
+      },
+      {
+        "date": "2026-10-18",
+        "totalStakedTao": 7436000,
+        "rootStakeTao": 5444000,
+        "subnetsSharePct": 26.79,
+        "regCostTao": 568.3,
+        "totalAccounts": 598408,
+        "newAccountsToday": 1143,
+        "taoUsd": 270.6
+      },
+      {
+        "date": "2026-10-19",
+        "totalStakedTao": 7434000,
+        "rootStakeTao": 5445000,
+        "subnetsSharePct": 26.75,
+        "regCostTao": 444.9,
+        "totalAccounts": 599000,
+        "newAccountsToday": 1202,
+        "taoUsd": 273.7
+      },
+      {
+        "date": "2026-10-20",
+        "totalStakedTao": 7433000,
+        "rootStakeTao": 5444000,
+        "subnetsSharePct": 26.76,
+        "regCostTao": 769.7,
+        "totalAccounts": 599682,
+        "newAccountsToday": 1355,
+        "taoUsd": 271.5
+      },
+      {
+        "date": "2026-10-21",
+        "totalStakedTao": 7442000,
+        "rootStakeTao": 5457000,
+        "subnetsSharePct": 26.67,
+        "regCostTao": 662.2,
+        "totalAccounts": 600390,
+        "newAccountsToday": 1352,
+        "taoUsd": 257.2
+      }
+    ],
+    "gate": {
+      "observedAt": "2026-10-22T22:04:28.198644+00:00",
+      "active": true,
+      "theta": 0.007695,
+      "aboveCount": 31,
+      "barMode": "rank"
+    },
+    "rotations": [
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 128,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 127,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 126,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 122,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 121,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 116,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 113,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 109,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 108,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 104,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 103,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 101,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 99,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 96,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 92,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 89,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 88,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 86,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 84,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 82,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 78,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 76,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 73,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 70,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 69,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 67,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 63,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 60,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 59,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      },
+      {
+        "observedAt": "2026-09-17T12:04:17.596920+00:00",
+        "netuid": 58,
+        "direction": "entered",
+        "newShare": 0.0002452,
+        "validatorCount": 21
+      }
+    ],
+    "params": [
+      {
+        "item": "SubnetEmissionEnabled[103]",
+        "prevValue": "true",
+        "newValue": "false",
+        "observedAt": "2026-10-20T02:02:41.576830+00:00",
+        "block": 9321592
+      },
+      {
+        "item": "SubnetEmissionEnabled[82]",
+        "prevValue": "true",
+        "newValue": "false",
+        "observedAt": "2026-10-19T16:10:56.683624+00:00",
+        "block": 9318632
+      },
+      {
+        "item": "SubnetEmissionEnabled[116]",
+        "prevValue": "false",
+        "newValue": "true",
+        "observedAt": "2026-10-15T17:35:20.152986+00:00",
+        "block": 9290252
+      },
+      {
+        "item": "SubnetEmissionEnabled[108]",
+        "prevValue": "false",
+        "newValue": "true",
+        "observedAt": "2026-10-15T17:35:20.140896+00:00",
+        "block": 9290252
+      },
+      {
+        "item": "SubnetEmissionEnabled[92]",
+        "prevValue": "false",
+        "newValue": "true",
+        "observedAt": "2026-10-15T17:35:20.116594+00:00",
+        "block": 9290252
+      },
+      {
+        "item": "SubnetEmissionEnabled[86]",
+        "prevValue": "false",
+        "newValue": "true",
+        "observedAt": "2026-10-15T17:35:20.107337+00:00",
+        "block": 9290252
+      },
+      {
+        "item": "SubnetEmissionEnabled[82]",
+        "prevValue": "false",
+        "newValue": "true",
+        "observedAt": "2026-10-15T17:35:20.100641+00:00",
+        "block": 9290252
+      },
+      {
+        "item": "SubnetEmissionEnabled[36]",
+        "prevValue": "false",
+        "newValue": "true",
+        "observedAt": "2026-10-15T17:35:20.031073+00:00",
+        "block": 9290252
+      },
+      {
+        "item": "SubnetEmissionEnabled[35]",
+        "prevValue": "false",
+        "newValue": "true",
+        "observedAt": "2026-10-15T17:35:20.029549+00:00",
+        "block": 9290252
+      },
+      {
+        "item": "SubnetEmissionEnabled[29]",
+        "prevValue": "false",
+        "newValue": "true",
+        "observedAt": "2026-10-15T17:35:20.020470+00:00",
+        "block": 9290252
+      },
+      {
+        "item": "SubnetEmissionEnabled[86]",
+        "prevValue": "true",
+        "newValue": "false",
+        "observedAt": "2026-10-15T15:03:48.854403+00:00",
+        "block": 9289498
+      },
+      {
+        "item": "SubnetEmissionEnabled[92]",
+        "prevValue": "true",
+        "newValue": "false",
+        "observedAt": "2026-10-09T20:10:06.424156+00:00",
+        "block": 9247830
+      },
+      {
+        "item": "CollateralLockShare[82]",
+        "prevValue": "0",
+        "newValue": "62258",
+        "observedAt": "2026-10-08T23:32:03.093989+00:00",
+        "block": 9241637
+      },
+      {
+        "item": "BasketConcentrationCap",
+        "prevValue": "4096",
+        "newValue": "7865",
+        "observedAt": "2026-10-08T00:05:09.834329+00:00",
+        "block": 9234609
+      },
+      {
+        "item": "SubnetEmissionEnabled[116]",
+        "prevValue": "true",
+        "newValue": "false",
+        "observedAt": "2026-10-04T17:05:34.647190+00:00",
+        "block": 9210911
+      },
+      {
+        "item": "CollateralLockShare[65]",
+        "prevValue": "39321",
+        "newValue": "0",
+        "observedAt": "2026-10-01T11:30:22.506407+00:00",
+        "block": 9187630
+      },
+      {
+        "item": "CollateralLockShare[82]",
+        "prevValue": "62258",
+        "newValue": "0",
+        "observedAt": "2026-09-27T23:29:58.091758+00:00",
+        "block": 9162429
+      },
+      {
+        "item": "CollateralLockShare[82]",
+        "prevValue": "0",
+        "newValue": "62258",
+        "observedAt": "2026-09-27T05:29:50.938383+00:00",
+        "block": 9157030
+      },
+      {
+        "item": "SubnetEmissionEnabled[82]",
+        "prevValue": "true",
+        "newValue": "false",
+        "observedAt": "2026-09-27T00:05:46.133451+00:00",
+        "block": 9155414
+      },
+      {
+        "item": "SubnetEmissionEnabled[108]",
+        "prevValue": "true",
+        "newValue": "false",
+        "observedAt": "2026-09-20T21:04:20.629396+00:00",
+        "block": 9111313
+      },
+      {
+        "item": "RootWeightSettingEnabled",
+        "prevValue": "true",
+        "newValue": "false",
+        "observedAt": "2026-09-17T17:01:02.950167+00:00",
+        "block": 9088729
+      },
+      {
+        "item": "CollateralLockShare[122]",
+        "prevValue": "0",
+        "newValue": "32768",
+        "observedAt": "2026-09-09T18:26:56.210636+00:00",
+        "block": 9031732
+      },
+      {
+        "item": "RootWeightSettingEnabled",
+        "prevValue": "false",
+        "newValue": "true",
+        "observedAt": "2026-08-27T20:07:52.617491+00:00",
+        "block": 8938705
+      },
+      {
+        "item": "CollateralLockShare[65]",
+        "prevValue": "0",
+        "newValue": "39321",
+        "observedAt": "2026-08-18T00:36:07.081192+00:00",
+        "block": 8868046
+      }
+    ]
+  }
+}
