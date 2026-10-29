@@ -76,5 +76,6 @@ in with `/opsx:update`.
 
 ## Verdict
 
-Do not apply until findings 1 to 3 are decided. Findings 4 to 8 should be
-folded into the specs and tasks. The rest can be handled in apply.
+Resolved 2026-10-30. The owner chose operator-free data (option A).
+Findings 1 to 11 were folded into the proposal, spec, design and tasks
+with `/opsx:update`. Findings 12 to 14 needed no change.
