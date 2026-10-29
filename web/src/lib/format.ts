@@ -15,3 +15,14 @@ export function signed(v: number | null | undefined, digits = 0, unit = ""): str
 export function day(iso: string): string {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 }
+
+/** What the miner-code scan found, in words. */
+export const VERDICT: Record<string, string> = {
+  possible: "Runs on a CPU",
+  "needs-gpu": "Needs a GPU",
+  unknown: "Not readable",
+};
+
+export function verdict(v: string | null): string {
+  return v ? (VERDICT[v] ?? v) : "-";
+}

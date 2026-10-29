@@ -4,7 +4,7 @@ import { useState } from "react";
 import { FilterTabs } from "@/components/filter-tabs";
 import { td, th } from "@/components/board-shell";
 import type { MiningRow } from "@/data/types";
-import { num } from "@/lib/format";
+import { num, verdict } from "@/lib/format";
 
 type Filter = "all" | "possible" | "needs-gpu" | "unknown";
 
@@ -15,11 +15,6 @@ const CAVEAT: Record<string, string> = {
   "pool-side-switch-off": "Pool switched off",
 };
 
-const VERDICT: Record<string, string> = {
-  possible: "Runs on a CPU",
-  "needs-gpu": "Needs a GPU",
-  unknown: "Not readable",
-};
 
 export function MiningTable({ rows }: { rows: MiningRow[] }) {
   const [filter, setFilter] = useState<Filter>("all");
@@ -61,7 +56,7 @@ export function MiningTable({ rows }: { rows: MiningRow[] }) {
                   <span className="text-muted">SN{r.netuid}</span> {r.name ?? "unnamed"}
                 </td>
                 <td className={`${td} pr-4 ${r.verdict === "possible" ? "" : "text-muted"}`}>
-                  {r.verdict ? VERDICT[r.verdict] : "-"}
+                  {verdict(r.verdict)}
                   {r.gpuFloor ? <span className="text-muted">, {r.gpuFloor.replace(/\s*\(.*\)$/, "")}</span> : null}
                 </td>
                 <td className={`${td} text-right`}>{num(r.minerBurnPct, 1)}%</td>
