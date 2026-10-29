@@ -49,18 +49,14 @@ export default async function FleetPage() {
             </dl>
           </Block>
           <Block title="All 128 slots">
-            <div className="grid grid-cols-16 gap-[2px]" role="list" aria-label="Subnet slots by tier">
+            <div
+              className="grid grid-cols-16 gap-[2px]"
+              role="img"
+              aria-label={`128 subnet slots: ${counts.invisible} without a public repository, the rest by tier as in the table`}
+            >
               {Array.from({ length: 128 }, (_, i) => {
                 const r = byNetuid.get(i + 1);
-                return (
-                  <span key={i} role="listitem" className={`aspect-square ${r ? TIER_CLASS[r.tier] : "text-tier-none"}`}>
-                    {r ? (
-                      <a href={`#sn${i + 1}`} aria-label={`Subnet ${i + 1}, ${r.tier}`} className="block size-full bg-current" />
-                    ) : (
-                      <span className="block size-full bg-current" aria-label={`Subnet ${i + 1}, no public repository`} />
-                    )}
-                  </span>
-                );
+                return <span key={i} className={`aspect-square bg-current ${r ? TIER_CLASS[r.tier] : "text-tier-none"}`} />;
               })}
             </div>
             <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-small text-muted">

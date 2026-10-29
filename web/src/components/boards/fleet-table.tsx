@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { FilterTabs } from "@/components/filter-tabs";
 import { td, th } from "@/components/board-shell";
 import type { FleetRow, FleetTier } from "@/data/types";
@@ -14,8 +14,22 @@ const WHY: Record<string, string> = {
   abandon: "Code gone quiet",
 };
 
+const subscribeHash = (cb: () => void) => {
+  window.addEventListener("hashchange", cb);
+  return () => window.removeEventListener("hashchange", cb);
+};
+
 export function FleetTable({ rows }: { rows: FleetRow[] }) {
-  const [filter, setFilter] = useState<Filter>("head");
+  // A link such as /fleet#sn20 opens the tab that holds that subnet's row.
+  const hash = useSyncExternalStore(subscribeHash, () => window.location.hash, () => "");
+  const target = rows.find((r) => `#sn${r.netuid}` === hash);
+  const [chosen, setChosen] = useState<Filter | null>(null);
+  const filter: Filter = chosen ?? target?.tier ?? "head";
+  const setFilter = (f: Filter) => setChosen(f);
+
+  useEffect(() => {
+    if (target) document.getElementById(`sn${target.netuid}`)?.scrollIntoView({ block: "center" });
+  }, [target]);
   const count = (f: Filter) => (f === "all" ? rows.length : rows.filter((r) => r.tier === f).length);
   const shown = filter === "all" ? rows : rows.filter((r) => r.tier === filter);
 

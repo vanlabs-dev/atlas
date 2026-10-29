@@ -96,7 +96,7 @@ export default async function Home() {
             <h1 id="hero-title" className="max-w-[12ch] text-[10vw] font-bold leading-[0.95] tracking-[-0.02em] sm:text-[clamp(52px,5.2vw,80px)]">
               Atlas watches every subnet.
             </h1>
-            <p className="mt-8 max-w-[38ch] text-body">
+            <p className="mt-8 max-w-[32ch] text-body">
               A self-hosted system on one Raspberry Pi. It clones the code of every Bittensor subnet, reads the chain, and shows what changed.
             </p>
             <Link
@@ -168,6 +168,13 @@ export default async function Home() {
             <p className="hidden pt-1 text-small text-muted md:col-span-1 md:block">Sources</p>
             <table className="w-full self-end text-[16px] md:col-span-5">
               <caption className="sr-only">Sources Atlas reads and outputs it sends</caption>
+              <thead className="sr-only">
+                <tr>
+                  <th scope="col">Kind</th>
+                  <th scope="col">Source</th>
+                  <th scope="col">What Atlas does</th>
+                </tr>
+              </thead>
               <tbody>
                 {reads.map(([kind, what, how], i) => (
                   <tr key={what} className={i > 0 && i % 4 === 0 ? "[&>td]:pt-11" : ""}>
