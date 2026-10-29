@@ -74,3 +74,7 @@ No AI attribution anywhere: no `Co-Authored-By` tags, no "Generated with"
 lines, in commits or PR bodies.
 
 Never push, force-push, or open a PR unprompted. Propose the command.
+
+After changing a component directory, a spec or a systemd timer, run
+`python3 tools/readme_sync.py`. It rewrites the generated tables in
+`README.md`. `tools/tests` and CI fail when they are stale.

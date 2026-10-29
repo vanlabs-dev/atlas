@@ -1,7 +1,8 @@
 # memory-session-recall Specification
 
 ## Purpose
-TBD - created by archiving change atlas-phase-1-memory-and-session-recall. Update Purpose after archive.
+Verify that Hermes memory and session recall work with approval gating on and no secrets retained.
+
 ## Requirements
 ### Requirement: Memory approval gating verification
 The verifier SHALL confirm from the installed Hermes configuration that memory and

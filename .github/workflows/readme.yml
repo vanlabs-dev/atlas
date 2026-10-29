@@ -1,0 +1,14 @@
+name: readme
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  readme-current:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check generated README regions
+        run: python3 tools/readme_sync.py --check

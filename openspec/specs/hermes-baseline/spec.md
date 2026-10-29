@@ -1,7 +1,8 @@
 # hermes-baseline Specification
 
 ## Purpose
-TBD - created by archiving change atlas-phase-1-hermes-baseline. Update Purpose after archive.
+Verify a manually installed Hermes agent (version, model, tool registration, approval gating) with a read-only check.
+
 ## Requirements
 ### Requirement: Install record contract
 The operator SHALL record the manual Hermes installation in a machine-readable install

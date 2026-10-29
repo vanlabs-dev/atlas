@@ -1,7 +1,8 @@
 # hardening-assessment Specification
 
 ## Purpose
-TBD - created by archiving change atlas-phase-0-hardening-assessment. Update Purpose after archive.
+Assess the device's security posture, read-only, against the eleven ATLAS-ENV-003 areas and report findings without changing anything.
+
 ## Requirements
 ### Requirement: Assessment is observation-based and read-only
 The hardening assessment SHALL derive every verdict from observed evidence: the most recent valid device-inventory report and/or its own read-only probes. It MUST NOT assume any state, and it MUST NOT modify the device — no package installation, configuration change, service change, or file mutation. Supplementary probes SHALL follow the same read-only, no-self-elevation, redaction, and status-envelope rules as the device-inventory capability.

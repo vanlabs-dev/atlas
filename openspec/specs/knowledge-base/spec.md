@@ -1,7 +1,8 @@
 # knowledge-base Specification
 
 ## Purpose
-TBD - created by archiving change atlas-phase-2-knowledge-base. Update Purpose after archive.
+Serve a validated, dated Bittensor corpus to Hermes through the read-only `atlas-kb` tools, measured against a fixed question battery.
+
 ## Requirements
 ### Requirement: Corpus snapshot with recorded provenance
 The repo SHALL carry a verbatim snapshot of the confirmed July 2026 corpus

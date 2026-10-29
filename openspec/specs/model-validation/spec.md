@@ -1,7 +1,8 @@
 # model-validation Specification
 
 ## Purpose
-TBD - created by archiving change atlas-phase-1-model-validation. Update Purpose after archive.
+Validate the agent's model against a scripted battery for tool use, context length, latency and honest refusal.
+
 ## Requirements
 ### Requirement: Scripted validation battery
 The change SHALL provide a scripted battery of deterministic, tagged prompt
