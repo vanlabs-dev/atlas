@@ -38,3 +38,10 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Node and Vercel (web/)
+node_modules/
+.next/
+.vercel/
+web/.env*
+*.tsbuildinfo
