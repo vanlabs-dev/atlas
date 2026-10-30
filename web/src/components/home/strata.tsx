@@ -164,7 +164,7 @@ export function Strata({
           if (n) setSelected(n);
         }}
       />
-      <div className="pointer-events-none relative mx-auto grid w-full max-w-[1320px] flex-1 items-end gap-10 px-4 pb-16 sm:px-8 md:grid-cols-[7fr_1fr_4fr]">
+      <div className="pointer-events-none relative mx-auto grid w-full max-w-[1320px] flex-1 items-end gap-16 px-4 pb-16 sm:px-8 md:grid-cols-[7fr_1fr_4fr]">
         <div className="pointer-events-auto relative isolate max-w-[640px] pt-12 md:pt-[120px]">
           {/* One scrim behind the copy, for legibility over the field (DESIGN.md). */}
           <div
