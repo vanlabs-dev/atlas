@@ -26,3 +26,9 @@ export const VERDICT: Record<string, string> = {
 export function verdict(v: string | null): string {
   return v ? (VERDICT[v] ?? v) : "-";
 }
+
+/** Colour for a "what moved" figure only: up in accent 2, down in red. */
+export function polarity(v: number | null | undefined): string {
+  if (!v) return "";
+  return v < 0 ? "text-down" : "text-accent-2";
+}

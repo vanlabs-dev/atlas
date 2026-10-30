@@ -1,19 +1,30 @@
 import type { ReactNode } from "react";
 
-// Canvas of a board: one left edge, one right edge, gutters that match the
-// home page.
-export function BoardShell({ children }: { children: ReactNode }) {
-  return <div className="mx-auto max-w-[1360px] px-4 pb-16 sm:px-8">{children}</div>;
-}
-
-export function Block({ title, children, className = "" }: { title: string; children: ReactNode; className?: string }) {
+// A board's parts. Surfaces separate by tone, not border; rules only in tables.
+export function Panel({ title, children, className = "" }: { title: string; children: ReactNode; className?: string }) {
   return (
-    <section aria-label={title} className={`min-w-0 bg-card p-5 ${className}`}>
-      <h2 className="pb-4 text-[16px] font-medium">{title}</h2>
+    <section aria-label={title} className={`min-w-0 rounded-[10px] bg-s1 p-5 sm:p-6 ${className}`}>
+      <h2 className="pb-4 text-small text-ink-3">{title}</h2>
       {children}
     </section>
   );
 }
 
-export const th = "pb-2 text-small font-normal text-muted";
-export const td = "h-[42px] border-t border-border align-middle"; // taste-skill-ignore: real table rows carry a rule
+/** Large Newsreader figures with a plain label, for a board's counts. */
+export function Figures({ items }: { items: { value: ReactNode; label: string }[] }) {
+  return (
+    <dl className="grid gap-7">
+      {items.map((k) => (
+        <div key={k.label} className="grid grid-cols-[minmax(96px,auto)_1fr] items-baseline gap-4">
+          <dd className="num font-display text-[clamp(44px,5vw,64px)] leading-[0.9]">{k.value}</dd>
+          <dt className="text-[15px] text-ink-2">{k.label}</dt>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export const table = "w-full border-collapse text-[15px]";
+export const th = "whitespace-nowrap px-3 pb-3.5 text-left text-small font-normal text-ink-3";
+export const td = "border-t border-rule px-3 py-3.5 align-middle"; // taste-skill-ignore: rules only in real tables (DESIGN.md)
+export const row = "transition-colors duration-150 hover:bg-s1 target:bg-s2";

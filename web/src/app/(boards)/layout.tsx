@@ -1,10 +1,3 @@
-import { BoardRail } from "@/components/board-rail";
-
 export default function BoardsLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <BoardRail />
-      <main className="min-h-svh pb-20 md:pb-0 md:pl-14">{children}</main>
-    </>
-  );
+  return <main className="mx-auto max-w-[1320px] px-4 sm:px-8">{children}</main>;
 }

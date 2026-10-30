@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Block, BoardShell, td, th } from "@/components/board-shell";
+import { Figures, Panel, row, table, td, th } from "@/components/board-shell";
 import { BoardHeader } from "@/components/board-header";
 import { getUpgrades } from "@/data/upgrades";
 import { day, num } from "@/lib/format";
@@ -26,54 +26,63 @@ export default async function UpgradesPage() {
     .reverse();
 
   return (
-    <BoardShell>
+    <>
       <BoardHeader title="Runtime upgrades" finding={finding} at={generatedAt} />
-      <div className="grid gap-4">
-        <Block title={`Every spec upgrade, ${day(first.observedAt)} to ${day(last.observedAt)}`}>
-          <svg viewBox="0 0 1000 64" className="w-full" role="img" aria-label={`${events.length} upgrades on a time line from ${day(first.observedAt)} to ${day(last.observedAt)}`}>
-            <line x1={0} x2={1000} y1={32} y2={32} stroke="currentColor" strokeOpacity={0.2} />
-            {events.map((e) => {
-              const x = ((Date.parse(e.observedAt) - t0) / (t1 - t0)) * 992 + 4;
-              return <rect key={e.newSpec} x={x - 4} y={22} width={8} height={20} className="fill-ink" />;
-            })}
-          </svg>
-          <p className="mt-2 flex justify-between text-small text-muted">
-            <span>{day(first.observedAt)}</span>
-            <span>Longest quiet stretch: {num(longest, 1)} days</span>
-            <span>{day(last.observedAt)}</span>
-          </p>
-        </Block>
+      <Panel title={`Every spec upgrade, ${day(first.observedAt)} to ${day(last.observedAt)}`}>
+        <svg
+          viewBox="0 0 1000 64"
+          className="w-full"
+          role="img"
+          aria-label={`${events.length} upgrades on a time line from ${day(first.observedAt)} to ${day(last.observedAt)}`}
+        >
+          <line x1={0} x2={1000} y1={32} y2={32} className="stroke-rule" />
+          {events.map((e) => {
+            const x = ((Date.parse(e.observedAt) - t0) / (t1 - t0)) * 992 + 4;
+            return <rect key={e.newSpec} x={x - 1.5} y={16} width={3} height={32} className="fill-accent" />;
+          })}
+        </svg>
+        <p className="num mt-3 flex justify-between text-small text-ink-3">
+          <span>{day(first.observedAt)}</span>
+          <span>{day(last.observedAt)}</span>
+        </p>
+      </Panel>
 
-        <Block title="Upgrades, newest first">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-[14px]">
-              <caption className="sr-only">Runtime spec upgrades seen by Atlas</caption>
-              <thead>
-                <tr>
-                  <th className={`${th} text-left`}>Spec</th>
-                  <th className={`${th} text-left`}>Seen</th>
-                  <th className={`${th} text-right`}>Days since the one before</th>
-                  <th className={`${th} text-right`}>Block</th>
-                  <th className={`${th} pl-4 text-left`}>Read by</th>
+      <div className="mt-[clamp(72px,9vw,120px)] grid gap-12 lg:grid-cols-[4fr_8fr] lg:gap-16">
+        <Figures
+          items={[
+            { value: events.length, label: `upgrades in ${Math.round(spanDays)} days` },
+            { value: num(mean, 1), label: "days between upgrades, on average" },
+            { value: num(longest, 1), label: "days in the longest quiet stretch" },
+          ]}
+        />
+        <div className="min-w-0 overflow-x-auto">
+          <table className={`${table} min-w-[560px]`}>
+            <caption className="sr-only">Runtime spec upgrades seen by Atlas, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col" className={th}>Spec</th>
+                <th scope="col" className={th}>Seen</th>
+                <th scope="col" className={`${th} text-right`}>Days since the one before</th>
+                <th scope="col" className={`${th} text-right`}>Block</th>
+                <th scope="col" className={th}>Read by</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((e) => (
+                <tr key={e.newSpec} className={row}>
+                  <td className={`${td} num`}>
+                    <span className="text-ink-3">{e.prevSpec ?? "-"} to</span> {e.newSpec}
+                  </td>
+                  <td className={`${td} num`}>{day(e.observedAt)}</td>
+                  <td className={`${td} num text-right`}>{num(e.gap, 1)}</td>
+                  <td className={`${td} num text-right text-ink-2`}>{e.block === null ? "-" : e.block.toLocaleString("en-GB")}</td>
+                  <td className={`${td} text-ink-2`}>{e.source === "rpc" ? "Chain RPC" : (e.source ?? "-")}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {rows.map((e) => (
-                  <tr key={e.newSpec}>
-                    <td className={`${td} pr-4`}>
-                      <span className="text-muted">{e.prevSpec ?? "-"} to</span> {e.newSpec}
-                    </td>
-                    <td className={`${td} pr-4`}>{day(e.observedAt)}</td>
-                    <td className={`${td} text-right`}>{num(e.gap, 1)}</td>
-                    <td className={`${td} text-right text-muted`}>{e.block === null ? "-" : e.block.toLocaleString("en-GB")}</td>
-                    <td className={`${td} pl-4 text-muted`}>{e.source === "rpc" ? "Chain RPC" : (e.source ?? "-")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Block>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </BoardShell>
+    </>
   );
 }
