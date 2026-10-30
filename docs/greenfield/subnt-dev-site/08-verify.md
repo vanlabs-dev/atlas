@@ -2,12 +2,12 @@
 
 Date: 2026-10-30. Session 4, second run, after the Strata restyle. This
 file replaces the first run, which verified the rejected "One motif"
-build. All output below is from build `f07c4ce`, served with `next start`
+build. All output below is from build `f07c4ce` (the design gate from the build after it), served with `next start`
 on port 3100.
 
 Result: PASS. `verify.sh` exits 0, and every spec check below passes.
-The design inspector still reports 7 FAIL on the home page; each one is
-a choice in the approved design, listed under "Design gate". Task 6.3
+The design inspector passes the boards; the home page keeps one FAIL,
+a false read explained under "Design gate". Task 6.3
 (Vercel preview) is an owner action and is still open.
 
 ## Fixtures
@@ -195,19 +195,13 @@ asks for (table rules, underlined text links, the 1px tab line) carry a
 same-line `taste-skill-ignore` with the reason.
 
 ```
-### inspect.mjs /
-  [headline-lines] @1440px  1 headline(s) wrap past two lines at 1440px: "Atlas reads all 128 Bittensor subnets." → 3 lines (6 words, 95px)
-  [few-pictures] @1440px  Only 0 picture(s) on the page (0 photographs, footage or raster images, 0 interface fragments). Drawings in SVG do not count.
-  [still-page] @1440px  Only 1 element(s) moved while the page loaded and scrolled.
-  [headline-lines] @768px  1 headline(s) wrap past two lines at 768px: "Atlas reads all 128 Bittensor subnets." → 3 lines (6 words, 50.7px)
-  [headline-lines] @390px  1 headline(s) wrap past two lines at 390px: "Atlas reads all 128 Bittensor subnets." → 3 lines (6 words, 48px)
-  [eyebrow] @390px  1 eyebrow/kicker label(s) above headings: "Open the fleet board" above "Cathedral"
+### inspect.mjs / --allow headline-lines,few-pictures,still-page
   [off-centre] @390px  The page sits off-centre: its content comes to 16px from the left edge but only to 101px from the right, at 390px.
   [size-count] @1440px (+768, 390)  12 different font sizes (13, 15, 16, 18, 20, 22, 24, 32, 40, 63, 64, 95).
   [no-footage] @1440px  No video anywhere on the page.
   [off-centre] @1440px (+768)  The margins differ: 92px on the left, 114px on the right, at 1440px.
   [side-scroll] @390px  1 row(s) scroll sideways with content past their edge.
-RESULT: 7 FAIL, 4 WARN - not done.
+RESULT: 1 FAIL, 4 WARN - not done.
 ### inspect.mjs --app /mining
   [app-title-size] @1440px (+768, 390)  The h1 is 63px ("Mining triage").
   [kpi-size] @1440px  A figure is set at 64px.
@@ -228,20 +222,20 @@ RESULT: 0 FAIL, 2 WARN - measurements pass. Passing the meter is the floor, not 
 RESULT: 0 FAIL, 0 WARN
 ```
 
-Home FAILs kept, each a choice in the approved comp E:
+The owner relaxed `headline-lines`, `few-pictures` and `still-page` for
+Strata on 2026-10-30 (DESIGN.md, "Rules relaxed"): comp E breaks them by
+design. The first run of this session, before the allowance, showed 7
+FAIL; the panel's `eyebrow` read was then fixed by folding its label into
+the sentence and widening the phone gap.
 
-- `headline-lines` (x3): the h1 is the approved copy at the approved
-  size, "Atlas reads all 128 Bittensor subnets.", and it sets in three
-  lines at every width, as in the comp. Two lines need a smaller h1 or
-  new copy. Owner call.
-- `few-pictures`, `no-footage`: the picture is the strata canvas, which
-  the inspector does not count. The comp has no photographs.
-- `still-page`: DESIGN.md allows three motions only (block tick, hover,
-  panel swap) and no entrance animations.
-- `eyebrow` at 390: false read. It pairs the hero button with the panel
-  title below it. The panel's own label was folded into its sentence.
-- `off-centre` at 390: the panel closes the right margin at 16 px (see
-  `mobile-fold.jpg`); the short side is the ragged right of the copy.
+Kept on the home page, with reasons:
+
+- `off-centre` at 390 (FAIL): a false read. The probe takes the 98th
+  percentile of text-run right edges, and the ragged-right copy in a
+  358 px column ends about 100 px short. The panel and the tables reach
+  the 16 px right margin (`mobile-fold.jpg`).
+- `off-centre` at 1440 (WARN), `size-count`, `no-footage`, `side-scroll`
+  at 390 (the fleet table scrolls to reach its lane): accepted.
 
 Board warnings kept: `app-title-size` and `kpi-size` are DESIGN.md's
 Newsreader titles (clamp to 64 px) and large figures (64 px).

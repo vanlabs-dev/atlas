@@ -29,6 +29,14 @@ The owner relaxed the house rules for this site. They are allowed:
 - a living background (the strata), which the inspector may read as
   motion or decoration.
 
+Relaxed by the owner on 2026-10-30, after the first Strata verify run,
+because comp E breaks them by design:
+
+- `headline-lines`: the approved h1 sets in three lines at every width;
+- `few-pictures`: the strata canvas is the picture, with no photographs;
+- `still-page`: motion is the three items in the motion list, with no
+  entrance animations.
+
 Pass `inspect.mjs --allow <rule>` only for those rules, and use a
 same-line `taste-skill-ignore` in lint. Every other house rule still
 holds.
