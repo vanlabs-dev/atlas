@@ -71,7 +71,7 @@ holds.
 | ground | `#08090a` |
 | surface 1 (panels) | `#0f1113` |
 | surface 2 (row hover) | `#15181b` |
-| rule | `rgba(255,255,255,.08)` |
+| rule | `#1d1f22` (8% white over ground, opaque) |
 | ink | `#f2f3f5` |
 | ink 2 (secondary) | `#a3a8b1` |
 | ink 3 (labels) | `#7d838d` |
@@ -83,8 +83,13 @@ holds.
   border. Rules only in tables.
 - Polarity colour only on "what moved" figures (price change). Positive
   uses accent 2, negative uses down. Everything else stays ink.
-- Light scheme: derive it in the restyle (ground near white, ink near
-  black, same blue). Keep WCAG AA in both.
+- Light scheme (derived 2026-10-30): ground `#f6f7f8`, surface 1
+  `#eceef1`, surface 2 `#e2e5e9`, rule `#dcdfe3`, ink `#0c0e11`, ink 2
+  `#464c56`, ink 3 `#5c626c`, accent `#2f6bf0`, accent 2 `#1d55c8`, down
+  `#c2303a`. Accent is for lines and marks only; text that needs blue
+  uses accent 2. Both schemes pass WCAG AA (Lighthouse `color-contrast`).
+- Rules are opaque colours, not alpha: the inspector reads an alpha rule
+  as solid black and flags it.
 
 ## Shape
 

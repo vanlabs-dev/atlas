@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Block, BoardShell } from "@/components/board-shell";
+import { Figures } from "@/components/board-shell";
 import { BoardHeader } from "@/components/board-header";
 import { MiningTable } from "@/components/boards/mining-table";
 import { getMining } from "@/data/mining";
@@ -18,40 +18,40 @@ export default async function MiningPage() {
     ? `${cpu.length} of ${rows.length} subnets have miner code that runs on a CPU. The highest gross among them is SN${best.netuid} ${best.name}, at ${num(best.grossTaoMonth, 1)} TAO a month.`
     : `${rows.length} subnets priced for a new miner.`;
 
+  const notes = [
+    ["Burn", `Share of miner emission the subnet burns. ${fullBurn} subnets burn all of it.`],
+    ["Top earner", "Share taken by the single largest miner."],
+    ["Gross", "What one new slot would earn a month before costs. A dash means Atlas has no honest figure."],
+    ["Caveat", "Why the gross may not reach a newcomer, such as an owner who takes most of it."],
+    ["Code", "From a scan of the miner code. Atlas never runs it."],
+  ];
+
   return (
-    <BoardShell>
+    <>
       <BoardHeader title="Mining triage" finding={finding} at={generatedAt} />
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
-        <Block title="Where a new miner could earn">
-          <MiningTable rows={rows} />
-        </Block>
-        <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-6">
-          <Block title="How to read it">
-            <dl className="space-y-3 text-small">
-              <div>
-                <dt className="text-ink">Burn</dt>
-                <dd className="text-muted">Share of miner emission the subnet burns. {fullBurn} subnets burn all of it.</dd>
+      <MiningTable rows={rows} />
+      <div className="mt-[clamp(72px,9vw,120px)] grid gap-12 lg:grid-cols-[4fr_8fr] lg:gap-16">
+        <Figures
+          items={[
+            { value: cpu.length, label: "with miner code that runs on a CPU" },
+            { value: rows.filter((r) => r.verdict === "needs-gpu").length, label: "that need a GPU" },
+            { value: fullBurn, label: "that burn all miner emission" },
+          ]}
+        />
+        <section aria-labelledby="read-title">
+          <h2 id="read-title" className="font-display text-[clamp(28px,3vw,40px)] leading-none">
+            How to read it
+          </h2>
+          <dl className="mt-8 grid gap-x-12 gap-y-6 sm:grid-cols-2">
+            {notes.map(([term, text]) => (
+              <div key={term}>
+                <dt className="font-medium">{term}</dt>
+                <dd className="mt-1 text-ink-2">{text}</dd>
               </div>
-              <div>
-                <dt className="text-ink">Top earner</dt>
-                <dd className="text-muted">Share taken by the single largest miner.</dd>
-              </div>
-              <div>
-                <dt className="text-ink">Gross</dt>
-                <dd className="text-muted">What one new slot would earn a month before costs. A dash means Atlas has no honest figure.</dd>
-              </div>
-              <div>
-                <dt className="text-ink">Caveat</dt>
-                <dd className="text-muted">Why the gross may not reach a newcomer, such as an owner who takes most of it.</dd>
-              </div>
-              <div>
-                <dt className="text-ink">Code</dt>
-                <dd className="text-muted">From a scan of the miner code. Atlas never runs it.</dd>
-              </div>
-            </dl>
-          </Block>
-        </div>
+            ))}
+          </dl>
+        </section>
       </div>
-    </BoardShell>
+    </>
   );
 }

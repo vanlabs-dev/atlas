@@ -1,7 +1,7 @@
 "use client";
 
-// Data-terminal selection: the chosen option is marked by a 1px accent line
-// exactly as wide as its label, on the bottom edge. Nothing else changes.
+// Text tabs. The chosen one is marked by a 1px accent line exactly as wide
+// as its label, on the bottom edge. Nothing else changes.
 export function FilterTabs<T extends string>({
   label,
   options,
@@ -14,7 +14,7 @@ export function FilterTabs<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-x-6 gap-y-2 text-small">
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-x-6 gap-y-2 text-[15px]">
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -24,10 +24,10 @@ export function FilterTabs<T extends string>({
             role="radio"
             aria-checked={on}
             onClick={() => onChange(o.value)}
-            className={`relative py-1.5 transition-colors ${on ? "text-ink" : "text-muted hover:text-ink"}`}
+            className={`relative py-1.5 transition-colors duration-150 ${on ? "text-ink" : "text-ink-2 hover:text-ink"}`}
           >
-            {o.label} <span className="text-muted">{o.count}</span>
-            {on ? <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-px bg-accent" /* taste-skill-ignore: selection line */ /> : null}
+            {o.label} <span className="num text-ink-3">{o.count}</span>
+            {on ? <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-px bg-accent" /* taste-skill-ignore: 1px accent tab line (DESIGN.md) */ /> : null}
           </button>
         );
       })}

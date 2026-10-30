@@ -2,81 +2,93 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Dark is the design target; light follows the system scheme. See DESIGN.md. */
+/* Strata. Dark is the design target; light follows the system. See DESIGN.md. */
 @custom-variant dark (@media (prefers-color-scheme: dark));
 
 @theme inline {
   --color-ground: var(--ground);
-  --color-surface: var(--surface);
-  --color-card: var(--card);
+  --color-s1: var(--s1);
+  --color-s2: var(--s2);
+  --color-rule: var(--rule);
   --color-ink: var(--ink);
-  --color-muted: var(--muted);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
   --color-accent: var(--accent);
-  --color-accent-ink: var(--accent-ink);
-  --color-tier-head: var(--tier-head);
-  --color-tier-mid: var(--tier-mid);
-  --color-tier-quiet: var(--tier-quiet);
-  --color-tier-none: var(--tier-none);
+  --color-accent-2: var(--accent-2);
+  --color-down: var(--down);
 
   /* shadcn roles, mapped onto the palette */
   --color-background: var(--ground);
   --color-foreground: var(--ink);
+  --color-card: var(--s1);
   --color-card-foreground: var(--ink);
-  --color-popover: var(--surface);
+  --color-popover: var(--s1);
   --color-popover-foreground: var(--ink);
-  --color-primary: var(--accent);
-  --color-primary-foreground: var(--accent-ink);
-  --color-secondary: var(--surface);
+  --color-primary: var(--ink);
+  --color-primary-foreground: var(--ground);
+  --color-secondary: var(--s1);
   --color-secondary-foreground: var(--ink);
-  --color-muted-foreground: var(--muted);
-  --color-accent-foreground: var(--accent-ink);
-  --color-border: var(--line);
-  --color-input: var(--line);
-  --color-ring: var(--ink);
+  --color-muted: var(--s1);
+  --color-muted-foreground: var(--ink-2);
+  --color-accent-foreground: var(--ground);
+  --color-border: var(--rule);
+  --color-input: var(--rule);
+  --color-ring: var(--accent);
 
-  --font-sans: "General Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-heading: var(--font-sans);
-  --radius-sm: 0;
-  --radius-md: 0;
-  --radius-lg: 0;
-  --radius-xl: 0;
+  --font-sans: var(--font-schibsted), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-newsreader), Georgia, serif;
 
-  --text-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
-  --text-body: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem);
-  --text-lead: clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem);
-  --text-head: clamp(2rem, 1.3rem + 3.2vw, 4rem);
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 10px;
+  --radius-xl: 10px;
+
+  --text-small: 0.8125rem;
+  --text-body: 1rem;
+  --text-lead: 1.25rem;
+  --text-section: clamp(2.5rem, 4.4vw, 4rem);
+  --text-hero: clamp(3rem, 6.6vw, 6.5rem);
 }
 
 :root {
-  color-scheme: dark light;
-  --ground: #133621;
-  --surface: #1a4429;
-  --card: #0e2a19;
-  --ink: #f4d96c;
-  --muted: #c0b26a;
-  --accent: #f4d96c;
-  --accent-ink: #133621;
-  --line: color-mix(in oklab, var(--ink) 18%, transparent);
-  --tier-head: #f4d96c;
-  --tier-mid: #9c9150;
-  --tier-quiet: #2c5a3b;
-  --tier-none: #1d4a2d;
-  --radius: 0;
+  color-scheme: dark;
+  --ground: #08090a;
+  --s1: #0f1113;
+  --s2: #15181b;
+  --rule: #1d1f22;
+  --ink: #f2f3f5;
+  --ink-2: #a3a8b1;
+  --ink-3: #7d838d;
+  --accent: #5d93ff;
+  --accent-2: #a8c8ff;
+  --down: #f0646a;
+  /* Strata canvas inks, as "r, g, b" for alpha ramps */
+  --field-ink: 210, 214, 222;
+  --field-head: 93, 147, 255;
+  --field-on: 168, 200, 255;
+  --field-line: 255, 255, 255;
+  --scrim: 8, 9, 10;
+  --radius: 4px;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --ground: #f3f6ef;
-    --surface: #e4ebdf;
-    --card: #ffffff;
-    --ink: #133621;
-    --muted: #4d5a3c;
-    --accent: #133621;
-    --accent-ink: #f4d96c;
-    --tier-head: #133621;
-    --tier-mid: #6b7d58;
-    --tier-quiet: #c3d0b9;
-    --tier-none: #dbe4d3;
+    color-scheme: light;
+    --ground: #f6f7f8;
+    --s1: #eceef1;
+    --s2: #e2e5e9;
+    --rule: #dcdfe3;
+    --ink: #0c0e11;
+    --ink-2: #464c56;
+    --ink-3: #5c626c;
+    --accent: #2f6bf0;
+    --accent-2: #1d55c8;
+    --down: #c2303a;
+    --field-ink: 40, 44, 52;
+    --field-head: 47, 107, 240;
+    --field-on: 29, 85, 200;
+    --field-line: 0, 0, 0;
+    --scrim: 246, 247, 248;
   }
 }
 
@@ -92,62 +104,32 @@
     background: var(--ground);
     color: var(--ink);
     font-size: var(--text-body);
-    line-height: 1.45;
-    font-variant-numeric: tabular-nums;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
   }
   :focus-visible {
-    outline: 2px solid var(--ink);
+    outline: 2px solid var(--accent);
     outline-offset: 3px;
   }
   ::selection {
-    background: var(--ink);
+    background: var(--accent);
     color: var(--ground);
   }
 }
 
-/* The one cell: a square subnet slot. It is the motif on every page. */
-.cell {
-  display: inline-block;
-  width: 0.6em;
-  height: 0.6em;
-  background: currentColor;
-  flex: none;
+@utility font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 500;
+  font-style: normal;
 }
 
-/* Section entrances. Hidden only when script has marked <html>. */
-.js [data-reveal] {
-  transition:
-    opacity 600ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.js [data-reveal]:not(.in) {
-  opacity: 0;
-  transform: translateY(24px);
-}
-
-/* Signature move: the hero stage opens from the bottom edge. */
-@media (prefers-reduced-motion: no-preference) {
-  .js .stage {
-    animation: shutter 1100ms cubic-bezier(0.65, 0, 0.35, 1) both;
-  }
-  .js .stage-fragment {
-    animation: settle 1100ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-}
-@keyframes shutter {
-  from { clip-path: inset(100% 0 0 0); }
-  to { clip-path: inset(0); }
-}
-@keyframes settle {
-  from { transform: scale(1.12); }
-  to { transform: scale(1); }
+/* Tabular figures on numbers only. Schibsted spaces commas apart otherwise. */
+@utility num {
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .js [data-reveal]:not(.in) {
-    opacity: 1;
-    transform: none;
-  }
   *,
   *::before,
   *::after {

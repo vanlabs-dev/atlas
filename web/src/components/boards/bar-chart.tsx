@@ -1,4 +1,4 @@
-// One series, one question. A bar per point, a faint scale of three lines,
+// One series, one question. Flat accent bars, a faint scale of three lines,
 // dates on the first and last bar. No legend: the title names the series.
 export function BarChart({
   points,
@@ -29,17 +29,17 @@ export function BarChart({
       <svg viewBox={`0 0 ${W + 56} ${H + 24}`} className="w-full" role="img" aria-label={`${label}: from ${fmt(ys[0])} on ${points[0].x} to ${fmt(ys[ys.length - 1])} on ${points[points.length - 1].x}, low ${fmt(lo)}, high ${fmt(hi)}`}>
         {ticks.map((t) => (
           <g key={t}>
-            <line x1={0} x2={W} y1={y(t)} y2={y(t)} stroke="currentColor" strokeOpacity={0.12} />
-            <text x={W + 8} y={y(t) + 4} className="fill-muted text-[12px]">
+            <line x1={0} x2={W} y1={y(t)} y2={y(t)} className="stroke-rule" />
+            <text x={W + 8} y={y(t) + 4} className="num fill-ink-3 text-[12px]">
               {fmt(t)}
             </text>
           </g>
         ))}
         {points.map((p, i) => (
-          <rect key={p.x} x={i * bw + 1} y={y(p.y)} width={Math.max(1, bw - 2)} height={H - y(p.y)} className="fill-ink" />
+          <rect key={p.x} x={i * bw + 1} y={y(p.y)} width={Math.max(1, bw - 2)} height={H - y(p.y)} className="fill-accent" />
         ))}
-        <text x={0} y={H + 18} className="fill-muted text-[12px]">{points[0].x}</text>
-        <text x={W} y={H + 18} textAnchor="end" className="fill-muted text-[12px]">{points[points.length - 1].x}</text>
+        <text x={0} y={H + 18} className="num fill-ink-3 text-[12px]">{points[0].x}</text>
+        <text x={W} y={H + 18} textAnchor="end" className="num fill-ink-3 text-[12px]">{points[points.length - 1].x}</text>
       </svg>
     </figure>
   );

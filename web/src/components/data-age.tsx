@@ -29,14 +29,14 @@ export function DataAge({ at }: { at: string }) {
   const f = now ? freshness(at, now) : null;
 
   return (
-    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-small text-muted">
+    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-small text-ink-3">
       <span>
         Data from <time dateTime={at}>{produced}</time>
         {f ? `, ${f.label}` : null}
       </span>
       {f?.stale ? (
         <span
-          className="bg-ink px-1.5 font-medium text-ground"
+          className="rounded-[4px] bg-down px-1.5 font-medium text-ground"
           title={`Older than ${STALE_AFTER_HOURS} hours`}
         >
           Stale
