@@ -239,23 +239,25 @@ function layout(g){
 
 // pointer tag: what is under the cursor, right next to it
 const cur=document.getElementById("cur");
-function curTag(e){
+function curTagAt(x0,y0){
   if(hover<0||G.mobile){cur.style.opacity=0;return}
-  const x=slots[hover],r=x.r,b=hero.getBoundingClientRect();
-  cur.innerHTML=`<b>${r?r.name:x.d?"Subnet "+x.n:"Subnet "+x.n}</b> <span>${x.n}</span><br><span>${x.d?`${f(x.c30)} commits in 30 days`:"no code Atlas can read"}</span>`;
-  const cx0=e.clientX-b.left+16,cy0=e.clientY-b.top+16;
-  cur.style.left=Math.min(cx0,G.right-cur.offsetWidth-8)+"px";cur.style.top=cy0+"px";cur.style.opacity=1;
+  const x=slots[hover],r=x.r;
+  cur.innerHTML=`<b>${r?r.name:"Subnet "+x.n}</b> <span>${x.n}</span><br><span>${x.d?`${f(x.c30)} commits in 30 days`:"no code Atlas can read"}</span>`;
+  cur.style.left=Math.min(x0+16,G.right-cur.offsetWidth-8)+"px";cur.style.top=(y0+16)+"px";cur.style.opacity=1;
 }
+function curTag(e){const b=hero.getBoundingClientRect();curTagAt(e.clientX-b.left,e.clientY-b.top)}
 
 // keyboard: arrow keys step one row; the annotation follows
-cv.addEventListener("keydown",e=>{const step={ArrowUp:-1,ArrowDown:1}[e.key];if(!step)return;e.preventDefault();sel=Math.max(0,Math.min(N-1,sel+step));hover=-1;px=null;draw()});
+cv.addEventListener("keydown",e=>{lastInput=performance.now();touring=false;const step={ArrowUp:-1,ArrowDown:1}[e.key];if(!step)return;e.preventDefault();sel=Math.max(0,Math.min(N-1,sel+step));hover=-1;px=null;draw()});
 
 // the annotation, pinned to the selected or hovered row
 const nt=document.getElementById("note");
 let px=null;
 function note(){
-  const g=G,i=hover>=0?hover:sel,x=slots[i],r=x.r,y=g.top+i*g.rh+g.rh/2;
-  const at=px==null?g.right-g.cw*2.5:Math.min(g.right,Math.max(g.left+40,px));
+  // on tour the annotation holds the last subnet the ghost settled on
+  const g=G,i=touring&&settled>=0?settled:hover>=0?hover:sel,x=slots[i],r=x.r,y=g.top+i*g.rh+g.rh/2;
+  const ax=touring&&settled>=0?settledX:px;
+  const at=ax==null?g.right-g.cw*2.5:Math.min(g.right,Math.max(g.left+40,ax));
   const tag=nt.querySelector(".tag");
   tag.innerHTML=`<span class="id">Subnet ${x.n}</span><div class="nm">${r?r.name:"SN"+x.n}</div>
     <p class="why">${r?`${WHY[r.why]||r.why}. ${TIER[r.tier][0].toUpperCase()+TIER[r.tier].slice(1)}.`:x.d?"Atlas reads its code. Not on the fleet board.":"No public repository Atlas can read."}</p>
@@ -277,12 +279,38 @@ function note(){
   nt.style.opacity=reveal>=1?1:0;
 }
 function rowAt(e){const r=cv.getBoundingClientRect(),g=G;const i=Math.floor((e.clientY-r.top-g.top)/g.rh);return i>=0&&i<N&&e.clientX-r.left<=g.right?i:-1}
-cv.addEventListener("mousemove",e=>{const i=rowAt(e);px=i>=0?e.clientX-cv.getBoundingClientRect().left:null;if(i!==hover){hover=i;draw()}else note();curTag(e)});
-cv.addEventListener("mouseleave",()=>{hover=-1;px=null;draw();cur.style.opacity=0});
+cv.addEventListener("mousemove",e=>{lastInput=performance.now();touring=false;const i=rowAt(e);px=i>=0?e.clientX-cv.getBoundingClientRect().left:null;if(i!==hover){hover=i;draw()}else note();curTag(e)});
+cv.addEventListener("mouseleave",()=>{lastInput=performance.now();hover=-1;px=null;draw();cur.style.opacity=0});
 cv.addEventListener("click",e=>{const i=rowAt(e);if(i>=0){sel=i;draw()}});
 
 function size(){const dpr=Math.min(2,devicePixelRatio||1);cv.width=cv.clientWidth*dpr;cv.height=cv.clientHeight*dpr;cx.setTransform(dpr,0,0,dpr,0,0);draw()}
+let lastInput=performance.now(), touring=false, vx=0, vy=0, gx=0, gy=0, nextPick=0, settled=-1, settledX=null;
 addEventListener("resize",size);size();
+
+// idle tour: after 5 s with no input, a ghost pointer glides between random
+// subnets so the field explains itself. Any mouse move or key hands it back.
+// Off with reduced motion, on phones, and while the hero is out of view.
+addEventListener("keydown",()=>{lastInput=performance.now();touring=false});
+function pick(){
+  const g=G,i=nNull+Math.floor(Math.random()*(N-nNull));
+  gx=g.left+(g.right-g.left)*(.5+Math.random()*.47);gy=g.top+i*g.rh+g.rh/2;
+  nextPick=performance.now()+6000+Math.random()*3000;
+}
+function tour(t){
+  requestAnimationFrame(tour);
+  const g=G;
+  if(g.mobile||document.hidden||reveal<1||hero.getBoundingClientRect().bottom<0)return;
+  if(t-lastInput<5000){touring=false;return}
+  if(!touring){touring=true;vx=px??g.right-g.cw*2.5;settled=hover>=0?hover:sel;settledX=vx;vy=g.top+settled*g.rh+g.rh/2;pick()}
+  if(t>nextPick)pick();
+  vx+=(gx-vx)*.011;vy+=(gy-vy)*.011;
+  const i=Math.max(0,Math.min(N-1,Math.floor((vy-g.top)/g.rh)));
+  px=vx;
+  if(Math.hypot(gx-vx,gy-vy)<3&&settled!==i){settled=i;settledX=vx;draw()}
+  if(i!==hover){hover=i;draw()}else note();
+  curTagAt(vx,vy);
+}
+if(!reduce)requestAnimationFrame(tour);
 
 // one load moment: the 90 days replay left to right, then the field settles
 if(!reduce){const t0=performance.now();(function go(t){reveal=Math.min(1,(t-t0)/1400);reveal=1-(1-reveal)**3;draw();if(reveal<1)requestAnimationFrame(go)})(t0)}
