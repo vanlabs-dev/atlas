@@ -43,7 +43,7 @@ export function FleetTable({ rows, activity }: { rows: FleetRow[]; activity: Sub
         ]}
       />
       <div className="mt-6 overflow-x-auto">
-        <table className={`${table} min-w-[760px]`}>
+        <table className={table}>
           <caption className="sr-only">Subnets ranked by fleet score</caption>
           <thead>
             <tr>
@@ -64,7 +64,7 @@ export function FleetTable({ rows, activity }: { rows: FleetRow[]; activity: Sub
                   {r.name ?? "unnamed"}
                 </td>
                 <td className={`${td} num text-right`}>{r.score}</td>
-                <td className={`${td} min-w-[11rem] text-ink-2`}>{r.why ? (WHY[r.why] ?? r.why) : "-"}</td>
+                <td className={`${td} text-ink-2`}>{r.why ? (WHY[r.why] ?? r.why) : "-"}</td>
                 <td className={`${td} num text-right`}>{signed(r.divergence)}</td>
                 <td className={`${td} num text-right`}>{num(r.commits30)}</td>
                 <td className={`${td} num text-right ${polarity(r.momentum30d)}`}>

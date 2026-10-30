@@ -31,8 +31,8 @@ export default async function NetworkPage() {
       <section aria-label="Chain vitals" className="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((k) => (
           <dl key={k.label}>
-            <dt className="text-[15px] text-ink-2">{k.label}</dt>
-            <dd className="num mt-2 font-display text-[clamp(40px,4.4vw,56px)] leading-none">{k.value}</dd>
+            <dt className="text-body text-ink-2">{k.label}</dt>
+            <dd className="num mt-2 font-display text-[clamp(44px,5vw,64px)] leading-none">{k.value}</dd>
             <dd className="mt-2 text-small text-ink-3">
               <span className={`num ${polarity(k.d)}`}>{signed(k.d, k.digits, k.unit)}</span> since {since}
             </dd>
@@ -54,19 +54,19 @@ export default async function NetworkPage() {
             <dl className="grid grid-cols-2 gap-x-4 gap-y-6">
               <div>
                 <dt className="text-small text-ink-3">State</dt>
-                <dd className="mt-1 font-display text-[44px] leading-none">{gate.active ? "On" : "Off"}</dd>
+                <dd className="mt-1 font-display text-section leading-none">{gate.active ? "On" : "Off"}</dd>
               </div>
               <div>
                 <dt className="text-small text-ink-3">Above the bar</dt>
-                <dd className="num mt-1 font-display text-[44px] leading-none">{num(gate.aboveCount)}</dd>
+                <dd className="num mt-1 font-display text-section leading-none">{num(gate.aboveCount)}</dd>
               </div>
               <div>
                 <dt className="text-small text-ink-3">Bar, share of emission</dt>
-                <dd className="num mt-1 text-[20px]">{gate.theta === null ? "-" : `${num(gate.theta * 100, 2)}%`}</dd>
+                <dd className="num mt-1 text-lead">{gate.theta === null ? "-" : `${num(gate.theta * 100, 2)}%`}</dd>
               </div>
               <div>
                 <dt className="text-small text-ink-3">Bar set by</dt>
-                <dd className="mt-1 text-[20px]">{gate.barMode ?? "-"}</dd>
+                <dd className="mt-1 text-lead">{gate.barMode ?? "-"}</dd>
               </div>
             </dl>
           ) : (
@@ -78,7 +78,7 @@ export default async function NetworkPage() {
 
       <div className="mt-[clamp(72px,9vw,120px)] grid gap-16 lg:grid-cols-2 lg:gap-12">
         <section aria-labelledby="params-title" className="min-w-0">
-          <h2 id="params-title" className="font-display text-[clamp(28px,3vw,40px)] leading-none">
+          <h2 id="params-title" className="font-display text-sub leading-none">
             Chain parameter changes
           </h2>
           <div className="mt-8 overflow-x-auto">
@@ -106,7 +106,7 @@ export default async function NetworkPage() {
           </div>
         </section>
         <section aria-labelledby="rotation-title" className="min-w-0">
-          <h2 id="rotation-title" className="font-display text-[clamp(28px,3vw,40px)] leading-none">
+          <h2 id="rotation-title" className="font-display text-sub leading-none">
             Root rotation
           </h2>
           <div className="mt-8 overflow-x-auto">

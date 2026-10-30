@@ -6,7 +6,7 @@ export function BoardHeader({ title, finding, at, children }: { title: string; f
   return (
     <header className="pb-12 pt-[clamp(48px,8vw,112px)]">
       <h1 className="font-display text-section leading-none tracking-[-0.02em]">{title}</h1>
-      <p className="mt-5 max-w-[52ch] text-[18px] text-ink-2">{finding}</p>
+      <p className="mt-5 max-w-[52ch] text-lead text-ink-2">{finding}</p>
       <div className="mt-4">
         <DataAge at={at} />
       </div>

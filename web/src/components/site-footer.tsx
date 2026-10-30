@@ -4,7 +4,7 @@ import { BOARDS, SOURCE } from "./boards";
 export function SiteFooter() {
   return (
     <footer className="mt-[clamp(96px,12vw,160px)] bg-s1">
-      <div className="mx-auto grid max-w-[1320px] gap-10 px-4 pb-10 pt-14 text-[15px] sm:px-8 md:grid-cols-12">
+      <div className="wrap grid gap-10 pb-10 pt-14 text-body md:grid-cols-12">
         <div className="md:col-span-4">
           <Link href="/" className="font-display text-[32px] leading-none">
             Atlas

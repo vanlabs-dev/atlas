@@ -39,7 +39,7 @@ export default async function MiningPage() {
           ]}
         />
         <section aria-labelledby="read-title">
-          <h2 id="read-title" className="font-display text-[clamp(28px,3vw,40px)] leading-none">
+          <h2 id="read-title" className="font-display text-sub leading-none">
             How to read it
           </h2>
           <dl className="mt-8 grid gap-x-12 gap-y-6 sm:grid-cols-2">

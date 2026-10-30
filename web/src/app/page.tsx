@@ -33,7 +33,6 @@ export default async function Home() {
       name: r?.name ?? null,
       tier: r?.tier ?? null,
       why: r?.why ?? null,
-      divergence: r?.divergence ?? null,
       momentum30d: r?.momentum30d ?? null,
       daily: byDaily.get(netuid) ?? null,
     };
@@ -65,11 +64,11 @@ export default async function Home() {
 
   return (
     <main>
-      <Strata slots={slots} initial={lead.netuid} anchor={anchor}>
-        <h1 id="hero-title" className="font-display text-hero leading-[0.96] tracking-[-0.025em]">
+      <Strata slots={slots} lead={lead.netuid} anchor={anchor} dataAt={fleet.generatedAt}>
+        <h1 id="hero-title" className="font-display text-hero leading-[0.95] tracking-[-0.028em]">
           Atlas reads all 128 Bittensor subnets.
         </h1>
-        <p className="mt-7 text-lead text-ink-2 sm:max-w-[34ch]">
+        <p className="mt-7 text-[19px] leading-[1.45] text-ink-2 sm:max-w-[40ch] md:text-[22px]">
           Code, chain and market, from one Raspberry Pi at home. In the last 30 days it read{" "}
           <strong className="font-medium text-ink">{num(commits30)} commits</strong> across{" "}
           <strong className="font-medium text-ink">{read.length} repositories</strong>.
@@ -77,7 +76,7 @@ export default async function Home() {
         <div className="mt-9 flex flex-wrap items-center gap-7">
           <Link
             href="/fleet"
-            className="inline-flex h-[46px] items-center rounded-[4px] bg-ink px-5 font-medium text-ground transition-colors duration-150 hover:bg-accent-2"
+            className="inline-flex h-12 items-center rounded-[4px] bg-ink px-[22px] font-medium text-ground transition-colors duration-150 hover:bg-accent-2"
           >
             Open the fleet board
           </Link>
@@ -87,13 +86,13 @@ export default async function Home() {
         </div>
       </Strata>
 
-      <div className="mx-auto max-w-[1320px] px-4 sm:px-8">
-        <section aria-labelledby="fleet-title" className="grid gap-10 pb-[clamp(96px,11vw,140px)] pt-[clamp(96px,12vw,160px)] lg:grid-cols-[4fr_8fr] lg:gap-16">
+      <div className="wrap">
+        <section aria-labelledby="fleet-title" className="grid gap-12 pb-[clamp(96px,11vw,140px)] pt-[clamp(96px,12vw,160px)] lg:grid-cols-[4fr_8fr] lg:gap-[72px]">
           <div>
             <h2 id="fleet-title" className="font-display text-section leading-none tracking-[-0.02em]">
               Fleet attention
             </h2>
-            <p className="mt-5 max-w-[30ch] text-[18px] text-ink-2">
+            <p className="mt-5 max-w-[30ch] text-lead text-ink-2">
               {counts.diverging} subnets show code and price moving 40 points or more apart. {lead.name} leads.
             </p>
             <div className="mt-12">
@@ -116,7 +115,7 @@ export default async function Home() {
                     <th scope="col" className={th}>Subnet</th>
                     <th scope="col" className={`${th} text-right`}>Score</th>
                     <th scope="col" className={`${th} hidden md:table-cell`}>Why it ranks</th>
-                    <th scope="col" className={`${th} hidden text-right md:table-cell`}>Commits, 30 d</th>
+                    <th scope="col" className={`${th} hidden text-right 2xl:table-cell`}>Commits, 30 d</th>
                     <th scope="col" className={`${th} text-right`}>Price, 30 d</th>
                     <th scope="col" className={`${th} text-right`}>Last 30 days</th>
                   </tr>
@@ -132,7 +131,7 @@ export default async function Home() {
                       </td>
                       <td className={`${td} num text-right`}>{r.score}</td>
                       <td className={`${td} hidden text-ink-2 md:table-cell`}>{r.why ? (WHY[r.why] ?? r.why) : "-"}</td>
-                      <td className={`${td} num hidden text-right md:table-cell`}>{num(r.commits30)}</td>
+                      <td className={`${td} num hidden text-right 2xl:table-cell`}>{num(r.commits30)}</td>
                       <td className={`${td} num text-right ${polarity(r.momentum30d)}`}>
                         {signed(r.momentum30d, 1, "%")}
                       </td>
@@ -161,9 +160,9 @@ export default async function Home() {
                   href={b.href}
                   className="grid gap-2 rounded-[10px] py-6 transition-colors duration-150 hover:bg-s1 md:grid-cols-[4fr_4fr_4fr] md:items-baseline md:gap-8 md:px-5"
                 >
-                  <span className="font-display text-[clamp(28px,3vw,40px)] leading-none">{b.label}</span>
+                  <span className="font-display text-sub leading-none">{b.label}</span>
                   <span className="text-ink-2">{b.question}</span>
-                  <span className="text-[15px] text-ink-3">{facts[b.href]}</span>
+                  <span className="text-body text-ink-3">{facts[b.href]}</span>
                 </Link>
               </li>
             ))}
@@ -175,7 +174,7 @@ export default async function Home() {
             <h2 id="reads-title" className="font-display text-section leading-none tracking-[-0.02em]">
               What it reads
             </h2>
-            <p className="mt-5 max-w-[32ch] text-[18px] text-ink-2">
+            <p className="mt-5 max-w-[32ch] text-lead text-ink-2">
               Every source is read-only. A stale, partial or contradictory input is reported as unavailable, never filled in.
             </p>
           </div>
@@ -194,7 +193,7 @@ export default async function Home() {
                   <td className={`${td} text-ink-3`}>{kind}</td>
                   <td className={td}>
                     {what}
-                    <span className="block text-[14px] text-ink-2 sm:hidden">{how}</span>
+                    <span className="block text-small text-ink-2 sm:hidden">{how}</span>
                   </td>
                   <td className={`${td} hidden text-ink-2 sm:table-cell`}>{how}</td>
                 </tr>

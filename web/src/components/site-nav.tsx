@@ -8,7 +8,7 @@ export function SiteNav() {
   const pathname = usePathname();
   return (
     <nav aria-label="Boards">
-      <ul className="flex flex-wrap gap-x-7 gap-y-1 text-[15px]">
+      <ul className="flex flex-wrap gap-x-7 gap-y-1 text-body">
         {BOARDS.map((b) => {
           const on = pathname === b.href;
           return (

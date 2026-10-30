@@ -14,7 +14,7 @@ export function FilterTabs<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-x-6 gap-y-2 text-[15px]">
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-x-6 gap-y-2 text-body">
       {options.map((o) => {
         const on = o.value === value;
         return (
