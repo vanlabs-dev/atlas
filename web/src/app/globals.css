@@ -151,7 +151,7 @@
   width: min(1200px, 140%);
   height: calc(100% + 140px);
   pointer-events: none;
-  background: radial-gradient(closest-side, rgba(var(--scrim), 0.94), rgba(var(--scrim), 0.8) 55%, transparent);
+  background: radial-gradient(closest-side, rgba(var(--scrim), 0.94), rgba(var(--scrim), 0.8) 55%, transparent); /* taste-skill-ignore: the one hero scrim (DESIGN.md) */
 }
 .strata .note {
   pointer-events: none;
@@ -179,9 +179,6 @@
   padding: 16px 18px;
 }
 .strata .note .sn {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 13px;
   color: var(--accent-2);
 }
 .strata .note .nm {
@@ -268,8 +265,7 @@
   pointer-events: none;
   white-space: nowrap;
   border-radius: 4px;
-  background: var(--ground);
-  box-shadow: 0 0 0 1px var(--rule);
+  background: var(--s2);
   padding: 6px 10px;
   font-size: 13px;
   line-height: 1.35;
@@ -286,7 +282,11 @@
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
+  /* keep the copy clear of the right margin's labels and block readout */
+  .strata .copy {
+    max-width: min(880px, calc(100vw - 260px));
+  }
   .strata .note .tag {
     background: transparent;
     padding: 0;

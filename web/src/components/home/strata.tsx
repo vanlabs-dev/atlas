@@ -48,7 +48,7 @@ function noteHtml(x: Row, idle: boolean): string {
       : "No public repository Atlas can read.";
   const tone = x.momentum ? (x.momentum < 0 ? "text-down" : "text-accent-2") : "";
   const price = x.tier ? `<div><dt>Price, 30 d</dt><dd class="${tone}">${signed(x.momentum, 1, "%")}</dd></div>` : "";
-  return `<span class="sn">Subnet ${x.n}</span><p class="nm">${esc(x.name)}</p><p class="ln">${line}</p>
+  return `<p class="nm">${esc(x.name)}</p><p class="ln"><span class="sn">Subnet ${x.n}.</span> ${line}</p>
     <dl><div><dt>Commits, 7 d</dt><dd>${fmt(x.c7)}</dd></div><div><dt>Commits, 30 d</dt><dd>${fmt(x.c30)}</dd></div>${price}</dl>
     ${idle ? `<p class="hint">Point at any line to read that subnet. Click to pin it, or use the arrow keys.</p>` : ""}`;
 }
@@ -120,8 +120,8 @@ export function Strata({
     const busiest = new Set(rows.map((_, i) => i).slice(-5));
 
     function geom() {
-      const W = cv.clientWidth, H = cv.clientHeight, mobile = W < 768;
-      const left = 0, right = W - (mobile ? 16 : Math.max(140, W * 0.09));
+      const W = cv.clientWidth, H = cv.clientHeight, mobile = W < 1024;
+      const left = 0, right = W - (mobile ? 16 : Math.max(168, W * 0.1));
       const top = mobile ? 8 : 88, bottom = H - (mobile ? 28 : 56);
       return { W, H, mobile, left, right, top, bottom, rh: (bottom - top) / N, cw: (right - left) / DAYS };
     }
@@ -253,7 +253,7 @@ export function Strata({
       }
       fur.innerHTML = [
         ...([[0, "90 days ago"], [30, "60 days ago"], [60, "30 days ago"]] as const).map(
-          ([d, l]) => `<span class="ax" style="left:${g.left + d * g.cw + 6}px;top:${g.bottom + 18}px">${day(d)} <span class="ago">${l}</span></span>`,
+          ([d, l]) => `<span class="ax" style="left:${Math.max(g.left + d * g.cw + 6, 24)}px;top:${g.bottom + 18}px">${day(d)} <span class="ago">${l}</span></span>`,
         ),
         `<span class="ax today" style="left:${g.right - 80}px;top:${g.bottom + 18}px;width:80px;text-align:right">${day(DAYS - 1)}</span>`,
         anchor
@@ -477,24 +477,24 @@ export function Strata({
     <section
       ref={heroRef}
       aria-labelledby="hero-title"
-      className="strata relative flex flex-col overflow-x-clip md:-mt-[72px] md:block md:h-[min(100svh,980px)] md:min-h-[760px]"
+      className="strata relative flex flex-col overflow-x-clip lg:-mt-[72px] lg:block lg:h-[min(100svh,980px)] lg:min-h-[760px]"
     >
       <canvas
         ref={canvasRef}
         tabIndex={0}
         role="img"
         aria-label="Commits per day for all 128 subnets over 90 days. One line per subnet, quietest at the top, busiest at the bottom, today on the right."
-        className="order-2 block h-[440px] w-full cursor-crosshair md:absolute md:inset-0 md:h-full"
+        className="order-2 block h-[440px] w-full cursor-crosshair md:h-[560px] lg:absolute lg:inset-0 lg:h-full"
       />
-      <div className="wrap pointer-events-none relative z-[2] order-1 pb-8 pt-11 md:pb-0 md:pt-[148px]">
+      <div className="wrap pointer-events-none relative z-[2] order-1 pb-8 pt-11 lg:pb-0 lg:pt-[148px]">
         <div className="copy pointer-events-auto relative max-w-[880px]">{children}</div>
       </div>
-      <div ref={noteRef} className="note relative order-3 z-[3] mx-4 mt-3 md:absolute md:inset-0 md:m-0" aria-live="polite">
+      <div ref={noteRef} className="note relative order-3 z-[3] mx-4 mt-3 sm:mx-[clamp(16px,4vw,64px)] lg:absolute lg:inset-0 lg:m-0" aria-live="polite">
         <span ref={leadRef} className="lead" aria-hidden="true" />
         <span ref={dotRef} className="dot" aria-hidden="true" />
         <div ref={tagRef} className="tag" dangerouslySetInnerHTML={{ __html: noteHtml(leadRow, true) }} />
       </div>
-      <div ref={furRef} className="pointer-events-none absolute inset-0 z-[2] hidden md:block" aria-hidden="true" />
+      <div ref={furRef} className="pointer-events-none absolute inset-0 z-[2] hidden lg:block" aria-hidden="true" />
       <div ref={curRef} className="cur" aria-hidden="true" />
     </section>
   );
