@@ -281,3 +281,25 @@ Checked in a real browser at 1440 (dark and light), 768 and 390:
 - Weak: on phones and tablets the field is a figure without margin
   labels or a tour, so it explains less there. The 7-day-old fixtures
   show the stale label on three boards until live data lands.
+
+## Final verify run (2026-10-31, after 46921cd and Vercel preview)
+
+Preview https://atlas-nine-gold.vercel.app/ returns 200 and serves the home page (task 6.3).
+
+```
+=== greenfield verify: subnt-dev-site ===
+Project root: /home/van/src/github/vanlabs-dev/atlas
+Artifact dir: /home/van/src/github/vanlabs-dev/atlas/docs/greenfield/subnt-dev-site
+
+Checking greenfield artifacts...
+  OK  01-brainstorm.md
+  OK  07-review.md
+  note  09-ship.md not present yet
+
+Checking OpenSpec change...
+  OK  openspec/changes/subnt-dev-site
+
+Running project checks (if present)...
+
+RESULT: PASS
+```
