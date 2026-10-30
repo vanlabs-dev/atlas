@@ -10,7 +10,7 @@ export function Lane({ daily, days = 30 }: { daily: number[] | null; days?: numb
     <svg
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"
-      className="ml-auto block h-3.5 w-[90px] md:w-[120px] xl:w-[180px]"
+      className="ml-auto block h-3.5 w-[90px] md:w-[150px]"
       role="img"
       aria-label={`${total} commits in the last ${days} days, at most ${Math.max(...d)} in one day`}
     >

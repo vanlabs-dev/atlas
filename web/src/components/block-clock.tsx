@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 import { BLOCK_MS, type BlockAnchor } from "@/data/chain";
 
@@ -45,4 +46,9 @@ export function BlockClock({ anchor }: { anchor: BlockAnchor | null }) {
       </span>
     </p>
   );
+}
+
+/** The header readout, on the boards only: the home field carries its own. */
+export function HeaderClock({ anchor }: { anchor: BlockAnchor | null }) {
+  return usePathname() === "/" ? null : <BlockClock anchor={anchor} />;
 }

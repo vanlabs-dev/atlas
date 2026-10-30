@@ -43,11 +43,13 @@
   --radius-lg: 10px;
   --radius-xl: 10px;
 
+  /* five steps plus the h1: 13 / 16 / 20 / 28 / 64 (DESIGN.md) */
   --text-small: 0.8125rem;
   --text-body: 1rem;
   --text-lead: 1.25rem;
+  --text-sub: 1.75rem;
   --text-section: clamp(2.5rem, 4.4vw, 4rem);
-  --text-hero: clamp(3rem, 6.6vw, 6.5rem);
+  --text-hero: clamp(3rem, 6.4vw, 7rem);
 }
 
 :root {
@@ -124,9 +126,171 @@
   font-style: normal;
 }
 
-/* Tabular figures on numbers only. Schibsted spaces commas apart otherwise. */
+/* Figures. Proportional on purpose: Schibsted's tabular set gives the comma
+   and the point a full figure width. Numeric columns align right instead. */
 @utility num {
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: lining-nums proportional-nums;
+}
+
+/* The page measure: 1600px, centred, with a fluid gutter. */
+@utility wrap {
+  width: 100%;
+  max-width: 1600px;
+  margin-inline: auto;
+  padding-inline: clamp(16px, 4vw, 64px);
+}
+
+/* The strata hero (components/home/strata.tsx). Parts the script places. */
+.strata .copy::before {
+  /* the one scrim allowed by DESIGN.md, behind the hero copy */
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -20%;
+  top: -60px;
+  width: min(1200px, 140%);
+  height: calc(100% + 140px);
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(var(--scrim), 0.94), rgba(var(--scrim), 0.8) 55%, transparent);
+}
+.strata .note {
+  pointer-events: none;
+  transition: opacity 150ms;
+}
+.strata .note .lead {
+  position: absolute;
+  border: solid var(--accent-2);
+  border-width: 0;
+  opacity: 0.7;
+}
+.strata .note .dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-2);
+  transform: translate(-50%, -50%);
+}
+.strata .note .tag {
+  min-width: 300px;
+  max-width: 380px;
+  border-radius: 10px;
+  background: var(--s1);
+  padding: 16px 18px;
+}
+.strata .note .sn {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--accent-2);
+}
+.strata .note .nm {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 500;
+  font-size: 40px;
+  line-height: 1;
+}
+.strata .note .ln {
+  margin-top: 8px;
+  max-width: 30ch;
+  color: var(--ink-2);
+}
+.strata .note dl {
+  display: flex;
+  gap: 28px;
+  margin-top: 14px;
+}
+.strata .note dt {
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.strata .note dd {
+  font-size: 22px;
+}
+.strata .note .hint {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.strata .ax,
+.strata .band,
+.strata .lbl {
+  position: absolute;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 14px;
+  color: var(--ink-3);
+}
+.strata .ax b {
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.strata .ax .ago {
+  opacity: 0.75;
+}
+.strata .ax.today,
+.strata .lbl.head {
+  color: var(--accent-2);
+}
+.strata .lbl {
+  color: var(--ink-2);
+}
+.strata .lbl > span {
+  display: inline-block;
+  min-width: 28px;
+  color: var(--ink-3);
+}
+.strata .lbl.on {
+  color: var(--ink);
+}
+.strata .bar {
+  position: relative;
+  top: -3px;
+  display: inline-block;
+  width: 40px;
+  height: 2px;
+  overflow: hidden;
+  background: var(--rule);
+}
+.strata .bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  transform: scaleX(var(--p, 0));
+  background: var(--accent);
+}
+.strata .cur {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  white-space: nowrap;
+  border-radius: 4px;
+  background: var(--ground);
+  box-shadow: 0 0 0 1px var(--rule);
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.35;
+  opacity: 0;
+  transition: opacity 100ms;
+}
+.strata .cur b {
+  font-weight: 500;
+}
+.strata .cur span {
+  color: var(--ink-3);
+}
+.strata canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+@media (min-width: 768px) {
+  .strata .note .tag {
+    background: transparent;
+    padding: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

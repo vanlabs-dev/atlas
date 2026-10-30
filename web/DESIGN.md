@@ -1,10 +1,12 @@
 # subnt.dev design
 
-Approved: 2026-10-30 (owner, comp E "Strata").
+Approved: 2026-10-30 (owner, comp E "Strata"). Revised the same day:
+comp F, "Strata as an instrument", approved by the owner (dashes
+variant, with wayfinding and the idle tour).
 
-Reference comp: `docs/greenfield/subnt-dev-site/comps/e-strata.html`
-(screenshots beside it). The comp reads a `DATA_PLACEHOLDER` built from
-the fixtures. It is a picture of the system, not code to copy.
+Reference comp: `docs/greenfield/subnt-dev-site/comps/f-instrument.html`
+(real fixture data inlined; screenshots beside it). It is a picture of
+the system, not code to copy. Comp E stays beside it for history.
 
 ## History
 
@@ -17,6 +19,10 @@ the fixtures. It is a picture of the system, not code to copy.
   serif keyword, and a generic aurora background.
 - E replaced those with the choices below, after research into 2026
   AI-default patterns (Paralect's 21 patterns, the Sailop 2026 report).
+- E, once built, read as distinctive but not excellent: the field was
+  even static with no shape or scale, the hero was the stock "headline
+  left, stat card right" layout, the block tick was invisible, and the
+  figures had spacing defects. F keeps E's identity and fixes those.
 
 ## Rules relaxed from design-taste-frontend
 
@@ -32,10 +38,10 @@ The owner relaxed the house rules for this site. They are allowed:
 Relaxed by the owner on 2026-10-30, after the first Strata verify run,
 because comp E breaks them by design:
 
-- `headline-lines`: the approved h1 sets in three lines at every width;
+- `headline-lines`: the approved h1 sets in three lines below desktop;
 - `few-pictures`: the strata canvas is the picture, with no photographs;
-- `still-page`: motion is the three items in the motion list, with no
-  entrance animations.
+- `still-page`: motion is the items in the motion list, with no
+  entrance animations on sections.
 
 Pass `inspect.mjs --allow <rule>` only for those rules, and use a
 same-line `taste-skill-ignore` in lint. Every other house rule still
@@ -63,12 +69,16 @@ holds.
 ## Type
 
 - Display: Newsreader (Google, optical size axis), weight 500, upright
-  only. h1 clamp(48px, 6.6vw, 104px), leading 0.96, tracking -0.025em.
+  only. h1 clamp(48px, 6.4vw, 112px), leading 0.95, tracking -0.028em.
   Section heads clamp(40px, 4.4vw, 64px). Large figures (KPIs) at 64px.
-- Text and UI: Schibsted Grotesk 400, 500, 600. Body 16px, lead 20px,
-  small 13px.
-- Tabular figures on numbers only (`dd`, numeric `td`, block readout).
-  Not on body text: Schibsted's tabular punctuation spaces commas apart.
+  Annotation name 40px.
+- Text and UI: Schibsted Grotesk 400, 500, 600. The scale is five
+  steps: 13 (labels, axis), 16 (body, tables), 20 (lead, findings),
+  28 (sub-heads), 64 (section heads and figures), plus the h1. The hero
+  sub-line is 22px.
+- No tabular figures anywhere. Schibsted's tabular set gives the comma
+  and the point a full figure width ("−27 .8%"). Numeric columns are
+  right-aligned with proportional figures.
 - Load both with `next/font/google` (self-hosted at build). Drop the
   Fontshare link.
 
@@ -99,6 +109,11 @@ holds.
 - Rules are opaque colours, not alpha: the inspector reads an alpha rule
   as solid black and flags it.
 
+## Width
+
+- Content runs to 1600px, centred, with a gutter of clamp(16px, 4vw,
+  64px). The field runs edge to edge.
+
 ## Shape
 
 - Primary button: solid ink, radius 4px, 46px tall. Secondary action:
@@ -107,41 +122,59 @@ holds.
 
 ## The strata (signature element and live control)
 
-- A full-bleed `<canvas>` behind the hero. 128 rows, one per subnet
-  (netuid 1 to 128). 90 columns, one per day, newest on the right.
-- Each cell's mark height and alpha scale with `log1p(commits that day)`.
-  Head-tier rows are drawn in accent, the rest in ink at low alpha. The
-  selected or hovered row draws in accent 2 with a lit baseline.
-- Block clock: Bittensor seals a block every 12 s. On each block the
-  newest column lights a seal line (see "Block tick" below). The header shows "est. block N" and a 12 s progress line.
-  "est." stays until a live block source exists.
-- Interaction: pointing at a row opens that subnet in the panel. Click
-  selects it. Keyboard: the panel holds a subnet picker (arrow keys or
-  a number field) that drives the same selection. The canvas has an
-  `aria-label`, and the panel is `aria-live="polite"`.
-- Reduced motion: no seal line flash and no progress line. The block
-  number still updates as text.
+- A full-bleed `<canvas>` behind the hero. 128 rows, one per subnet,
+  90 columns, one per day, newest on the right. Each mark's height and
+  alpha follow `log1p(commits that day)`. Marks are separate dashes, one
+  per day (the smoothed "bands" variant was rejected: it reads as speed
+  lines).
+- Rows are sorted like sediment: subnets with no readable code at the
+  top (dotted baselines), then silent ones, then by 30-day commits,
+  busiest at the bottom. The copy sits in the quiet top layers.
+- It reads as a chart: a time axis under the field (dates and "90, 60,
+  30 days ago"), a "today" edge on the right, and a right margin that
+  names the quiet bands, the head of the fleet board and the five
+  busiest, each with a connector to its row. Head-tier rows draw in
+  accent, the rest in ink.
+- The annotation replaces the card: subnet number, Newsreader name, one
+  sentence, three figures, set in the quiet layers with an elbow line
+  down to a dot on its row. The field is cleared behind it.
+- Wayfinding: the row under the pointer lights as a band, a small tag at
+  the pointer names it ("REAX 92, 106 commits in 30 days"), the
+  annotation and the margin follow. Click pins a row. The field takes
+  focus; the up and down arrows step one row. Idle, the annotation says
+  how to explore.
+- Idle tour (owner, 2026-10-30): after 5 s with no input, a ghost
+  pointer glides slowly between random subnets with code (right half of
+  the field), a new one every 6 to 9 s. The pointer tag follows it; the
+  annotation moves only when it settles. Any mouse move or key press
+  hands control back. Off with reduced motion, on phones, and while the
+  hero is out of view.
+- Block clock: the "today" edge carries "est. block N" and a 12 s
+  progress line, and flares on every block. The header carries the
+  readout on the boards only. The field never adds or removes activity
+  (owner, 2026-10-30). "est." stays until a live block source exists.
+- Load: the 90 days replay left to right once, in 1.4 s, then settle.
+- Phone: the copy first, the field below it as a 440px figure, the
+  annotation under the field. No tour, no margin labels.
+- Reduced motion: no replay, no tour, no flare, no progress line. The
+  block number still updates as text.
 - Data: real daily commit counts per subnet for 90 days (allowlisted
   field `daily` in `fleet.activity`, 90 integers, oldest first). The
   export runs the activity metric's own `git log --no-merges` in each
   clone and bins back from that subnet's latest activity pass, the same
   instant the fleet board reads. So the last 7 and 30 bins match the
   board's counts (a test checks this). A subnet with no readable clone
-  gets `null`, never zeros. The comp derived days from the 7- and
-  30-day counts. The build does not.
-- Block tick (owner, 2026-10-30): the field stays still. Each block
-  advances the counter and the progress line and lights a seal line on
-  the newest column. It never adds or removes activity.
+  gets `null`, never zeros.
 
 ## Boards (mining, fleet, network, upgrades)
 
 - Same tokens and type. Shell: a slim top bar (wordmark, four links,
-  block readout). No icon rail.
+  block readout on the boards). No icon rail.
 - Each board: a Newsreader title, one finding sentence, the data age
   and stale label, then the content.
 - Layout: asymmetric, with a 4/8 split where a board has a figure
   column. Large Newsreader figures for the counts. Tables with rules,
-  right-aligned tabular numbers, and a 30-day activity lane (a tiny
+  right-aligned numbers, no wrapping cells, and a 30-day activity lane (a tiny
   strata strip) per subnet where daily data exists.
 - Filters: text tabs, with the selected one marked by a 1px accent
   underline as wide as its label.
@@ -150,10 +183,12 @@ holds.
 
 ## Motion list
 
-1. The strata block tick (signature): counter, progress line, seal line.
-2. Hover and press feedback on rows, links and buttons (opacity or
+1. The strata block tick (signature): counter, progress line, today
+   edge flare.
+2. The strata load replay (1.4 s, once).
+3. The idle tour and the pointer tag.
+4. Hover and press feedback on rows, links and buttons (opacity or
    colour only, under 200 ms).
-3. Panel content swap on selection (150 ms crossfade).
 
 That is all. No entrance animations on sections.
 
