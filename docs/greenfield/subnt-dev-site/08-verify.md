@@ -1,14 +1,14 @@
 # subnt-dev-site: verify
 
-Date: 2026-10-30. Session 4, second run, after the Strata restyle. This
-file replaces the first run, which verified the rejected "One motif"
-build. All output below is from build `f07c4ce` (the design gate from the build after it), served with `next start`
-on port 3100.
+Date: 2026-10-30. Session 4, third run, after the comp F rebuild ("Strata
+as an instrument"). This file replaces the two earlier runs, which
+verified the rejected "One motif" build and the first Strata build. All
+output below is from build `c11b301`, served with `next start` on port
+3101.
 
-Result: PASS. `verify.sh` exits 0, and every spec check below passes.
-The design inspector passes the boards; the home page keeps one FAIL,
-a false read explained under "Design gate". Task 6.3
-(Vercel preview) is an owner action and is still open.
+Result: PASS. `verify.sh` exits 0, every spec check passes, and the
+design inspector reports 0 FAIL on every page. Task 6.3 (Vercel preview)
+is an owner action and is still open.
 
 ## Fixtures
 
@@ -17,9 +17,9 @@ SSH. Mining, network and upgrades are cut off 7 days before the export
 and rounded to 4 significant digits. The fleet board is a same-hour
 snapshot (`generatedAt` 2026-10-29 23:43 UTC): `build_board` reads the
 latest pass and ignores the cutoff, and its values are rounded, not
-aged. The new `daily` series (90 days per subnet) is binned back from
-each subnet's latest activity pass, the instant the fleet board reads,
-so a test can check its 7- and 30-day sums against the board.
+aged. The `daily` series (90 days per subnet) is binned back from each
+subnet's latest activity pass, the instant the fleet board reads, so a
+test checks its 7- and 30-day sums against the board.
 
 ## verify.sh
 
@@ -54,24 +54,24 @@ verify.sh exit 0
 > web@0.1.0 test
 > node --test 'tests/**/*.test.ts'
 
-✔ fixtures exist (1.285775ms)
-✔ fleet.json has no leaks (0.942738ms)
-✔ fleet.json has no em dash (0.226537ms)
-✔ mining.json has no leaks (0.578792ms)
-✔ mining.json has no em dash (0.115067ms)
-✔ network.json has no leaks (0.348207ms)
-✔ network.json has no em dash (0.061336ms)
-✔ upgrades.json has no leaks (0.144913ms)
-✔ upgrades.json has no em dash (0.0532ms)
-✔ scrub catches planted leaks (0.168798ms)
-✔ allowlist drops unlisted fields (0.19608ms)
-✔ allowlist rounds and strips em dashes (0.084279ms)
-✔ allowlist rejects nested values (0.147558ms)
-✔ allowlist accepts only a 90-day integer series (0.172906ms)
-✔ daily series cover 128 subnets and match the board counts (0.604421ms)
-✔ fresh under 48 hours (0.598189ms)
-✔ stale past 48 hours (0.087455ms)
-✔ future timestamps read as now (0.072597ms)
+✔ fixtures exist (0.743971ms)
+✔ fleet.json has no leaks (0.924238ms)
+✔ fleet.json has no em dash (0.226323ms)
+✔ mining.json has no leaks (0.552473ms)
+✔ mining.json has no em dash (0.113252ms)
+✔ network.json has no leaks (0.360334ms)
+✔ network.json has no em dash (0.052839ms)
+✔ upgrades.json has no leaks (0.145952ms)
+✔ upgrades.json has no em dash (0.072836ms)
+✔ scrub catches planted leaks (0.276006ms)
+✔ allowlist drops unlisted fields (0.208059ms)
+✔ allowlist rounds and strips em dashes (0.089237ms)
+✔ allowlist rejects nested values (0.174927ms)
+✔ allowlist accepts only a 90-day integer series (0.255157ms)
+✔ daily series cover 128 subnets and match the board counts (0.811437ms)
+✔ fresh under 48 hours (0.43876ms)
+✔ stale past 48 hours (0.085059ms)
+✔ future timestamps read as now (0.069019ms)
 ℹ tests 18
 ℹ suites 0
 ℹ pass 18
@@ -79,7 +79,7 @@ verify.sh exit 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 65.758806
+ℹ duration_ms 73.897431
 exit 0
 ```
 
@@ -101,19 +101,19 @@ exit 0
 > web@0.1.0 build
 > next build
 ▲ Next.js 16.4.3 (Turbopack)
-✓ Running next.config.ts took 16ms
+✓ Running next.config.ts took 14ms
 - Cache Components enabled
 - Partial Prefetching enabled
   Creating an optimized production build ...
-✓ Compiled successfully in 190ms
+✓ Compiled successfully in 227ms
   Running TypeScript ...
-  Finished TypeScript in 948ms ...
+  Finished TypeScript in 952ms ...
   Collecting page data using 9 workers ...
   Generating static pages using 9 workers (0/8) ...
   Generating static pages using 9 workers (2/8) 
   Generating static pages using 9 workers (4/8) 
   Generating static pages using 9 workers (6/8) 
-✓ Generating static pages using 9 workers (8/8) in 441ms
+✓ Generating static pages using 9 workers (8/8) in 483ms
   Finalizing page optimization ...
 Route (app)
 ┌ ○ /
@@ -153,9 +153,11 @@ dark     upgrades  100   none | color-contrast: 1
 
 Each page loaded with `prefers-reduced-motion: reduce`, scrolled, then
 checked for CSS animations or transitions longer than an instant. The
-strata seal line runs on `requestAnimationFrame`, so on the home page the
-check also counts animation frames across one full 12 s block. The
-control run (motion allowed) must fail, and does: 38 frames.
+strata's load replay, block flare and idle tour all run on
+`requestAnimationFrame`, so on the home page the check also counts
+animation frames across one full 12 s block. The control run (motion
+allowed) must fail, and does: the replay and the idle tour draw 818
+frames.
 
 ```
 OK   /          reduce=true css=[] canvasFrames=0
@@ -165,7 +167,7 @@ OK   /network   reduce=true css=[] canvasFrames=0
 OK   /upgrades  reduce=true css=[] canvasFrames=0
 exit 0
 --- control (motion allowed, must FAIL)
-FAIL /          reduce=false css=[] canvasFrames=38
+FAIL /          reduce=false css=[] canvasFrames=818
 exit 1
 ```
 
@@ -178,67 +180,74 @@ time, and the stale label exactly when the data is over 48 hours old.
 ```
 OK   home 1280x720 h1=true sentence=true links=[true,true,true,true]
 OK   home 390x844 h1=true sentence=true links=[true,true,true,true]
-OK   /mining    Data from 22 Oct 2026, 23:33 UTC, 7 days ago | 169 h, stale label true
-OK   /fleet     Data from 29 Oct 2026, 23:43 UTC, under an hour ago | 0 h, stale label false
-OK   /network   Data from 22 Oct 2026, 23:43 UTC, 7 days ago | 168 h, stale label true
-OK   /upgrades  Data from 22 Oct 2026, 23:43 UTC, 7 days ago | 168 h, stale label true
+OK   /mining    Data from 22 Oct 2026, 23:33 UTC, 7 days ago | 170 h, stale label true
+OK   /fleet     Data from 29 Oct 2026, 23:43 UTC, 1 h ago | 2 h, stale label false
+OK   /network   Data from 22 Oct 2026, 23:43 UTC, 7 days ago | 170 h, stale label true
+OK   /upgrades  Data from 22 Oct 2026, 23:43 UTC, 7 days ago | 170 h, stale label true
 exit 0
 ```
 
 ## Design gate
 
-`design-taste-frontend` inspector and lint. The local direction sheet
-(`web/.taste-skill/direction.json`, gitignored) still held the rejected
-"One motif" type (General Sans); it now marks type as kept from
-DESIGN.md, which clears `font-not-dealt`. Lint lines that DESIGN.md
-asks for (table rules, underlined text links, the 1px tab line) carry a
-same-line `taste-skill-ignore` with the reason.
+`design-taste-frontend` inspector and lint. `headline-lines`,
+`few-pictures` and `still-page` are relaxed for Strata (DESIGN.md,
+owner, 2026-10-30). The local direction sheet
+(`web/.taste-skill/direction.json`, gitignored) marks type as kept from
+DESIGN.md. Lint lines that DESIGN.md asks for (table rules, underlined
+text links, the 1px tab line, the one hero scrim) carry a same-line
+`taste-skill-ignore` with the reason.
 
 ```
 ### inspect.mjs / --allow headline-lines,few-pictures,still-page
-  [off-centre] @390px  The page sits off-centre: its content comes to 16px from the left edge but only to 101px from the right, at 390px.
-  [size-count] @1440px (+768, 390)  12 different font sizes (13, 15, 16, 18, 20, 22, 24, 32, 40, 63, 64, 95).
+  [hairline] @1440px  1 thin rule(s)/divider line(s): span.lead 13px
+  [size-count] @1440px (+768, 390)  11 different font sizes (13, 16, 20, 22, 24, 28, 32, 40, 63, 64, 92).
+  [grey-body] @1440px (+768, 390)  The running text is a soft grey on its ground (5.7:1).
   [no-footage] @1440px  No video anywhere on the page.
-  [off-centre] @1440px (+768)  The margins differ: 92px on the left, 114px on the right, at 1440px.
-  [side-scroll] @390px  1 row(s) scroll sideways with content past their edge.
-RESULT: 1 FAIL, 4 WARN - not done.
+  [side-scroll] @768px (+390)  1 row(s) scroll sideways with content past their edge.
+  [off-centre] @768px  The margins differ: 31px on the left, 62px on the right, at 768px.
+RESULT: 0 FAIL, 6 WARN - measurements pass. Passing the meter is the floor, not the grade: score the screenshots with references/critique.md.
 ### inspect.mjs --app /mining
+  [tabular] @1440px (+768, 390)  Only 0% of the figures use tabular numerals.
   [app-title-size] @1440px (+768, 390)  The h1 is 63px ("Mining triage").
   [kpi-size] @1440px  A figure is set at 64px.
-RESULT: 0 FAIL, 2 WARN - measurements pass. Passing the meter is the floor, not the grade: score the screenshots with references/critique.md.
+RESULT: 0 FAIL, 3 WARN - measurements pass. Passing the meter is the floor, not the grade: score the screenshots with references/critique.md.
 ### inspect.mjs --app /fleet
+  [tabular] @1440px (+768, 390)  Only 0% of the figures use tabular numerals.
   [app-title-size] @1440px (+768, 390)  The h1 is 63px ("Fleet attention").
   [kpi-size] @1440px  A figure is set at 64px.
-RESULT: 0 FAIL, 2 WARN - measurements pass. Passing the meter is the floor, not the grade: score the screenshots with references/critique.md.
+RESULT: 0 FAIL, 3 WARN - measurements pass. Passing the meter is the floor, not the grade: score the screenshots with references/critique.md.
 ### inspect.mjs --app /network
+  [tabular] @1440px (+768, 390)  Only 0% of the figures use tabular numerals.
   [app-title-size] @1440px (+768, 390)  The h1 is 63px ("Network pulse").
-  [kpi-size] @1440px  A figure is set at 56px.
-RESULT: 0 FAIL, 2 WARN - measurements pass. Passing the meter is the floor, not the grade: score the screenshots with references/critique.md.
+  [kpi-size] @1440px  A figure is set at 64px.
+RESULT: 0 FAIL, 3 WARN - measurements pass. Passing the meter is the floor, not the grade: score the screenshots with references/critique.md.
 ### inspect.mjs --app /upgrades
+  [tabular] @1440px (+768, 390)  Only 0% of the figures use tabular numerals.
   [app-title-size] @1440px (+768, 390)  The h1 is 63px ("Runtime upgrades").
   [kpi-size] @1440px  A figure is set at 64px.
-RESULT: 0 FAIL, 2 WARN - measurements pass. Passing the meter is the floor, not the grade: score the screenshots with references/critique.md.
+RESULT: 0 FAIL, 3 WARN - measurements pass. Passing the meter is the floor, not the grade: score the screenshots with references/critique.md.
 ### lint.mjs src
 RESULT: 0 FAIL, 0 WARN
 ```
 
-The owner relaxed `headline-lines`, `few-pictures` and `still-page` for
-Strata on 2026-10-30 (DESIGN.md, "Rules relaxed"): comp E breaks them by
-design. The first run of this session, before the allowance, showed 7
-FAIL; the panel's `eyebrow` read was then fixed by folding its label into
-the sentence and widening the phone gap.
+Warnings kept, with reasons:
 
-Kept on the home page, with reasons:
+- `tabular` (boards): no tabular figures, on purpose. Schibsted's
+  tabular set gives the comma and the point a full figure width
+  (DESIGN.md, Type).
+- `app-title-size`, `kpi-size`: DESIGN.md's 64px Newsreader titles and
+  figures.
+- `hairline` (home): the annotation's leader line, an instrument part.
+- `size-count`, `grey-body`, `no-footage`: accepted.
+- `side-scroll` at 768 and 390: the home fleet table scrolls to reach
+  its activity lane.
+- `off-centre` at 768 (WARN): the field and its gutter are full-bleed.
 
-- `off-centre` at 390 (FAIL): a false read. The probe takes the 98th
-  percentile of text-run right edges, and the ragged-right copy in a
-  358 px column ends about 100 px short. The panel and the tables reach
-  the 16 px right margin (`mobile-fold.jpg`).
-- `off-centre` at 1440 (WARN), `size-count`, `no-footage`, `side-scroll`
-  at 390 (the fleet table scrolls to reach its lane): accepted.
-
-Board warnings kept: `app-title-size` and `kpi-size` are DESIGN.md's
-Newsreader titles (clamp to 64 px) and large figures (64 px).
+Fixed in this run from the inspector: the "Subnet 94" kicker above the
+annotation name (folded into the sentence), a ring shadow on the pointer
+tag, labels within 16px of the screen edge, the block readout reading as
+a kicker over the h1 at 768, and the annotation landing on the copy
+below 1024px (tablets now use the stacked layout).
 
 ## Isolation and repo checks
 
@@ -249,7 +258,6 @@ OK
 exit 0
 > tools/tests and readme_sync --check
 Ran 3 tests in 0.003s
-
 OK
 README.md is current
 exit 0
@@ -263,12 +271,13 @@ push with `web/` in an earlier commit builds; unset SHA builds.
 
 ## Look round
 
-Screenshots at 1440, 768 and 390, light and dark:
+Checked in a real browser at 1440 (dark and light), 768 and 390:
 
-- Strong: the strata field is real data (9,779 commits in 30 days across
-  104 repositories) and carries the idea at once. The boards share one
-  type system and read as one product.
-- Weak: on the fleet board at 1280 px the longer "why it ranks" values
-  wrap to two lines, and the table scrolls sideways to reach the lane. The 7-day-old fixtures show the stale label on
-  three boards, which is correct but reads as broken until live data
-  lands.
+- Strong: the field has a shape (quiet top, busy floor) and reads as a
+  chart: dated axis, today edge with the block clock, named rows in the
+  margin. The pointer tag, lit row and annotation say what is under the
+  cursor; idle, the ghost tour does it unprompted. Tables no longer wrap
+  or overflow at 1440.
+- Weak: on phones and tablets the field is a figure without margin
+  labels or a tour, so it explains less there. The 7-day-old fixtures
+  show the stale label on three boards until live data lands.
