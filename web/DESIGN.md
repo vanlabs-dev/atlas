@@ -145,8 +145,9 @@ holds.
   how to explore.
 - Idle tour (owner, 2026-10-30): after 5 s with no input, a ghost
   pointer glides slowly between random subnets with code (right half of
-  the field), a new one every 6 to 9 s. The pointer tag follows it; the
-  annotation moves only when it settles. Any mouse move or key press
+  the field), a new one every 6 to 9 s. The pointer tag and the
+  annotation follow it row by row, as they follow the mouse (owner,
+  2026-10-30). Any mouse move or key press
   hands control back. Off with reduced motion, on phones, and while the
   hero is out of view.
 - Block clock: the "today" edge carries "est. block N" and a 12 s

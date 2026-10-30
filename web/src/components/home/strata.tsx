@@ -137,8 +137,6 @@ export function Strata({
     let lastInput = performance.now();
     let touring = false;
     let vx = 0, vy = 0, gx = 0, gy = 0, nextPick = 0;
-    let settled = -1;
-    let settledX: number | null = null;
     let noteFor = "";
     const frames: number[] = [];
     const raf = (fn: FrameRequestCallback) => frames.push(requestAnimationFrame(fn));
@@ -270,10 +268,10 @@ export function Strata({
       note();
     }
 
-    // The annotation: on tour it holds the last subnet the ghost settled on.
+    // The annotation: follows the pointer, real or the ghost on tour.
     function note() {
       const g = G;
-      const i = touring && settled >= 0 ? settled : hover >= 0 ? hover : sel;
+      const i = hover >= 0 ? hover : sel;
       const x = rows[i];
       const idle = hover < 0 && !touring;
       const key = `${x.n}:${idle}`;
@@ -289,8 +287,7 @@ export function Strata({
         return;
       }
       const y = g.top + i * g.rh + g.rh / 2;
-      const ax = touring && settled >= 0 ? settledX : px;
-      const at = ax === null ? g.right - g.cw * 2.5 : Math.min(g.right, Math.max(g.left + 40, ax));
+      const at = px === null ? g.right - g.cw * 2.5 : Math.min(g.right, Math.max(g.left + 40, px));
       const tw = tag.offsetWidth, th = tag.offsetHeight;
       const tx = Math.round(Math.min(g.right - tw - 24, Math.max(g.W * 0.62, at - tw - 24)) / 4) * 4;
       const ty = g.top + Math.round((g.bottom - g.top) * 0.24);
@@ -437,9 +434,7 @@ export function Strata({
       if (!touring) {
         touring = true;
         vx = px ?? g.right - g.cw * 2.5;
-        settled = hover >= 0 ? hover : sel;
-        settledX = vx;
-        vy = g.top + settled * g.rh + g.rh / 2;
+        vy = g.top + (hover >= 0 ? hover : sel) * g.rh + g.rh / 2;
         pick();
       }
       if (t > nextPick) pick();
@@ -447,11 +442,6 @@ export function Strata({
       vy += (gy - vy) * 0.011;
       const i = Math.max(0, Math.min(N - 1, Math.floor((vy - g.top) / g.rh)));
       px = vx;
-      if (Math.hypot(gx - vx, gy - vy) < 3 && settled !== i) {
-        settled = i;
-        settledX = vx;
-        draw();
-      }
       if (i !== hover) {
         hover = i;
         draw();
