@@ -16,12 +16,13 @@ job already uses:
 - `--setting-sources ""`, `--disable-slash-commands`: no settings files,
   plugins, hooks or skills.
 - `--max-turns 1`, `--no-session-persistence`: one turn, nothing kept.
-- The prompt goes on stdin; the working directory is outside the
-  repository, so no AGENTS.md or CLAUDE.md is found.
+- The prompt goes on stdin. Each call runs in a new private directory
+  (mode 0700, removed afterwards), so no AGENTS.md or CLAUDE.md can be
+  found, even one another process drops in the shared temp directory.
 
 `stream-json` output carries an `init` event that lists the tools and MCP
-servers of that very call. `parse_stream` refuses the reply unless the
-event is present and both lists are empty. No model id is set: the CLI's
+servers of that very call. `parse_stream` refuses the reply unless an
+event is present and every one has both lists empty. No model id is set: the CLI's
 default model is used.
 
 Standard library only. Callers inject the runner, so tests touch no
@@ -33,9 +34,11 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import shutil
 import tempfile
 from typing import Any, Callable, List
 
+# Parent of the per-call private directory; outside the repository.
 ONESHOT_CWD = tempfile.gettempdir()
 
 Runner = Callable[..., Any]
@@ -66,18 +69,23 @@ def oneshot_argv(claude_path: str, system_prompt: str) -> List[str]:
 
 def run_oneshot(prompt: str, claude_path: str, system_prompt: str,
                 timeout: float, runner: Runner) -> Any:
-    """Run one call. Returns the completed process; raises what the runner
-    raises (subprocess.TimeoutExpired, OSError)."""
-    return runner(oneshot_argv(claude_path, system_prompt), input=prompt,
-                  capture_output=True, text=True, timeout=timeout,
-                  cwd=ONESHOT_CWD)
+    """Run one call in a new private directory. Returns the completed
+    process; raises what the runner raises (subprocess.TimeoutExpired,
+    OSError)."""
+    workdir = tempfile.mkdtemp(prefix="oneshot-", dir=ONESHOT_CWD)
+    try:
+        return runner(oneshot_argv(claude_path, system_prompt), input=prompt,
+                      capture_output=True, text=True, timeout=timeout,
+                      cwd=workdir)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
 
 
 def parse_stream(stdout: str) -> str:
     """The reply text of one `stream-json` call. Raises OneshotError when
     the call reported a non-empty or missing tool surface, failed, or
     produced no result."""
-    init = None
+    inits = []
     result = None
     for line in (stdout or "").splitlines():
         line = line.strip()
@@ -89,20 +97,20 @@ def parse_stream(stdout: str) -> str:
             continue
         if not isinstance(event, dict):
             continue
-        if (event.get("type") == "system" and event.get("subtype") == "init"
-                and init is None):
-            init = event
+        if event.get("type") == "system" and event.get("subtype") == "init":
+            inits.append(event)
         elif event.get("type") == "result":
             result = event
-    if init is None:
+    if not inits:
         raise OneshotError("no init event", surface=True)
-    tools = init.get("tools")
-    servers = init.get("mcp_servers")
-    if not isinstance(tools, list) or not isinstance(servers, list):
-        raise OneshotError("init event has no tool lists", surface=True)
-    if tools or servers:
-        raise OneshotError("call exposed %d tools and %d MCP servers"
-                           % (len(tools), len(servers)), surface=True)
+    for init in inits:
+        tools = init.get("tools")
+        servers = init.get("mcp_servers")
+        if not isinstance(tools, list) or not isinstance(servers, list):
+            raise OneshotError("init event has no tool lists", surface=True)
+        if tools or servers:
+            raise OneshotError("call exposed %d tools and %d MCP servers"
+                               % (len(tools), len(servers)), surface=True)
     if result is None:
         raise OneshotError("no result event")
     if result.get("is_error") or result.get("subtype") != "success":

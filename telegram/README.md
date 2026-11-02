@@ -239,7 +239,8 @@ scan (no history replay). **Schedule (change: alert-delivery-reliability, 2026-1
   watch pages "cannot read gateway state" and the LLM check falls back to
   rewrite outcomes.
 - **Rewrite and judge calls** do not use Hermes. They run `claude -p` with
-  no tools, no MCP servers, no settings files and no skills, from `/tmp`,
+  no tools, no MCP servers, no settings files and no skills, from a new
+  private directory under `/tmp`,
   and code reads each call's own `init` event: any tool or MCP server, or
   no event, discards the reply (`tools-exposed` for the rewrite,
   `unjudged` for the judge). The Hermes gateway merges every enabled MCP

@@ -182,9 +182,10 @@ Each rewrite and judge call SHALL run `claude -p` with `--restricted`,
 `--strict-mcp-config` and no `--mcp-config`, `--tools ""`,
 `--setting-sources ""`, `--disable-slash-commands`, `--max-turns 1` and
 `--no-session-persistence`, with `stream-json` output, the prompt on
-stdin, and a working directory outside the repository. Code SHALL read
+stdin, and a new private working directory outside the repository
+for each call. Code SHALL read
 the CLI's `init` event of that call and SHALL accept the reply only when
-the event is present and lists no tools and no MCP servers. Otherwise the
+every `init` event present lists no tools and no MCP servers. Otherwise the
 reply SHALL be discarded: the rewrite SHALL fall back with reason
 `tools-exposed`, which the health watch counts as a model failure, and the
 econ judge SHALL record `unjudged`. The call SHALL NOT go through the

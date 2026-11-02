@@ -10,8 +10,10 @@ claude -p --restricted --strict-mcp-config --tools "" --setting-sources ""
   --output-format stream-json --verbose --system-prompt <short>
 ```
 
-The prompt goes on stdin, so untrusted text never sits in argv, and the
-working directory is `/tmp`, so no AGENTS.md or CLAUDE.md is found. No
+The prompt goes on stdin, so untrusted text never sits in argv. Each call
+runs in a new private directory under the system temp directory (mode
+0700, removed afterwards), so no AGENTS.md or CLAUDE.md can be found, even
+one another process drops in the shared `/tmp`. No
 `--mcp-config` is passed, so `--strict-mcp-config` loads no server. No
 `--model` is passed: the CLI's default model is used, and no model id
 enters Atlas. Auth is the CLI's existing login on the Pi, the one the
@@ -30,7 +32,10 @@ Test call on the Pi (Claude Code 2.1.280, 2026-11-03), the audit's
 tokens (5,000 through Hermes), 5.1 s, and a reply that passes the check.
 The event also lists built-in plugins (`agents-md`, `telemetry`) and
 subagent names; with no tools there is no tool to start a subagent, and
-`/tmp` holds no AGENTS.md.
+the private directory holds no AGENTS.md. The Pi has no managed settings
+(`/etc/claude-code/` is absent), so no hook receives the prompt.
+`parse_stream` checks every `init` event in the output, not only the
+first.
 
 Trade-off: the two calls no longer follow Hermes's model setting. A model
 change in Hermes does not reach them.
@@ -60,7 +65,7 @@ toolset, or one-shot exits 2. Findings on the Pi (Hermes v0.22.5,
   name. It passed because the merge happens later, in the gateway. The
   post-deploy test call's session record showed the bridge.
 
-A read-only check of all 510 `oneshot` sessions in `~/.hermes/state.db`
+Read-only check of all 510 `oneshot` sessions in `~/.hermes/state.db`
 found tool calls only in the 2026-09-24 knowledge battery, which uses the
 KB tools on purpose. No rewrite (121) or judge (350) session called a
 tool. Both calls were disabled (`7a9f412`) until this route shipped.
