@@ -1,0 +1,16 @@
+#!/bin/sh
+# Atlas Pi guard: reject any commit not authored and committed as the
+# personal identity. Installed on the Pi with
+#   git -C /home/pi/atlas config core.hooksPath /home/pi/atlas/tools/git-hooks
+# The value must match AUTHOR_IDENT in upgrade/atlas_upgrade.py.
+expected="vaNlabs <vanlabs@pm.me>"
+for kind in AUTHOR COMMITTER; do
+    ident=$(git var "GIT_${kind}_IDENT" 2>/dev/null) || ident=""
+    ident=${ident% * *}
+    if [ "$ident" != "$expected" ]; then
+        echo "pre-commit: $kind is '$ident', expected '$expected'." >&2
+        echo "pre-commit: commits on the Pi come from the upgrade job only." >&2
+        exit 1
+    fi
+done
+exit 0
