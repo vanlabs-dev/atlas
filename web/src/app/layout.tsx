@@ -15,7 +15,8 @@ const archivo = Archivo({
 });
 
 // Runs before first paint: a browser without WebGL gets the flat field and no flight, with no layout jump.
-const NOGL = `try{var c=document.createElement("canvas");if(!(c.getContext("webgl2")||c.getContext("webgl")))document.documentElement.classList.add("nogl")}catch(e){document.documentElement.classList.add("nogl")}`;
+// The probe releases its context at once, so it never holds one of the browser's few WebGL slots.
+const NOGL = `try{var c=document.createElement("canvas"),g=c.getContext("webgl2")||c.getContext("webgl");if(g){var x=g.getExtension("WEBGL_lose_context");if(x)x.loseContext()}else document.documentElement.classList.add("nogl")}catch(e){document.documentElement.classList.add("nogl")}`;
 
 export const metadata: Metadata = {
   title: { default: "Atlas reads all 128 Bittensor subnets", template: "%s | Atlas" },
