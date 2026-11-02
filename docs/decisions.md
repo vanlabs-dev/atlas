@@ -985,3 +985,43 @@ instant classes are unchanged (about 28 pages in the window). Detection,
 verdicts and the effectiveness ledger continue for every class.
 
 Rollback: set a class tier in `telegram/config.json`.
+
+## metagraphed replaced by atlas-live readers (2026-11-02, change: livedata-metagraphed-gaps)
+
+metagraphed (`https://api.metagraph.sh/mcp`) answered every Hermes connect
+with 401 from at least 2026-10-25. The server now requires an OAuth sign-in
+(authorization code with PKCE; no API key, no device flow). The operator
+disabled it in `~/.hermes/config.yaml` on 2026-11-02 (`enabled: false`; the
+block is kept for a one-line re-enable). Decision: chain RPC answers first
+wherever the chain can; keyless TaoSwap answers the rest. No TaoStats quota.
+
+Discovery gate: TaoSwap contract report
+`contract-taoswap-20261102T064402Z-1eeebab4` (workstation, 27 of 32 calls).
+
+- Rate: no rate headers on any call; no documented limit. Recorded as
+  unknown. The politeness budget stays (serial, 1.0 s spacing, 20/min).
+- `/v2/subnets/{netuid}/`: about 190 KB (it embeds the metagraph). The
+  `hyperparameters` object is present for netuids 1 and 64. Some values
+  are strings (`min_difficulty`, `weights_version`) or floats
+  (`max_weight_limit`).
+- `/v2/subnets/{netuid}/validators/`: page-based (`pagination.total_count`),
+  rows carry `hotkey`, `coldkey`, `stake`, `identity`, `take` and yields;
+  `apy_365d` can be null. An unknown netuid is 404 with
+  `{code, detail, error, message}`.
+- `/v2/validators/{hotkey}/`: 2 MB and 13 s, almost all of it the
+  `monitoring` series. With `omit=monitoring` it is 78 KB and 1.9 s
+  (one extra observed call). The adapter pins `omit=monitoring`. A
+  malformed hotkey is 404.
+- `/v1/account-ledger/`: page-based; rows carry `block`, `timestamp`,
+  `kind`, `tao_rao`, nullable `alpha_rao`, `netuid` and `hotkey`.
+- `/account-transactions/`: two lists, `stake_transfers` and `transfers`,
+  each newest first with `block` and `timestamp`; amounts in rao.
+- `/events/` and `/blocks/{block}/events/`: page-based; rows carry `block`,
+  `idx`, `section`, `method`, `data` (a string) and nullable
+  `extrinsic_idx`.
+- The //Alice sample address is not idle on Finney (it receives real
+  transfers), so both account samples show full shapes; an empty list was
+  not observed for these endpoints.
+
+Not replaced: metagraphed's health incidents, subnet API and endpoint
+listings, semantic search and `ask`.

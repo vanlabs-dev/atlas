@@ -21,7 +21,16 @@ import atlas_live as al
 import discovery_common as dc
 
 PROVIDER = "taoswap"
-MAX_CALLS = 30  # keyless, but budgeted anyway — politeness by design
+MAX_CALLS = 32  # keyless, but budgeted anyway: politeness by design
+
+# Public sample identities for the metagraphed-gap probes (change:
+# livedata-metagraphed-gaps). The bounded report sample keeps the first 15
+# keys only, so the hotkey cannot be read back from /v2/validators/.
+# ACTIVE is the top validator by stake on 2026-11-02 (identity tao.bot);
+# IDLE is the well-known //Alice development address.
+SAMPLE_HOTKEY = "5E2LP6EnZ54m3wS8s1yPvD5c3xo71kQroBw7aUVK32TKeZ5u"
+SAMPLE_COLDKEY_ACTIVE = "5GsbTgfvgCH4xdqSkiPb7EaBBFLHjWH5vfEALhJaewSFpZX9"
+SAMPLE_COLDKEY_IDLE = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
 
 
 def discover() -> int:
@@ -60,6 +69,8 @@ def discover() -> int:
         session.probe("validators-v2", "/v2/validators/")
         session.probe("metagraph", "/metagraph/1/",
                       note="size check: full-subnet metagraph payload")
+
+        _probe_metagraphed_gaps(session)
 
         # -- network stats + blocks (freshness anchors)
         session.probe("network-stats", "/network-stats/")
@@ -161,6 +172,40 @@ def discover() -> int:
         return 0 if not failures else 1
     finally:
         session.close()
+
+
+def _probe_metagraphed_gaps(session: dc.DiscoverySession) -> None:
+    """Endpoints that replace the disabled metagraphed MCP (change:
+    livedata-metagraphed-gaps): two samples where shapes vary, plus
+    negative tests. The existing /v2/subnets/99999/ probe covers an
+    unknown netuid on the detail path."""
+    session.probe("subnet-detail-large", "/v2/subnets/64/",
+                  note="second subnet-detail sample; hyperparameters")
+    session.probe("subnet-validators", "/v2/subnets/1/validators/")
+    session.probe("subnet-validators-unknown",
+                  "/v2/subnets/99999/validators/", expect="error",
+                  note="unknown netuid")
+    session.probe("validator-detail",
+                  "/v2/validators/%s/" % SAMPLE_HOTKEY)
+    session.probe("validator-detail-malformed",
+                  "/v2/validators/not-an-ss58/", expect="error",
+                  note="malformed hotkey")
+    session.probe("account-ledger-active", "/v1/account-ledger/",
+                  params={"account": SAMPLE_COLDKEY_ACTIVE,
+                          "page_size": 20})
+    session.probe("account-ledger-idle", "/v1/account-ledger/",
+                  params={"account": SAMPLE_COLDKEY_IDLE,
+                          "page_size": 20},
+                  note="idle account: empty-list shape")
+    session.probe("account-transactions-active", "/account-transactions/",
+                  params={"account": SAMPLE_COLDKEY_ACTIVE, "limit": 20})
+    session.probe("account-transactions-idle", "/account-transactions/",
+                  params={"account": SAMPLE_COLDKEY_IDLE, "limit": 20},
+                  note="idle account: empty-list shape")
+    session.probe("events", "/events/", params={"page_size": 20})
+    session.probe("block-events", "/blocks/8819803/events/",
+                  params={"page_size": 20},
+                  note="one finalized historical block")
 
 
 def _propose_envelopes(session: dc.DiscoverySession):
