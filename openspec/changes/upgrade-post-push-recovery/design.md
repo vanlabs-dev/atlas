@@ -91,9 +91,10 @@ base", and restart the MCP servers after new code arrives.
       `hashes.json`, set status `idle` and drop `post_push`.
    4. **Restart.** Retry a pending gateway restart (decision 7).
 
-   The early return no longer rewrites any state to `idle`. The only path
-   back to `idle` is step 3. A pre-push `blocked` still needs `clear`, as
-   before.
+   The early return no longer rewrites a `blocked` state to `idle`; it
+   still resets a pre-push `waiting` or `retrying` state. The only path out
+   of a post-push block is step 3. A pre-push `blocked` now needs `clear`
+   even after the corpus catches up.
 
    The knowledge base is read with `sqlite3` in read-only URI mode. All
    writes go through `atlas_kb.py`.

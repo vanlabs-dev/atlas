@@ -2,10 +2,12 @@
 retry, and report path runs against fakes for git, claude, RPC, and
 Telegram; nothing here reaches the network or a real repository."""
 
+import datetime
 import hashlib
 import json
 import os
 import shutil
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -15,6 +17,9 @@ sys.path.insert(0, os.path.dirname(_HERE))
 
 import allowed_paths as ap  # noqa: E402
 import atlas_upgrade as au  # noqa: E402
+
+sys.path.insert(0, os.path.join(au.ROOT, "knowledge"))
+import atlas_kb as akb  # noqa: E402
 
 SOURCES = "| Grounded at | Finney `spec_version` **%d** |\n"
 BASE, COMMIT = "b" * 40, "c" * 40
@@ -57,6 +62,84 @@ class FakeJob(au.Job):
         self.edit = self.default_edit
         self.deliver = True
         self.pushed = False
+        self.repo_ident = au.AUTHOR_IDENT + " 1 +0000"
+        self.live_head = BASE
+        self.code_log = ""
+        self.gateway = "active"
+        self.restarts = 0
+        self.activated = []
+        self.hermes_home = os.path.join(tmp, "hermes")
+        self.set_gateway()
+        self.make_kb()
+
+    # -- world builders ------------------------------------------------------
+
+    def set_gateway(self, age=0.0, **fields):
+        state = {"gateway_state": "running", "active_agents": 0,
+                 "active_work": None,
+                 "updated_at": datetime.datetime.fromtimestamp(
+                     self.clock - age, tz=datetime.timezone.utc).isoformat()}
+        state.update(fields)
+        write(os.path.join(self.hermes_home, "gateway_state.json"),
+              json.dumps(state))
+
+    def make_kb(self):
+        """A real store with the atlas_kb schema; run R0 (operator) serves
+        the corpus the live tree carries."""
+        os.makedirs(os.path.dirname(self.kb_db), exist_ok=True)
+        connection = sqlite3.connect(self.kb_db)
+        connection.executescript(akb.SCHEMA_SQL)
+        connection.commit()
+        connection.close()
+        self.add_run("R0", self.corpus_hashes(), actor="operator")
+        self.kb_activate("R0")
+
+    def add_run(self, run_id, files, actor="atlas-upgrade", clean=True):
+        connection = sqlite3.connect(self.kb_db)
+        connection.execute("DELETE FROM units WHERE run_id = ?", (run_id,))
+        connection.execute(
+            "INSERT OR REPLACE INTO intake_runs VALUES (?, ?, ?, ?, ?, ?)",
+            (run_id, "2026-11-%02d" % (len(self.activated) + 1),
+             "2026-11-01", "p", "k", json.dumps(
+                 {name: {"bytes": 1, "sha256": digest}
+                  for name, digest in files.items()})))
+        connection.execute(
+            "INSERT INTO units (unit_id, run_id, source_file, source_sha256,"
+            " heading_path, line_start, line_end, coverage_date, "
+            "evidence_state, content) VALUES ('u', ?, 'f', 's', 'h', 1, 1, "
+            "'2026-11-01', 'confirmed', 'c')", (run_id,))
+        connection.execute(
+            "INSERT INTO audit (timestamp, actor, action, detail) VALUES "
+            "('t', ?, 'ingest', ?)", (actor, "run %s staged 1 units"
+                                      % run_id))
+        connection.commit()
+        connection.close()
+        write(os.path.join(self.root, "var", "knowledge",
+                           "validation-report-%s.json" % run_id),
+              json.dumps({"secret_scan_findings": [],
+                          "duplicate_unit_ids": [] if clean else ["dup"]}))
+
+    def kb_activate(self, run_id):
+        connection = sqlite3.connect(self.kb_db)
+        connection.execute("UPDATE units SET active = 0")
+        connection.execute("UPDATE units SET active = 1 WHERE run_id = ?",
+                           (run_id,))
+        connection.commit()
+        connection.close()
+        self.activated.append(run_id)
+
+    def set_corpus(self, digest=None, grounded=None):
+        path = os.path.join(self.root, "knowledge", "corpus", "hashes.json")
+        with open(path, "r", encoding="utf-8") as handle:
+            manifest = json.load(handle)
+        if digest is not None:
+            manifest["files"] = {"ground-truth.md": digest}
+        if grounded is not None:
+            manifest["grounded_spec"] = grounded
+        write(path, json.dumps(manifest))
+
+    def sleep(self, seconds):
+        pass
 
     def now(self):
         return self.clock
@@ -80,10 +163,19 @@ class FakeJob(au.Job):
         self.calls.append(cmd)
         ok = au.Result(0, "", "")
         if cmd[0] == "git":
-            return self.git_fake(cmd[1:], cwd)
+            return self.git_fake(cmd[1:], cwd, env)
+        if cmd[0] == "systemctl":
+            if cmd[2] == "is-active":
+                return au.Result(0 if self.gateway == "active" else 3,
+                                 self.gateway + "\n", "")
+            if "restart" in self.broken:
+                return au.Result(1, "", "failed")
+            self.restarts += 1
+            return ok
         if cmd[0] == self.claude:
             if cmd[-1] == "reply ok":
-                return au.Result(1, "", "auth") if "smoke" in self.broken \
+                return au.Result(1, "", "OAuth session expired") \
+                    if "smoke" in self.broken \
                     else au.Result(0, "ok", "")
             if "claude" in self.broken:
                 return au.Result(124, "", "timed out")
@@ -100,20 +192,50 @@ class FakeJob(au.Job):
             report = {"secret_scan_findings": [],
                       "duplicate_unit_ids": ["dup"] if "ingest" in self.broken
                       else []}
+            with open(os.path.join(cwd, "knowledge", "corpus",
+                                   "hashes.json"), "r",
+                      encoding="utf-8") as handle:
+                self.add_run("R1", json.load(handle)["files"])
             write(os.path.join(self.root, "var", "knowledge",
                                "validation-report-R1.json"),
                   json.dumps(report))
             return au.Result(0, "Ingest run R1: 3 units staged", "")
         if script == "atlas_kb.py" and cmd[2] == "activate":
-            return au.Result(1, "", "no") if "activate" in self.broken else ok
+            if "activate" in self.broken:
+                return au.Result(1, "", "no")
+            self.kb_activate(cmd[cmd.index("--run") + 1])
+            return ok
         return ok  # repotrack update, read-knobs
 
-    def git_fake(self, args, cwd):
+    def git_fake(self, args, cwd, env=None):
         ok = au.Result(0, "", "")
         if "git-" + args[0] in self.broken:
             return au.Result(1, "", "%s failed" % args[0])
         if args[0] == "var":
-            return au.Result(0, "vaNlabs <vanlabs@pm.me> 1 +0000", "")
+            # The job's own overrides always win; only a bare env shows the
+            # repo's identity.
+            if env and env.get("GIT_AUTHOR_NAME"):
+                return au.Result(0, au.AUTHOR_IDENT + " 1 +0000", "")
+            return au.Result(0, self.repo_ident, "")
+        if args[0] == "merge-base":
+            older, newer = args[2], args[3]
+            if (older, newer) == ("HEAD", "origin/main"):
+                late = "diverged-late" in self.broken and any(
+                    len(c) > 2 and c[2] == "ingest" for c in self.calls)
+                return au.Result(1 if "diverged" in self.broken or late
+                                 else 0, "", "")
+            return au.Result(0 if older in (self.live_head, BASE) else 1,
+                             "", "")
+        if args[0] == "log" and "--format=%h %s" in args:
+            return au.Result(0, self.code_log, "")
+        if args[0] == "pull":
+            if self.pushed:
+                self.live_head = COMMIT
+                shutil.copy(os.path.join(self.worktree, "knowledge",
+                                         "corpus", "hashes.json"),
+                            os.path.join(self.root, "knowledge", "corpus",
+                                         "hashes.json"))
+            return ok
         if args[0] == "status":
             if cwd == self.root:
                 return au.Result(0, " M x" if "dirty" in self.broken else "",
@@ -124,11 +246,14 @@ class FakeJob(au.Job):
             return ok if args[-1][len("refs/heads/"):] in self.branches \
                 else au.Result(1, "", "")
         if args[0] == "rev-parse":
-            if "moved" in self.broken and cwd == self.worktree:
-                return au.Result(0, "d" * 40, "")
-            return au.Result(0, COMMIT if self.pushed or (
-                cwd == self.worktree and "commit" in self.calls_flat())
-                else BASE, "")
+            if cwd == self.worktree:
+                if "moved" in self.broken:
+                    return au.Result(0, "d" * 40, "")
+                return au.Result(0, COMMIT if "commit" in self.calls_flat()
+                                 else BASE, "")
+            if args[1] == "HEAD":
+                return au.Result(0, self.live_head, "")
+            return au.Result(0, COMMIT if self.pushed else BASE, "")
         if args[0] == "worktree" and args[1] == "add":
             self.branches.add(args[3])
             shutil.copytree(os.path.join(self.root, "knowledge"),
@@ -190,8 +315,11 @@ class DetectTest(Base):
     def test_corpus_equals_live_does_nothing(self):
         job = self.job(live=469)
         self.assertEqual(job.run_once(), 0)
-        self.assertEqual(job.calls, [])
+        # Only the read-only live-tree checks of the recovery pass run.
+        self.assertEqual({tuple(c[:2]) for c in job.calls},
+                         {("git", "status"), ("git", "merge-base")})
         self.assertEqual(job.sent, [])
+        self.assertFalse(os.path.exists(job.state_path))
 
     def test_only_repo_moved_does_nothing(self):
         job = self.job(live=469, clone=470)
@@ -250,12 +378,6 @@ class GateTest(Base):
         self.assertIn("retrying", job.sent[0])
         self.assertIn("(attempt 1 of 3)", job.sent[0].split("\n")[0])
         return job
-
-    def test_claude_auth(self):
-        self.fails_at("preflight", lambda j: j.broken.add("smoke"))
-
-    def test_dirty_live_tree(self):
-        self.fails_at("preflight", lambda j: j.broken.add("dirty"))
 
     def test_edit_timeout(self):
         self.fails_at("edit", lambda j: j.broken.add("claude"))
@@ -328,10 +450,14 @@ class PostPushTest(Base):
         self.assertEqual(job.run_once(), 1)
         state = job.state()
         self.assertEqual((state["status"], state["attempt"]), ("blocked", 1))
-        self.assertIn("Blocked", job.sent[0])
+        self.assertIn("blocked after the push", job.sent[0])
         self.assertTrue(job.sent[0].startswith("🔴 "))
-        self.assertIn("upgrade/atlas_upgrade.py clear --spec",
-                      job.sent[0].split("\n")[-1])
+        self.assertEqual(state["post_push"],
+                         {"commit": COMMIT, "run_id": "R1",
+                          "gate": "activate"})
+        last = job.sent[0].split("\n")[-1]
+        self.assertIn("atlas_kb.py activate --run R1", last)
+        self.assertNotIn("pull", last)
 
     def test_readback_mismatch_blocks_before_pull(self):
         job = self.job()
@@ -366,7 +492,9 @@ class RetryTest(Base):
         job.clock += 10 ** 6
         calls = len(job.calls)
         job.run_once()
-        self.assertEqual(len(job.calls), calls)  # blocked: no new run
+        self.assertFalse(any(c[0] in (job.claude, sys.executable)
+                             or c[:2] in (["git", "fetch"], ["git", "push"])
+                             for c in job.calls[calls:]))  # blocked: no run
         self.assertEqual(len(job.sent), 3)
 
     def test_clear_restarts_at_attempt_one(self):
@@ -453,6 +581,268 @@ class ReportTest(Base):
         self.assertNotIn("pending_report", job.state())
         job.run_once()
         self.assertEqual(len(job.sent), 1)
+
+
+class FlushTest(Base):
+    """C16: a delivered pending report is saved on every path."""
+
+    def test_pending_delivered_on_idle_run_is_saved(self):
+        job = self.job(live=469)
+        job.save_state({"status": "idle", "spec": 469, "attempt": 1,
+                        "reported": [], "pending_report": {
+                            "key": "469:1:retrying",
+                            "message": {"headline": "late news"}}})
+        job.run_once()
+        self.assertEqual(len(job.sent), 1)
+        state = job.state()
+        self.assertNotIn("pending_report", state)
+        self.assertIn("469:1:retrying", state["reported"])
+        job.run_once()
+        self.assertEqual(len(job.sent), 1)
+
+    def test_stale_pending_report_dropped(self):
+        job = self.job(live=469)
+        job.save_state({"status": "idle", "spec": 469, "attempt": 1,
+                        "reported": [], "pending_report": {
+                            "key": "468:2:retrying",
+                            "message": {"headline": "old news"}}})
+        job.run_once()
+        self.assertEqual(job.sent, [])
+        self.assertNotIn("pending_report", job.state())
+
+
+class WaitReasonTest(Base):
+    """C12, A2: environment preflight uses no attempt."""
+
+    def waits(self, reason, prepare):
+        job = self.job()
+        prepare(job)
+        self.assertEqual(job.run_once(), 0)
+        state = job.state()
+        self.assertEqual((state["status"], state["wait_reason"],
+                          state["attempt"]), ("waiting", reason, 0))
+        self.assertEqual(self.claude_calls(job), [])
+        self.assertFalse(job.pushed)
+        self.assertEqual(len(job.sent), 1)
+        headline, _meaning, _action = au.WAIT_REASONS[reason]
+        self.assertIn(headline, job.sent[0])
+        job.clock += 1800
+        job.run_once()
+        self.assertEqual(len(job.sent), 1)  # one report per reason
+        return job
+
+    def test_claude_login_expired(self):
+        job = self.waits("auth", lambda j: j.broken.add("smoke"))
+        self.assertNotIn("OAuth", job.sent[0])  # fixed wording only
+
+    def test_dirty_live_tree(self):
+        self.waits("dirty", lambda j: j.broken.add("dirty"))
+
+    def test_local_commit_in_live_tree(self):
+        job = self.waits("diverged", lambda j: j.broken.add("diverged"))
+        self.assertTrue(job.ran(["git", "fetch", "origin"]))
+
+    def test_identity_checked_without_overrides(self):
+        def wrong(job):
+            job.repo_ident = "Atlas <atlas@localhost> 1 +0000"
+        self.waits("identity", wrong)
+
+    def test_recovers_and_uses_attempt_one(self):
+        job = self.waits("auth", lambda j: j.broken.add("smoke"))
+        job.broken.discard("smoke")
+        job.run_once()
+        state = job.state()
+        self.assertEqual((state["status"], state["attempt"]), ("updated", 1))
+        self.assertNotIn("wait_reason", state)
+
+    def test_divergence_before_push_fails_at_push(self):
+        job = self.job()
+        job.broken.add("diverged-late")
+        self.assertEqual(job.run_once(), 1)
+        state = job.state()
+        self.assertEqual(state["status"], "retrying")
+        self.assertTrue(state["last_error"].startswith("push:"))
+        self.assertFalse(job.ran(["git", "push", "origin", "HEAD:main"]))
+        self.assertNotIn("post_push", state)
+
+
+class RecoveryTest(Base):
+    """A1: a post-push failure never goes quiet with a stale corpus."""
+
+    def pull_blocked(self):
+        job = self.job()
+        job.broken.add("git-pull")
+        self.assertEqual(job.run_once(), 1)
+        return job
+
+    def test_pull_failure_blocks_with_commands(self):
+        job = self.pull_blocked()
+        state = job.state()
+        self.assertEqual(state["status"], "blocked")
+        self.assertEqual(state["post_push"],
+                         {"commit": COMMIT, "run_id": "R1", "gate": "pull"})
+        self.assertIn(au.PULL_CMD, job.sent[0])
+        self.assertIn("atlas_kb.py activate --run R1", job.sent[0])
+        self.assertEqual(job.activated, ["R0"])
+
+    def test_corpus_catching_up_keeps_the_block(self):
+        job = self.pull_blocked()
+        job.set_corpus(digest="new", grounded=470)  # rebased by hand
+        job.clock += 10 ** 6
+        job.run_once()
+        state = job.state()
+        self.assertEqual(state["status"], "blocked")
+        self.assertIn("post_push", state)
+
+    def test_repaired_tree_pulls_activates_and_clears(self):
+        job = self.pull_blocked()
+        job.broken.discard("git-pull")
+        sent = len(job.sent)
+        job.run_once()
+        state = job.state()
+        self.assertEqual(state["status"], "idle")
+        self.assertNotIn("post_push", state)
+        self.assertEqual(job.live_head, COMMIT)
+        self.assertEqual(job.activated, ["R0", "R1"])
+        self.assertEqual(len(job.sent), sent + 1)
+        self.assertIn("activated the knowledge run", job.sent[-1])
+        job.run_once()
+        self.assertEqual(len(job.sent), sent + 1)
+
+    def test_diverged_tree_is_not_pulled(self):
+        job = self.pull_blocked()
+        job.broken.discard("git-pull")
+        job.broken.add("diverged")
+        job.run_once()
+        self.assertEqual(job.state()["status"], "blocked")
+        self.assertEqual(job.activated, ["R0"])
+
+    def test_activation_failure_recovers_next_run(self):
+        job = self.job()
+        job.broken.add("activate")
+        job.run_once()
+        job.broken.discard("activate")
+        job.run_once()
+        self.assertEqual(job.state()["status"], "idle")
+        self.assertEqual(job.activated, ["R0", "R1"])
+
+
+class KnowledgeCurrencyTest(Base):
+    """A1: the active run must serve the live tree's corpus."""
+
+    def stale(self, prepare=None):
+        job = self.job(live=469)
+        job.set_corpus(digest="new")
+        if prepare:
+            prepare(job)
+        job.run_once()
+        return job
+
+    def test_matching_run_ingested_by_the_job_is_activated(self):
+        job = self.stale(lambda j: j.add_run("R5", {"ground-truth.md":
+                                                    "new"}))
+        self.assertEqual(job.activated, ["R0", "R5"])
+        self.assertEqual(len(job.sent), 1)
+        self.assertIn("R5", job.sent[0])
+
+    def test_no_candidate_reports_commands_once(self):
+        job = self.stale()
+        self.assertEqual(job.activated, ["R0"])
+        self.assertEqual(len(job.sent), 1)
+        self.assertIn("knowledge base is stale", job.sent[0])
+        self.assertIn("atlas_kb.py ingest", job.sent[0])
+        job.run_once()
+        self.assertEqual(len(job.sent), 1)
+
+    def test_operator_run_is_not_self_activated(self):
+        job = self.stale(lambda j: j.add_run(
+            "R6", {"ground-truth.md": "new"}, actor="operator"))
+        self.assertEqual(job.activated, ["R0"])
+        self.assertIn("stale", job.sent[0])
+
+    def test_other_corpus_or_rejected_run_is_not_activated(self):
+        def runs(job):
+            job.add_run("R7", {"ground-truth.md": "other"})
+            job.add_run("R8", {"ground-truth.md": "new"}, clean=False)
+        job = self.stale(runs)
+        self.assertEqual(job.activated, ["R0"])
+
+    def test_dirty_tree_activates_nothing(self):
+        job = self.stale(lambda j: (j.add_run("R5", {"ground-truth.md":
+                                                     "new"}),
+                                    j.broken.add("dirty")))
+        self.assertEqual(job.activated, ["R0"])
+        self.assertEqual(job.sent, [])
+
+
+class RestartTest(Base):
+    """F2, F3: pulled code reaches the Hermes tools."""
+
+    def upgraded(self, prepare=None, commits=3):
+        job = self.job()
+        job.code_log = "\n".join("a%03d fix thing %d" % (n, n)
+                                 for n in range(commits))
+        if prepare:
+            prepare(job)
+        self.assertEqual(job.run_once(), 0)
+        self.assertEqual(job.state()["status"], "updated")
+        return job
+
+    def test_updated_lists_code_commits(self):
+        job = self.upgraded(commits=12)
+        self.assertIn("Code pulled into the live tree:", job.sent[0])
+        self.assertIn("a009 fix thing 9", job.sent[0])
+        self.assertNotIn("a010 fix thing 10", job.sent[0])
+        self.assertIn("and 2 more", job.sent[0])
+
+    def test_idle_gateway_is_restarted(self):
+        job = self.upgraded()
+        self.assertEqual(job.restarts, 1)
+        self.assertNotIn("restart", job.state())
+        self.assertEqual(len(job.sent), 1)
+
+    def test_corpus_only_pull_does_not_restart(self):
+        job = self.upgraded(commits=0)
+        self.assertEqual(job.restarts, 0)
+        self.assertNotIn("Code pulled", job.sent[0])
+        self.assertFalse(job.ran(["systemctl", "--user", "is-active"]))
+
+    def test_busy_gateway_reports_once_then_restarts_later(self):
+        job = self.upgraded(lambda j: j.set_gateway(active_agents=1))
+        self.assertEqual(job.restarts, 0)
+        self.assertEqual(len(job.sent), 2)
+        self.assertIn("needs a Hermes gateway restart", job.sent[1])
+        self.assertIn("busy", job.sent[1])
+        job.clock += 1800
+        job.set_gateway(active_agents=1)
+        job.run_once()
+        self.assertEqual((job.restarts, len(job.sent)), (0, 2))
+        job.set_gateway()
+        job.run_once()
+        self.assertEqual(job.restarts, 1)
+        self.assertNotIn("restart", job.state())
+        self.assertEqual(len(job.sent), 2)
+
+    def test_stale_or_missing_gateway_state_is_unsafe(self):
+        job = self.upgraded(lambda j: j.set_gateway(age=3600))
+        self.assertEqual(job.restarts, 0)
+        self.assertIn("stale", job.sent[1])
+        os.remove(os.path.join(job.hermes_home, "gateway_state.json"))
+        job.state_path = job.state_path  # same state, next run
+        job.run_once()
+        self.assertEqual(job.restarts, 0)
+        self.assertIn("restart", job.state())
+
+    def test_stopped_gateway_is_not_started(self):
+        job = self.upgraded(lambda j: setattr(j, "gateway", "inactive"))
+        self.assertEqual(job.restarts, 0)
+        self.assertIn("not running", job.sent[1])
+
+    def test_restart_failure_keeps_updated(self):
+        job = self.upgraded(lambda j: j.broken.add("restart"))
+        self.assertEqual(job.state()["status"], "updated")
+        self.assertIn("did not bring the gateway back", job.sent[1])
+        self.assertIn("restart", job.state())
 
 
 class DryRunTest(Base):

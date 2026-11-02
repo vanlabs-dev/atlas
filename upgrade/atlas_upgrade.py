@@ -4,8 +4,14 @@
 When the live Finney runtime spec moves past the corpus spec, this job
 brings Atlas up to date on the Pi without an operator:
 
-    detect, preflight, prepare, edit, goal, scope, test, probe, ingest,
-    push, activate, report
+    recover, detect, preflight, prepare, edit, goal, scope, test, probe,
+    ingest, push, activate, report, restart
+
+Recovery runs first on every run: it finishes a pull or activation a
+failed run left behind, and keeps the active knowledge run equal to the
+live tree's corpus. A failed environment preflight waits without using an
+attempt. After a pull that brings in code, the Hermes gateway restarts so
+its MCP servers load it.
 
 It runs from the live tree (~/atlas, trusted origin/main code) on a timer.
 The model step is one headless `claude -p` session in a separate worktree
@@ -31,6 +37,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import string
 import subprocess
 import sys
@@ -59,6 +66,40 @@ TIMEOUT = {"git": 120, "rpc": 120, "repotrack": 600, "smoke": 120,
 # main already carries the grounded corpus. It blocks at once.
 POST_PUSH_GATES = ("readback", "pull", "activate")
 MODEL_TOOLS = "Read,Grep,Glob,Edit,Write"
+GATEWAY_UNIT = "hermes-gateway"
+GATEWAY_FRESH_SECONDS = 600  # Hermes rewrites its state file about once a min
+RESTART_CONFIRM_TRIES, RESTART_CONFIRM_PAUSE = 6, 5
+CODE_COMMITS_SHOWN = 10
+CORPUS_PATH = "knowledge/corpus"
+KB_ACTIVATE = "python3 knowledge/atlas_kb.py activate --run %s"
+PULL_CMD = "git -C ~/atlas pull --ff-only origin main"
+
+# Environment preflight failures: (headline, meaning, next action). Fixed
+# wording only; raw command output can trip the scrubber and never sends.
+WAIT_REASONS = {
+    "identity": (
+        "Atlas self-update waiting: wrong git identity in the live tree",
+        "The live tree's git author is not %s. No attempt used; Atlas "
+        "checks again each run." % AUTHOR_IDENT,
+        "set the repo identity in ~/atlas to %s" % AUTHOR_IDENT),
+    "dirty": (
+        "Atlas self-update waiting: the live tree has uncommitted changes",
+        "Uncommitted changes in ~/atlas would block the pull after a push. "
+        "No attempt used; Atlas checks again each run.",
+        "commit or discard the changes in ~/atlas"),
+    "diverged": (
+        "Atlas self-update waiting: the live tree has local commits",
+        "~/atlas holds commits that origin/main does not, so the pull "
+        "after a push would fail. No attempt used; Atlas checks again "
+        "each run.",
+        "move the local commits off main in ~/atlas so it matches "
+        "origin/main"),
+    "auth": (
+        "Atlas self-update waiting: the Claude login needs renewing",
+        "The Claude login check on the Pi failed. No attempt used; Atlas "
+        "checks again each run.",
+        "log in to Claude on the Pi"),
+}
 
 SPEC_RE = re.compile(r"spec_version:\s*(\d+)")
 GROUNDED_RE = re.compile(r"Grounded at\s*\|\s*Finney `spec_version` "
@@ -66,6 +107,15 @@ GROUNDED_RE = re.compile(r"Grounded at\s*\|\s*Finney `spec_version` "
 INGEST_RUN_RE = re.compile(r"Ingest run (\S+):")
 
 Result = collections.namedtuple("Result", "rc out err")
+
+
+class Waiting(Exception):
+    """An environment preflight check failed: no attempt is used."""
+
+    def __init__(self, reason: str, detail: str) -> None:
+        super().__init__("%s: %s" % (reason, detail))
+        self.reason = reason
+        self.detail = detail
 
 
 class StepFailed(Exception):
@@ -145,6 +195,8 @@ class Job:
         self.clone = os.path.join(root, "var", "repotrack", "subtensor")
         self.kb_db = os.path.join(root, "var", "knowledge", "knowledge.db")
         self.claude = os.environ.get("ATLAS_CLAUDE_BIN", "claude")
+        self.hermes_home = (os.environ.get("HERMES_HOME")
+                            or os.path.expanduser("~/.hermes"))
         self.dry_run = dry_run
         self.state_path = os.path.join(
             self.var, "dry-run-state.json" if dry_run else "state.json")
@@ -168,6 +220,9 @@ class Job:
         except OSError as exc:
             return Result(127, "", str(exc))
         return Result(proc.returncode, proc.stdout, proc.stderr)
+
+    def sleep(self, seconds: float) -> None:
+        time.sleep(seconds)
 
     def live_spec(self) -> Dict[str, Any]:
         return al.read_live_spec(al.load_config())
@@ -219,6 +274,11 @@ class Job:
             value = json.load(handle).get("grounded_spec")
         return value if isinstance(value, int) else None
 
+    def corpus_hashes(self) -> Dict[str, str]:
+        path = os.path.join(self.root, CORPUS_PATH, "hashes.json")
+        with open(path, "r", encoding="utf-8") as handle:
+            return dict(json.load(handle).get("files") or {})
+
     def clone_spec(self) -> Optional[int]:
         try:
             with open(os.path.join(self.clone, "runtime", "src", "lib.rs"),
@@ -231,10 +291,12 @@ class Job:
     # -- reporting ----------------------------------------------------------
 
     def report(self, state: Dict[str, Any], kind: str,
-               msg: "tg.Message") -> None:
-        """Exactly one delivery per (spec, attempt, outcome). An undelivered
-        report is kept and retried at the start of the next run."""
-        key = "%s:%s:%s" % (state.get("spec"), state.get("attempt", 0), kind)
+               msg: "tg.Message", key: Optional[str] = None) -> None:
+        """Exactly one delivery per (spec, attempt, outcome), or per explicit
+        key. An undelivered report is kept and retried at the start of the
+        next run."""
+        key = key or "%s:%s:%s" % (state.get("spec"),
+                                   state.get("attempt", 0), kind)
         reported = state.setdefault("reported", [])
         if key in reported:
             return
@@ -245,10 +307,19 @@ class Job:
             state["pending_report"] = {"key": key,
                                        "message": msg.to_dict()}
 
-    def flush_pending(self, state: Dict[str, Any]) -> None:
+    def flush_pending(self, state: Dict[str, Any]) -> bool:
+        """Retry the undelivered report. True when state changed, so the
+        caller saves it. A report for an older spec is dropped unsent."""
         pending = state.get("pending_report")
         if not pending:
-            return
+            return False
+        head = str(pending.get("key", "")).split(":", 1)[0]
+        if (head.isdigit() and isinstance(state.get("spec"), int)
+                and int(head) < state["spec"]):
+            print("dropped stale pending report %s" % pending["key"],
+                  file=sys.stderr)
+            state.pop("pending_report")
+            return True
         if "message" in pending:
             msg = tg.Message.from_dict(pending["message"])
         else:  # a report saved before the house layout (plain text)
@@ -256,6 +327,8 @@ class Job:
         if self.send(msg):
             state.setdefault("reported", []).append(pending["key"])
             state.pop("pending_report")
+            return True
+        return False
 
     def fail(self, state: Dict[str, Any], gate: str, detail: str,
              stalled: bool = False) -> None:
@@ -264,13 +337,40 @@ class Job:
         `retrying` or `blocked` report for that attempt."""
         attempt = int(state.get("attempt", 0))
         spec = state.get("spec")
+        post_push = state.get("post_push")
+        if (gate == "interrupted" and post_push
+                and state.get("step") == "activate"):
+            gate = "activate"  # the push and pull were done
+        if post_push and gate not in POST_PUSH_GATES:
+            state.pop("post_push")  # the commit never reached main
+            post_push = None
         blocked = gate in POST_PUSH_GATES or attempt >= MAX_ATTEMPTS
         state.update(status="blocked" if blocked else "retrying",
                      last_error="%s: %s" % (gate, _tail(detail, 600)),
                      step=None)
         of = "attempt %d of %d" % (attempt, MAX_ATTEMPTS)
         details = _tail(detail, 600).splitlines()
-        if blocked:
+        if blocked and post_push:
+            post_push["gate"] = gate
+            msg = tg.Message(
+                severity=tg.severity_for("upgrade-blocked"),
+                headline="Atlas self-update for spec %s is %s after the push"
+                         % (spec, "stalled and blocked" if stalled
+                            else "blocked"),
+                meaning="Commit %s is on main, but %s failed, so corpus run "
+                        "%s is not active. Atlas retries each run and "
+                        "clears this block once the live tree has the "
+                        "commit and the run is active." % (
+                            tg.mono(post_push["commit"][:8]), gate,
+                            tg.mono(post_push["run_id"])),
+                details=details,
+                next_action=("in ~/atlas run %s" % tg.mono(
+                    KB_ACTIVATE % post_push["run_id"])
+                    if gate == "activate" else
+                    "in ~/atlas run %s, then %s" % (
+                        tg.mono(PULL_CMD),
+                        tg.mono(KB_ACTIVATE % post_push["run_id"]))))
+        elif blocked:
             why = ("this gate runs after the push, so another attempt "
                    "cannot fix it" if gate in POST_PUSH_GATES
                    else "all %d attempts are used" % MAX_ATTEMPTS)
@@ -314,24 +414,34 @@ class Job:
 
     def _run_locked(self) -> int:
         state = self.load_state()
-        self.flush_pending(state)
+        changed = self.flush_pending(state)
         if state.get("status") == "running":
             # We hold the lock, so no live run owns this state.
             self.keep_branch()
             self.fail(state, "interrupted", "run interrupted at step %s"
                       % state.get("step"), stalled=True)
             self.save_state(state)
+        if not self.dry_run and self.reconcile(state):
+            changed = True
 
         live = self.live_spec()
         if not live.get("ok"):
             print("live spec unavailable: %s" % live.get("error"))
+            if changed:
+                self.save_state(state)
             return 1
         spec = live["spec_version"]
         corpus = self.corpus_spec()
         machinery_check = self.dry_run and spec == corpus
         if spec == corpus and not machinery_check:
-            if state.get("spec") == spec and state.get("status") != "idle":
+            # A pre-push wait or retry is moot once the corpus is current.
+            # A block is not: a post-push block clears only in reconcile,
+            # a pre-push one only through `clear`.
+            if (state.get("spec") == spec
+                    and state.get("status") in ("waiting", "retrying")):
                 state["status"] = "idle"
+                changed = True
+            if changed:
                 self.save_state(state)
             return 0
 
@@ -339,8 +449,9 @@ class Job:
             # A newer live spec supersedes; old branches are kept.
             state = {"status": "idle", "spec": spec, "attempt": 0,
                      "reported": state.get("reported", []),
-                     **({"pending_report": state["pending_report"]}
-                        if "pending_report" in state else {})}
+                     **{key: state[key] for key in ("pending_report",
+                                                    "restart")
+                        if key in state}}
         if state["status"] == "blocked":
             self.save_state(state)
             return 0
@@ -349,6 +460,206 @@ class Job:
             self.save_state(state)
             return 0
         return self._attempt(state, spec, corpus, machinery_check)
+
+    # -- recovery (every run) -----------------------------------------------
+
+    def tree_ok(self) -> bool:
+        """The live tree is clean and holds no commit origin/main lacks."""
+        status = self.run(["git", "status", "--porcelain"], self.root,
+                          TIMEOUT["git"])
+        if status.rc != 0 or status.out.strip():
+            return False
+        return self.is_ancestor("HEAD", "origin/main")
+
+    def is_ancestor(self, older: str, newer: str) -> bool:
+        return self.run(["git", "merge-base", "--is-ancestor", older, newer],
+                        self.root, TIMEOUT["git"]).rc == 0
+
+    def head(self) -> Optional[str]:
+        result = self.run(["git", "rev-parse", "HEAD"], self.root,
+                          TIMEOUT["git"])
+        return result.out.strip() if result.rc == 0 else None
+
+    def code_commits(self, old: str, new: str) -> List[str]:
+        """`old..new` commits that touch anything outside the corpus."""
+        result = self.run(["git", "log", "--format=%h %s", "%s..%s"
+                           % (old, new), "--", ".", ":!" + CORPUS_PATH],
+                          self.root, TIMEOUT["git"])
+        return result.out.splitlines() if result.rc == 0 else []
+
+    def kb_read(self) -> Tuple[Optional[str], Optional[Dict[str, str]],
+                               List[Tuple[str, Dict[str, str]]]]:
+        """(active run, its file hashes, staged runs this job ingested
+        newest first with their hashes). Read-only; writes go through
+        atlas_kb.py."""
+        def hashes(files_json: str) -> Dict[str, str]:
+            return {name: info.get("sha256")
+                    for name, info in json.loads(files_json).items()}
+        connection = sqlite3.connect("file:%s?mode=ro" % self.kb_db,
+                                     uri=True)
+        try:
+            row = connection.execute(
+                "SELECT u.run_id, r.files_json FROM units u LEFT JOIN "
+                "intake_runs r ON r.run_id = u.run_id WHERE u.active = 1 "
+                "LIMIT 1").fetchone()
+            ours = connection.execute(
+                "SELECT r.run_id, r.files_json FROM intake_runs r WHERE "
+                "EXISTS (SELECT 1 FROM audit a WHERE a.actor = ? AND "
+                "a.action = 'ingest' AND a.detail LIKE 'run ' || r.run_id "
+                "|| ' staged %') ORDER BY r.intake_date DESC",
+                ("atlas-upgrade",)).fetchall()
+        finally:
+            connection.close()
+        active = row[0] if row else None
+        active_files = hashes(row[1]) if row and row[1] else None
+        return active, active_files, [(run, hashes(files))
+                                      for run, files in ours]
+
+    def run_is_clean(self, run_id: str) -> bool:
+        path = os.path.join(self.root, "var", "knowledge",
+                            "validation-report-%s.json" % run_id)
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                report = json.load(handle)
+        except (OSError, ValueError):
+            return False
+        return not (report.get("secret_scan_findings")
+                    or report.get("duplicate_unit_ids"))
+
+    def reconcile(self, state: Dict[str, Any]) -> bool:
+        """Recover what a run left undone after the push, on every timer
+        run and before the "corpus equals live" exit. True when state
+        changed."""
+        changed = False
+        post_push = state.get("post_push")
+        blocked = post_push and state.get("status") == "blocked"
+        tree_ok = self.tree_ok()
+        if blocked and tree_ok and not self.is_ancestor(
+                post_push["commit"], "HEAD"):
+            before = self.head()
+            pull = self.run(["git", "pull", "--ff-only", "origin", "main"],
+                            self.root, TIMEOUT["git"], self.git_env)
+            if pull.rc == 0 and before:
+                print("live tree pulled to %s" % self.head())
+                if self.code_commits(before, "HEAD"):
+                    state["restart"] = {"commit": self.head() or ""}
+                    changed = True
+        try:
+            if tree_ok and os.path.exists(self.kb_db):
+                changed = self.check_kb(state) or changed
+            current = (os.path.exists(self.kb_db)
+                       and self.kb_read()[1] == self.corpus_hashes())
+        except sqlite3.Error as exc:
+            print("knowledge store unreadable: %s" % exc, file=sys.stderr)
+            current = False
+        if blocked and current and self.is_ancestor(post_push["commit"],
+                                                    "HEAD"):
+            print("post-push block for spec %s cleared" % state.get("spec"))
+            state.update(status="idle", last_error=None)
+            state.pop("post_push")
+            changed = True
+        if state.get("restart"):
+            self.try_restart(state)
+            changed = True
+        return changed
+
+    def check_kb(self, state: Dict[str, Any]) -> bool:
+        """The active run must serve the corpus the live tree carries.
+        Activate a clean run this job ingested for exactly that corpus, or
+        report once with the commands."""
+        want = self.corpus_hashes()
+        active, active_files, ours = self.kb_read()
+        if active_files == want:
+            return False
+        digest = hashlib.sha256(json.dumps(
+            want, sort_keys=True).encode("utf-8")).hexdigest()[:8]
+        for run_id, files in ours:
+            if files != want or not self.run_is_clean(run_id):
+                continue
+            result = self.run([sys.executable, os.path.join(
+                self.root, "knowledge", "atlas_kb.py"), "activate",
+                "--db", self.kb_db, "--run", run_id,
+                "--actor", "atlas-upgrade"], self.root, TIMEOUT["ingest"])
+            if result.rc != 0:
+                print("activate %s failed: %s" % (
+                    run_id, _tail(result.err or result.out)),
+                    file=sys.stderr)
+                break
+            self.report(state, "kb", tg.Message(
+                severity=tg.severity_for("upgrade-updated"),
+                headline="Atlas activated the knowledge run for its corpus",
+                meaning="The active run %s did not match the corpus in the "
+                        "live tree. Atlas activated run %s, which it "
+                        "ingested from that corpus." % (
+                            tg.mono(active), tg.mono(run_id))),
+                key="kb:%s:activated" % digest)
+            return True
+        self.report(state, "kb", tg.Message(
+            severity=tg.severity_for("upgrade-blocked"),
+            headline="Atlas knowledge base is stale",
+            meaning="The active run %s does not match the corpus in the live "
+                    "tree, and no clean run ingested by Atlas matches it."
+                    % tg.mono(active),
+            next_action="in ~/atlas run %s, then %s with the run id it "
+                        "prints" % (
+                            tg.mono("python3 knowledge/atlas_kb.py ingest"),
+                            tg.mono(KB_ACTIVATE % "<run>"))),
+            key="kb:%s:stale" % digest)
+        return True
+
+    def gateway_unsafe(self) -> Optional[str]:
+        """Why a gateway restart is unsafe now, or None. Hermes owns the
+        state file's schema, so anything unexpected counts as unsafe."""
+        active = self.run(["systemctl", "--user", "is-active",
+                           GATEWAY_UNIT], self.root, TIMEOUT["git"])
+        if active.out.strip() != "active":
+            return "the gateway is not running"
+        try:
+            with open(os.path.join(self.hermes_home, "gateway_state.json"),
+                      "r", encoding="utf-8") as handle:
+                gateway = json.load(handle)
+            updated = datetime.datetime.fromisoformat(
+                gateway["updated_at"]).timestamp()
+        except (OSError, ValueError, KeyError, TypeError):
+            return "the gateway state is unreadable"
+        if self.now() - updated > GATEWAY_FRESH_SECONDS:
+            return "the gateway state is stale"
+        if (gateway.get("gateway_state") != "running"
+                or gateway.get("active_agents") != 0
+                or gateway.get("active_work") is not None):
+            return "the gateway is busy"
+        return None
+
+    def try_restart(self, state: Dict[str, Any]) -> None:
+        """Restart the gateway so its MCP servers load the pulled code.
+        Never fails the run; an unsafe or failed restart reports once and
+        is retried on later runs."""
+        commit = str(state["restart"].get("commit") or "")
+        why = self.gateway_unsafe()
+        if why is None:
+            result = self.run(["systemctl", "--user", "restart",
+                               GATEWAY_UNIT], self.root, TIMEOUT["git"])
+            if result.rc == 0:
+                for _ in range(RESTART_CONFIRM_TRIES):
+                    if self.run(["systemctl", "--user", "is-active",
+                                 GATEWAY_UNIT], self.root,
+                                TIMEOUT["git"]).out.strip() == "active":
+                        print("%s restarted" % GATEWAY_UNIT)
+                        state.pop("restart")
+                        return
+                    self.sleep(RESTART_CONFIRM_PAUSE)
+            why = "the restart did not bring the gateway back"
+        self.report(state, "restart", tg.Message(
+            severity=tg.severity_for("upgrade-blocked"),
+            headline="Atlas needs a Hermes gateway restart",
+            meaning="New code was pulled into the live tree, but %s, so the "
+                    "Hermes tools still run the old code. Atlas tries again "
+                    "each run." % why,
+            next_action="run %s on the Pi" % tg.mono(
+                "systemctl --user restart %s" % GATEWAY_UNIT)),
+            key="restart:%s" % commit[:8])
+
+    # -- the attempt --------------------------------------------------------
 
     def _attempt(self, state: Dict[str, Any], spec: int,
                  corpus: Optional[int], machinery_check: bool) -> int:
@@ -368,13 +679,26 @@ class Job:
             self.save_state(state)
             return 0
 
+        try:
+            self.check_environment()
+        except Waiting as exc:
+            print("preflight %s: %s" % (exc.reason, exc.detail),
+                  file=sys.stderr)
+            headline, meaning, action = WAIT_REASONS[exc.reason]
+            state.update(status="waiting", wait_reason=exc.reason)
+            self.report(state, "waiting-" + exc.reason, tg.Message(
+                severity=tg.severity_for("upgrade-waiting"),
+                headline=headline, meaning=meaning, next_action=action))
+            self.save_state(state)
+            return 0
+        state.pop("wait_reason", None)
+
         state.update(status="running", attempt=int(state["attempt"]) + 1,
                      started_at=self.now(), last_error=None, step=None,
                      clone_spec=clone)
         ctx: Dict[str, Any] = {"spec": spec, "corpus": corpus,
                                "clone": clone}
-        steps = [("preflight", self.step_preflight),
-                 ("prepare", self.step_prepare)]
+        steps = [("prepare", self.step_prepare)]
         if not machinery_check:
             steps += [("edit", self.step_edit), ("goal", self.step_goal),
                       ("scope", self.step_scope)]
@@ -411,31 +735,56 @@ class Job:
                         "knowledge corpus is active.",
                 facts=[("Commit", tg.mono(ctx["commit"][:8])),
                        ("Corpus run", tg.mono(ctx["run_id"]))],
-                details=(["What changed:"] + summary) if summary else [],
+                details=((["What changed:"] + summary) if summary else [])
+                + self.code_lines(ctx.get("code_commits") or []),
                 buttons=tg.button(None, "View commit", "atlas_commit",
                                   sha=ctx["commit"])))
+        state.pop("post_push", None)
+        if ctx.get("code_commits"):
+            state["restart"] = {"commit": ctx["commit"]}
+            self.try_restart(state)
         self.save_state(state)
         return 0
 
+    @staticmethod
+    def code_lines(commits: List[str]) -> List[str]:
+        if not commits:
+            return []
+        lines = ["Code pulled into the live tree:"]
+        lines += commits[:CODE_COMMITS_SHOWN]
+        if len(commits) > CODE_COMMITS_SHOWN:
+            lines.append("and %d more" % (len(commits) - CODE_COMMITS_SHOWN))
+        return lines
+
     # -- steps --------------------------------------------------------------
 
-    def step_preflight(self, state: Dict[str, Any],
-                       ctx: Dict[str, Any]) -> None:
-        ident = self.git("preflight", self.root, "var", "GIT_AUTHOR_IDENT")
-        if not ident.startswith(AUTHOR_IDENT + " "):
-            raise StepFailed("preflight", "author is %r, not %s"
-                             % (ident.rsplit(">", 1)[0] + ">", AUTHOR_IDENT))
-        dirty = self.git("preflight", self.root, "status", "--porcelain")
-        if dirty:
-            raise StepFailed("preflight", "live tree has uncommitted "
-                             "changes: %s" % _tail(dirty, 200))
+    def check_environment(self) -> None:
+        """Preflight before an attempt is counted. Raises Waiting."""
+        # The repo's own identity: the job's overrides would always pass.
+        bare = {key: value for key, value in os.environ.items()
+                if not key.startswith(("GIT_AUTHOR_", "GIT_COMMITTER_"))}
+        ident = self.run(["git", "var", "GIT_AUTHOR_IDENT"], self.root,
+                         TIMEOUT["git"], bare)
+        if ident.rc != 0 or not ident.out.startswith(AUTHOR_IDENT + " "):
+            raise Waiting("identity", "author is %r" % (
+                ident.out.rsplit(">", 1)[0] + ">"))
+        dirty = self.run(["git", "status", "--porcelain"], self.root,
+                         TIMEOUT["git"])
+        if dirty.rc != 0 or dirty.out.strip():
+            raise Waiting("dirty", _tail(dirty.out or dirty.err, 200))
+        fetch = self.run(["git", "fetch", "origin"], self.root,
+                         TIMEOUT["git"], self.git_env)
+        if fetch.rc != 0 or not self.is_ancestor("HEAD", "origin/main"):
+            # A failed fetch leaves origin/main stale, never ahead, so
+            # the ancestry check still holds against local commits.
+            raise Waiting("diverged", "HEAD is not an ancestor of "
+                          "origin/main")
         smoke = self.run([self.claude, "-p", "--restricted",
                           "--strict-mcp-config", "--max-turns", "1",
                           "--tools", "", "--", "reply ok"],
                          self.root, TIMEOUT["smoke"])
         if smoke.rc != 0:
-            raise StepFailed("preflight", "claude auth: %s"
-                             % _tail(smoke.err or smoke.out, 200))
+            raise Waiting("auth", _tail(smoke.err or smoke.out, 200))
 
     def branch_name(self, spec: int, attempt: int) -> str:
         base = "upgrade/spec-%d-a%d" % (spec, attempt)
@@ -605,6 +954,15 @@ class Job:
         if author != AUTHOR_IDENT:
             raise StepFailed("push", "commit author is %r" % author)
         ctx["commit"] = self.git("push", wt, "rev-parse", "HEAD")
+        # The pull after the push must fast-forward: no local commits.
+        if self.git("push", self.root, "status", "--porcelain"):
+            raise StepFailed("push", "the live tree has uncommitted changes")
+        if not self.is_ancestor("HEAD", "origin/main"):
+            raise StepFailed("push", "the live tree has local commits")
+        before = self.git("push", self.root, "rev-parse", "HEAD")
+        state["post_push"] = {"commit": ctx["commit"],
+                              "run_id": ctx["run_id"], "gate": None}
+        self.save_state(state)
         self.git("push", wt, "push", "origin", "HEAD:main")  # never forced
         remote = self.git("readback", self.root, "ls-remote", "origin",
                           "refs/heads/main").split()
@@ -615,6 +973,9 @@ class Job:
         if self.git("pull", self.root, "rev-parse", "HEAD") != ctx["commit"]:
             raise StepFailed("pull", "live tree did not reach %s"
                              % ctx["commit"])
+        # Code the pull brought in: others' commits since the last pull,
+        # and the upgrade commit itself when it touched chain readers.
+        ctx["code_commits"] = self.code_commits(before, ctx["commit"])
 
     def step_activate(self, state: Dict[str, Any],
                       ctx: Dict[str, Any]) -> None:
@@ -635,6 +996,7 @@ def clear(job: Job, spec: int) -> int:
                   % (spec, state.get("spec"), state.get("status")))
             return 1
         state.update(status="idle", attempt=0, last_error=None)
+        state.pop("post_push", None)
         job.save_state(state)
     print("spec %d cleared; the next run starts at attempt 1" % spec)
     return 0
