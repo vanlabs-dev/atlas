@@ -53,6 +53,19 @@ class RedactionTests(unittest.TestCase):
         redacted = ai.redact("API_KEY=abc123def456")
         self.assertIn(ai.REDACTION_MARKER, redacted)
 
+    def test_cli_flags_redacted_at_word_start(self):
+        for text in ("run --token PLANTED7001", "run -token PLANTED7002",
+                     '"--password PLANTED7003"', "x --api-key PLANTED7004",
+                     "(--auth PLANTED7005)"):
+            self.assertNotIn("PLANTED700", ai.redact(text), text)
+
+    def test_hyphenated_word_is_not_a_flag(self):
+        # change: alert-delivery-reliability. The alert gloss "dynamic TAO,
+        # the subnet-token mechanism" was refused by every scan.
+        for text in ("dynamic TAO, the subnet-token mechanism",
+                     "a pre-auth step", "the alpha-secret sauce"):
+            self.assertEqual(ai.redact(text), text)
+
 
 if __name__ == "__main__":
     unittest.main()

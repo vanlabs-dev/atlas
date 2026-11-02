@@ -96,10 +96,11 @@ _REDACTION_RULES: List[Tuple[re.Pattern, str]] = [
         r"\1\2" + REDACTION_MARKER,
     ),
     # CLI flags with a space-separated value: --password hunter2, -p hunter2 is
-    # too ambiguous; restrict to explicit long flags.
+    # too ambiguous; restrict to explicit long flags. The flag must start a
+    # word: "subnet-token mechanism" is prose, not a flag.
     (
         re.compile(
-            r"(?i)(--?(?:password|passwd|pwd|token|secret|api-?key|auth)) +(\S+)"
+            r"(?i)(?<![\w-])(--?(?:password|passwd|pwd|token|secret|api-?key|auth)) +(\S+)"
         ),
         r"\1 " + REDACTION_MARKER,
     ),

@@ -254,5 +254,39 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(self.queued(), [])
 
 
+class WithheldTests(unittest.TestCase):
+    def setUp(self):
+        tg._SECRET_VALUES.clear()
+
+    def test_refusal_sends_one_fixed_notice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            conn = tg.open_store(config["db"])
+            posts = []
+
+            def poster(url, data, timeout):
+                posts.append(urllib.parse.parse_qs(data.decode())["text"][0])
+                return 200, OK_BODY
+            event = {"event_id": "schema-drift:leak",
+                     "event_class": "schema-drift",
+                     "created_at": tg._utc_now(),
+                     "text": "Authorization: Bearer sk-verylongsecrettokenvalue1"}
+            status = tg.deliver_event(conn, config, "tok12345", "42", event,
+                                      poster=poster)
+            self.assertEqual(status, tg.STATUS_SCRUB_REFUSED)
+            self.assertEqual(len(posts), 1)
+            self.assertIn("held back", posts[0])
+            self.assertIn("schema-drift:leak", posts[0])
+            self.assertNotIn("sk-verylong", posts[0])
+            self.assertNotIn("Bearer", posts[0])
+            # The refused alert is final: a second delivery sends nothing.
+            tg.deliver_event(conn, config, "tok12345", "42", event,
+                             poster=poster)
+            self.assertEqual(len(posts), 1)
+            self.assertEqual(conn.execute(
+                "SELECT COUNT(*) FROM pending_send").fetchone()[0], 0)
+            conn.close()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -12,8 +12,8 @@
 
 ## 3. Scrubber and withheld notice
 
-- [ ] 3.1 Narrow the CLI-flag rule in `inventory/atlas_inventory.py` with `(?<![\w-])`. Verify: redaction test for "subnet-token mechanism" passes and `--token X` / `-token X` still redact; every Python suite passes.
-- [ ] 3.2 On a scrub refusal `deliver_event` sends one fixed withheld notice keyed `withheld:<event_id>`. Verify: test with a planted secret asserts one notice, no content, no retry.
+- [x] 3.1 Narrow the CLI-flag rule in `inventory/atlas_inventory.py` with `(?<![\w-])`. Verify: redaction test for "subnet-token mechanism" passes and `--token X` / `-token X` still redact; every Python suite passes.
+- [x] 3.2 On a scrub refusal `deliver_event` sends one fixed withheld notice keyed `withheld:<event_id>`. Verify: test with a planted secret asserts one notice, no content, no retry.
 
 ## 4. One send path for probe and upgrade
 
