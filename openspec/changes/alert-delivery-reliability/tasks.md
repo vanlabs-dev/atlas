@@ -23,7 +23,7 @@
 
 ## 5. Fail-closed start time (G7)
 
-- [ ] 5.1 Count only `category = 'provider-failure'` rows. Verify: test with earlier invariant-divergence rows asserts the key and start time.
+- [x] 5.1 Count only `category = 'provider-failure'` rows. Verify: test with earlier invariant-divergence rows asserts the key and start time.
 
 ## 6. Scan on its own timer
 
