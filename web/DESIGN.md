@@ -44,6 +44,11 @@ history.
 - Dark is the target; a light scheme is derived and follows the system.
 - The look applies to the whole site: header, footer and the four
   boards share the tokens.
+- The brand is subnt.dev: the wordmark at the top left reads
+  "subnt.dev" in Archivo display with a red dot, and page titles end in
+  "| subnt.dev". Atlas is the system underneath that reads the data;
+  copy names it as the reader, and the large "Atlas." closes every page
+  in the footer.
 
 ## Rules relaxed from design-taste-frontend
 
@@ -129,6 +134,8 @@ Every other house rule still holds.
 
 - Content runs to 1600px, centred, with a gutter of clamp(16px, 4vw,
   64px). The field and the bands run edge to edge.
+- Header: 76px from md up, one row; 92px on phones, with the wordmark
+  on its own row above the four links.
 - Buttons: solid, radius 3px, 48px tall. Secondary actions: an
   underlined text link. Panels: no border, no shadow; surfaces separate
   by tone. Rules only in tables and lists.
@@ -198,7 +205,7 @@ sway and the flight.
 
 ## Boards (mining, fleet, network, upgrades)
 
-- Same tokens and type. Shell: the top bar (wordmark with a red period,
+- Same tokens and type. Shell: the top bar (the subnt.dev wordmark,
   four links, the block readout on the boards). Each board: an Archivo
   title, one finding sentence, the data age and stale label, then the
   content. Tables with rules, right-aligned numbers, ink activity lanes.
