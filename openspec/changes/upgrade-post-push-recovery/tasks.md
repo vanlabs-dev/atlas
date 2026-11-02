@@ -39,5 +39,5 @@
 
 ## 6. Docs and close-out
 
-- [ ] 6.1 Update `docs/runtime-upgrade.md` and `upgrade/README.md` for the waiting reasons, the post-push recovery, self-activation and the gateway restart. Verify: a read-through, and `python3 tools/readme_sync.py --check` passes.
-- [ ] 6.2 Run every Python suite with the loop in the handover. Verify: all suites pass.
+- [x] 6.1 Update `docs/runtime-upgrade.md` and `upgrade/README.md` for the waiting reasons, the post-push recovery, self-activation and the gateway restart. Verify: a read-through, and `python3 tools/readme_sync.py --check` passes.
+- [x] 6.2 Run every Python suite with the loop in the handover. Verify: all suites pass.
