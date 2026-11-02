@@ -252,11 +252,11 @@ class RepoStore:
         if not rel or ".." in parts or parts[0] == ".git":
             return structured_error("invalid", "path must be a relative "
                                     "repository path", retry_safe=False)
-        real_clone = os.path.realpath(clone)
-        abs_path = os.path.realpath(os.path.join(real_clone, rel))
-        if not abs_path.startswith(real_clone + os.sep):
+        abs_path = arp.contained_file(clone, rel)
+        if abs_path is None:
             return structured_error("invalid", "path escapes the tracked "
-                                    "clone", retry_safe=False)
+                                    "clone or passes through a symlink",
+                                    retry_safe=False)
         try:
             sha = arp.local_sha(clone)
             dirty = arp.working_tree_dirty(clone)

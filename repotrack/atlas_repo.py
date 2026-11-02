@@ -45,6 +45,7 @@ import time
 import urllib.error
 import urllib.request
 import secrets as secretsmod
+import shutil
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -451,6 +452,29 @@ def setup(config: Dict[str, Any], repo_root: str = _REPO_ROOT,
 # ---------------------------------------------------------------------------
 
 
+def contained_file(root: str, rel_path: str) -> Optional[str]:
+    """Resolve a clone-relative path to an absolute path, or None.
+
+    Refuses an empty path, `.` or `..` parts, a leading `.git`, any part
+    that is a symbolic link, and any result whose real path leaves the
+    clone. Every reader of clone files goes through this check, so a
+    committed link is never followed (change: fleet-clone-containment)."""
+    rel = (rel_path or "").replace("\\", "/").strip().strip("/")
+    parts = rel.split("/")
+    if not rel or parts[0] == ".git" or any(
+            part in ("", ".", "..") for part in parts):
+        return None
+    real_root = os.path.realpath(root)
+    current = real_root
+    for part in parts:
+        current = os.path.join(current, part)
+        if os.path.islink(current):
+            return None
+    if not os.path.realpath(current).startswith(real_root + os.sep):
+        return None
+    return current
+
+
 def _indexable(abs_path: str, rel_path: str,
                index_cfg: Dict[str, Any]) -> Optional[str]:
     """Return a skip reason, or None when the file should be indexed."""
@@ -502,6 +526,8 @@ def _walk_tree(clone_dir: str) -> List[str]:
     for root, dirs, names in os.walk(clone_dir):
         dirs[:] = [d for d in dirs if d != ".git"]
         for name in names:
+            if os.path.islink(os.path.join(root, name)):
+                continue  # links are never read (fleet-clone-containment)
             paths.append(os.path.relpath(os.path.join(root, name),
                                          clone_dir).replace(os.sep, "/"))
     return sorted(paths)
@@ -533,7 +559,12 @@ def run_index(connection: sqlite3.Connection, clone_dir: str,
 
     indexed = removed = skipped = 0
     for rel_path in candidates:
-        abs_path = os.path.join(clone_dir, rel_path)
+        abs_path = contained_file(clone_dir, rel_path)
+        if abs_path is None:
+            # a link or an out-of-clone path: never read, drop any old row
+            _remove_one(connection, rel_path)
+            skipped += 1
+            continue
         if not os.path.isfile(abs_path):
             removed += 1 if _remove_one(connection, rel_path) else 0
             continue
@@ -665,6 +696,13 @@ def _machine_summary(range_data: Dict[str, Any], prev_sha: str,
     return _redact(" ".join(parts))
 
 
+def _disk_free(path: str) -> Optional[int]:
+    try:
+        return shutil.disk_usage(path).free
+    except OSError:
+        return None
+
+
 def update(config: Dict[str, Any], repo_root: str = _REPO_ROOT,
            actor: Optional[str] = None) -> int:
     identity = require_confirmed_identity(config)
@@ -715,6 +753,15 @@ def update(config: Dict[str, Any], repo_root: str = _REPO_ROOT,
             return 1
 
         prev_sha = local_sha(clone_dir)
+
+        # 2b. free disk must stay above the ceiling (fleet-clone-containment)
+        min_free = config.get("min_free_bytes")
+        free = _disk_free(clone_dir) if min_free is not None else None
+        if free is not None and free < min_free:
+            status = "disk-limited"
+            error = ("free disk %d bytes is below the %d byte ceiling; no "
+                     "fetch" % (free, min_free))
+            return 1
 
         # 3. fetch (failure leaves local refs and tree untouched)
         meta_set(connection, META_LAST_FETCH_ATTEMPT, _utc_now())
