@@ -153,6 +153,14 @@ hand after one.
   python3 upgrade/atlas_upgrade.py clear --spec <n>
   ```
 
+- Reports name the failing gate in fixed words. The raw error never goes
+  to Telegram; it stays in `last_error` and on stderr.
+- Reports go through the Telegram ledger and retry queue. A queued report
+  counts as sent.
+- Exit codes: a run that ends in a recorded outcome exits 0. That includes
+  a failed attempt that was reported and a live spec that could not be
+  read. Only an unexpected error exits non-zero, which pages through the
+  unit failure notifier.
 - Inspect the state: `python3 upgrade/atlas_upgrade.py status`.
 - Dry run (no push, no activation, reports printed). When corpus equals
   live, it checks the machinery on an unedited worktree:

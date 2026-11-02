@@ -463,10 +463,14 @@ class Job:
 
         live = self.live_spec()
         if not live.get("ok"):
+            # An RPC blip is not a job failure: the chain-head poll and the
+            # fail-closed page already cover a real outage, and a non-zero
+            # exit would page through OnFailure= (change:
+            # alert-delivery-reliability).
             print("live spec unavailable: %s" % live.get("error"))
             if changed:
                 self.save_state(state)
-            return 1
+            return 0
         spec = live["spec_version"]
         corpus = self.corpus_spec()
         machinery_check = self.dry_run and spec == corpus
@@ -755,7 +759,7 @@ class Job:
             self.keep_branch()
             self.fail(state, exc.gate, exc.detail)
             self.save_state(state)
-            return 1
+            return 0  # reported (or queued): a handled outcome, not a crash
 
         state.update(status="updated", step=None, commit=ctx.get("commit"))
         if self.dry_run:
