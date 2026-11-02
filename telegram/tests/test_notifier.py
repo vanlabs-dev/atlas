@@ -1464,12 +1464,16 @@ class ScanIsolationTests(unittest.TestCase):
 
             summary = tg.notify_scan(config, "tok12345", "42", store,
                                      poster=dead_poster)
+            # A network failure is transient: the message is kept for a
+            # later run (change: alert-delivery-reliability).
             self.assertEqual(
-                summary["classes"]["repository-update"]["failed"], 1)
+                summary["classes"]["repository-update"]["queued"], 1)
             row = store.execute(
                 "SELECT status, final_failure FROM events "
                 "WHERE event_id = 'repository-update:range:1'").fetchone()
-            self.assertEqual(row[0], tg.STATUS_FAILED)
+            self.assertEqual(row[0], tg.STATUS_QUEUED)
+            self.assertEqual(store.execute(
+                "SELECT COUNT(*) FROM pending_send").fetchone()[0], 1)
             # Watermark still advances so a flapping source cannot re-flood.
             self.assertEqual(
                 tg.watermark_get(store, "repository-update"), "1")

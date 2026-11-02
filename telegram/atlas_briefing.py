@@ -733,6 +733,7 @@ def run_briefing(config: Dict[str, Any], token: str, chat_id: str,
         event = tg.message_event(
             msg, "briefing:%s:%s:%d" % (kind, stamp, index),
             "pulse-briefing", tg._utc_now(), max_chars, None)
+        event["no_queue"] = True  # the edition watermark owns catch-up
         statuses.append(tg.deliver_event(connection, config, token,
                                          chat_id, event, poster=poster))
     delivered = statuses and all(

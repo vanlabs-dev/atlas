@@ -7,8 +7,8 @@
 
 ## 2. Durable retry queue
 
-- [ ] 2.1 `pending_send` table; `deliver_event` queues on transient failure (network, 5xx, 429) with status `queued`; 400/401/403/404 final; digests not queued. Verify: tests for each status class.
-- [ ] 2.2 `flush_pending_sends`: id order, stop on 429 and set `next_attempt_at`, drop after 24 h as `failed`, "Detected <time>" prefix on late sends; called at the start of `scan`. Verify: tests for flush success, 429 stop, expiry, prefix in plain and HTML.
+- [x] 2.1 `pending_send` table; `deliver_event` queues on transient failure (network, 5xx, 429) with status `queued`; 400/401/403/404 final; digests not queued. Verify: tests for each status class.
+- [x] 2.2 `flush_pending_sends`: id order, stop on 429 and set `next_attempt_at`, drop after 24 h as `failed`, "Detected <time>" prefix on late sends; called at the start of `scan`. Verify: tests for flush success, 429 stop, expiry, prefix in plain and HTML.
 
 ## 3. Scrubber and withheld notice
 

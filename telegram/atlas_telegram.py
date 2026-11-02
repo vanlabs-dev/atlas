@@ -91,6 +91,19 @@ CREATE TABLE IF NOT EXISTS pending_churn (
     dominant_area TEXT NOT NULL,
     detected_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS pending_send (
+    id INTEGER PRIMARY KEY,
+    event_id TEXT NOT NULL UNIQUE,
+    event_class TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    first_attempt_at REAL NOT NULL,
+    next_attempt_at REAL NOT NULL,
+    attempts INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    html TEXT,
+    buttons TEXT NOT NULL,
+    tier TEXT
+);
 CREATE TABLE IF NOT EXISTS pending_signal (
     event_row_id INTEGER PRIMARY KEY,
     line TEXT NOT NULL,
@@ -161,6 +174,14 @@ STATUS_FAILED = "failed"
 STATUS_SUPPRESSED = "suppressed"
 STATUS_SCRUB_REFUSED = "scrub-refused"
 STATUS_BRIEFED = "briefed"
+# Not terminal: kept in pending_send and retried by later runs (change:
+# alert-delivery-reliability).
+STATUS_QUEUED = "queued"
+# Telegram statuses worth a later retry; anything else is final.
+TRANSIENT_STATUSES = (429, 500, 502, 503, 504)
+QUEUE_MAX_AGE_SECONDS = 24 * 3600
+DEFAULT_RETRY_AFTER_SECONDS = 60.0
+QUEUE_BACKOFF_SECONDS = 300.0
 TIER_INSTANT = "instant"
 TIER_BRIEFING = "briefing"
 # A class that records and is measured but is carried nowhere (change:
@@ -3169,6 +3190,9 @@ def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
 
     if ledger_seen_recent(connection, event_id, window):
         return STATUS_SUPPRESSED
+    if connection.execute("SELECT 1 FROM pending_send WHERE event_id = ?",
+                          (event_id,)).fetchone():
+        return STATUS_QUEUED  # already waiting for a retry: never twice
 
     max_chars = int(config.get("message_max_chars", 3500))
     text = (event["text"] or "")[:max_chars]
@@ -3189,9 +3213,19 @@ def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
                       rewrite_ms=event.get("rewrite_ms"))
         return STATUS_SCRUB_REFUSED
 
-    result, fallback_note = send_with_fallback(
-        config, token, chat_id, text, html, event.get("buttons") or [],
-        poster=poster)
+    hold = rate_limited_until(connection)
+    if hold is not None:
+        # A 429 is in force: queue without touching Telegram.
+        result = {"delivered": False, "attempts": 0, "status": 429,
+                  "detail": "held: rate limited",
+                  "retry_after": max(hold - _now_epoch(), 1.0)}
+        fallback_note = None
+    else:
+        result, fallback_note = send_with_fallback(
+            config, token, chat_id, text, html, event.get("buttons") or [],
+            poster=poster)
+        if result.get("status") == 429:
+            set_rate_limit(connection, result)
 
     if result["delivered"]:
         ledger_record(connection, event_id, event_class, created_at,
@@ -3201,11 +3235,161 @@ def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
                       rewrite_ms=event.get("rewrite_ms"), text=text,
                       message_id=result.get("message_id"))
         return STATUS_DELIVERED
+    if is_transient(result) and _queueable(event):
+        queue_send(connection, event, text, html, tier, result)
+        ledger_record(connection, event_id, event_class, created_at,
+                      _utc_now(), STATUS_QUEUED, result["attempts"],
+                      result["detail"], tier=tier,
+                      rewrite=event.get("rewrite"),
+                      rewrite_ms=event.get("rewrite_ms"))
+        return STATUS_QUEUED
     ledger_record(connection, event_id, event_class, created_at, _utc_now(),
                   STATUS_FAILED, result["attempts"], result["detail"],
                   tier=tier, rewrite=event.get("rewrite"),
                   rewrite_ms=event.get("rewrite_ms"))
     return STATUS_FAILED
+
+
+# ---------------------------------------------------------------------------
+# Durable retry queue (change: alert-delivery-reliability)
+# ---------------------------------------------------------------------------
+# A message that fails for a transient reason (network, 5xx, 429) is kept
+# with its rendered text, HTML and buttons, and resent as-is by the next
+# scan or health run: never rewritten again, never re-rendered. Digest
+# events are not queued: their lines already wait durably in pending_churn
+# and pending_signal, which clear only on delivery.
+
+def is_transient(result: Dict[str, Any]) -> bool:
+    """A failure a later run may fix: no HTTP status (network) or a
+    status in TRANSIENT_STATUSES."""
+    if result.get("delivered"):
+        return False
+    status = result.get("status")
+    return status is None or status in TRANSIENT_STATUSES
+
+
+def _queueable(event: Dict[str, Any]) -> bool:
+    """Digests and briefing parts own their catch-up: their content waits
+    in its own durable state, so the queue must not hold a second copy."""
+    return not (event.get("digest_range_ids")
+                or event.get("digest_signal_ids")
+                or event.get("no_queue"))
+
+
+def _next_attempt(result: Dict[str, Any], now: float) -> float:
+    if result.get("status") == 429:
+        return now + float(result.get("retry_after")
+                           or DEFAULT_RETRY_AFTER_SECONDS)
+    return now + QUEUE_BACKOFF_SECONDS
+
+
+def queue_send(connection: sqlite3.Connection, event: Dict[str, Any],
+               text: str, html: Optional[str], tier: Optional[str],
+               result: Dict[str, Any]) -> None:
+    now = _now_epoch()
+    connection.execute(
+        "INSERT OR IGNORE INTO pending_send (event_id, event_class, "
+        "created_at, first_attempt_at, next_attempt_at, attempts, text, "
+        "html, buttons, tier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (event["event_id"], event["event_class"], event["created_at"], now,
+         _next_attempt(result, now), int(result.get("attempts") or 1),
+         text, html, json.dumps([list(b) for b in
+                                 (event.get("buttons") or [])]), tier))
+    connection.commit()
+
+
+def rate_limited_until(connection: sqlite3.Connection) -> Optional[float]:
+    """Epoch until which Telegram asked us to stop, or None."""
+    row = connection.execute(
+        "SELECT value FROM meta WHERE key = 'rate_limited_until'").fetchone()
+    try:
+        until = float(row[0]) if row else None
+    except ValueError:
+        return None
+    return until if until is not None and until > _now_epoch() else None
+
+
+def set_rate_limit(connection: sqlite3.Connection,
+                   result: Dict[str, Any]) -> None:
+    until = _next_attempt(result, _now_epoch())
+    connection.execute(
+        "INSERT INTO meta (key, value) VALUES ('rate_limited_until', ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (repr(until),))
+    connection.commit()
+
+
+def late_prefix(created_at: str) -> Tuple[str, str]:
+    """(plain, html) line naming when a late message's event was
+    detected, so a retried alert never reads as current."""
+    line = "Late send. Detected " + fmt_time(created_at)
+    return (_strip_mono(line) + "\n\n",
+            "<i>" + _html_spans(line) + "</i>\n\n")
+
+
+def flush_pending_sends(connection: sqlite3.Connection,
+                        config: Dict[str, Any], token: str, chat_id: str,
+                        poster: Optional[Callable[..., Tuple[int, str]]]
+                        = None) -> Dict[str, int]:
+    """Retry queued messages in order. Drops rows past the 24 h window as
+    failed. Stops at the first 429 and defers the rest of the queue by
+    its retry_after. Never raises for a send failure."""
+    counts = {"delivered": 0, "requeued": 0, "expired": 0, "failed": 0}
+    now = _now_epoch()
+    held = rate_limited_until(connection) is not None
+    rows = connection.execute(
+        "SELECT id, event_id, event_class, created_at, first_attempt_at, "
+        "next_attempt_at, attempts, text, html, buttons, tier "
+        "FROM pending_send ORDER BY id").fetchall()
+    for (row_id, event_id, event_class, created_at, first_at, next_at,
+         attempts, text, html, buttons, tier) in rows:
+        if now - first_at > QUEUE_MAX_AGE_SECONDS:
+            connection.execute("DELETE FROM pending_send WHERE id = ?",
+                               (row_id,))
+            ledger_record(connection, event_id, event_class, created_at,
+                          _utc_now(), STATUS_FAILED, attempts,
+                          "retry window expired")
+            counts["expired"] += 1
+            continue
+        if held or next_at > now:
+            continue
+        plain_pre, html_pre = late_prefix(created_at)
+        result, note = send_with_fallback(
+            config, token, chat_id, plain_pre + text,
+            (html_pre + html) if html else None,
+            [tuple(b) for b in json.loads(buttons or "[]")], poster=poster)
+        attempts += int(result.get("attempts") or 1)
+        if result["delivered"]:
+            connection.execute("DELETE FROM pending_send WHERE id = ?",
+                               (row_id,))
+            ledger_record(connection, event_id, event_class, created_at,
+                          _utc_now(), STATUS_DELIVERED, attempts,
+                          "late: retried from queue" + (
+                              "; " + note if note else ""), tier=tier,
+                          text=plain_pre + text,
+                          message_id=result.get("message_id"))
+            counts["delivered"] += 1
+            continue
+        if not is_transient(result):
+            connection.execute("DELETE FROM pending_send WHERE id = ?",
+                               (row_id,))
+            ledger_record(connection, event_id, event_class, created_at,
+                          _utc_now(), STATUS_FAILED, attempts,
+                          result["detail"], tier=tier)
+            counts["failed"] += 1
+            continue
+        next_at = _next_attempt(result, now)
+        connection.execute(
+            "UPDATE pending_send SET attempts = ?, next_attempt_at = ? "
+            "WHERE id = ?", (attempts, next_at, row_id))
+        connection.commit()
+        counts["requeued"] += 1
+        if result.get("status") == 429:
+            # Rate limited: nothing else goes out until retry_after.
+            set_rate_limit(connection, result)
+            held = True
+    connection.commit()
+    return counts
 
 
 def send_with_fallback(config: Dict[str, Any], token: str, chat_id: str,
@@ -3484,7 +3668,13 @@ def _cmd_scan(config: Dict[str, Any]) -> int:
     token, chat_id = resolve_credentials(config)  # validate before any state
     connection = open_store(resolve(config["db"]))
     try:
+        try:
+            flushed: Any = flush_pending_sends(connection, config, token,
+                                               chat_id)
+        except Exception as exc:  # the queue never blocks the scan
+            flushed = {"error": redact(str(exc))[:200]}
         summary = notify_scan(config, token, chat_id, connection)
+        summary["retry_queue"] = flushed
         # The pulse briefing rides the same scan (change: pulse-briefing):
         # once per day at the configured hour, weekly on its weekday, gated
         # by durable edition watermarks. Isolated like everything else.
