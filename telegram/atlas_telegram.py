@@ -277,7 +277,24 @@ def load_config(path: str = CONFIG_FILE) -> Dict[str, Any]:
         if key not in config:
             raise FatalTelegramError("config missing %r" % key)
     voice_maps(config)
+    _check_briefing_tiers(config)
     return config
+
+
+def _check_briefing_tiers(config: Dict[str, Any]) -> None:
+    """Refuse a `briefing` tier while the briefing is off (change:
+    alert-tier-trim). Such a class records every event as `briefed` and
+    nothing ever carries it, so the operator hears nothing."""
+    if (config.get("briefing") or {}).get("enabled"):
+        return
+    dead = sorted(name for name, spec in (config.get("classes") or {}).items()
+                  if isinstance(spec, dict)
+                  and spec.get("tier") == TIER_BRIEFING)
+    if dead:
+        raise FatalTelegramError(
+            "class %s is at the briefing tier but the briefing is "
+            "disabled; set the tier to instant or shadow"
+            % ", ".join(dead))
 
 
 def voice_maps(config: Dict[str, Any]) -> Tuple[Dict[str, str],
@@ -2117,7 +2134,7 @@ def _gate_crossing_event(event_id: str, observed_at: str, netuid: int,
             buttons=buttons)
         # Own delivery-only class (change: plain-english-alerts): a subnet
         # that earns zero either way pages nobody. The class is registered
-        # at the briefing tier, so flipping it restores the page. The
+        # at the shadow tier, so flipping it restores the page. The
         # cooldown reads class `gate-crossing` only, so these events
         # neither start nor extend it.
         return message_event(msg, event_id, "gate-crossing-no-effect",
@@ -2457,7 +2474,12 @@ def _build_econ_event(conn: sqlite3.Connection, row_id: int,
                           "taostats_subnet", netuid=netuid)
     msg = Message(severity="watch", headline=headline, meaning=meaning,
                   facts=facts, body=body, details=details, buttons=buttons)
-    return message_event(msg, "fleet-signal:%s" % dedup_key, "econ-code",
+    # Only a high verdict is emitted as `econ-code` (change:
+    # alert-tier-trim). Medium, unjudged and verdict-less events go to the
+    # sibling class `econ-code-minor`, which the registry shadows.
+    event_class = ("econ-code" if significance == "high" and not unjudged
+                   else "econ-code-minor")
+    return message_event(msg, "fleet-signal:%s" % dedup_key, event_class,
                          created_at, max_chars, None,
                          digest_signal_ids=[row[0] for row in pending])
 
@@ -2478,6 +2500,23 @@ def _build_signal_digest_event(pending: List[Tuple[int, str, str]],
     return message_event(msg, "fleet-signal-digest:%d" % pending[-1][0],
                          "signal-digest", _utc_now(), max_chars, glosses,
                          digest_signal_ids=[row[0] for row in pending])
+# Fleet digest rows carry only their line; the dedup-key prefix names the
+# producer (fleet/atlas_fleet_signals.py queue_digest_line callers).
+_DIGEST_SOURCE_CLASS = {
+    "cluster-follow": "narrative-cluster",
+    "term-overflow": "narrative-cluster",
+    "range-capped": "narrative-cluster",
+    "econ-digest": "econ-code-minor",
+    "econ-cooldown": "econ-code-minor",
+}
+
+
+def digest_line_class(dedup_key: Optional[str]) -> Optional[str]:
+    """The registered class a fleet digest line belongs to, or None."""
+    prefix = str(dedup_key or "").split(":", 1)[0]
+    return _DIGEST_SOURCE_CLASS.get(prefix)
+
+
 def fleet_signal_events(source_db: str, watermark: Optional[str],
                         ctx: Optional[Dict[str, Any]] = None
                         ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
@@ -2516,6 +2555,13 @@ def fleet_signal_events(source_db: str, watermark: Optional[str],
             high = max(high, int(row_id))
             payload = json.loads(payload_json)
             if tier != "instant":
+                # A digest line takes its source class's tier (change:
+                # alert-tier-trim). An unknown source or a line whose
+                # class does not resolve to instant is never kept.
+                source = digest_line_class(dedup_key)
+                if (source is None or event_tier(config, spec, source)
+                        != TIER_INSTANT):
+                    continue
                 line = redact(str(payload.get("line") or ""))[:200]
                 if store is not None and line:
                     store.execute(
@@ -2941,9 +2987,12 @@ def subnet_registry_events(source_db: str, watermark: Optional[str],
                               details=["Blocks %s → %s" % (
                                   fmt_int(prev_block), fmt_int(block)),
                                   "Source: panel snapshot"])
+                # A rename has no action behind it: its own class, which
+                # the registry shadows (change: alert-tier-trim).
                 events.append(message_event(
                     msg, "subnet-registry:%s:%s:%s" % (block, netuid, kind),
-                    "subnet-registry", _utc_now(), max_chars, glosses))
+                    "subnet-rename" if kind == "renamed"
+                    else "subnet-registry", _utc_now(), max_chars, glosses))
             prev_block = block
         new_wm = str(pending[:10][-1]) if pending else watermark
         return events, new_wm

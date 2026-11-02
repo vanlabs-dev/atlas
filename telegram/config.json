@@ -152,9 +152,15 @@
     "subnet-registry": {
       "_comment": "Netuid set and chain-name changes between consecutive panel snapshots (change: pulse-briefing). The first snapshot seeds silently; a registration, deregistration, or on-chain rename pages at instant tier.",
       "enabled": true,
-      "tier": "briefing",
+      "tier": "instant",
       "source_db": "var/livedata/livedata.db",
-      "_tier_comment": "DEMOTED to briefing 2026-09-09 (change: rotation-signal-gate). All six alerts in the preceding 30 days were `renamed`: a subnet changing its display name has no action behind it. Registration and deregistration still ride the daily briefing. Flip back to instant to roll back."
+      "_tier_comment": "Registrations and deregistrations page at instant since 2026-11-02 (change: alert-tier-trim). Renames are emitted as `subnet-rename`, which is shadowed: a display-name change has no action behind it (all 12 registry events from 19 Oct to 2 Nov were renames)."
+    },
+    "subnet-rename": {
+      "_comment": "An on-chain subnet name change, split from subnet-registry (2026-11-02 (change: alert-tier-trim)). Recorded, not sent. Flip to instant to page renames again.",
+      "enabled": true,
+      "tier": "shadow",
+      "delivery_only": true
     },
     "fail-closed": {
       "_comment": "One page per outage when the gate poll or the chain-parameter watch has recorded only failures for longer than window_hours (change: pulse-briefing). Keyed by the outage's first failure so a persisting outage never pages twice; recovery re-arms the key.",
@@ -171,9 +177,9 @@
       "tier": "instant"
     },
     "gate-crossing-no-effect": {
-      "_comment": "A confirmed crossing for a subnet whose pool-side emission switch is off (change: plain-english-alerts). It earns zero either way, so the event is recorded as briefed and not sent. Flip the tier to instant to restore the page. Cooldown and eligibility stay on gate-crossing.",
+      "_comment": "A confirmed crossing for a subnet whose pool-side emission switch is off (change: plain-english-alerts). It earns zero either way, so the event is recorded as shadowed and not sent (shadow since 2026-11-02 (change: alert-tier-trim); was briefing). Flip the tier to instant to restore the page. Cooldown and eligibility stay on gate-crossing.",
       "enabled": true,
-      "tier": "briefing",
+      "tier": "shadow",
       "delivery_only": true
     },
     "fleet-signal": {
@@ -197,13 +203,20 @@
     "knowledge-ingestion": {
       "enabled": true,
       "source_db": "var/knowledge/knowledge.db",
-      "tier": "briefing",
-      "_tier_comment": "DEMOTED to briefing 2026-10-22 (change: plain-english-alerts). The runtime upgrade job ingests and activates every run itself, so the alert never asked the operator for anything real. Flip back to instant to roll back."
+      "tier": "shadow",
+      "_tier_comment": "SHADOWED 2026-11-02 (change: alert-tier-trim): the briefing is off, and the upgrade job activates every run itself, so the alert asks for nothing. Was briefing from 2026-10-22. Flip back to instant to roll back."
     },
     "econ-code": {
       "_comment": "DEMOTED 2026-09-09 on its own effectiveness read: at n=212 (1d) and n=185 (7d) the class median was -0.278% vs a -0.305% fleet baseline at one day and -2.175% vs -1.873% at seven, so no edge at one day and worse than baseline at seven. Detection, the econ judge, the cooldown and the ledger all continue: the 30-day horizon is still half-pending and is the only thing that could reverse this. Flip back to instant to roll back.",
       "enabled": true,
-      "tier": "briefing",
+      "tier": "shadow",
+      "delivery_only": true,
+      "_tier_comment": "SHADOWED 2026-11-02 (change: alert-tier-trim): the briefing that carried this class has been off since 2026-10-19. The operator declined to page it: at 7 days, 399 filled, class median -2.702% vs baseline -2.275%. Only a high verdict is emitted as econ-code; medium, unjudged and verdict-less events are emitted as econ-code-minor, so a later promotion of this class pages high verdicts only."
+    },
+    "econ-code-minor": {
+      "_comment": "Econ-code events whose verdict is not high: med, unjudged, or no verdict (2026-11-02 (change: alert-tier-trim)). Recorded and measured, not sent. Their digest lines (econ-digest, econ-cooldown) take this tier too. Flip to instant to page them again.",
+      "enabled": true,
+      "tier": "shadow",
       "delivery_only": true
     },
     "narrative-cluster": {
@@ -214,6 +227,12 @@
     },
     "watchlist": {
       "_comment": "Unchanged and operator-curated: these terms were chosen by hand, so the class carries intent that the ledger cannot see. n=3.",
+      "enabled": true,
+      "tier": "instant",
+      "delivery_only": true
+    },
+    "signal-digest": {
+      "_comment": "The fleet digest message, registered explicitly (2026-11-02 (change: alert-tier-trim)). Each line takes its source class's tier; a line from a shadowed class is never kept. With every current source shadowed, no digest is sent.",
       "enabled": true,
       "tier": "instant",
       "delivery_only": true

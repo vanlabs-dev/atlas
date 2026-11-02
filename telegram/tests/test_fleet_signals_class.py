@@ -191,7 +191,7 @@ class TestFleetSignalAlerts(FleetSignalBase):
         self.assertEqual(sent, [])
 
     def test_digest_rows_never_page_and_ride_next_instant(self):
-        add_event(self.fleet_db, "signal-digest", "digest", "adopt:1",
+        add_event(self.fleet_db, "signal-digest", "digest", "cluster-follow:dependency:sglang:12:1",
                   {"line": "SN12 adopted sglang"})
         summary, sent = self.scan()
         self.assertEqual(summary["classes"]["fleet-signal"], {
@@ -215,7 +215,7 @@ class TestFleetSignalAlerts(FleetSignalBase):
             "SELECT COUNT(*) FROM pending_signal").fetchone()[0], 0)
 
     def test_digest_survives_failed_scan_until_delivered(self):
-        add_event(self.fleet_db, "signal-digest", "digest", "adopt:2",
+        add_event(self.fleet_db, "signal-digest", "digest", "cluster-follow:dependency:verl:9:1",
                   {"line": "SN9 adopted verl"})
         self.scan()  # stored durably, watermark advances past it
         add_event(self.fleet_db, "econ-code", "instant", "econ:19",
@@ -234,7 +234,7 @@ class TestFleetSignalAlerts(FleetSignalBase):
             "SELECT COUNT(*) FROM pending_signal").fetchone()[0], 1)
 
     def test_backstop_flushes_stale_digest_alone(self):
-        add_event(self.fleet_db, "signal-digest", "digest", "adopt:3",
+        add_event(self.fleet_db, "signal-digest", "digest", "cluster-follow:dependency:x:2:1",
                   {"line": "SN2 joined existing cluster"})
         self.scan()
         self.store.execute("UPDATE pending_signal SET detected_at = ?",
@@ -328,6 +328,90 @@ ECON_VERDICT_PAYLOAD = {
     "evidence": "del latency_penalty", "partial_view": False,
     "unjudged": False,
 }
+
+
+class TestAlertTierTrim(FleetSignalBase):
+    """change: alert-tier-trim. Only high econ verdicts page; digest lines
+    take their source class's tier; the shipped config loads."""
+
+    def use_shipped(self, *names):
+        shipped = tg.load_config()
+        for name in names:
+            self.config["classes"][name] = dict(shipped["classes"][name])
+
+    def econ(self, range_id, significance, unjudged=False):
+        payload = dict(ECON_VERDICT_PAYLOAD, range_id=range_id,
+                       significance=significance, unjudged=unjudged)
+        add_event(self.fleet_db, "econ-code", "instant", "econ:%d" % range_id,
+                  payload, netuid=64)
+
+    def ledger(self):
+        return self.store.execute(
+            "SELECT event_class, status FROM events ORDER BY id").fetchall()
+
+    def test_shipped_config_shadows_all_econ(self):
+        self.use_shipped("econ-code", "econ-code-minor")
+        self.econ(43, "high")
+        self.econ(44, "med")
+        _summary, sent = self.scan()
+        self.assertEqual(sent, [])
+        self.assertEqual(self.ledger(), [
+            ("econ-code", "shadowed"), ("econ-code-minor", "shadowed")])
+
+    def test_only_a_high_verdict_pages(self):
+        self.use_shipped("econ-code", "econ-code-minor")
+        self.config["classes"]["econ-code"]["tier"] = "instant"
+        self.econ(40, "high")
+        self.econ(41, "med")
+        self.econ(42, None, unjudged=True)
+        _summary, sent = self.scan()
+        self.assertEqual(len(sent), 1)
+        self.assertIn("latency+penalty+removed", sent[0])
+        self.assertEqual(self.ledger(), [
+            ("econ-code", "delivered"),
+            ("econ-code-minor", "shadowed"),
+            ("econ-code-minor", "shadowed")])
+
+    def test_shadowed_source_lines_are_never_kept(self):
+        self.use_shipped("narrative-cluster", "econ-code-minor")
+        add_event(self.fleet_db, "signal-digest", "digest",
+                  "cluster-follow:dependency:vllm:12:1",
+                  {"line": "SN12 joined existing cluster"})
+        add_event(self.fleet_db, "signal-digest", "digest", "econ-digest:50",
+                  {"line": "SN12 incentive-code change · minor"})
+        add_event(self.fleet_db, "signal-digest", "digest",
+                  "econ-cooldown:51", {"line": "SN12 further change"})
+        _summary, sent = self.scan()
+        self.assertEqual(sent, [])
+        self.assertEqual(self.store.execute(
+            "SELECT COUNT(*) FROM pending_signal").fetchone()[0], 0)
+        self.assertEqual(self.store.execute(
+            "SELECT value FROM watermarks WHERE source = 'fleet-signal'"
+        ).fetchone()[0], "3")
+
+    def test_unknown_digest_source_is_skipped(self):
+        add_event(self.fleet_db, "signal-digest", "digest", "mystery:1",
+                  {"line": "SN3 something"})
+        self.scan()
+        self.assertEqual(self.store.execute(
+            "SELECT COUNT(*) FROM pending_signal").fetchone()[0], 0)
+
+    def test_instant_source_line_is_kept(self):
+        self.config["classes"]["econ-code-minor"] = {
+            "enabled": True, "tier": "instant", "delivery_only": True}
+        add_event(self.fleet_db, "signal-digest", "digest", "econ-digest:52",
+                  {"line": "SN12 incentive-code change · minor"})
+        self.scan()
+        self.assertEqual(self.store.execute(
+            "SELECT COUNT(*) FROM pending_signal").fetchone()[0], 1)
+
+    def test_signal_digest_is_registered(self):
+        shipped = tg.load_config()
+        self.assertEqual(shipped["classes"]["signal-digest"]["tier"],
+                         "instant")
+        self.assertEqual(tg.digest_line_class("econ-digest:9"),
+                         "econ-code-minor")
+        self.assertIsNone(tg.digest_line_class("adopt:9"))
 
 
 class TestEconVerdictCard(FleetSignalBase):
