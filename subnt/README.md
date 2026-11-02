@@ -1,7 +1,7 @@
 # subnt: the public edition
 
-**Retired 2026-09-28.** The operator deleted the Cloudflare Worker, so
-subnt.dev no longer serves a page, and the publisher is switched off.
+**Retired 2026-09-28.** The operator deleted the Cloudflare Worker and
+switched the publisher off. The subnt.dev site is now [`web/`](../web/README.md).
 On the Pi, `atlas-subnt.service` and `atlas-subnt.timer` are masked in
 `~/.config/systemd/user/` and in `/etc/systemd/system/` (the installed copies were removed;
 the sources stay in `subnt/systemd/`).
@@ -232,8 +232,8 @@ without it the commit fails outright.
 
 ## On the device
 
-**Retired 2026-09-28.** The Cloudflare Worker is deleted and nothing
-serves subnt.dev. On the Pi, `atlas-subnt.service` and `atlas-subnt.timer` are masked in
+**Retired 2026-09-28.** The Cloudflare Worker is deleted and this
+publisher serves nothing; the subnt.dev site is now `web/`. On the Pi, `atlas-subnt.service` and `atlas-subnt.timer` are masked in
 `~/.config/systemd/user/` and in `/etc/systemd/system/` (the installed copies were removed;
 the sources stay in `subnt/systemd/`).
 
