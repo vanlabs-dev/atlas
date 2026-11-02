@@ -3531,70 +3531,45 @@ def seed_watermarks(config: Dict[str, Any],
 # Plain-English rewrite hook (change: plain-english-alerts)
 # ---------------------------------------------------------------------------
 
-_BULLET_RE = re.compile(r"^[\u2022*\-\s]+")
-
-
-def _plain_input(event_class: str, msg: "Message"
-                 ) -> Tuple[Dict[str, Any], List[Tuple[str, str]]]:
-    """The model's input for one message, as plain strings, and the time
-    facts that stay code-owned (they carry the reader's local time)."""
+def _plain_input(event_class: str, msg: "Message") -> Dict[str, Any]:
+    """The model's input for one message, as plain strings. Time facts
+    carry the reader's local time and go in as details."""
     time_facts = [f for f in msg.facts if _TIME_OPEN in f[1]]
     facts = [[_strip_mono(l), _strip_mono(v)] for l, v in msg.facts
              if _TIME_OPEN not in v]
     details = [_strip_mono(d) for d in msg.details]
     details += ["%s: %s" % (_strip_mono(l), _strip_mono(v))
                 for l, v in time_facts]
-    return ({"class": event_class,
-             "headline": _strip_mono(msg.headline),
-             "meaning": _strip_mono(msg.meaning) if msg.meaning else None,
-             "facts": facts,
-             "body": [_strip_mono(b) for b in msg.body],
-             "details": details,
-             "next_action": (_strip_mono(msg.next_action)
-                             if msg.next_action else None)},
-            time_facts)
+    return {"class": event_class,
+            "headline": _strip_mono(msg.headline),
+            "meaning": _strip_mono(msg.meaning) if msg.meaning else None,
+            "facts": facts,
+            "body": [_strip_mono(b) for b in msg.body],
+            "details": details,
+            "next_action": (_strip_mono(msg.next_action)
+                            if msg.next_action else None)}
 
 
-_PROVENANCE_FACT_RE = re.compile(
-    r"\b(block|setting|run|range|sha|hash|source|spec)\b", re.IGNORECASE)
-
-
-def _rewritten_message(msg: "Message", reply: Dict[str, Any],
-                       time_facts: List[Tuple[str, str]],
-                       allow_next: bool) -> "Message":
-    # Provenance belongs in the fold: a model-made figure about the block,
-    # setting, run, range or hash is dropped, not shown.
-    wanted = [(l, v) for l, v in reply["facts"]
-              if not _PROVENANCE_FACT_RE.search(l)]
-    facts = [(rec(l), rec(v)) for l, v in
-             wanted[:max(0, plain_rewrite.MAX_FACTS - len(time_facts))]]
-    facts += time_facts
-    body = list(msg.body)
-    if msg.body and reply["body"]:
-        head = ([msg.body[0]] if msg.body[0].startswith(_BOLD_OPEN)
-                else [])
-        lines = [_BULLET_RE.sub("", line) for line in reply["body"]]
-        lines = [line for line in lines
-                 if line.strip().rstrip(":").lower()
-                 not in ("main changes", "what changed")]
-        body = head + ["\u2022 " + rec(line) for line in lines] if lines \
-            else list(msg.body)
-    next_action = msg.next_action
-    if next_action is None and allow_next and reply.get("next"):
-        next_action = rec(reply["next"])
-        next_action = next_action[:1].lower() + next_action[1:]
+def _rewritten_message(msg: "Message", reply: Dict[str, Any]) -> "Message":
+    """The template with the model's headline and meaning. Facts, body
+    lines and the Next line stay code-owned (change:
+    rewrite-judge-lockdown). The originals go to the fold."""
+    details = list(msg.details) + ["Original: " + _strip_mono(msg.headline)]
+    if msg.meaning and reply.get("meaning"):
+        details.append("Original meaning: " + _strip_mono(msg.meaning))
     return Message(
         severity=msg.severity, headline=rec(reply["headline"]),
         meaning=rec(reply["meaning"]) if reply.get("meaning")
         else msg.meaning,
-        facts=facts, body=body,
-        details=list(msg.details) + ["Original: " + _strip_mono(msg.headline)],
-        next_action=next_action, buttons=list(msg.buttons))
+        facts=list(msg.facts), body=list(msg.body), details=details,
+        next_action=msg.next_action, buttons=list(msg.buttons))
 
 
 def apply_rewrite(connection: sqlite3.Connection, config: Dict[str, Any],
                   event: Dict[str, Any], deadline: Optional[float] = None,
-                  runner: Optional[Callable[..., Any]] = None) -> None:
+                  runner: Optional[Callable[..., Any]] = None,
+                  verify: Optional[Callable[[Dict[str, Any]],
+                                            Optional[str]]] = None) -> None:
     """Replace the wording of one paged event with the checked rewrite, in
     place. Sets `event["rewrite"]` to `used`, `cached` or `fallback:<reason>`
     and leaves the template untouched on any failure. Never raises for a
@@ -3606,15 +3581,12 @@ def apply_rewrite(connection: sqlite3.Connection, config: Dict[str, Any],
     try:
         msg = Message.from_dict(event["message"])
         max_chars = int(config.get("message_max_chars", 3500))
-        allow_next = (event["event_class"]
-                      in (rcfg.get("next_allowed_classes") or [])
-                      and msg.next_action is None)
-        inp, time_facts = _plain_input(event["event_class"], msg)
+        inp = _plain_input(event["event_class"], msg)
         terms = (config.get("voice") or {}).get("alert_terms") or {}
         reply, cached = plain_rewrite.rewrite(
-            inp, terms, allow_next, rcfg, connection, runner, deadline,
-            created_at=_utc_now(), max_chars=max_chars)
-        new = _rewritten_message(msg, reply, time_facts, allow_next)
+            inp, terms, rcfg, connection, runner, deadline,
+            created_at=_utc_now(), max_chars=max_chars, verify=verify)
+        new = _rewritten_message(msg, reply)
         _lexicon, glosses = voice_maps(config)
         event["html"] = render_html(new, max_chars, glosses)
         event["text"] = render_plain(new, max_chars, glosses)

@@ -257,14 +257,11 @@
     "knowledge_db": "var/knowledge/knowledge.db"
   },
   "rewrite": {
-    "_comment": "Plain-English rewrite pass (change: plain-english-alerts). A Hermes one-shot reworded each paged alert; code checks every number and subnet name against the input and falls back to the template on any failure. ENABLED 2026-10-22 after a 21-event replay on the Pi: 21 accepted, none fell back. `enabled` false is the whole rollback. `toolset` is the no-tools identifier from `hermes tools list` (the econ judge uses the same one); one-shot mode bypasses approvals, so a restriction is mandatory and an empty toolset keeps the pass off. A model-written Next line is allowed only for the classes in next_allowed_classes and only when the template has none. scan_budget_seconds bounds the total model time in one scan.",
+    "_comment": "Plain-English rewrite pass (changes: plain-english-alerts, rewrite-judge-lockdown). A Hermes one-shot rewords the headline and meaning of each paged alert; facts, body lines and the Next line stay code-owned. Code refuses a reply whose numbers, signs, units, from/to order, direction or negation differ from the input, or that adds an assurance, advice or a gloss, and falls back to the template. `enabled` false is the whole rollback. `toolset` must resolve to zero tools in the installed Hermes: `bot_room` does today, and every process checks it before its first call (fallback `toolset-unverified` otherwise). An empty toolset keeps the pass off. scan_budget_seconds bounds the total model time in one scan.",
     "enabled": true,
     "hermes_path": "/home/pi/.local/bin/hermes",
-    "toolset": "todo",
+    "toolset": "bot_room",
     "timeout_seconds": 25,
-    "scan_budget_seconds": 180,
-    "next_allowed_classes": [
-      "chain-parameter-change"
-    ]
+    "scan_budget_seconds": 180
   }
 }

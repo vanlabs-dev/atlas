@@ -240,6 +240,17 @@ class LlmTests(Base):
                          ah.health_config(self.config)),
             "the plain-English rewrite failed 2 times in a row")
 
+    def test_unverified_toolset_pages(self):
+        # A toolset the startup check cannot prove tool-free stops every
+        # rewrite; that must reach the operator (change:
+        # rewrite-judge-lockdown).
+        self._rewrite("e1", "fallback:toolset-unverified: probe exit 1")
+        self._rewrite("e2", "fallback:toolset-unverified: probe exit 1")
+        self.assertEqual(
+            ah.check_llm(self.readers, self.conn,
+                         ah.health_config(self.config)),
+            "the plain-English rewrite failed 2 times in a row")
+
 
 class UnitFailureTests(Base):
     def fail(self, unit="atlas-fleet.service", system=False):
