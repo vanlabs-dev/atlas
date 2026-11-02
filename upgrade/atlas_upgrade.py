@@ -57,6 +57,12 @@ import atlas_telegram as tg  # noqa: E402  (atlas_probe put it on the path)
 AUTHOR_NAME = "vaNlabs"
 AUTHOR_EMAIL = "vanlabs@pm.me"
 AUTHOR_IDENT = "%s <%s>" % (AUTHOR_NAME, AUTHOR_EMAIL)
+# The write-enabled deploy key. Only the job's push uses it; the live
+# tree has no `core.sshCommand`, so other pushes from the Pi fail.
+DEPLOY_KEY = os.environ.get(
+    "ATLAS_DEPLOY_KEY", os.path.expanduser("~/.ssh/atlas_maintenance_ed25519"))
+DEPLOY_SSH = ("ssh -i %s -o IdentitiesOnly=yes -o BatchMode=yes "
+              "-o StrictHostKeyChecking=yes" % DEPLOY_KEY)
 MAX_ATTEMPTS = 3
 BACKOFF_SECONDS = (3600, 4 * 3600)  # after attempt 1, after attempt 2
 MAX_TURNS = 60
@@ -238,9 +244,10 @@ class Job:
 
     # -- helpers ------------------------------------------------------------
 
-    def git(self, gate: str, cwd: str, *args: str) -> str:
+    def git(self, gate: str, cwd: str, *args: str,
+            env: Optional[Dict[str, str]] = None) -> str:
         result = self.run(["git"] + list(args), cwd, TIMEOUT["git"],
-                          self.git_env)
+                          env or self.git_env)
         if result.rc != 0:
             raise StepFailed(gate, "git %s: %s" % (
                 args[0], _tail(result.err or result.out)))
@@ -972,7 +979,8 @@ class Job:
         state["post_push"] = {"commit": ctx["commit"],
                               "run_id": ctx["run_id"], "gate": None}
         self.save_state(state)
-        self.git("push", wt, "push", "origin", "HEAD:main")  # never forced
+        self.git("push", wt, "push", "origin", "HEAD:main",  # never forced
+                 env=dict(self.git_env, GIT_SSH_COMMAND=DEPLOY_SSH))
         remote = self.git("readback", self.root, "ls-remote", "origin",
                           "refs/heads/main").split()
         if not remote or remote[0] != ctx["commit"]:

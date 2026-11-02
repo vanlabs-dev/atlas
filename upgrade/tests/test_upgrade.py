@@ -468,6 +468,26 @@ class PostPushTest(Base):
                                   "main"]))
 
 
+class DeployKeyTest(Base):
+    def test_only_the_push_carries_the_deploy_key(self):
+        job = self.job()
+        seen = []
+        real = job.run
+
+        def spy(cmd, cwd, timeout, env=None):
+            seen.append((cmd, (env or {}).get("GIT_SSH_COMMAND")))
+            return real(cmd, cwd, timeout, env)
+
+        job.run = spy
+        self.assertEqual(job.run_once(), 0)
+        keyed = [cmd for cmd, ssh in seen if ssh]
+        self.assertEqual(keyed, [["git", "push", "origin", "HEAD:main"]])
+        ssh = [s for cmd, s in seen if s][0]
+        self.assertIn("-i " + au.DEPLOY_KEY, ssh)
+        self.assertIn("IdentitiesOnly=yes", ssh)
+        self.assertNotIn("GIT_SSH_COMMAND", job.git_env)
+
+
 class RetryTest(Base):
     def test_backoff_then_blocked_after_third(self):
         job = self.job()
