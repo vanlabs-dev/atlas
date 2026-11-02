@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas, live instrument</title>
+<meta name="description" content="Atlas reads all 128 Bittensor subnets: code, chain and market, from one Raspberry Pi at home.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ground: #f3f4f6;
+  --s1: #e7e9ec;
+  --s2: #dde0e4;
+  --rule: #d3d7dc;
+  --ink: #0b0d10;
+  --ink-2: #464c56;
+  --ink-3: #5c626c;
+  --mark: #ff4a1c;
+  --hot: #c42f0b;
+  --bar: #b9bec6;
+  --band: #0b0d10;
+  --band-s: #16191d;
+  --band-ink: #f3f4f6;
+  --band-ink-2: #a3a8b1;
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --gutter: clamp(16px, 4vw, 64px);
+  --row: 34px;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Archivo", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  font-stretch: 100%;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--mark); outline-offset: 3px; border-radius: 2px; }
+.wrap { max-width: 1600px; margin: 0 auto; padding: 0 var(--gutter); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Header */
+.top { display: flex; align-items: center; gap: 40px; height: 76px; }
+.mark-word { font-weight: 820; font-stretch: 118%; font-size: 28px; letter-spacing: -0.02em; text-decoration: none; }
+.top nav { display: flex; gap: 28px; }
+.top nav a { text-decoration: none; color: var(--ink-2); transition: color 160ms ease; }
+.top nav a:hover { color: var(--ink); }
+
+/* Hero */
+.hero { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); column-gap: clamp(40px, 5vw, 96px); padding-top: clamp(24px, 4vh, 56px); }
+h1 {
+  margin: 0;
+  font-weight: 780;
+  font-stretch: 104%;
+  font-size: clamp(46px, 6.4vw, 118px);
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+  max-width: 11.5em;
+}
+.lead { margin: 28px 0 0; font-size: 20px; line-height: 1.42; max-width: 36ch; color: var(--ink-2); }
+.lead strong { color: var(--ink); font-weight: 640; }
+.actions { margin-top: 32px; display: flex; flex-wrap: wrap; align-items: center; gap: 28px; }
+.btn {
+  display: inline-flex; align-items: center; height: 48px; padding: 0 22px;
+  background: var(--ink); color: var(--ground); border-radius: 4px;
+  text-decoration: none; font-weight: 600; transition: background-color 160ms ease, transform 140ms var(--ease-out);
+}
+.btn:hover { background: var(--hot); }
+.btn:active { transform: scale(0.98); }
+.link { font-weight: 600; text-decoration: underline; text-decoration-color: var(--ink-3); text-underline-offset: 6px; text-decoration-thickness: 1.5px; transition: text-decoration-color 160ms ease; }
+.link:hover { text-decoration-color: var(--ink); }
+
+/* The ranked list */
+.rank h2 { margin: 6px 0 14px; font-size: 20px; font-weight: 600; line-height: 1.3; }
+.rank h2 span { color: var(--hot); }
+.rows { position: relative; list-style: none; margin: 0; padding: 0; }
+.rows li { position: absolute; left: 0; right: 0; top: 0; height: var(--row); background: var(--ground); will-change: transform; }
+.rows a {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) 64px 52px; align-items: center; column-gap: 12px;
+  height: 100%; text-decoration: none; border-radius: 3px; padding: 0 6px; margin: 0 -6px;
+  transition: background-color 160ms ease;
+}
+.rows a:hover { background: var(--s1); }
+.rows .n { color: var(--ink-3); font-size: 14px; }
+.rows .nm {
+  font-size: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  letter-spacing: -0.01em; transition: font-stretch 520ms var(--ease-expo);
+}
+.rows svg { width: 64px; height: 18px; display: block; }
+.rows svg path { fill: var(--ink-2); }
+.rows .c { text-align: right; font-weight: 600; }
+
+/* The scrubber */
+.scrub { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) clamp(260px, 22vw, 340px); column-gap: clamp(24px, 3vw, 48px); align-items: end; margin-top: clamp(28px, 4.5vh, 52px); }
+.strip-wrap { position: relative; }
+.strip-wrap { padding-top: 28px; }
+.strip-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-top: 14px; font-size: 14px; color: var(--ink-2); }
+.replay { white-space: nowrap; font: inherit; font-size: 14px; color: var(--ink); background: none; border: 0; padding: 4px 0; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--ink-3); }
+.replay:hover { text-decoration-color: var(--ink); }
+.strip { position: relative; height: 104px; cursor: ew-resize; touch-action: none; user-select: none; border-radius: 2px; }
+.strip svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.strip rect { fill: var(--bar); transition: fill 200ms ease; }
+.strip rect.in { fill: var(--mark); }
+.cursor { position: absolute; top: -6px; bottom: 0; width: 0; pointer-events: none; }
+.cursor::before { content: ""; position: absolute; left: -1px; top: 0; bottom: 0; width: 2px; background: var(--ink); }
+.cursor .knob { position: absolute; left: -9px; bottom: -14px; width: 18px; height: 18px; border-radius: 4px; background: var(--ink); }
+.cursor .when { position: absolute; bottom: calc(100% + 4px); transform: translateX(-50%); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.axis { position: relative; height: 20px; margin-top: 22px; font-size: 14px; color: var(--ink-3); }
+.axis span { position: absolute; top: 0; white-space: nowrap; transform: translateX(-50%); }
+.axis span:first-child { transform: none; }
+.axis span:last-child { transform: translateX(-100%); }
+.axis b { font-weight: 500; color: var(--ink-2); }
+.clock { padding-bottom: 36px; }
+.clock .lab { font-size: 14px; color: var(--ink-2); margin-top: 12px; }
+.clock .num { display: flex; font-size: clamp(36px, 3.9vw, 56px); font-weight: 720; font-stretch: 96%; letter-spacing: -0.02em; line-height: 1.05; margin-top: 2px; }
+.dg { position: relative; display: inline-block; overflow: hidden; height: 1.05em; }
+.dg > span { display: block; }
+.dg > span + span { position: absolute; left: 0; top: 0; }
+.tick { height: 3px; margin-top: 10px; background: var(--s2); border-radius: 2px; overflow: hidden; }
+.tick i { display: block; height: 100%; background: var(--mark); transform-origin: left; transform: scaleX(0); }
+
+/* Sections */
+section.block { padding-top: clamp(112px, 12vw, 176px); }
+h2.big { margin: 0; font-size: clamp(36px, 3.9vw, 56px); font-weight: 760; font-stretch: 104%; line-height: 0.98; letter-spacing: -0.03em; }
+.find { margin: 20px 0 0; font-size: 20px; line-height: 1.45; max-width: 32ch; }
+
+.fleet { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); column-gap: clamp(40px, 5vw, 96px); }
+.figs { display: grid; grid-template-columns: 1fr 1fr; gap: 28px 24px; margin: 44px 0 0; }
+.figs dd { margin: 0; font-size: 56px; font-weight: 760; font-stretch: 92%; letter-spacing: -0.03em; line-height: 1; }
+.figs dt { margin-top: 8px; font-size: 14px; color: var(--ink-2); line-height: 1.35; }
+.figs div { display: flex; flex-direction: column-reverse; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-weight: 500; font-size: 14px; color: var(--ink-3); padding: 0 12px 12px 0; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+td { padding: 15px 12px 15px 0; border-bottom: 1px solid var(--rule); white-space: nowrap; vertical-align: middle; }
+tbody tr { transition: background-color 160ms ease; }
+tbody tr:hover { background: var(--s1); }
+td a { text-decoration: none; font-weight: 600; }
+td a:hover { color: var(--hot); }
+td .n { color: var(--ink-3); font-weight: 400; margin-right: 10px; }
+.r { text-align: right; }
+.dn { color: var(--hot); }
+.mute { color: var(--ink-2); }
+td svg { width: 96px; height: 18px; display: block; margin-left: auto; }
+td svg path { fill: var(--ink-2); }
+.all { display: inline-block; margin-top: 28px; }
+
+/* Boards band */
+.band { background: var(--band); color: var(--band-ink); margin-top: clamp(112px, 12vw, 176px); padding: clamp(88px, 9vw, 140px) 0; }
+.band .link { text-decoration-color: var(--band-ink-2); }
+.boards { list-style: none; margin: 48px 0 0; padding: 0; }
+.boards a {
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 4fr) minmax(0, 3fr); column-gap: 40px; align-items: baseline;
+  padding: 26px 20px; margin: 0 -20px; border-radius: 6px; text-decoration: none; transition: background-color 180ms ease;
+}
+.boards a:hover { background: var(--band-s); }
+.boards .bn { font-size: clamp(32px, 3.9vw, 56px); font-weight: 720; letter-spacing: -0.03em; line-height: 1; font-stretch: 100%; transition: font-stretch 520ms var(--ease-expo); }
+.boards a:hover .bn, .boards a:focus-visible .bn { font-stretch: 122%; }
+.boards .q { font-size: 20px; line-height: 1.35; }
+.boards .f { color: var(--band-ink-2); line-height: 1.45; }
+
+/* Reads */
+.reads-head { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 6fr); column-gap: clamp(40px, 5vw, 96px); align-items: end; }
+.reads-head .find { margin: 0; max-width: 40ch; }
+.reads { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 40px clamp(24px, 3vw, 48px); margin-top: 56px; }
+.reads h3 { margin: 0 0 18px; font-size: 28px; font-weight: 720; font-stretch: 112%; letter-spacing: -0.02em; line-height: 1; }
+.reads ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
+.reads li b { display: block; font-weight: 600; }
+.reads li span { color: var(--ink-2); }
+
+/* Footer */
+footer { padding-top: clamp(112px, 12vw, 176px); padding-bottom: 40px; overflow: hidden; }
+.foot-name { display: block; font-size: clamp(120px, 25.5vw, 420px); font-weight: 880; font-stretch: 125%; letter-spacing: -0.05em; line-height: 0.8; margin: 0 0 0 -0.04em; }
+.foot-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 40px; margin-top: 36px; color: var(--ink-2); }
+.foot-row nav { display: flex; flex-wrap: wrap; gap: 24px; }
+.foot-row a { color: var(--ink); text-decoration: none; }
+.foot-row a:hover { color: var(--hot); }
+
+/* Tablet */
+@media (max-width: 1100px) {
+  .hero { grid-template-columns: 1fr; }
+  .rank { margin-top: 48px; }
+  .fleet { grid-template-columns: 1fr; }
+  .fleet table { margin-top: 48px; }
+  .col-c30, .col-lane { display: none; }
+  .reads { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .reads-head { grid-template-columns: 1fr; row-gap: 20px; }
+  .boards a { grid-template-columns: 1fr 1fr; row-gap: 10px; }
+  .boards .bn { grid-column: 1 / -1; }
+}
+/* Phone */
+@media (max-width: 640px) {
+  :root { --row: 42px; }
+  .top { height: 64px; gap: 20px; }
+  .top nav { gap: 16px; font-size: 16px; }
+  .top nav a:nth-child(n+3) { display: none; }
+  h1 { font-size: 46px; line-height: 0.95; }
+  .lead { margin-top: 20px; font-size: 18px; }
+  .actions { margin-top: 24px; gap: 22px; }
+  .scrub { grid-template-columns: 1fr; margin-top: 44px; grid-row: 2; }
+  .rank { grid-row: 3; margin-top: 40px; }
+  .strip { height: 96px; }
+  .clock { padding: 32px 0 0; }
+  .axis span:nth-child(2), .axis span:nth-child(3) { display: none; }
+  .rows a { grid-template-columns: 30px minmax(0, 1fr) 48px 44px; column-gap: 10px; }
+  .rows svg { width: 48px; }
+  .figs dd { font-size: 36px; }
+  h2.big, .boards .bn { font-size: 36px; }
+  .find, .boards .q, .rows .nm { font-size: 18px; }
+  footer { padding-top: 168px; }
+  .col-why, .col-c30, .col-lane { display: none; }
+  .boards a { grid-template-columns: 1fr; padding: 22px 14px; margin: 0 -14px; }
+  .reads { grid-template-columns: 1fr 1fr; }
+  .foot-name { font-size: 27vw; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rows .nm, .boards .bn, .strip rect { transition: none; }
+  .replay, .tick { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="mark-word" href="#top" aria-label="Atlas, home">Atlas</a>
+    <nav aria-label="Boards">
+      <a href="/mining">Mining</a><a href="/fleet">Fleet</a><a href="/network">Network</a><a href="/upgrades">Upgrades</a>
+    </nav>
+  </header>
+</div>
+
+<main id="top">
+  <div class="wrap">
+    <section class="hero" aria-labelledby="hero-title" id="hero">
+      <div class="copy">
+        <h1 id="hero-title">Atlas reads all 128 Bittensor subnets.</h1>
+        <p class="lead" id="lead">Code, chain and market, from one Raspberry Pi at home. In the 7 days to <span data-k="date">29 Oct</span>, it read <strong><span data-k="n">0</span> commits</strong> across <strong><span data-k="m">0</span> repositories</strong>.</p>
+        <div class="actions">
+          <a class="btn" href="/fleet">Open the fleet board</a>
+          <a class="link" href="#reads">What it reads</a>
+        </div>
+      </div>
+
+      <div class="rank">
+        <h2 id="rank-title">Busiest in the 7 days to <span data-k="date">29 Oct</span></h2>
+        <ol class="rows" id="rows" aria-labelledby="rank-title"></ol>
+      </div>
+
+      <div class="scrub">
+        <div class="strip-wrap">
+          <div class="strip" id="strip" role="slider" tabindex="0" aria-labelledby="strip-label"
+               aria-valuemin="6" aria-valuemax="89" aria-valuenow="89" aria-valuetext="7 days to 29 Oct">
+            <svg id="bars" viewBox="0 0 900 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+            <div class="cursor" id="cursor"><span class="when" id="when">29 Oct</span><span class="knob"></span></div>
+          </div>
+          <div class="axis" id="axis" aria-hidden="true"></div>
+          <div class="strip-foot">
+            <span id="strip-label">Commits read per day, all subnets, last 90 days</span>
+            <button class="replay" id="replay" type="button">Replay 90 days</button>
+          </div>
+        </div>
+        <div class="clock" aria-label="Estimated current block">
+          <div class="num" id="block" aria-live="off"></div>
+          <div class="tick"><i id="tick"></i></div>
+          <div class="lab">est. block, a new one every 12 seconds</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block fleet" aria-labelledby="fleet-title">
+      <div>
+        <h2 class="big" id="fleet-title">Fleet attention</h2>
+        <p class="find" id="fleet-find"></p>
+        <dl class="figs" id="figs"></dl>
+      </div>
+      <div style="min-width:0">
+        <div style="overflow-x:auto">
+          <table>
+            <caption class="sr">Top of the fleet board</caption>
+            <thead><tr>
+              <th scope="col">Subnet</th>
+              <th scope="col" class="r">Score</th>
+              <th scope="col" class="col-why">Why it ranks</th>
+              <th scope="col" class="r col-c30">Commits, 30 d</th>
+              <th scope="col" class="r">Price, 30 d</th>
+              <th scope="col" class="r col-lane">Last 30 days</th>
+            </tr></thead>
+            <tbody id="fleet-rows"></tbody>
+          </table>
+        </div>
+        <a class="link all" href="/fleet" id="all-link">All scored subnets</a>
+      </div>
+    </section>
+  </div>
+
+  <section class="band" aria-labelledby="boards-title">
+    <div class="wrap">
+      <h2 class="big" id="boards-title">Four boards</h2>
+      <ul class="boards" id="boards"></ul>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <section class="block" id="reads" aria-labelledby="reads-title" style="scroll-margin-top:24px">
+      <div class="reads-head">
+        <h2 class="big" id="reads-title">What it reads</h2>
+        <p class="find">Every source is read-only. A stale, partial or contradictory input is reported as unavailable, never filled in.</p>
+      </div>
+      <div class="reads" id="reads-grid"></div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="foot-name" aria-hidden="true">Atlas</span>
+    <div class="foot-row">
+      <span id="foot-note">Read by one Raspberry Pi at home.</span>
+      <nav aria-label="Footer">
+        <a href="/mining">Mining</a><a href="/fleet">Fleet</a><a href="/network">Network</a><a href="/upgrades">Upgrades</a>
+        <a href="https://github.com/vanlabs-dev/atlas">Source on GitHub</a>
+      </nav>
+    </div>
+  </div>
+</footer>
+
+<script src="./data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/motion@14.8.0/dist/motion.js"></script>
+<script>
+(() => {
+  const A = window.ATLAS;
+  const M = window.Motion || null;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const phone = matchMedia("(max-width: 640px)");
+  const EXPO = [0.16, 1, 0.3, 1];
+  const DAYS = 90, WIN = 7, MIN = WIN - 1, MAX = DAYS - 1;
+
+  const WHY = {
+    emission: "Emission route changed",
+    divergence: "Code and price apart",
+    abandon: "Code gone quiet",
+    fresh: "Economics code just changed",
+  };
+  const fmt = (v, d = 0) => v === null || v === undefined ? "-" : v.toLocaleString("en-GB", { maximumFractionDigits: d, minimumFractionDigits: d });
+  const signed = (v, d = 1) => v === null || v === undefined ? "-" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${fmt(Math.abs(v), d)}%`;
+  const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+
+  // Day i of the 90 ends on the export date, oldest first.
+  const end = new Date(A.generatedAt);
+  end.setUTCHours(12, 0, 0, 0);
+  const dateOf = (i) => new Date(end.getTime() - (MAX - i) * 864e5);
+  const day = (d) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+
+  const read = A.slots.filter((s) => s.daily);
+  const totals = Array.from({ length: DAYS }, (_, i) => sum(read.map((s) => s.daily[i])));
+
+  function lanePath(daily, endIdx, len, w, h) {
+    if (!daily) return "";
+    const from = Math.max(0, endIdx - len + 1);
+    const xs = daily.slice(from, endIdx + 1);
+    const top = Math.log1p(Math.max(1, ...daily.slice(Math.max(0, endIdx - 89), endIdx + 1)));
+    const step = w / len, bw = Math.max(1, step * 0.62);
+    const off = (len - xs.length) * step;
+    let d = "";
+    xs.forEach((v, i) => {
+      if (!v) return;
+      const bh = Math.max(1.5, (Math.log1p(v) / top) * h);
+      d += `M${(off + i * step).toFixed(2)} ${(h - bh).toFixed(2)}h${bw.toFixed(2)}V${h}h-${bw.toFixed(2)}Z`;
+    });
+    return d;
+  }
+
+  /* ---------- The strip ---------- */
+  const strip = document.getElementById("strip");
+  const svg = document.getElementById("bars");
+  const peak = Math.max(...totals);
+  const rects = totals.map((t, i) => {
+    const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    const h = Math.max(1, (t / peak) * 100);
+    r.setAttribute("x", i * 10 + 1.5);
+    r.setAttribute("width", 7);
+    r.setAttribute("y", 100 - h);
+    r.setAttribute("height", h);
+    svg.appendChild(r);
+    return r;
+  });
+  document.getElementById("axis").innerHTML = [[0, ""], [MAX - 60, "60 days ago"], [MAX - 30, "30 days ago"], [MAX, "today"]].map(([i, t]) =>
+    `<span style="left:${i === 0 ? 0 : i === MAX ? 100 : ((i + 0.5) / DAYS) * 100}%">${day(dateOf(i))} <b>${t}</b></span>`).join("");
+
+  /* ---------- The ranked list ---------- */
+  const list = document.getElementById("rows");
+  const live = new Map();
+  const rowH = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--row")) || 34;
+  const listLen = () => (phone.matches ? 8 : 12);
+
+  function makeRow(s) {
+    const li = document.createElement("li");
+    li.innerHTML = `<a href="/fleet#sn${s.n}"><span class="n">${s.n}</span><span class="nm">${s.name ?? "unnamed"}</span>` +
+      `<svg viewBox="0 0 64 18" aria-hidden="true"><path/></svg><span class="c"></span></a>`;
+    li._nm = li.querySelector(".nm");
+    li._path = li.querySelector("path");
+    li._c = li.querySelector(".c");
+    li._a = li.querySelector("a");
+    return li;
+  }
+  // Motion owns the transform whenever it loaded, so instant and animated moves share one y.
+  function place(el, y, opacity, animate) {
+    const was = el._y;
+    el._y = y;
+    // Rows are opaque. A row that rises passes over the rows it overtakes, so no two names ever overprint.
+    el.style.zIndex = was !== undefined && y < was ? 2 : 1;
+    if (M) {
+      M.animate(el, { y, opacity }, animate && !reduce ? { duration: 0.5, ease: EXPO } : { duration: 0 });
+    } else {
+      el.style.transform = `translateY(${y}px)`;
+      el.style.opacity = opacity;
+    }
+  }
+
+  /* ---------- State ---------- */
+  let cursor = MAX;
+  let shownN = 0, nAnim = null;
+  const nEl = document.querySelector('[data-k="n"]');
+  const mEl = document.querySelector('[data-k="m"]');
+  const dateEls = document.querySelectorAll('[data-k="date"]');
+  const cursorEl = document.getElementById("cursor");
+  const whenEl = document.getElementById("when");
+
+  function render(animate) {
+    const from = cursor - WIN + 1;
+    const per = read.map((s) => ({ s, c: sum(s.daily.slice(from, cursor + 1)) }));
+    const n = sum(per.map((p) => p.c));
+    const m = per.filter((p) => p.c > 0).length;
+    const label = day(dateOf(cursor));
+
+    // Sentence and dates
+    dateEls.forEach((el) => (el.textContent = label));
+    mEl.textContent = fmt(m);
+    if (animate && M && !reduce) {
+      if (nAnim) nAnim.stop();
+      const start = shownN;
+      nAnim = M.animate(start, n, { duration: 0.42, ease: EXPO, onUpdate: (v) => { shownN = v; nEl.textContent = fmt(Math.round(v)); } });
+    } else {
+      shownN = n;
+      nEl.textContent = fmt(n);
+    }
+
+    // Strip
+    rects.forEach((r, i) => r.classList.toggle("in", i >= from && i <= cursor));
+    const pct = ((cursor + 0.5) / DAYS) * 100;
+    cursorEl.style.left = `${pct}%`;
+    whenEl.textContent = label;
+    whenEl.style.transform = `translateX(${pct > 92 ? "-100%" : pct < 8 ? "0" : "-50%"})`;
+    strip.setAttribute("aria-valuenow", cursor);
+    strip.setAttribute("aria-valuetext", `7 days to ${label}: ${fmt(n)} commits across ${m} repositories`);
+
+    // Ranking
+    const len = listLen(), h = rowH();
+    const top = per.slice().sort((a, b) => b.c - a.c || a.s.n - b.s.n).slice(0, len);
+    const lead = Math.max(1, top[0].c);
+    const keep = new Set(top.map((p) => p.s.n));
+    for (const [k, el] of live) {
+      if (keep.has(k)) continue;
+      live.delete(k);
+      if (animate && M && !reduce) {
+        // Leavers fade where they stand, so they never cross the rows that stay.
+        el.style.pointerEvents = "none";
+        M.animate(el, { opacity: 0 }, { duration: 0.22, ease: [0.55, 0.055, 0.675, 0.19] }).then(() => el.remove());
+      } else el.remove();
+    }
+    top.forEach((p, rank) => {
+      let el = live.get(p.s.n);
+      if (!el) {
+        el = makeRow(p.s);
+        live.set(p.s.n, el);
+        // Newcomers rise into their own slot instead of travelling up the list.
+        place(el, rank * h + h * 0.5, 0, false);
+      }
+      list.appendChild(el); // DOM order follows rank for reading order
+      el._c.textContent = fmt(p.c);
+      // Width follows the square root of the share, so the middle of the list still moves.
+      el._nm.style.fontStretch = `${(62 + 63 * Math.sqrt(p.c / lead)).toFixed(1)}%`;
+      el._path.setAttribute("d", lanePath(p.s.daily, cursor, 30, 64, 18));
+      el._a.setAttribute("aria-label", `Subnet ${p.s.n}, ${p.s.name ?? "unnamed"}, ${p.c} commits in the 7 days to ${label}`);
+      place(el, rank * h, 1, animate);
+    });
+    list.style.height = `${len * h}px`;
+  }
+
+  /* ---------- Input ---------- */
+  function setCursor(i, animate = true) {
+    const next = Math.max(MIN, Math.min(MAX, i));
+    if (next === cursor) return;
+    cursor = next;
+    render(animate);
+  }
+  const fromX = (x) => {
+    const b = strip.getBoundingClientRect();
+    return Math.floor(((x - b.left) / b.width) * DAYS);
+  };
+  let dragging = false;
+  strip.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    strip.setPointerCapture(e.pointerId);
+    takeOver();
+    setCursor(fromX(e.clientX));
+  });
+  strip.addEventListener("pointermove", (e) => { if (dragging) setCursor(fromX(e.clientX)); });
+  const drop = () => { dragging = false; idleLater(); };
+  strip.addEventListener("pointerup", drop);
+  strip.addEventListener("pointercancel", drop);
+  strip.addEventListener("keydown", (e) => {
+    const step = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1, PageDown: -7, PageUp: 7 }[e.key];
+    if (step || e.key === "Home" || e.key === "End") {
+      e.preventDefault();
+      takeOver();
+      if (e.key === "Home") setCursor(MIN);
+      else if (e.key === "End") setCursor(MAX);
+      else setCursor(cursor + step);
+      idleLater();
+    }
+  });
+
+  /* ---------- The idle replay ---------- */
+  let touring = false, tourTimer = null, idleTimer = null, heroVisible = true;
+  // Each step moves two days and settles (FLIP 500 ms), then holds so the ranking can be read.
+  const STEP_MS = 900, STEP_DAYS = 2;
+  function stopTour() { touring = false; clearTimeout(tourTimer); }
+  function takeOver() { stopTour(); clearTimeout(idleTimer); }
+  function idleLater(ms = 8000) {
+    clearTimeout(idleTimer);
+    if (reduce) return;
+    idleTimer = setTimeout(() => startTour(cursor >= MAX), ms);
+  }
+  function startTour(fromStart) {
+    if (reduce || !heroVisible || document.hidden) { idleLater(); return; }
+    touring = true;
+    if (fromStart) setCursor(MIN);
+    const tick = () => {
+      if (!touring) return;
+      if (cursor >= MAX) { touring = false; idleLater(6000); return; }
+      setCursor(cursor + STEP_DAYS);
+      tourTimer = setTimeout(tick, STEP_MS);
+    };
+    tourTimer = setTimeout(tick, STEP_MS);
+  }
+  document.getElementById("replay").addEventListener("click", () => { takeOver(); startTour(true); });
+  ["pointermove", "keydown", "wheel", "touchstart"].forEach((ev) =>
+    window.addEventListener(ev, (e) => {
+      if (e.target.closest && e.target.closest("#replay")) return;
+      if (touring && !(ev === "pointermove" && e.pointerType === "touch")) { stopTour(); idleLater(); }
+      else if (!touring) idleLater();
+    }, { passive: true }));
+  new IntersectionObserver(([en]) => {
+    heroVisible = en.isIntersecting;
+    if (!heroVisible) stopTour();
+  }, { threshold: 0.25 }).observe(document.getElementById("hero"));
+  document.addEventListener("visibilitychange", () => { if (document.hidden) stopTour(); });
+
+  /* ---------- Block clock ---------- */
+  const BLOCK_MS = 12000;
+  const anchorAt = Date.parse(A.anchor.at);
+  const blockEl = document.getElementById("block");
+  const tickEl = document.getElementById("tick");
+  let shownBlock = "";
+  function drawBlock(str, roll) {
+    if (blockEl.children.length !== str.length) {
+      blockEl.innerHTML = [...str].map((ch) => `<span class="dg"><span>${ch}</span></span>`).join("");
+      blockEl.setAttribute("aria-label", str);
+      shownBlock = str;
+      return;
+    }
+    [...str].forEach((ch, i) => {
+      if (ch === shownBlock[i]) return;
+      const cell = blockEl.children[i];
+      const old = cell.firstElementChild;
+      if (!roll || !M) { old.textContent = ch; while (cell.children.length > 1) cell.lastElementChild.remove(); return; }
+      const nu = document.createElement("span");
+      nu.textContent = ch;
+      cell.appendChild(nu);
+      M.animate(old, { y: ["0%", "-100%"] }, { duration: 0.5, ease: EXPO });
+      M.animate(nu, { y: ["100%", "0%"] }, { duration: 0.5, ease: EXPO, delay: 0.03 * (str.length - i) }).then(() => {
+        old.remove();
+        nu.style.position = "static";
+        nu.style.transform = "none";
+      });
+    });
+    blockEl.setAttribute("aria-label", str);
+    shownBlock = str;
+  }
+  function clock() {
+    const now = Date.now();
+    const elapsed = now - anchorAt;
+    const block = A.anchor.block + Math.floor(elapsed / BLOCK_MS);
+    drawBlock(fmt(block), !reduce);
+    const into = (elapsed % BLOCK_MS) / BLOCK_MS;
+    const rem = BLOCK_MS - (elapsed % BLOCK_MS);
+    if (!reduce && M) M.animate(tickEl, { scaleX: [into, 1] }, { duration: rem / 1000, ease: "linear" });
+    setTimeout(clock, rem + 20);
+  }
+
+  /* ---------- Below the hero ---------- */
+  const c = A.counts;
+  const scored = A.slots.filter((s) => s.score !== null && s.score !== undefined).sort((a, b) => b.score - a.score || a.n - b.n);
+  const lead = scored[0];
+  document.getElementById("fleet-find").textContent =
+    `${c.diverging} subnets show code and price moving 40 points or more apart. ${lead.name} leads.`;
+  document.getElementById("figs").innerHTML = [
+    [c.diverging, "code and price apart"],
+    [c.cold, "gone cold this month"],
+    [c.emission, "emission routes changed"],
+    [c.invisible, "with no public repository"],
+  ].map(([v, l]) => `<div><dt>${l}</dt><dd>${v}</dd></div>`).join("");
+  document.getElementById("fleet-rows").innerHTML = scored.slice(0, 8).map((s) => {
+    const c30 = s.daily ? sum(s.daily.slice(-30)) : null;
+    return `<tr>
+      <td><a href="/fleet#sn${s.n}"><span class="n">${s.n}</span>${s.name ?? "unnamed"}</a></td>
+      <td class="r">${s.score}</td>
+      <td class="mute col-why">${s.why ? WHY[s.why] ?? s.why : "-"}</td>
+      <td class="r col-c30">${fmt(c30)}</td>
+      <td class="r ${s.m30 < 0 ? "dn" : ""}">${signed(s.m30)}</td>
+      <td class="col-lane"><svg viewBox="0 0 96 18" aria-hidden="true"><path d="${lanePath(s.daily, MAX, 30, 96, 18)}"/></svg></td>
+    </tr>`;
+  }).join("");
+  document.getElementById("all-link").textContent = `All ${A.scored} scored subnets`;
+
+  const F = A.facts;
+  const boards = [
+    ["/mining", "Mining triage", "Where can a new miner still earn?", `${F.cpu} of ${F.miningTotal} subnets have miner code that runs on a CPU.`],
+    ["/fleet", "Fleet attention", "Whose code moved, and does price agree?", `${A.scored} repositories scored by how their code moved, set against price.`],
+    ["/network", "Network pulse", "How is the whole chain doing?", `Subnets hold ${fmt(F.subnetsSharePct, 2)}% of staked TAO, read daily for ${F.vitalDays} days.`],
+    ["/upgrades", "Runtime upgrades", "How often does the chain runtime change?", `${F.specs} runtime specs seen. The latest is ${F.latestSpec}, on ${day(new Date(F.latestSpecAt + "T12:00:00Z"))}.`],
+  ];
+  document.getElementById("boards").innerHTML = boards.map(([h, n, q, f]) =>
+    `<li><a href="${h}"><span class="bn">${n}</span><span class="q">${q}</span><span class="f">${f}</span></a></li>`).join("");
+
+  const reads = [
+    ["Code", [["Every subnet repository", "cloned, indexed, never run"], ["The subtensor source", "verified clone, change records"]]],
+    ["Chain", [["Finney RPC", "spec, emission gate, parameters"]]],
+    ["Markets", [["TaoSwap, TaoStats, CoinGecko", "fail-closed readers"]]],
+    ["Facts", [["Validated corpus", "each fact carries its date"]]],
+    ["Out", [["Telegram", "the few changes worth reading"], ["subnt.dev", "this site, from a scrubbed snapshot"]]],
+  ];
+  document.getElementById("reads-grid").innerHTML = reads.map(([k, xs]) =>
+    `<div><h3>${k}</h3><ul>${xs.map(([a, b]) => `<li><b>${a}</b><span>${b}</span></li>`).join("")}</ul></div>`).join("");
+  document.getElementById("foot-note").textContent =
+    `Read by one Raspberry Pi at home. Data from ${new Date(A.generatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}.`;
+
+  /* ---------- Start ---------- */
+  render(false);
+  clock();
+  phone.addEventListener("change", () => { for (const el of live.values()) el.remove(); live.clear(); render(false); });
+  if (!reduce) idleLater(4000);
+})();
+</script>
+</body>
+</html>

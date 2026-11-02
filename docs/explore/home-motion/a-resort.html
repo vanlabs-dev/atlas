@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas, comp A: Re-sort</title>
+<meta name="description" content="Atlas reads all 128 Bittensor subnets from one Raspberry Pi at home.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@400;500;600&family=Funnel+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ground: #08090a;
+  --s1: #0f1113;
+  --s2: #15181b;
+  --rule: #1d1f22;
+  --ink: #f2f3f5;
+  --ink-2: #a3a8b1;
+  --ink-3: #7d838d;
+  --accent: #5d93ff;
+  --accent-2: #a8c8ff;
+  --down: #f0646a;
+  --gutter: clamp(16px, 4vw, 64px);
+  --display: "Funnel Display", "Funnel Sans", system-ui, sans-serif;
+  --text: "Funnel Sans", system-ui, sans-serif;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --t-hover: 180ms;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: var(--ground); }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font: 400 18px/1.5 var(--text);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; border-radius: 2px; }
+::selection { background: var(--accent); color: var(--ground); }
+.wrap { width: 100%; max-width: 1600px; margin: 0 auto; padding: 0 var(--gutter); }
+
+/* Bar */
+.bar { display: flex; align-items: baseline; gap: 40px; height: 76px; padding-top: 26px; position: relative; z-index: 5; }
+.bar .mark { font: 600 30px/1 var(--display); letter-spacing: -0.02em; text-decoration: none; }
+.bar nav { display: flex; gap: 28px; }
+.bar .src { margin-left: auto; text-decoration: none; color: var(--ink-2); transition: color var(--t-hover) ease; }
+.bar .src:hover { color: var(--ink); }
+.bar nav a { text-decoration: none; color: var(--ink-2); transition: color var(--t-hover) ease; }
+.bar nav a:hover { color: var(--ink); }
+
+/* Type */
+h1 {
+  font: 500 clamp(52px, 7vw, 128px)/0.92 var(--display);
+  letter-spacing: -0.035em;
+  max-width: 13.5em;
+}
+h2 { font: 500 clamp(40px, 4.2vw, 68px)/1 var(--display); letter-spacing: -0.03em; }
+.lead { font-size: clamp(19px, 1.55vw, 23px); line-height: 1.45; color: var(--ink-2); }
+.lead strong { font-weight: 500; color: var(--ink); }
+.btn {
+  display: inline-flex; align-items: center; height: 50px; padding: 0 24px;
+  background: var(--ink); color: var(--ground); border-radius: 4px;
+  font-weight: 500; text-decoration: none;
+  transition: background-color var(--t-hover) ease, transform 140ms var(--ease-out);
+}
+.btn:hover { background: var(--accent-2); }
+.btn:active { transform: translateY(1px) scale(0.985); }
+.link {
+  text-decoration: none; font-weight: 500;
+  border-bottom: 1px solid var(--ink-3); padding-bottom: 2px;
+  transition: border-color var(--t-hover) ease, color var(--t-hover) ease;
+}
+.link:hover { border-color: var(--ink); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 28px; margin-top: 40px; }
+
+/* Stage: static by default (phone, reduced motion, no script) */
+.stage { position: relative; }
+.sticky { position: relative; }
+#field { display: none; }
+.ch { padding: 0 var(--gutter); max-width: 1600px; margin: 0 auto; }
+.ch0 { padding-top: clamp(40px, 8vw, 96px); }
+.ch0 .lead { margin-top: 28px; max-width: 34ch; }
+.ch + .ch { margin-top: clamp(96px, 14vw, 180px); }
+.ch .lead.note { margin-top: 20px; max-width: 34ch; }
+.fig { display: block; width: 100%; height: auto; margin-top: 40px; }
+.ch3 .link { display: inline-block; margin-top: 28px; }
+.tag {
+  position: absolute; z-index: 6; pointer-events: none;
+  background: var(--ink); color: var(--ground);
+  font: 500 15px/1 var(--text); padding: 8px 10px; border-radius: 3px;
+  white-space: nowrap; transform: translate(14px, -50%);
+}
+.tag[hidden] { display: none; }
+
+/* Pinned stage: desktop with motion allowed */
+html.pin .stage { height: 520vh; }
+html.pin .bar { position: absolute; top: 0; left: 0; right: 0; }
+html.pin .sticky { position: sticky; top: 0; height: 100vh; overflow: hidden; }
+html.pin #field { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
+html.pin .fig { display: none; }
+html.pin .ch { position: absolute; left: 0; right: 0; margin: 0; padding: 0 var(--gutter); max-width: none; will-change: opacity, transform; }
+html.pin .ch0 { top: 0; padding-top: calc(76px + clamp(24px, 4vh, 56px)); }
+html.pin .ch0 .lead, html.pin .ch0 .actions { max-width: 42%; }
+html.pin .ch0 .lead { max-width: min(42%, 34ch); }
+html.pin .ch:not(.ch0) { top: 50%; transform: translateY(-50%); width: min(36%, 520px); }
+html.pin .ch + .ch { margin-top: 0; }
+html.pin .ch.off { pointer-events: none; }
+
+/* Boards */
+section.after { padding-top: clamp(120px, 14vw, 220px); }
+.boards-head { display: grid; gap: 20px; }
+.boards-head .lead { max-width: 40ch; }
+.boards { list-style: none; margin-top: 56px; }
+.boards a {
+  display: grid; grid-template-columns: 1fr; gap: 6px 40px; align-items: baseline;
+  padding: 28px 0; text-decoration: none; position: relative; isolation: isolate;
+}
+.boards a::before {
+  content: ""; position: absolute; inset: 0 -20px; z-index: -1; border-radius: 10px;
+  background: transparent; transition: background-color var(--t-hover) ease;
+}
+.boards a:hover::before { background: var(--s1); }
+.boards .fig-n { font: 500 clamp(40px, 4.2vw, 68px)/0.9 var(--display); letter-spacing: -0.03em; }
+.boards .name { font: 500 30px/1.1 var(--display); letter-spacing: -0.02em; }
+.boards .q { color: var(--ink); margin-top: 6px; }
+.boards .fact { color: var(--ink-2); font-size: 15px; }
+.boards .go { justify-self: end; color: var(--ink-3); transition: color var(--t-hover) ease, transform 240ms var(--ease-out); display: inline-block; }
+.boards a:hover .go { color: var(--ink); transform: translateX(4px); }
+@media (max-width: 899px) { .boards .go { display: none; } }
+@media (min-width: 900px) {
+  .boards a { grid-template-columns: 2fr 4fr 4fr 1fr; padding: 32px 0; }
+  .boards-head { grid-template-columns: 4fr 8fr; align-items: end; }
+}
+
+/* Reads */
+.reads { display: grid; gap: 40px; }
+.reads .lead { margin-top: 20px; max-width: 32ch; }
+table { width: 100%; border-collapse: collapse; font-size: 18px; }
+th { text-align: left; font-weight: 500; color: var(--ink-3); font-size: 15px; padding: 0 16px 12px 0; border-bottom: 1px solid var(--rule); }
+td { padding: 15px 16px 15px 0; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+td.k { color: var(--ink-3); width: 18%; }
+td.h { color: var(--ink-2); }
+td .sm { display: block; color: var(--ink-2); font-size: 15px; }
+@media (min-width: 1000px) { .reads { grid-template-columns: 4fr 8fr; gap: 64px; } }
+@media (min-width: 640px) { td .sm { display: none; } }
+@media (max-width: 639px) { th.hc, td.h { display: none; } }
+
+/* Footer */
+footer.wrap { margin-top: clamp(120px, 14vw, 220px); padding-bottom: 40px; }
+footer .big { font: 600 clamp(96px, 27vw, 440px)/0.8 var(--display); letter-spacing: -0.05em; display: block; margin-left: -0.04em; }
+footer .row { display: flex; flex-wrap: wrap; gap: 12px 32px; justify-content: space-between; margin-bottom: 40px; color: var(--ink-2); font-size: 15px; }
+footer nav { display: flex; gap: 24px; flex-wrap: wrap; }
+footer nav a { text-decoration: none; transition: color var(--t-hover) ease; }
+footer nav a:hover { color: var(--ink); }
+
+@media (max-width: 640px) {
+  .bar { gap: 22px; height: 64px; padding-top: 22px; }
+  .bar nav { gap: 16px; font-size: 16px; }
+  .bar .mark { font-size: 22px; }
+  .bar .src { display: none; }
+}
+@media (max-width: 400px) {
+  .bar nav a:nth-child(4) { display: none; }
+}
+</style>
+</head>
+<body>
+<header class="wrap bar">
+  <a class="mark" href="/">Atlas</a>
+  <nav aria-label="Boards">
+    <a href="/mining">Mining</a>
+    <a href="/fleet">Fleet</a>
+    <a href="/network">Network</a>
+    <a href="/upgrades">Upgrades</a>
+  </nav>
+  <a class="src" href="https://github.com/vanlabs-dev/atlas">Source</a>
+</header>
+
+<main>
+  <section class="stage" id="stage" aria-labelledby="hero-title">
+    <div class="sticky" id="sticky">
+      <canvas id="field" aria-hidden="true"></canvas>
+
+      <div class="ch ch0" data-ch="0">
+        <h1 id="hero-title">Atlas reads all 128 Bittensor subnets.</h1>
+        <p class="lead">Code, chain and market, from one Raspberry Pi at home. In the last 30 days it read <strong data-f="commits30">9,779 commits</strong> across <strong data-f="repos">104 repositories</strong>.</p>
+        <div class="actions">
+          <a class="btn" href="/fleet">Open the fleet board</a>
+          <a class="link" href="#reads">What it reads</a>
+        </div>
+        <canvas class="fig" data-layout="0" role="img" aria-label="All 128 subnets in number order, each drawn as its last 90 days of commits."></canvas>
+      </div>
+
+      <div class="ch ch1" data-ch="1">
+        <h2>Ranked by commits</h2>
+        <p class="lead note" data-f="ch1">Sorted by the last 30 days, the busiest 10 subnets wrote 85% of all commits. 18 subnets with code wrote none, and 24 have no code Atlas can read.</p>
+        <canvas class="fig" data-layout="1" role="img" aria-label="The same 128 subnets stacked by 30-day commits, busiest at the bottom."></canvas>
+      </div>
+
+      <div class="ch ch2" data-ch="2">
+        <h2>Code against price</h2>
+        <p class="lead note" data-f="ch2">32 subnets show code and price moving 40 points or more apart. Cathedral leads the fleet board: 209 commits in 30 days while its price fell 27.8%.</p>
+        <canvas class="fig" data-layout="2" role="img" aria-label="Each subnet placed by 30-day commits against 30-day price change. The head of the fleet board in blue."></canvas>
+      </div>
+
+      <div class="ch ch3" data-ch="3">
+        <h2>The fleet board</h2>
+        <p class="lead note" data-f="ch3">103 repositories, scored by how their code moved against price. These 8 lead it.</p>
+        <a class="link" href="/fleet" data-f="all">All 103 scored subnets</a>
+        <canvas class="fig" data-layout="3" role="img" aria-label="The eight highest-scored subnets named, the rest below them, and the subnets with no readable code in a dotted row."></canvas>
+      </div>
+
+      <div class="tag" id="tag" hidden></div>
+    </div>
+  </section>
+
+  <section class="after wrap" aria-labelledby="boards-title">
+    <div class="boards-head">
+      <h2 id="boards-title">Four boards</h2>
+      <p class="lead">Each board answers one question from the same snapshot, with the data age shown beside it.</p>
+    </div>
+    <ul class="boards" id="boards"></ul>
+  </section>
+
+  <section class="after wrap reads" id="reads" aria-labelledby="reads-title">
+    <div>
+      <h2 id="reads-title">What it reads</h2>
+      <p class="lead">Every source is read-only. A stale, partial or contradictory input is reported as unavailable, never filled in.</p>
+    </div>
+    <table>
+      <caption class="sr" hidden>Sources Atlas reads and outputs it sends</caption>
+      <thead><tr><th scope="col">Kind</th><th scope="col">Source</th><th scope="col" class="hc">What Atlas does</th></tr></thead>
+      <tbody id="reads-body"></tbody>
+    </table>
+  </section>
+
+  <footer class="wrap">
+    <div class="row">
+      <span id="foot-age">Snapshot of 29 Oct 2026, scrubbed of operator data.</span>
+      <nav aria-label="Footer">
+        <a href="/mining">Mining</a><a href="/fleet">Fleet</a><a href="/network">Network</a><a href="/upgrades">Upgrades</a>
+        <a href="https://github.com/vanlabs-dev/atlas">Source</a>
+      </nav>
+    </div>
+    <span class="big" aria-hidden="true">Atlas</span>
+  </footer>
+</main>
+
+<script src="./data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/ScrollTrigger.min.js"></script>
+<script>
+(() => {
+  const A = window.ATLAS;
+  const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+  const fmt = (v, d = 0) => v.toLocaleString("en-GB", { maximumFractionDigits: d, minimumFractionDigits: d });
+  const signed = (v, d = 1) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${fmt(Math.abs(v), d)}%`;
+  const day = (iso) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+  // ---------- Data ----------
+  const marks = A.slots.map((s) => {
+    const d = s.daily;
+    const c30 = d ? sum(d.slice(-30)) : null;
+    const bins = d ? Array.from({ length: 18 }, (_, i) => sum(d.slice(i * 5, i * 5 + 5))) : null;
+    return { ...s, c30, c90: d ? sum(d) : null, bins };
+  });
+  const read = marks.filter((m) => m.daily);
+  const nulls = marks.filter((m) => !m.daily);
+  const silent = read.filter((m) => m.c30 === 0);
+  const commits30 = sum(read.map((m) => m.c30));
+  const busiest = [...read].sort((a, b) => b.c30 - a.c30);
+  const top10share = Math.round((sum(busiest.slice(0, 10).map((m) => m.c30)) / commits30) * 100);
+  const byScore = marks.filter((m) => m.score != null).sort((a, b) => b.score - a.score);
+  const lead = byScore[0];
+  const head8 = byScore.slice(0, 8);
+  const maxDay = Math.max(...read.flatMap((m) => m.daily));
+  const maxBin = Math.max(...read.flatMap((m) => m.bins));
+  const maxC30 = busiest[0].c30;
+  const L1 = Math.log1p(maxDay), LB = Math.log1p(maxBin), LC = Math.log1p(maxC30);
+
+  // ---------- Copy from data ----------
+  const set = (k, html) => document.querySelectorAll(`[data-f="${k}"]`).forEach((n) => (n.innerHTML = html));
+  set("commits30", `${fmt(commits30)} commits`);
+  set("repos", `${read.length} repositories`);
+  set("ch1", `Sorted by the last 30 days, the busiest 10 subnets wrote ${top10share}% of all commits. ${silent.length} subnets with code wrote none, and ${nulls.length} have no code Atlas can read.`);
+  set("ch2", `${A.counts.diverging} subnets show code and price moving 40 points or more apart. ${lead.name} leads the fleet board: ${fmt(lead.c30)} commits in 30 days while its price ${lead.m30 < 0 ? "fell" : "rose"} ${fmt(Math.abs(lead.m30), 1)}%.`);
+  set("ch3", `${A.scored} repositories, scored by how their code moved against price. These ${head8.length} lead it.`);
+  set("all", `All ${A.scored} scored subnets`);
+  document.getElementById("foot-age").textContent = `Snapshot of ${day(A.generatedAt)}, scrubbed of operator data.`;
+
+  const F = A.facts;
+  const boards = [
+    ["/mining", "Mining triage", "Where can a new miner still earn?", String(F.cpu), `of ${F.miningTotal} run on a CPU`, `${F.cpu} of ${F.miningTotal} subnets have miner code that runs on a CPU.`],
+    ["/fleet", "Fleet attention", "Whose code moved, and does price agree?", String(A.scored), "repositories scored", `${A.scored} repositories scored by how their code moved, set against price.`],
+    ["/network", "Network pulse", "How is the whole chain doing?", `${fmt(F.subnetsSharePct, 1)}%`, "of staked TAO in subnets", `Subnets hold ${fmt(F.subnetsSharePct, 2)}% of staked TAO, read daily for ${F.vitalDays} days.`],
+    ["/upgrades", "Runtime upgrades", "How often does the chain runtime change?", String(F.specs), "runtime specs seen", `${F.specs} runtime specs seen. The latest is ${F.latestSpec}, on ${day(F.latestSpecAt)}.`],
+  ];
+  document.getElementById("boards").innerHTML = boards.map(([h, n, q, v, l, f]) => `
+    <li><a href="${h}">
+      <span class="fig-n">${v}</span>
+      <span><span class="name">${n}</span><span class="q" style="display:block">${q}</span></span>
+      <span class="fact">${f}</span>
+      <span class="go" aria-hidden="true">Open</span>
+    </a></li>`).join("");
+  const reads = [
+    ["Code", "Every subnet repository", "cloned, indexed, never run"],
+    ["Code", "The subtensor source", "verified clone, change records"],
+    ["Chain", "Finney RPC", "spec, emission gate, parameters"],
+    ["Markets", "TaoSwap, TaoStats, CoinGecko", "fail-closed readers"],
+    ["Facts", "Validated corpus", "each fact carries its date"],
+    ["Out", "Telegram", "the few changes worth reading"],
+    ["Out", "subnt.dev", "this site, from a scrubbed snapshot"],
+  ];
+  document.getElementById("reads-body").innerHTML = reads.map(([k, w, h]) =>
+    `<tr><td class="k">${k}</td><td>${w}<span class="sm">${h}</span></td><td class="h">${h}</td></tr>`).join("");
+
+  // ---------- Colours ----------
+  const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const C = { ink: hex("#f2f3f5"), dim: hex("#7d838d"), accent: hex("#5d93ff"), accent2: hex("#a8c8ff"), down: hex("#f0646a"), s2: "#15181b", ink2: "#a3a8b1", ink3: "#7d838d" };
+  const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+
+  // ---------- Layouts: each returns a box and colour per mark, plus labels ----------
+  // R = {x, y, w, h}. Boxes are {x, y, w, h, c (rgb), a (alpha)}.
+  function layoutGrid(R) {
+    const wide = R.w > R.h * 1.1;
+    const cols = wide ? 16 : 8, rows = 128 / cols;
+    const cw = R.w / cols, chh = R.h / rows;
+    const boxes = marks.map((m, i) => {
+      const c = i % cols, r = Math.floor(i / cols);
+      return { x: R.x + c * cw + cw * 0.06, y: R.y + r * chh + chh * 0.08, w: cw * 0.84, h: chh * 0.64, c: C.ink, a: 1 };
+    });
+    const labels = marks.map((m, i) => {
+      const c = i % cols, r = Math.floor(i / cols);
+      return { t: String(m.n), x: R.x + c * cw + cw * 0.06, y: R.y + r * chh + chh * 0.9, size: Math.min(12, chh * 0.2), col: C.ink3, align: "left" };
+    });
+    return { boxes, labels };
+  }
+
+  function sediment() {
+    return [...marks].sort((a, b) => {
+      const ka = a.daily ? (a.c30 === 0 ? 1 : 2) : 0, kb = b.daily ? (b.c30 === 0 ? 1 : 2) : 0;
+      return ka - kb || (a.c30 ?? 0) - (b.c30 ?? 0) || a.n - b.n;
+    });
+  }
+  const SED = sediment();
+  const sedIndex = new Map(SED.map((m, i) => [m.n, i]));
+
+  function layoutRanked(R, narrow) {
+    const right = narrow ? 0 : Math.min(190, R.w * 0.22);
+    const W = R.w - right, rh = R.h / 128;
+    const top5 = new Set(busiest.slice(0, 5).map((m) => m.n));
+    const boxes = marks.map((m) => {
+      const i = sedIndex.get(m.n);
+      const hot = top5.has(m.n);
+      return { x: R.x, y: R.y + i * rh, w: W, h: Math.max(2, rh * 0.86), c: hot ? C.accent : C.ink, a: 1 };
+    });
+    const labels = [];
+    const ty = (i) => R.y + i * rh + rh / 2;
+    labels.push({ t: `${nulls.length} with no readable code`, x: R.x, y: R.y - 12, size: 13, col: C.ink3, align: "left" });
+    if (!narrow) {
+      const zMid = nulls.length + silent.length / 2;
+      labels.push({ t: `${silent.length} silent, 30 days`, x: R.x + W + 16, y: ty(zMid), size: 13, col: C.ink3, align: "left" });
+      busiest.slice(0, 5).forEach((m, k) => {
+        const i = sedIndex.get(m.n);
+        labels.push({ t: `${m.n}  ${m.name}`, x: R.x + W + 16, y: R.y + R.h - k * 21 + 4, size: 14, col: C.accent2, align: "left", lead: [R.x + W + 4, ty(i)] });
+      });
+    } else {
+      labels.push({ t: `Busiest: ${busiest[0].name}, ${fmt(busiest[0].c30)} commits`, x: R.x, y: R.y + R.h + 22, size: 13, col: C.accent2, align: "left" });
+    }
+    return { boxes, labels };
+  }
+
+  function layoutScatter(R, narrow) {
+    const band = R.h * 0.16;
+    const P = { x: R.x + (narrow ? 0 : 56), y: R.y, w: R.w - (narrow ? 0 : 56), h: R.h - band - 24 };
+    const mw = Math.max(18, Math.min(40, R.w / 24)), mh = mw * 0.42;
+    const yMin = -80, yMax = 100;
+    const yOf = (v) => P.y + (1 - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin)) * (P.h - mh);
+    const head = new Set(marks.filter((m) => m.tier === "head").map((m) => m.n));
+    const parked = marks.filter((m) => !m.daily || m.m30 == null);
+    const pIdx = new Map(parked.map((m, i) => [m.n, i]));
+    const pw = (R.w) / parked.length;
+    const boxes = marks.map((m) => {
+      if (pIdx.has(m.n)) {
+        const i = pIdx.get(m.n);
+        return { x: R.x + i * pw + pw * 0.15, y: R.y + R.h - mh * 0.8 - 2, w: pw * 0.7, h: mh * 0.8, c: C.dim, a: 0.6 };
+      }
+      const x = P.x + (Math.log1p(m.c30) / LC) * (P.w - mw);
+      return { x, y: yOf(m.m30), w: mw, h: mh, c: head.has(m.n) ? C.accent : C.ink, a: head.has(m.n) ? 1 : 0.8 };
+    });
+    const labels = [];
+    const z = yOf(0) + mh / 2;
+    labels.push({ line: [P.x, z, P.x + P.w, z], col: "#1d1f22" });
+    labels.push({ t: "price flat", x: P.x + P.w, y: z - 8, size: 13, col: C.ink3, align: "right" });
+    if (!narrow) {
+      [[100, "+100%"], [50, "+50%"], [-50, "−50%"]].forEach(([v, t]) => labels.push({ t, x: P.x - 12, y: yOf(v) + mh / 2 + 4, size: 13, col: C.ink3, align: "right" }));
+    }
+    [[0, "0"], [10, "10"], [100, "100"], [1000, "1,000"]].forEach(([v, t]) => {
+      const x = P.x + (Math.log1p(v) / LC) * (P.w - mw);
+      labels.push({ t, x, y: P.y + P.h + 20, size: 13, col: C.ink3, align: "left" });
+    });
+    labels.push({ t: "commits in 30 days, log scale", x: P.x + P.w, y: P.y + P.h + 40, size: 13, col: C.ink3, align: "right" });
+    labels.push({ t: `${parked.length} with no code or no price to compare`, x: R.x, y: R.y + R.h - mh * 0.8 - 12, size: 13, col: C.ink3, align: "left" });
+    const named = byScore.filter((m) => head.has(m.n)).slice(0, narrow ? 2 : 5);
+    const placed = [];
+    named.forEach((m) => {
+      const b = boxes[m.n - 1];
+      const out = m.m30 > yMax ? ` (${signed(m.m30, 0)})` : "";
+      const right = b.x + b.w + 140 < R.x + R.w;
+      let y = b.y + mh / 2 + 5;
+      for (const q of placed) if (Math.abs(q.x - b.x) < 160 && Math.abs(q.y - y) < 18) y = q.y + 18;
+      placed.push({ x: b.x, y });
+      labels.push({ t: `${m.name}${out}`, x: right ? b.x + b.w + 8 : b.x - 8, y, size: 14, col: C.accent2, align: right ? "left" : "right" });
+    });
+    return { boxes, labels };
+  }
+
+  function layoutFleet(R, narrow) {
+    const gap = R.h * (narrow ? 0.08 : 0.05);
+    const rowsH = R.h * 0.5, rh = rowsH / head8.length;
+    const nameW = narrow ? R.w * 0.42 : Math.min(R.w * 0.36, 300);
+    const headSet = new Map(head8.map((m, i) => [m.n, i]));
+    const rest = marks.filter((m) => m.daily && !headSet.has(m.n)).sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || a.n - b.n);
+    const restIdx = new Map(rest.map((m, i) => [m.n, i]));
+    const nullIdx = new Map(nulls.map((m, i) => [m.n, i]));
+    const cols = narrow ? 12 : 16, rrows = Math.ceil(rest.length / cols);
+    const gy = R.y + rowsH + gap, gh = R.h * 0.34, cw = R.w / cols, chh = gh / rrows;
+    const ny = R.y + R.h - R.h * 0.04, nw = R.w / nulls.length;
+    const boxes = marks.map((m) => {
+      if (headSet.has(m.n)) {
+        const i = headSet.get(m.n);
+        return { x: R.x + nameW, y: R.y + i * rh + rh * 0.18, w: R.w - nameW, h: rh * 0.64, c: C.accent, a: 1 };
+      }
+      if (restIdx.has(m.n)) {
+        const i = restIdx.get(m.n), c = i % cols, r = Math.floor(i / cols);
+        return { x: R.x + c * cw + cw * 0.1, y: gy + r * chh + chh * 0.15, w: cw * 0.8, h: chh * 0.62, c: C.ink, a: 0.7 };
+      }
+      const i = nullIdx.get(m.n);
+      return { x: R.x + i * nw + nw * 0.12, y: ny, w: nw * 0.76, h: 4, c: C.dim, a: 0.7 };
+    });
+    const labels = [];
+    head8.forEach((m, i) => {
+      const y = R.y + i * rh + rh / 2 + 5;
+      const nm = narrow && m.name.length > 12 ? m.name.slice(0, 11) + "." : m.name;
+      labels.push({ t: String(m.n), x: R.x, y, size: 14, col: C.ink3, align: "left" });
+      labels.push({ t: nm, x: R.x + (narrow ? 30 : 40), y, size: narrow ? 15 : 18, col: C.ink, align: "left", weight: 500 });
+      if (!narrow) labels.push({ t: `${m.score}`, x: R.x + nameW - 20, y, size: 15, col: C.ink2, align: "right" });
+      if (m.c90 === 0) labels.push({ t: "no commits in 90 days", x: R.x + R.w, y: y - 9, size: 13, col: C.ink2, align: "right" });
+    });
+    labels.push({ t: `${rest.length} more with readable code`, x: R.x, y: gy - 10, size: 13, col: C.ink3, align: "left" });
+    labels.push({ t: `${nulls.length} with no readable code`, x: R.x, y: ny - 10, size: 13, col: C.ink3, align: "left" });
+    return { boxes, labels };
+  }
+  const LAYOUTS = [layoutGrid, layoutRanked, layoutScatter, layoutFleet];
+
+  // ---------- Drawing ----------
+  function drawMark(ctx, m, b, reveal) {
+    if (b.w < 1) return;
+    const [r, g, bl] = b.c.map(Math.round);
+    if (!m.daily) {
+      ctx.fillStyle = `rgba(${r},${g},${bl},${(b.w > 200 ? 0.32 : 0.55) * b.a})`;
+      const step = Math.max(3, Math.min(6, b.w / 8)), cy = b.y + b.h / 2;
+      for (let x = b.x; x < b.x + b.w * reveal; x += step) ctx.fillRect(x, cy - 0.5, 1.2, 1.2);
+      return;
+    }
+    if (m.c90 === 0) {
+      ctx.fillStyle = `rgba(${r},${g},${bl},${0.32 * b.a})`;
+      ctx.fillRect(b.x, b.y + b.h - 1, b.w * reveal, 1);
+    }
+    // Blend 18 five-day bins (small marks) into 90 single days (wide rows).
+    const t = Math.max(0, Math.min(1, (b.w - 140) / 220));
+    const passes = [];
+    if (t < 1) passes.push([m.bins, LB, 1 - t]);
+    if (t > 0) passes.push([m.daily, L1, t]);
+    for (const [vals, L, wgt] of passes) {
+      const n = vals.length, cw = b.w / n, bw = Math.max(0.6, cw * (n > 20 ? 0.72 : 0.78));
+      const lim = Math.ceil(n * reveal);
+      for (let i = 0; i < lim; i++) {
+        const v = vals[i];
+        if (!v) continue;
+        const k = Math.log1p(v) / L;
+        const h = Math.max(1, b.h * (0.18 + 0.82 * k));
+        ctx.fillStyle = `rgba(${r},${g},${bl},${(0.28 + 0.72 * k) * b.a * wgt})`;
+        ctx.fillRect(b.x + i * cw, b.y + b.h - h, bw, h);
+      }
+    }
+  }
+  function drawLabels(ctx, labels, alpha) {
+    if (alpha <= 0.01) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    for (const L of labels) {
+      if (L.line) {
+        ctx.strokeStyle = L.col; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(L.line[0], L.line[1]); ctx.lineTo(L.line[2], L.line[3]); ctx.stroke();
+        continue;
+      }
+      const col = Array.isArray(L.col) ? `rgb(${L.col.join(",")})` : L.col;
+      if (L.lead) {
+        ctx.strokeStyle = "rgba(168,200,255,0.45)"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(L.lead[0], L.lead[1]); ctx.lineTo(L.x - 6, L.y - 5); ctx.stroke();
+      }
+      ctx.fillStyle = col;
+      ctx.font = `${L.weight || 400} ${L.size}px "Funnel Sans", system-ui, sans-serif`;
+      ctx.textAlign = L.align;
+      ctx.fillText(L.t, L.x, L.y);
+    }
+    ctx.restore();
+  }
+
+  const quart = (x) => (x < 0.5 ? 8 * x ** 4 : 1 - (-2 * x + 2) ** 4 / 2);
+  const smooth = (x) => x * x * (3 - 2 * x);
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+
+  // ---------- Static figures (phone, reduced motion, fallback) ----------
+  function fitCanvas(cv, w, h) {
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return ctx;
+  }
+  const figs = [...document.querySelectorAll(".fig")];
+  const figState = new Map();
+  function figGeom(cv) {
+    const k = +cv.dataset.layout;
+    const w = cv.clientWidth || cv.parentElement.clientWidth;
+    const narrow = w < 640;
+    const h = k === 1 ? Math.min(560, w * (narrow ? 1.2 : 0.5)) : k === 0 ? (narrow ? w * 1.1 : w * 0.42) : narrow ? w * 1.15 : w * 0.5;
+    const padT = k === 1 ? 24 : 4, padB = k === 1 && narrow ? 34 : k === 2 ? 4 : 4;
+    return { k, w, h, narrow, R: { x: 0, y: padT, w, h: h - padT - padB } };
+  }
+  function drawFig(cv, prog) {
+    const g = figGeom(cv);
+    cv.style.height = g.h + "px";
+    const ctx = fitCanvas(cv, g.w, g.h);
+    const to = LAYOUTS[g.k](g.R, g.narrow);
+    const from = g.k > 0 ? LAYOUTS[g.k - 1](g.R, g.narrow) : to;
+    ctx.clearRect(0, 0, g.w, g.h);
+    marks.forEach((m, i) => {
+      const d = ((to.boxes[i].x - g.R.x) / g.R.w) * 0.3;
+      const e = g.k === 0 ? 1 : quart(clamp01((prog - d) / 0.7));
+      const a = from.boxes[i], b = to.boxes[i];
+      drawMark(ctx, m, { x: lerp(a.x, b.x, e), y: lerp(a.y, b.y, e), w: lerp(a.w, b.w, e), h: lerp(a.h, b.h, e), c: mix(a.c, b.c, e), a: lerp(a.a, b.a, e) }, g.k === 0 ? prog : 1);
+    });
+    drawLabels(ctx, to.labels, g.k === 0 ? 1 : smooth(clamp01((prog - 0.6) / 0.4)));
+  }
+  function runFigs() {
+    figs.forEach((cv) => drawFig(cv, reduced.matches ? 1 : 0));
+    if (reduced.matches) return;
+    const io = new IntersectionObserver((es) => es.forEach((e) => {
+      if (!e.isIntersecting) return;
+      io.unobserve(e.target);
+      const t0 = performance.now(), dur = +e.target.dataset.layout === 0 ? 900 : 1400;
+      const step = (t) => { const p = clamp01((t - t0) / dur); drawFig(e.target, p); if (p < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+    }), { threshold: 0.25 });
+    figs.forEach((cv) => io.observe(cv));
+  }
+
+  // ---------- Pinned stage ----------
+  const canPin = () => !reduced.matches && innerWidth >= 900 && innerHeight >= 560;
+  const sticky = document.getElementById("sticky");
+  const field = document.getElementById("field");
+  const chs = [...document.querySelectorAll(".ch")];
+  const tag = document.getElementById("tag");
+  let W = 0, H = 0, ctx = null, layouts = [], progress = 0, hover = null, reveal = 0, dirty = true, cur = null;
+
+  function regions() {
+    const gutter = parseFloat(getComputedStyle(chs[0]).paddingLeft) || 64;
+    const h1 = chs[0].querySelector("h1").getBoundingClientRect();
+    const st = sticky.getBoundingClientRect();
+    const top0 = Math.max(H * 0.42, h1.bottom - st.top + 48);
+    const r0 = { x: W * 0.5, y: top0, w: W - gutter - W * 0.5, h: H - top0 - 40 };
+    const x1 = Math.max(W * 0.42, gutter + Math.min(W * 0.36, 520) + 56);
+    const r = { x: x1, y: 104, w: W - gutter - x1, h: H - 104 - 72 };
+    return [r0, r, { ...r, y: 96, h: H - 96 - 64 }, { ...r, y: 96, h: H - 96 - 56 }];
+  }
+  function relayout() {
+    W = sticky.clientWidth; H = sticky.clientHeight;
+    ctx = fitCanvas(field, W, H);
+    const R = regions();
+    layouts = LAYOUTS.map((f, k) => f(R[k], false));
+    dirty = true;
+  }
+  // Scroll position to (chapter, local progress). Each chapter holds, then travels to the next.
+  function phase(p) {
+    const t = p * 3.5;
+    const k = Math.min(3, Math.floor(t));
+    const f = t - k;
+    return k >= 3 ? { k: 3, l: 0 } : { k, l: clamp01((f - 0.35) / 0.65) };
+  }
+  function boxesNow() {
+    const { k, l } = phase(progress);
+    const A0 = layouts[k], B0 = layouts[Math.min(3, k + 1)];
+    return marks.map((m, i) => {
+      const a = A0.boxes[i], b = B0.boxes[i];
+      const d = ((b.x + b.y * 0.3) / (W + H * 0.3)) * 0.35;
+      const e = quart(clamp01((l - d) / 0.65));
+      return { x: lerp(a.x, b.x, e), y: lerp(a.y, b.y, e), w: lerp(a.w, b.w, e), h: lerp(a.h, b.h, e), c: mix(a.c, b.c, e), a: lerp(a.a, b.a, e) };
+    });
+  }
+  function render() {
+    if (!dirty) return requestAnimationFrame(render);
+    dirty = false;
+    const { k, l } = phase(progress);
+    cur = boxesNow();
+    ctx.clearRect(0, 0, W, H);
+    if (hover != null) {
+      const b = cur[hover];
+      ctx.fillStyle = C.s2;
+      ctx.fillRect(b.x - 6, b.y - 4, b.w + 12, b.h + 8);
+    }
+    marks.forEach((m, i) => drawMark(ctx, m, cur[i], reveal));
+    drawLabels(ctx, layouts[k].labels, (k === 3 ? 1 : 1 - smooth(clamp01(l * 2.2))) * reveal);
+    if (k < 3) drawLabels(ctx, layouts[k + 1].labels, smooth(clamp01((l - 0.65) / 0.35)));
+    chs.forEach((el, i) => {
+      let o = i === k ? 1 - smooth(clamp01(l * 1.8)) : i === k + 1 ? smooth(clamp01((l - 0.55) / 0.45)) : 0;
+      const dy = (1 - o) * (i === k ? -28 : 28);
+      el.style.opacity = o.toFixed(3);
+      el.style.transform = i === 0 ? `translateY(${dy}px)` : `translateY(calc(-50% + ${dy}px))`;
+      el.classList.toggle("off", o < 0.5);
+      el.style.visibility = o < 0.01 ? "hidden" : "visible";
+      el.setAttribute("aria-hidden", o < 0.5 ? "true" : "false");
+    });
+    requestAnimationFrame(render);
+  }
+  function pick(x, y) {
+    if (!cur) return null;
+    for (let i = 0; i < cur.length; i++) {
+      const b = cur[i], pad = Math.max(0, (8 - b.h) / 2);
+      if (x >= b.x && x <= b.x + b.w && y >= b.y - pad && y <= b.y + b.h + pad) return i;
+    }
+    return null;
+  }
+  function onMove(e) {
+    const r = sticky.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    const i = pick(x, y);
+    if (i !== hover) { hover = i; dirty = true; }
+    if (i == null) { tag.hidden = true; return; }
+    const m = marks[i];
+    tag.textContent = m.daily
+      ? `${m.n} ${m.name ?? "unnamed"}, ${fmt(m.c30)} commits in 30 days`
+      : `${m.n} ${m.name ?? "unnamed"}, no readable code`;
+    tag.hidden = false;
+    const tx = Math.min(x, W - tag.offsetWidth - 40);
+    tag.style.left = tx + "px"; tag.style.top = y + "px";
+  }
+  function startPin() {
+    document.documentElement.classList.add("pin");
+    relayout();
+    gsap.registerPlugin(ScrollTrigger);
+    ScrollTrigger.create({
+      trigger: "#stage", start: "top top", end: "bottom bottom",
+      onUpdate: (self) => { progress = self.progress; dirty = true; },
+    });
+    sticky.addEventListener("pointermove", onMove);
+    sticky.addEventListener("pointerleave", () => { hover = null; tag.hidden = true; dirty = true; });
+    addEventListener("scroll", () => { if (hover != null) { hover = null; tag.hidden = true; dirty = true; } }, { passive: true });
+    // Load: the 90 days draw in left to right once, under a second.
+    const t0 = performance.now();
+    const grow = (t) => { reveal = clamp01((t - t0) / 900); reveal = 1 - (1 - reveal) ** 3; dirty = true; if (reveal < 1) requestAnimationFrame(grow); };
+    requestAnimationFrame(grow);
+    requestAnimationFrame(render);
+    let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { if (!canPin()) location.reload(); else { relayout(); ScrollTrigger.refresh(); } }, 150); });
+    document.fonts && document.fonts.ready.then(() => { relayout(); });
+  }
+
+  // Review hook: ?p=0.5 opens the pinned stage at that scroll progress.
+  const qp = new URLSearchParams(location.search).get("p");
+  if (qp !== null) addEventListener("load", () => {
+    const st = document.getElementById("stage");
+    scrollTo(0, st.offsetTop + (+qp) * (st.offsetHeight - innerHeight));
+  });
+
+  if (canPin() && window.gsap && window.ScrollTrigger) startPin();
+  else {
+    runFigs();
+    let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => figs.forEach((cv) => drawFig(cv, 1)), 150); });
+    document.fonts && document.fonts.ready.then(() => figs.forEach((cv) => drawFig(cv, 1)));
+  }
+})();
+</script>
+</body>
+</html>
