@@ -1581,15 +1581,21 @@ def run_operation(connection: sqlite3.Connection, config: Dict[str, Any],
         else None
 
     if not result["ok"] and result.get("status") == 404 and path_keys:
-        # A templated path names one resource; 404 means it does not
-        # exist (unknown netuid, hotkey or block), not an outage.
+        # A templated path names one resource; 404 usually means it does
+        # not exist (unknown netuid, hotkey or block). TaoSwap sends the
+        # same body for a retired endpoint (report 20261102T064402Z-1eeebab4),
+        # so every 404 is also a health event: a run of them on valid
+        # inputs shows in live_status as a moved endpoint.
         audit_call(connection, provider, op_name, params, started,
                    finished, 404, operation["schema"], "not-validated",
                    body_sha, "not-found")
+        health_event(connection, provider, op_name, "not-found",
+                     "HTTP 404 for %s" % path)
         return _failure(connection, config, provider, op_name, params_key,
-                        "not-found", "%s has no such %s"
-                        % (provider, "/".join(path_keys)), False,
-                        include_last_known)
+                        "not-found", "%s has no such %s (if valid inputs "
+                        "keep failing, the endpoint may have moved: see "
+                        "live_status)" % (provider, "/".join(path_keys)),
+                        False, include_last_known)
 
     if not result["ok"]:
         audit_call(connection, provider, op_name, params, started,
