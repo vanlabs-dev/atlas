@@ -4,11 +4,11 @@
 
 **A self-hosted Bittensor analyst that runs on a Raspberry Pi.**
 
-Cited answers. Fail-closed data. No third-party dependencies.
+Cited answers. Fail-closed data. No third-party Python packages.
 
 <p>
   <img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-3776AB?style=flat-square&logo=python&logoColor=white">
-  <img alt="Dependencies: none" src="https://img.shields.io/badge/dependencies-none-2ea44f?style=flat-square">
+  <img alt="Python dependencies: none" src="https://img.shields.io/badge/python%20deps-none-2ea44f?style=flat-square">
   <img alt="SQLite" src="https://img.shields.io/badge/store-SQLite%20%2B%20FTS5-003B57?style=flat-square&logo=sqlite&logoColor=white">
   <img alt="Raspberry Pi 5" src="https://img.shields.io/badge/runs%20on-Raspberry%20Pi%205-A22846?style=flat-square&logo=raspberrypi&logoColor=white">
   <img alt="MCP" src="https://img.shields.io/badge/agent%20tools-MCP-6E56CF?style=flat-square">
@@ -32,7 +32,8 @@ Cited answers. Fail-closed data. No third-party dependencies.
 Atlas keeps a verified knowledge base, the subtensor source, live market data
 and every subnet's code repository on one small device. An LLM agent answers
 questions from those sources only, and says so when it has no evidence. A
-notifier sends the few changes worth reading to Telegram.
+notifier sends the few changes worth reading to Telegram. The public site,
+subnt.dev, shows what Atlas reads.
 
 - **Cited or silent.** Answers carry a source: a corpus fact with its date, a
   commit and file path, or a provider reading with its freshness. No source
@@ -42,7 +43,8 @@ notifier sends the few changes worth reading to Telegram.
 - **Read-only toward the world.** Atlas reads public data and clones public
   repositories. It never builds, runs or executes subnet code, and it holds no
   wallet keys.
-- **Python standard library only.** No third-party packages to install.
+- **Python standard library only.** No third-party packages to install. The
+  public site in `web/` is a separate Node project.
 
 ## How it fits together
 
@@ -63,6 +65,7 @@ flowchart LR
     end
     HERMES[Hermes agent<br/>MCP tools]
     PHONE[Telegram]
+    WEB[subnt.dev<br/>web/ on Vercel]
 
     RPC --> LIVE
     API --> LIVE
@@ -79,11 +82,15 @@ flowchart LR
     REPO --> TG
     TG --> PHONE
     HERMES --> PHONE
+    FLEET -. fixture export .-> WEB
+    LIVE -. fixture export .-> WEB
 ```
 
 Each component writes its own SQLite store under the gitignored `var/` and
 exposes read-only MCP tools to Hermes: `atlas-kb`, `atlas-repo`, `atlas-live`
-and `atlas-fleet`. Scheduled work runs as user-level systemd timers.
+and `atlas-fleet`. Scheduled work runs as user-level systemd timers. The
+subnt.dev site reads a scrubbed, read-only fixture export of the fleet and
+livedata stores, and deploys to Vercel from `main`.
 
 ## Components
 
@@ -162,8 +169,11 @@ python3 -m unittest discover -s fleet/tests
 Run every suite:
 
 ```bash
-for d in */tests; do python3 -m unittest discover -s "$d" || break; done
+for d in */tests; do [ "$d" = web/tests ] && continue; python3 -m unittest discover -s "$d" || break; done
 ```
+
+The site in `web/` has its own checks: `npm --prefix web test` (see
+[`web/README.md`](web/README.md)).
 
 To run Atlas against live data, copy [`env.example`](env.example) to `.env`,
 set `chmod 600` on it, and fill in the keys it lists. The file explains each
@@ -180,6 +190,7 @@ one. Secrets live only in `.env` and never in the repository, logs or output.
 | [`docs/device.md`](docs/device.md) | The target device and how its services are laid out |
 | [`docs/open-items.md`](docs/open-items.md) | Known debts and decisions still open |
 | [`telegram/docs/voice.md`](telegram/docs/voice.md) | The voice rules for chat and alerts |
+| [`web/DESIGN.md`](web/DESIGN.md) | The subnt.dev site's design and owner decisions |
 
 ## Working on Atlas
 
@@ -198,7 +209,8 @@ one. Secrets live only in `.env` and never in the repository, logs or output.
 ## Status
 
 Phases 0 to 5 are complete and running on the device. Phase 6, an operator
-monitoring frontend, is blocked on open requirements questions. No change is
-active. This README states no live chain values on purpose: they go stale in
+monitoring frontend, is blocked on open requirements questions. The public
+subnt.dev site (`web/`) is live from fixtures; it is separate from Phase 6. No
+OpenSpec change is active. This README states no live chain values on purpose: they go stale in
 hours. The current figures are in the knowledge corpus and the records in
 [`docs/decisions.md`](docs/decisions.md).
