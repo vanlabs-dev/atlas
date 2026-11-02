@@ -71,6 +71,25 @@ TIMEOUT = {"git": 120, "rpc": 120, "repotrack": 600, "smoke": 120,
 # A failure after the push has landed cannot be fixed by another attempt:
 # main already carries the grounded corpus. It blocks at once.
 POST_PUSH_GATES = ("readback", "pull", "activate")
+# Fixed wording per failing gate (change: alert-delivery-reliability).
+# Reports never quote raw command, error or model output: that text stays
+# in state.json and on stderr, where `status` shows it.
+GATE_PHRASES = {
+    "prepare": "Setting up the upgrade worktree failed.",
+    "edit": "The Claude editing session failed or changed nothing usable.",
+    "goal": "The edit did not bring the corpus to the live spec.",
+    "scope": "The edit touched files outside the allowed scope.",
+    "test": "A test suite failed on the edited tree.",
+    "probe": "The chain-read probe failed on the edited tree.",
+    "ingest": "Staging the knowledge run from the edited corpus failed.",
+    "push": "Pushing the upgrade commit to main failed.",
+    "readback": "The pushed commit could not be read back from main.",
+    "pull": "The live tree could not pull the pushed commit.",
+    "activate": "Activating the staged knowledge run failed.",
+    "interrupted": "The previous run stopped before it finished.",
+}
+GATE_PHRASE_DEFAULT = "The %s step failed."
+RAW_ERROR_HINT = "The raw error is kept on the Pi: %s"
 MODEL_TOOLS = "Read,Grep,Glob,Edit,Write"
 GATEWAY_UNIT = "hermes-gateway"
 GATEWAY_FRESH_SECONDS = 600  # Hermes rewrites its state file about once a min
@@ -349,6 +368,8 @@ class Job:
         """Record a failed attempt: retry with backoff, or block after the
         last attempt. An interrupted run reports `stalled` in place of the
         `retrying` or `blocked` report for that attempt."""
+        print("failed at %s: %s" % (gate, _tail(detail, 600)),
+              file=sys.stderr)
         attempt = int(state.get("attempt", 0))
         spec = state.get("spec")
         post_push = state.get("post_push")
@@ -363,7 +384,9 @@ class Job:
                      last_error="%s: %s" % (gate, _tail(detail, 600)),
                      step=None)
         of = "attempt %d of %d" % (attempt, MAX_ATTEMPTS)
-        details = _tail(detail, 600).splitlines()
+        details = [GATE_PHRASES.get(gate, GATE_PHRASE_DEFAULT % gate),
+                   RAW_ERROR_HINT % tg.mono(
+                       "python3 upgrade/atlas_upgrade.py status")]
         if blocked and post_push:
             post_push["gate"] = gate
             msg = tg.Message(
