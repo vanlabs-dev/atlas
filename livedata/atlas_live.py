@@ -1329,6 +1329,17 @@ def _pp_block_events_taoswap(payload, params):
             "block_reference": params.get("block")}
 
 
+def _pp_subnet_detail_taoswap(payload, params):
+    if params.get("netuid") is not None and payload["id"] != params["netuid"]:
+        raise FatalLiveError("subnet detail is for netuid %r, asked %r"
+                             % (payload["id"], params["netuid"]))
+    return {"values": {"netuid": payload["id"], "name": payload.get("name"),
+                       "hyperparameters": payload["hyperparameters"]},
+            "units": "provider native (see live_hyperparams)",
+            "upstream_timestamp": None,
+            "block_reference": None}
+
+
 def _pp_network_stats_taoswap(payload, params):
     return {"values": {key: payload.get(key) for key in (
         "date", "total_staked_tao", "available_tao", "root_stake_tao",
@@ -1443,6 +1454,7 @@ POSTPROCESSORS = {
     "validators_taoswap": _pp_validators_taoswap,
     "subnet_validators_taoswap": _pp_subnet_validators_taoswap,
     "validator_detail_taoswap": _pp_validator_detail_taoswap,
+    "subnet_detail_taoswap": _pp_subnet_detail_taoswap,
     "account_ledger_taoswap": _pp_account_ledger_taoswap,
     "account_transactions_taoswap": _pp_account_transactions_taoswap,
     "events_taoswap": _pp_events_taoswap,
@@ -1966,6 +1978,38 @@ CHAIN_READS: Tuple[ChainRead, ...] = tuple(
         ("Burn", ("identity",), "TaoBalance"),
         ("ImmunityPeriod", ("identity",), "u16"),
         ("MaxAllowedUids", ("identity",), "u16"),
+        # Subnet hyperparameters for live_hyperparams (change:
+        # livedata-metagraphed-gaps). Declarations read from the subtensor
+        # source at spec 487, unchanged since 486.
+        ("Tempo", ("identity",), "u16"),
+        ("Kappa", ("identity",), "u16"),
+        ("Rho", ("identity",), "u16"),
+        ("MinAllowedWeights", ("identity",), "u16"),
+        ("MaxWeightsLimit", ("identity",), "u16"),
+        ("WeightsSetRateLimit", ("identity",), "u64"),
+        ("ActivityCutoff", ("identity",), "u16"),
+        ("AdjustmentInterval", ("identity",), "u16"),
+        ("AdjustmentAlpha", ("identity",), "u64"),
+        ("MinBurn", ("identity",), "TaoBalance"),
+        ("MaxBurn", ("identity",), "TaoBalance"),
+        ("MinDifficulty", ("identity",), "u64"),
+        ("MaxDifficulty", ("identity",), "u64"),
+        ("Difficulty", ("identity",), "u64"),
+        ("BondsMovingAverage", ("identity",), "u64"),
+        ("BondsPenalty", ("identity",), "u16"),
+        ("CommitRevealWeightsEnabled", ("identity",), "bool"),
+        ("RevealPeriodEpochs", ("twox64concat",), "u64"),
+        ("LiquidAlphaOn", ("blake2_128concat",), "bool"),
+        ("Yuma3On", ("blake2_128concat",), "bool"),
+        ("WeightsVersionKey", ("identity",), "u64"),
+        ("MaxAllowedValidators", ("identity",), "u16"),
+        ("TargetRegistrationsPerInterval", ("identity",), "u16"),
+        ("NetworkRegistrationAllowed", ("identity",), "bool"),
+        ("NetworkPowRegistrationAllowed", ("identity",), "bool"),
+        ("ServingRateLimit", ("identity",), "u64"),
+        ("TransferToggle", ("identity",), "bool"),
+        ("AlphaSigmoidSteepness", ("identity",), "i16"),
+        ("MinAllowedUids", ("identity",), "u16"),
     )) + (
         # Balancer is a struct with one Perquintill field, the quote weight.
         ChainRead("Swap", "SwapBalancer", ("twox64concat",), "Balancer"),
@@ -3606,6 +3650,66 @@ def decode_u64(hex_payload: str) -> int:
 
 _CODECS["u64"] = decode_u64
 
+
+def decode_i16(hex_payload: str) -> int:
+    """Decode a SCALE i16 storage payload (2 bytes little-endian, signed)."""
+    data = _payload_bytes(hex_payload)
+    if len(data) != 2:
+        raise ValueError("expected 2 bytes, got %d" % len(data))
+    return int.from_bytes(data, "little", signed=True)
+
+
+_CODECS["i16"] = decode_i16
+
+# Subnet hyperparameters for live_hyperparams (change:
+# livedata-metagraphed-gaps): (storage item, codec, TaoSwap key). Each item
+# is declared in CHAIN_READS, so the hourly probe checks its hasher and type
+# against live metadata. The TaoSwap key fills unset storage and
+# cross-checks set storage; None means TaoSwap has no comparable field.
+# TaoBalance is a u64 in rao.
+HYPERPARAMS: Tuple[Tuple[str, str, Optional[str]], ...] = (
+    ("Tempo", "u16", "tempo"),
+    ("Kappa", "u16", "kappa"),
+    ("Rho", "u16", "rho"),
+    ("ImmunityPeriod", "u16", "immunity_period"),
+    ("MinAllowedWeights", "u16", "min_allowed_weights"),
+    ("MaxWeightsLimit", "u16", "max_weight_limit"),
+    ("WeightsSetRateLimit", "u64", "weights_rate_limit"),
+    ("ActivityCutoff", "u16", "activity_cutoff"),
+    ("AdjustmentInterval", "u16", "adjustment_interval"),
+    ("AdjustmentAlpha", "u64", "adjustment_alpha"),
+    ("Burn", "u64", None),
+    ("MinBurn", "u64", "min_burn"),
+    ("MaxBurn", "u64", "max_burn"),
+    ("Difficulty", "u64", "difficulty"),
+    ("MinDifficulty", "u64", "min_difficulty"),
+    ("MaxDifficulty", "u64", "max_difficulty"),
+    ("BondsMovingAverage", "u64", "bonds_moving_avg"),
+    ("BondsPenalty", "u16", None),
+    ("CommitRevealWeightsEnabled", "bool", "commit_reveal_weights_enabled"),
+    ("RevealPeriodEpochs", "u64", "commit_reveal_period"),
+    ("LiquidAlphaOn", "bool", "liquid_alpha_enabled"),
+    ("Yuma3On", "bool", None),
+    ("AlphaSigmoidSteepness", "i16", "alpha_sigmoid_steepness"),
+    ("WeightsVersionKey", "u64", "weights_version"),
+    ("MaxAllowedUids", "u16", "max_n"),
+    ("MinAllowedUids", "u16", None),
+    ("MaxAllowedValidators", "u16", "max_validators"),
+    ("TargetRegistrationsPerInterval", "u16", "target_regs_per_interval"),
+    ("NetworkRegistrationAllowed", "bool", "registration_allowed"),
+    ("NetworkPowRegistrationAllowed", "bool", None),
+    ("ServingRateLimit", "u64", "serving_rate_limit"),
+    ("TransferToggle", "bool", "transfers_enabled"),
+)
+
+
+def hyperparam_keys(netuid: int) -> Dict[str, str]:
+    """Storage key of every hyperparameter for one netuid, built from the
+    item's declared hashers (refuses an undeclared item)."""
+    raw = int(netuid).to_bytes(2, "little")
+    return {item: storage_key(SUBTENSOR_PALLET, item, raw)
+            for item, _, _ in HYPERPARAMS}
+
 # Plain knobs the corpus states as live values, with their codecs. Unset
 # prints as unset: a code default is not a live value (SOURCES.md rule 3).
 KNOB_ITEMS: Dict[str, str] = {
@@ -3621,6 +3725,186 @@ KNOB_ITEMS: Dict[str, str] = {
     "NetworkLockReductionInterval": "u64",
     "NetworkRateLimit": "u64",
 }
+
+
+HYPERPARAM_UNITS = ("chain-native: burns in rao (1e9 per TAO); rate limits, "
+                    "periods and intervals in blocks; kappa, rho and "
+                    "max_weights_limit u16-normalized (65535 = 1.0)")
+
+
+def _hyperparam_norm(codec: str, value: Any) -> Tuple[bool, Any]:
+    """(ok, value) in the chain codec's terms. TaoSwap sends some integers
+    as strings or floats; a non-integral float or other text does not
+    normalize and is reported as it came."""
+    if codec == "bool":
+        return (True, value) if isinstance(value, bool) else (False, value)
+    if isinstance(value, bool):
+        return False, value
+    if isinstance(value, int):
+        return True, value
+    if isinstance(value, float) and value.is_integer():
+        return True, int(value)
+    if isinstance(value, str) and re.fullmatch(r"-?\d+", value.strip()):
+        return True, int(value.strip())
+    return False, value
+
+
+def read_hyperparam_storage(config: Dict[str, Any], netuid: int,
+                            rpc: Optional[Any] = None,
+                            connection: Optional[sqlite3.Connection] = None
+                            ) -> Dict[str, Any]:
+    """Every HYPERPARAMS item for one netuid at one finalized block.
+    Returns {ok, block_hash, block_number, values, failures, absent} or
+    {ok: False, error}. Fail-closed: the key self-test runs first."""
+    try:
+        verify_key_derivation(config)
+        keys = hyperparam_keys(netuid)
+    except FatalLiveError as exc:
+        return {"ok": False, "error": str(exc)}
+    rpc = _recorder(config, rpc)
+    started = _utc_now()
+    block_hash, block_number, error = _finalized_block(rpc)
+    if error:
+        audit_chain_read(connection, rpc, list(keys), {}, {}, None, None,
+                         started, error, "transport")
+        return {"ok": False, "error": error}
+    read = rpc("state_queryStorageAt", [list(keys.values()), block_hash])
+    if not read.get("ok"):
+        error = read.get("error") or "hyperparameter read failed"
+        audit_chain_read(connection, rpc, list(keys), {}, {}, block_number,
+                         block_hash, started, error, "transport")
+        return {"ok": False, "error": error}
+    by_key = {key: item for item, key in keys.items()}
+    codecs = {item: codec for item, codec, _ in HYPERPARAMS}
+    values: Dict[str, Any] = {}
+    failures: Dict[str, str] = {}
+    for block_changes in (read.get("result") or []):
+        for key, raw in (block_changes.get("changes") or []):
+            item = by_key.get(key)
+            if item is None or raw is None:
+                continue
+            try:
+                values[item] = decode_by_codec(codecs[item], raw)
+            except ValueError as exc:
+                failures[item] = str(exc)
+    audit_chain_read(connection, rpc, list(keys),
+                     {item: 1 for item in keys},
+                     {item: 1 for item in values}, block_number,
+                     block_hash, started)
+    return {"ok": True, "block_hash": block_hash,
+            "block_number": block_number, "values": values,
+            "failures": failures,
+            "absent": [item for item in keys
+                       if item not in values and item not in failures]}
+
+
+def run_hyperparams(connection: sqlite3.Connection, config: Dict[str, Any],
+                    ledger: "QuotaLedger", netuid: int,
+                    rpc: Optional[Any] = None,
+                    env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """live_hyperparams: chain storage first, TaoSwap for unset items and as
+    a cross-check (change: livedata-metagraphed-gaps). Every item names its
+    source; a disagreement is reported with both values, never resolved."""
+    chain = read_hyperparam_storage(config, netuid, rpc, connection)
+    taoswap = run_operation(connection, config, ledger,
+                            "subnet_detail_taoswap",
+                            dynamic_params={"netuid": netuid}, env=env)
+    tao_ok = taoswap.get("status") == "ok"
+    tao_missing = (taoswap.get("error") or {}).get("category") == "not-found"
+    tao_values = taoswap["values"]["hyperparameters"] if tao_ok else {}
+    if not chain["ok"]:
+        health_event(connection, CHAIN_PROVIDER, "live_hyperparams",
+                     "provider-failure", chain["error"])
+    stored = chain.get("values") or {}
+    if tao_missing and not stored:
+        return {"status": "live-unavailable",
+                "error": {"category": "not-found",
+                          "message": "netuid %d is not a registered subnet "
+                                     "(TaoSwap has no record and the chain "
+                                     "stores no hyperparameter)" % netuid,
+                          "retry_safe": False}}
+    if not chain["ok"] and not tao_ok:
+        return {"status": "live-unavailable",
+                "error": {"category": "provider-failure",
+                          "message": "chain read failed (%s) and TaoSwap "
+                                     "failed (%s)" % (
+                                         redact(chain["error"]),
+                                         (taoswap.get("error") or {}).get(
+                                             "message")),
+                          "retry_safe": True}}
+    items: Dict[str, Dict[str, Any]] = {}
+    conflicts: List[str] = []
+    for item, codec, tao_key in HYPERPARAMS:
+        tao_has = tao_ok and tao_key is not None and tao_key in tao_values
+        tao_raw = tao_values.get(tao_key) if tao_has else None
+        tao_norm_ok, tao_norm = _hyperparam_norm(codec, tao_raw)
+        if item in stored:
+            entry: Dict[str, Any] = {"status": "chain",
+                                     "value": stored[item]}
+            if tao_has:
+                if tao_norm_ok and tao_norm == stored[item]:
+                    entry["cross_checked"] = "taoswap agrees"
+                else:
+                    entry = {"status": "conflicting",
+                             "chain_value": stored[item],
+                             "taoswap_value": tao_raw}
+                    conflicts.append(item)
+            items[item] = entry
+            continue
+        if chain["ok"] and item in (chain.get("failures") or {}):
+            why = "chain value did not decode"
+        elif chain["ok"]:
+            why = "chain storage unset (the runtime default applies)"
+        else:
+            why = "chain read failed"
+        if tao_has:
+            items[item] = {"status": "taoswap",
+                           "value": tao_norm if tao_norm_ok else tao_raw,
+                           "note": why}
+        else:
+            items[item] = {"status": "unavailable", "note": why + (
+                "; TaoSwap has no comparable field" if tao_key is None
+                else "; TaoSwap did not answer")}
+    if conflicts:
+        health_event(connection, "hyperparams", "live_hyperparams",
+                     "provider-disagreement",
+                     "netuid %d: chain and TaoSwap differ on %s"
+                     % (netuid, ", ".join(conflicts)))
+    counts: Dict[str, int] = {}
+    for entry in items.values():
+        counts[entry["status"]] = counts.get(entry["status"], 0) + 1
+    notes = []
+    if conflicts:
+        notes.append("Sources disagree on %s: report both values; the "
+                     "chain value is read at the stated block."
+                     % ", ".join(conflicts))
+    if not chain["ok"]:
+        notes.append("The chain read failed; every value is TaoSwap's.")
+    if not tao_ok:
+        notes.append("TaoSwap failed; unset chain items have no value.")
+    return {
+        "status": "ok",
+        "provider": "chain+taoswap" if chain["ok"] and tao_ok else (
+            "chain" if chain["ok"] else "taoswap"),
+        "operation": "hyperparams",
+        "request_completed": _utc_now(),
+        "upstream_timestamp": None,
+        "block_reference": {"number": chain.get("block_number"),
+                            "hash": chain.get("block_hash")}
+        if chain["ok"] else None,
+        "units": HYPERPARAM_UNITS,
+        "validation_status": "chain: declared codecs at a finalized "
+                             "block; taoswap: %s" % (
+                                 taoswap.get("validation_status")
+                                 or "unavailable"),
+        "freshness_status": "finalized-block" if chain["ok"] else
+        taoswap.get("freshness_status", "unknown-upstream"),
+        "values": {"netuid": netuid,
+                   "name": taoswap["values"].get("name") if tao_ok
+                   else None,
+                   "items": items, "counts": counts,
+                   "conflicts": conflicts, "notes": notes},
+    }
 
 
 def read_knobs(config: Dict[str, Any],

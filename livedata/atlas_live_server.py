@@ -269,6 +269,25 @@ TOOLS: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "live_hyperparams",
+        "description": (
+            "One subnet's hyperparameters, CHAIN FIRST: each value is read "
+            "from Finney storage at one finalized block (cite the block). "
+            "Items the chain does not store come from TaoSwap and say so; "
+            "set items are cross-checked against TaoSwap. Per item: "
+            "status chain | taoswap | conflicting (report BOTH values, "
+            "never pick) | unavailable. Units are chain-native: burns in "
+            "rao, rate limits in blocks, kappa/rho u16-normalized."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "netuid": {"type": "integer", "minimum": 0},
+            },
+            "required": ["netuid"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "live_status",
         "description": (
             "Live-data integration health: recent health events (drift/"
@@ -633,6 +652,14 @@ class LiveTools:
                          dynamic_params={"limit": limit or 20},
                          include_last_known=include_last_known)
 
+    def hyperparams(self, netuid: int) -> Dict[str, Any]:
+        config, connection, ledger = self._context()
+        try:
+            return al.run_hyperparams(connection, config, ledger, netuid,
+                                      env=self._env)
+        finally:
+            connection.close()
+
     def resolve_account(self, account_or_alias: str) -> Dict[str, Any]:
         """Resolve wallet alias from config.wallet_aliases or pass ss58."""
         raw = (account_or_alias or "").strip()
@@ -839,6 +866,14 @@ def handle_tool_call(tools: LiveTools, audit: AuditLog, name: str,
                     retry_safe=False)
             else:
                 payload = tools.events(block, limit, include_last_known)
+        elif name == "live_hyperparams":
+            netuid = arguments.get("netuid")
+            if not _non_negative_int(netuid):
+                payload = structured_error(
+                    "invalid", "netuid must be a non-negative integer",
+                    retry_safe=False)
+            else:
+                payload = tools.hyperparams(netuid)
         elif name == "live_status":
             payload = tools.status()
         else:

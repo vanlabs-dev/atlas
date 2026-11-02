@@ -24,6 +24,8 @@ def _today():
 
 
 GAPS_FIXTURE = os.path.join(_HERE, "fixtures", "taoswap-gaps.json")
+HYPERPARAMS_FIXTURE = os.path.join(_HERE, "fixtures",
+                                   "hyperparams-chain-1.json")
 
 
 def payloads() -> Dict[str, Any]:
@@ -231,6 +233,23 @@ class FixtureProvider:
                 self.end_headers()
                 self.wfile.write(body)
 
+            def do_POST(self):  # noqa: N802
+                """Finney JSON-RPC replayed from the recorded
+                hyperparameter read (path /rpc)."""
+                length = int(self.headers.get("Content-Length") or 0)
+                request = json.loads(self.rfile.read(length) or b"{}")
+                outer.request_counts["rpc"] = \
+                    outer.request_counts.get("rpc", 0) + 1
+                result = outer.rpc_result(request.get("method"),
+                                          request.get("params") or [])
+                body = json.dumps({"jsonrpc": "2.0", "id": request.get("id"),
+                                   "result": result}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
             def log_message(self, *args):  # silence
                 pass
 
@@ -240,6 +259,21 @@ class FixtureProvider:
                                        daemon=True)
         self.thread.start()
         self.base_url = "http://127.0.0.1:%d" % self.server.server_port
+
+    def rpc_result(self, method, params):
+        with open(HYPERPARAMS_FIXTURE, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        if method == "chain_getFinalizedHead":
+            return data["block_hash"]
+        if method == "chain_getHeader":
+            return {"number": hex(data["block_number"])}
+        if method == "state_queryStorageAt":
+            by_key = {key: data["payloads"].get(item) for item, key
+                      in al.hyperparam_keys(data["netuid"]).items()}
+            return [{"block": data["block_hash"],
+                     "changes": [[key, by_key.get(key)]
+                                 for key in params[0]]}]
+        return None
 
     def set_override(self, path, status, body=b"{}"):
         self.overrides[path] = (status, body)
