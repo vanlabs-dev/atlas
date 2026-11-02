@@ -74,8 +74,8 @@ code) and never edits that tree.
 12. **Activate.** `knowledge/atlas_kb.py activate --actor atlas-upgrade`,
     only after the read-back matches.
 13. **Report.** One Telegram outcome per run. `updated` lists the commits
-    the pull brought in that touch code outside `knowledge/corpus` (up to
-    10).
+    the pull brought in that touch code, not only the corpus, the
+    supersession markers or `docs/` (up to 10).
 14. **Restart.** When the pull brought in code, restart `hermes-gateway`
     so its MCP servers load it (see Gateway restart below).
 
@@ -108,7 +108,8 @@ current.
 ## Gateway restart
 
 The `hermes-gateway` MCP servers are long-lived, so pulled code reaches
-them only after a restart. After a pull that brings in non-corpus code,
+them only after a restart. After a pull that brings in code (anything but the corpus, the
+supersession markers and `docs/`),
 the job restarts the gateway only when the restart is safe:
 - `systemctl --user is-active hermes-gateway` is `active`.
 - `~/.hermes/gateway_state.json` is under 10 minutes old.

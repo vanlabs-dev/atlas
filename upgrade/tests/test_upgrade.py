@@ -647,6 +647,22 @@ class WaitReasonTest(Base):
             job.repo_ident = "Atlas <atlas@localhost> 1 +0000"
         self.waits("identity", wrong)
 
+    def test_fetch_failure_is_not_reported_as_divergence(self):
+        job = self.job()
+        job.broken.add("git-fetch")
+        self.assertEqual(job.run_once(), 1)
+        state = job.state()
+        self.assertTrue(state["last_error"].startswith("prepare:"))
+        self.assertNotIn(au.WAIT_REASONS["diverged"][0], "".join(job.sent))
+
+    def test_code_pathspec_excludes_corpus_and_docs(self):
+        job = self.job()
+        job.code_commits(BASE, COMMIT)
+        call = [c for c in job.calls if c[:2] == ["git", "log"]][-1]
+        for path in ("knowledge/corpus", "docs",
+                     "knowledge/supersession-markers.json"):
+            self.assertIn(":!" + path, call)
+
     def test_recovers_and_uses_attempt_one(self):
         job = self.waits("auth", lambda j: j.broken.add("smoke"))
         job.broken.discard("smoke")
