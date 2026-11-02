@@ -5,6 +5,9 @@ runtime spec moves past the corpus spec, one headless `claude -p` session edits
 the corpus and chain readers in a separate worktree. Code then enforces every
 gate (goal, edit scope in `allowed_paths.py`, all test suites, a live
 chain-read probe) before it pushes to `main` and activates the corpus.
+Each run first recovers a failed pull or activation and keeps the active
+knowledge run equal to the live corpus. After a pull that brings in code,
+it restarts `hermes-gateway` when the gateway is idle.
 
 Full description, gates and failure handling: [docs/runtime-upgrade.md](../docs/runtime-upgrade.md).
 
