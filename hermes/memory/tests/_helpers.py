@@ -25,6 +25,19 @@ GREEN_CONFIG = (
     "  write_approval: on\n"
 )
 
+# The read-and-answer Telegram surface; tests that vary only the approval
+# gates append it so their finding counts stay about the gates.
+WRITE_PATHS_CLOSED = (
+    "command_allowlist: []\n"
+    "platform_toolsets:\n"
+    "  cli:\n"
+    "    - terminal\n"
+    "  telegram:\n"
+    "    - web\n"
+    "    - memory\n"
+)
+GREEN_CONFIG += WRITE_PATHS_CLOSED
+
 
 def make_record(**overrides):
     """Complete, valid install record; None removes a field."""

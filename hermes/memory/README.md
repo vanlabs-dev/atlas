@@ -41,7 +41,7 @@ a change in any of these is a deliberate re-pin, not drift:
 | check | what it verifies |
 |---|---|
 | `install-record` | the ATLAS-HERMES-001 record is complete (paths come from it) |
-| `approval-gating` | both write-approval gates explicitly on (ATLAS-MEM-003) |
+| `approval-gating` | both write-approval gates explicitly on (ATLAS-MEM-003), and no way around them: `platform_toolsets.telegram` set and limited to read-and-answer toolsets, `command_allowlist` empty |
 | `memory-hygiene` | `MEMORY.md`/`USER.md` are secret-free and canary-free (ATLAS-MEM-005), hold no bulk domain content (ATLAS-MEM-001); sizes recorded |
 | `session-store` | store present, FTS surface present, recall marker findable read-only (ATLAS-MEM-002) |
 
