@@ -27,7 +27,7 @@
 
 ## 6. Scan on its own timer
 
-- [ ] 6.1 Add `telegram/systemd/atlas-alerts.{service,timer}` (poll-gate with `-`, then scan); remove both `ExecStartPost` lines from repotrack; scan writes `meta.last_scan_completed`. Verify: unit files reviewed; heartbeat test; `python3 tools/readme_sync.py` then `--check` passes.
+- [x] 6.1 Add `telegram/systemd/atlas-alerts.{service,timer}` (poll-gate with `-`, then scan); remove both `ExecStartPost` lines from repotrack; scan writes `meta.last_scan_completed`. Verify: unit files reviewed; heartbeat test; `python3 tools/readme_sync.py` then `--check` passes.
 
 ## 7. Health watch
 

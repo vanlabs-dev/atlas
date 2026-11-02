@@ -1,0 +1,12 @@
+# Hourly at :15, after the repo update timer's 10-minute window, so a new
+# range is usually picked up in the same hour.
+[Unit]
+Description=Atlas alert scan timer (hourly)
+
+[Timer]
+OnCalendar=*:15
+RandomizedDelaySec=5m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -5,19 +5,9 @@
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now atlas-repotrack-update.timer
 #
-# Phase 5: after each successful update, run the outbound Telegram notifier
-# scan (piggyback schedule, decided 2026-07-12). The leading `-` makes the
-# notifier best-effort — a Telegram failure or missing config NEVER marks
-# this unit failed and never affects the repo update (isolation guarantee).
-#
-# The live spec poll left this unit (change: runtime-upgrade-pipeline). It
-# runs on its own timer, atlas-poll-chain-head, so a failed repo update no
-# longer silences spec detection. The scan still alerts its upgrade events.
-#
-# Gate-crossing signal: poll the emission-gate state (keyless finney RPC +
-# one TaoSwap panel call) before the scan,
-# so a confirmed bar crossing is alerted in the same run. Inert until
-# livedata gate_signal.enabled is true. Best-effort (leading `-`).
+# The gate poll and the Telegram scan left this unit (change:
+# alert-delivery-reliability). They run on atlas-alerts.timer, so a failed
+# repo update no longer silences alerts.
 [Unit]
 Description=Atlas subtensor repository update
 Wants=network-online.target
@@ -26,5 +16,3 @@ After=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/python3 /home/pi/atlas/repotrack/atlas_repo.py update
-ExecStartPost=-/usr/bin/python3 /home/pi/atlas/livedata/atlas_live.py poll-gate
-ExecStartPost=-/usr/bin/python3 /home/pi/atlas/telegram/atlas_telegram.py scan

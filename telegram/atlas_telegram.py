@@ -3728,6 +3728,19 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
 # CLI
 # ---------------------------------------------------------------------------
 
+SCAN_HEARTBEAT_KEY = "last_scan_completed"
+
+
+def mark_scan_completed(connection: sqlite3.Connection) -> None:
+    """Heartbeat the health watch reads (change: alert-delivery-
+    reliability): the scan cannot report that it is not running."""
+    connection.execute(
+        "INSERT INTO meta (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (SCAN_HEARTBEAT_KEY, _utc_now()))
+    connection.commit()
+
+
 def _cmd_scan(config: Dict[str, Any]) -> int:
     token, chat_id = resolve_credentials(config)  # validate before any state
     connection = open_store(resolve(config["db"]))
@@ -3739,6 +3752,7 @@ def _cmd_scan(config: Dict[str, Any]) -> int:
             flushed = {"error": redact(str(exc))[:200]}
         summary = notify_scan(config, token, chat_id, connection)
         summary["retry_queue"] = flushed
+        mark_scan_completed(connection)
         # The pulse briefing rides the same scan (change: pulse-briefing):
         # once per day at the configured hour, weekly on its weekday, gated
         # by durable edition watermarks. Isolated like everything else.

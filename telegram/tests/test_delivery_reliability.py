@@ -362,5 +362,20 @@ class ProbeSendTests(unittest.TestCase):
         self.assertEqual(calls, ["probe-cleared", "probe-drift"])
 
 
+class HeartbeatTests(unittest.TestCase):
+    def test_scan_writes_heartbeat(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = _config_with_creds(tmp)
+            config["classes"] = {}
+            with mock.patch.object(tg, "load_config", return_value=config):
+                self.assertEqual(tg._cmd_scan(config), 0)
+            conn = sqlite3.connect(config["db"])
+            row = conn.execute("SELECT value FROM meta WHERE key = ?",
+                               (tg.SCAN_HEARTBEAT_KEY,)).fetchone()
+            conn.close()
+            self.assertIsNotNone(row)
+            self.assertTrue(row[0].startswith("20"))
+
+
 if __name__ == "__main__":
     unittest.main()
