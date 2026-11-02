@@ -156,6 +156,7 @@ every change are in [`openspec/changes/archive/`](openspec/changes/archive/).
 | `atlas-repotrack-update` | Every hour | Subtensor repository update |
 | `atlas-subnt` | Every 6 hours, at :55 | Subnt public edition (retired, masked; replaced by `web/`) |
 | `atlas-alerts` | `*:15` | Alert scan |
+| `atlas-health` | Every 5 minutes | Health watch |
 | `atlas-upgrade` | Every 30 minutes | Runtime upgrade job |
 <!-- END:schedule -->
 

@@ -3769,6 +3769,51 @@ def _cmd_scan(config: Dict[str, Any]) -> int:
     return 0
 
 
+def _health_sender(config: Dict[str, Any]
+                   ) -> Callable[["Message", str, str], bool]:
+    def send(msg: "Message", event_class: str, event_id: str) -> bool:
+        return send_alert(msg, event_class, event_id=event_id, config=config)
+    return send
+
+
+def _cmd_health(config: Dict[str, Any]) -> int:
+    """One health-watch run (change: alert-delivery-reliability): retry
+    the queue, then check the gateway, the scan heartbeat, the LLM and
+    the unit failure streaks."""
+    import atlas_health
+    token, chat_id = resolve_credentials(config)
+    connection = open_store(resolve(config["db"]))
+    try:
+        try:
+            flushed: Any = flush_pending_sends(connection, config, token,
+                                               chat_id)
+        except Exception as exc:  # the queue never blocks the checks
+            flushed = {"error": redact(str(exc))[:200]}
+        summary = atlas_health.run_health(connection, config,
+                                          _health_sender(config))
+        summary["retry_queue"] = flushed
+    finally:
+        connection.close()
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
+def _cmd_unit_failed(config: Dict[str, Any], unit: str,
+                     system: bool) -> int:
+    """Run by atlas-notify-failure@<unit> through OnFailure=."""
+    import atlas_health
+    resolve_credentials(config)
+    connection = open_store(resolve(config["db"]))
+    try:
+        atlas_health.open_health(connection)
+        outcome = atlas_health.record_unit_failure(
+            connection, unit, system, _utc_now(), _health_sender(config))
+    finally:
+        connection.close()
+    print(json.dumps({"unit": unit, "outcome": outcome}, sort_keys=True))
+    return 0
+
+
 def _cmd_test(config: Dict[str, Any], event_class: str) -> int:
     if event_class not in _ADAPTERS:
         raise FatalTelegramError("unknown class %r" % event_class)
@@ -3865,6 +3910,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     test = sub.add_parser("test", help="send one test alert of a class")
     test.add_argument("--class", dest="event_class", required=True)
     sub.add_parser("status", help="show ledger + watermark summary")
+    sub.add_parser("health", help="retry queued sends, then check the "
+                                  "gateway, scan heartbeat, LLM and units")
+    failed = sub.add_parser("unit-failed",
+                            help="page one unit failure (OnFailure=)")
+    failed.add_argument("unit")
+    failed.add_argument("--system", action="store_true",
+                        help="the unit is a system unit")
     args = parser.parse_args(argv)
     try:
         config = load_config(args.config)
@@ -3876,6 +3928,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             return _cmd_test(config, args.event_class)
         if args.command == "status":
             return _cmd_status(config)
+        if args.command == "health":
+            return _cmd_health(config)
+        if args.command == "unit-failed":
+            return _cmd_unit_failed(config, args.unit, args.system)
     except FatalTelegramError as exc:
         print("fatal: %s" % redact(str(exc)), file=sys.stderr)
         return 2

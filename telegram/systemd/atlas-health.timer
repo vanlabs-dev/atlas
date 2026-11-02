@@ -1,0 +1,10 @@
+[Unit]
+Description=Atlas health watch timer (every 5 minutes)
+
+[Timer]
+OnCalendar=*:00/5
+RandomizedDelaySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
