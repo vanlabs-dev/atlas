@@ -16,6 +16,8 @@ export interface LeadRow {
   dsc: number | null;
   m7: number | null;
   m30: number | null;
+  /** Code-activity rank minus 7-day price rank, in places out of 100. */
+  gap: number | null;
 }
 
 const W = 900;
@@ -111,7 +113,7 @@ export function LeadPanel({ heads, generatedAt }: { heads: LeadRow[]; generatedA
     [String(s.c30 ?? "-"), "Commits, 30 days", `of ${sum(d).toLocaleString("en-GB")} in 90 days`, ""],
     [String(s.a30 ?? "-"), "Authors, 30 days", "people pushing code", ""],
     [last, "Last commit", s.dsc === 0 ? "code moved today" : "ago", ""],
-    [signed(s.m7, 1, "%"), "Price, 7 days", `after ${signed(s.m30, 1, "%")} over 30`, tone(s.m7)],
+    [signed(s.gap, 0), "Code against price", s.gap === null ? "no price to rank" : s.gap >= 0 ? "code ranks ahead of price" : "price ranks ahead of code", ""],
   ];
 
   return (
@@ -160,11 +162,11 @@ export function LeadPanel({ heads, generatedAt }: { heads: LeadRow[]; generatedA
             </p>
           </div>
           <div className="k">
-            <b className={`fig ${tone(s.m30)}`}>
-              {arrow(s.m30)}
-              {signed(s.m30, 1, "%")}
+            <b className={`fig ${tone(s.m7)}`}>
+              {arrow(s.m7)}
+              {signed(s.m7, 1, "%")}
             </b>
-            <span>price, 30 days</span>
+            <span>price, 7 days ({signed(s.m30, 1, "%")} over 30)</span>
           </div>
         </div>
         <div className="chart">

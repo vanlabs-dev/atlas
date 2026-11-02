@@ -48,7 +48,7 @@ export default async function Home() {
   const lead = rows[0];
   const lr = (r: (typeof rows)[number]): LeadRow => ({
     n: r.netuid, name: r.name, score: r.score, why: r.why, daily: byDaily.get(r.netuid) ?? null,
-    c7: r.commits7, c30: r.commits30, a30: r.authors30, dsc: r.daysSinceCommit, m7: r.momentum7d, m30: r.momentum30d,
+    c7: r.commits7, c30: r.commits30, a30: r.authors30, dsc: r.daysSinceCommit, m7: r.momentum7d, m30: r.momentum30d, gap: r.divergence,
   });
 
   // The band: who wrote the month's commits, as one proportional bar.
@@ -213,7 +213,8 @@ export default async function Home() {
             {counts.diverging} subnets show code and price apart. {lead.name} leads.
           </h2>
           <p className="sub3">
-            Apart means 40 points or more between how the code moved and how the price moved. Scored {day(at)} from {rows.length} repositories.
+            Atlas ranks every subnet twice: by how much its code moved in 30 days, and by how its price moved in 7. Apart means the two ranks differ
+            by 40 places in 100 or more. Scored {day(at)} from {rows.length} repositories.
           </p>
           <div className="lead-grid">
             <LeadPanel heads={rows.slice(0, 3).map(lr)} generatedAt={at} />
