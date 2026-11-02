@@ -18,7 +18,8 @@ toolset, or one-shot exits 2. Findings on the Pi (Hermes v0.22.5,
   today.
 
 Because `bot_room` is empty by accident, not by contract, the startup
-check is the guarantee. `hermes/atlas_oneshot.py` follows the launcher
+check guards the toolset name. It does not prove the surface is empty
+(see below). `hermes/atlas_oneshot.py` follows the launcher
 chain (`~/.local/bin/hermes` to the Python launcher) to the interpreter
 and Hermes root that one-shot really uses, then runs
 `toolsets.validate_toolset` and `model_tools.get_tool_definitions` there.
@@ -27,17 +28,29 @@ or unreadable output. The result is cached per process.
 
 The shipped probe does not start MCP servers, and the `todo` leak came
 through MCP: the `tool_search` catalog listed every Atlas MCP tool although
-tool selection excluded them. The probe cannot see that path. A one-off
-run on the Pi with `discover_mcp_tools()` first showed `bot_room` still
-yields no tools and no bridge with all four Atlas servers loaded. After
-deploy, and after each Hermes update, the session record of the first
-real call confirms the surface is empty.
+tool selection excluded them. A one-off run on the Pi with MCP discovery,
+plugin discovery and a full `AIAgent` build showed `bot_room` yields no
+tools. The probe checks the toolset name, not the surface the model sees.
+
+The post-deploy test call (2026-11-03) disproved the empty surface. Its
+session pin in `~/.hermes/state.db` still carries the `tool_search`,
+`tool_describe` and `tool_call` bridge, with a catalog of 26 names (the 25
+Atlas MCP tools and `x_search`). The construction path gives `[]`, so the
+bridge is added later in the real run; the source is not yet traced. The
+bridge dispatcher scopes `tool_search` and `tool_call` with
+`get_tool_definitions(enabled_toolsets=["bot_room"],
+skip_tool_search_assembly=True)`, which is `[]` on the Pi, so no tool is
+callable; the model sees tool names and descriptions only. That is
+narrower than `todo`, where `todo_list` was callable, but it is not "no
+tools". B7 stays open until the check reads the real surface, for example
+the session pin of each call.
 
 `--ignore-rules` is a session policy field on the `-z` path (Hermes
 `gateway_chat._POLICY`); the agent factory maps it to
 `skip_context_files` and `skip_memory`. Hermes's own parser accepts the
-exact argv. The first real call's session record (`cwd` `/tmp`, lower
-`input_tokens` than earlier rewrites) is the end-to-end evidence.
+exact argv. The test call's session record confirms it: `cwd` `/tmp`, no
+AGENTS.md text in the system prompt, and about 5,000 prompt tokens against
+10,000 to 17,000 for earlier rewrites.
 
 Rejected: a user-defined empty toolset in `~/.hermes/config.yaml`. It is
 a Pi config change, and Hermes validates `-t` against built-in, plugin
