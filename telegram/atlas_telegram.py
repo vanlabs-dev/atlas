@@ -392,6 +392,11 @@ def open_store(db_path: str) -> sqlite3.Connection:
     if "rewrite" not in columns:
         connection.execute("ALTER TABLE events ADD COLUMN rewrite TEXT")
         connection.execute("ALTER TABLE events ADD COLUMN rewrite_ms INTEGER")
+    # Additive (change: alert-delivery-reliability): the sent text and the
+    # Telegram message id, so the ledger shows what went out.
+    if "message_id" not in columns:
+        connection.execute("ALTER TABLE events ADD COLUMN text TEXT")
+        connection.execute("ALTER TABLE events ADD COLUMN message_id INTEGER")
     connection.executescript(plain_rewrite.CACHE_SQL)
     connection.commit()
     return connection
@@ -450,7 +455,9 @@ def ledger_record(connection: sqlite3.Connection, event_id: str,
                   final_failure: Optional[str],
                   tier: Optional[str] = None,
                   rewrite: Optional[str] = None,
-                  rewrite_ms: Optional[int] = None) -> None:
+                  rewrite_ms: Optional[int] = None,
+                  text: Optional[str] = None,
+                  message_id: Optional[int] = None) -> None:
     """Record one event's outcome. `tier` names the delivery tier that
     governed it (change: rotation-signal-gate), so the ledger stays a
     complete account of what was detected and why it was or was not sent.
@@ -458,15 +465,20 @@ def ledger_record(connection: sqlite3.Connection, event_id: str,
     was sent (change: plain-english-alerts)."""
     connection.execute(
         "INSERT INTO events (event_id, event_class, created_at, attempted_at, "
-        "status, retry_count, final_failure, tier, rewrite, rewrite_ms) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+        "status, retry_count, final_failure, tier, rewrite, rewrite_ms, "
+        "text, message_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(event_id) DO UPDATE SET attempted_at = excluded.attempted_at, "
         "status = excluded.status, retry_count = excluded.retry_count, "
         "final_failure = excluded.final_failure, tier = excluded.tier, "
-        "rewrite = excluded.rewrite, rewrite_ms = excluded.rewrite_ms",
+        "rewrite = COALESCE(excluded.rewrite, events.rewrite), "
+        "rewrite_ms = COALESCE(excluded.rewrite_ms, events.rewrite_ms), "
+        "text = COALESCE(excluded.text, events.text), "
+        "message_id = COALESCE(excluded.message_id, events.message_id)",
         (event_id, event_class, created_at, attempted_at, status,
          retry_count, redact(final_failure)[:400] if final_failure else None,
-         tier, redact(rewrite)[:200] if rewrite else None, rewrite_ms))
+         tier, redact(rewrite)[:200] if rewrite else None, rewrite_ms,
+         redact(text)[:4000] if text else None, message_id))
     connection.commit()
 
 
@@ -1023,8 +1035,41 @@ def _do_post(url: str, data: bytes, timeout: int) -> Tuple[int, str]:
         url, data=data, method="POST",
         headers={"User-Agent": USER_AGENT,
                  "Content-Type": "application/x-www-form-urlencoded"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return response.status, response.read().decode("utf-8", "replace")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.status, response.read().decode("utf-8",
+                                                            "replace")
+    except urllib.error.HTTPError as exc:
+        # The Bot API explains a rejection in the body: a 429 carries
+        # parameters.retry_after there. Return it instead of raising, so
+        # the caller can honour it (change: alert-delivery-reliability).
+        try:
+            body = exc.read().decode("utf-8", "replace")
+        except OSError:
+            body = ""
+        return exc.code, body
+
+
+def _reply_fields(body: str) -> Tuple[Optional[int], Optional[float]]:
+    """(message_id, retry_after) from a Bot API reply body, each None when
+    absent or unparseable."""
+    try:
+        reply = json.loads(body)
+    except (TypeError, ValueError):
+        return None, None
+    if not isinstance(reply, dict):
+        return None, None
+    message_id = None
+    result = reply.get("result")
+    if isinstance(result, dict) and isinstance(result.get("message_id"),
+                                               int):
+        message_id = result["message_id"]
+    retry_after = None
+    params = reply.get("parameters")
+    if isinstance(params, dict) and isinstance(
+            params.get("retry_after"), (int, float)):
+        retry_after = float(params["retry_after"])
+    return message_id, retry_after
 
 
 def send_message(config: Dict[str, Any], token: str, chat_id: str,
@@ -1066,14 +1111,26 @@ def send_message(config: Dict[str, Any], token: str, chat_id: str,
             status, body = poster(url, payload, timeout)
             last_status = status
             if status == 200:
+                message_id, _ra = _reply_fields(body)
                 return {"delivered": True, "attempts": attempts,
-                        "status": status, "detail": "ok"}
+                        "status": status, "detail": "ok",
+                        "message_id": message_id}
             last_detail = redact("HTTP %s: %s" % (status, body))[:300]
+            if status == 429:
+                # Never retried inline: the queue waits retry_after.
+                _mid, retry_after = _reply_fields(body)
+                return {"delivered": False, "attempts": attempts,
+                        "status": status, "detail": last_detail,
+                        "retry_after": retry_after}
             if status in never_retry or status not in retry_on:
                 break
         except urllib.error.HTTPError as exc:
             last_status = exc.code
             last_detail = redact("HTTP %s" % exc.code)[:300]
+            if exc.code == 429:
+                return {"delivered": False, "attempts": attempts,
+                        "status": 429, "detail": last_detail,
+                        "retry_after": None}
             if exc.code in never_retry or exc.code not in retry_on:
                 break
         except (urllib.error.URLError, OSError, ValueError) as exc:
@@ -3141,7 +3198,8 @@ def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
                       _utc_now(), STATUS_DELIVERED, result["attempts"],
                       fallback_note, tier=tier,
                       rewrite=event.get("rewrite"),
-                      rewrite_ms=event.get("rewrite_ms"))
+                      rewrite_ms=event.get("rewrite_ms"), text=text,
+                      message_id=result.get("message_id"))
         return STATUS_DELIVERED
     ledger_record(connection, event_id, event_class, created_at, _utc_now(),
                   STATUS_FAILED, result["attempts"], result["detail"],
