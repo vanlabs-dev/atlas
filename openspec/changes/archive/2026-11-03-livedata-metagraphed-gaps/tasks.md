@@ -26,4 +26,4 @@
 
 - [x] 5.1 Update the `atlas-live` module docstring tool list and `live_status` provider coverage, then run `python3 tools/readme_sync.py`. Verify: `python3 tools/readme_sync.py --check` passes.
 - [x] 5.2 Run every Python suite with the handover loop. Verify: all suites pass, with `hardening/apply/tests` at 0 tests as already known.
-- [ ] 5.3 Deploy after operator approval: push, `git pull --ff-only` in the Pi's `~/atlas`, restart `hermes-gateway`. Verify: the gateway log shows `atlas-live` registering 12 tools, and the operator gets an answer on the phone for one question per new tool.
+- [x] 5.3 Deploy after operator approval: push, `git pull --ff-only` in the Pi's `~/atlas`, restart `hermes-gateway`. Verify: the gateway log shows `atlas-live` registering 12 tools, and the operator gets an answer on the phone for one question per new tool.
