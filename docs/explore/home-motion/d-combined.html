@@ -27,7 +27,7 @@
   :root {
     --ground: #0a0a0b; --raised: #161618; --raised-2: #1e1e21; --line: #2c2c31;
     --ink: #f1f1ef; --ink-2: #a3a0a6; --ink-3: #8b8890;
-    --red: #ff3b30; --red-deep: #e3291f;
+    --red: #ff3b30; --red-deep: #e3291f; --up: #3fcf7a;
     --inv: #f1f1ef; --inv-2: #5c5955; --inv-line: #cfcfcb; --inv-red: #d91c12; --inv-seg: #e2e2df; --inv-seg-2: #d6d6d2;
     --sans: "Archivo", "Helvetica Neue", Arial, sans-serif;
     --gutter: clamp(16px, 4vw, 64px);
@@ -46,6 +46,7 @@
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .fig { font-weight: 850; font-stretch: 85%; letter-spacing: -0.045em; line-height: 0.86; }
   .dn { color: var(--red); }
+  .up { color: var(--up); }
   .r { text-align: right; }
 
   /* Header */
@@ -136,6 +137,7 @@
   .seg div:hover { background: var(--inv-seg-2); }
   .seg div b { font-weight: 700; }
   .seg div.top { box-shadow: inset 0 -3px 0 var(--inv-red); }
+  .seglegend { display: none; }
   .seg div.rest { background: transparent; box-shadow: inset 0 0 0 1px var(--inv-line); color: var(--inv-2); }
   .moves .seg div { transform: scaleX(0); transition: transform 900ms var(--ease-expo), background-color 160ms ease; }
   .moves .seg.go div { transform: none; }
@@ -194,26 +196,25 @@
   .wrow .s { font-size: 14px; color: var(--ink-2); }
   .boxes { display: flex; gap: 3px; }
   .boxes i { width: 11px; height: 11px; display: block; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
-  .boxes i.p { background: var(--ink); box-shadow: none; }
+  .boxes i.p { background: var(--up); box-shadow: none; }
   .moves .boxes i.p { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); transition: background-color 260ms ease, box-shadow 260ms ease; }
-  .moves .wrows.go .boxes i.p { background: var(--ink); box-shadow: none; }
+  .moves .wrows.go .boxes i.p { background: var(--up); box-shadow: none; }
   .wrow .c { text-align: right; font-weight: 600; }
   .more { display: inline-block; margin-top: 16px; font-size: 14px; }
 
   /* Boards on a red field */
-  .redfield { background: var(--red); color: #0a0a0b; margin-top: clamp(112px, 11vw, 176px); padding: clamp(80px, 8vw, 128px) 0; }
+  .redfield { background: var(--raised); color: var(--ink); margin-top: clamp(112px, 11vw, 176px); padding: clamp(80px, 8vw, 128px) 0; }
   .redfield h2 { font-size: clamp(44px, 4.6vw, 72px); font-weight: 850; font-stretch: 92%; letter-spacing: -0.045em; line-height: 0.92; }
   .boards { margin-top: 40px; }
   .boards a {
     display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 4fr) minmax(0, 3fr); column-gap: 40px; align-items: baseline;
-    padding: 24px 20px; margin: 0 -20px; text-decoration: none; box-shadow: inset 0 1px 0 rgba(10,10,11,0.28); transition: background-color 180ms ease;
+    padding: 24px 20px; margin: 0 -20px; text-decoration: none; box-shadow: inset 0 1px 0 var(--line); transition: background-color 180ms ease;
   }
-  .boards a:hover { background: var(--red-deep); }
-  .boards .bn { font-size: clamp(32px, 3.6vw, 56px); font-weight: 760; letter-spacing: -0.035em; line-height: 1; font-stretch: 92%; transition: font-stretch 520ms var(--ease-expo); }
-  .boards a:hover .bn, .boards a:focus-visible .bn { font-stretch: 122%; }
+  .boards a:hover { background: var(--raised-2); }
+  .boards .bn { font-size: clamp(32px, 3.6vw, 56px); font-weight: 760; letter-spacing: -0.035em; line-height: 1; font-stretch: 92%; transition: font-stretch 520ms var(--ease-expo), color 180ms ease; }
+  .boards a:hover .bn, .boards a:focus-visible .bn { font-stretch: 122%; color: var(--red); }
   .boards .q { font-size: 20px; line-height: 1.35; font-weight: 600; }
-  .boards .f { line-height: 1.45; }
-  .boards a:focus-visible { outline-color: #0a0a0b; }
+  .boards .f { line-height: 1.45; color: var(--ink-2); }
 
   /* Three columns */
   .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(28px, 3vw, 48px); }
@@ -224,8 +225,8 @@
   .prow .x { font-size: 34px; text-align: right; }
   .prow .x small { font-size: 16px; font-weight: 700; font-stretch: 100%; letter-spacing: 0; margin-left: 2px; }
   .spark { display: block; width: 104px; height: 30px; overflow: visible; }
-  .spark path { fill: none; stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-  .spark path.last { stroke: var(--red); }
+  .spark path { fill: none; stroke: var(--up); stroke-opacity: 0.55; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+  .spark path.last { stroke-opacity: 1; stroke-width: 2.25; }
   .moves .spark path { transition: stroke-dashoffset 1200ms var(--ease-expo); }
   table { width: 100%; border-collapse: collapse; font-size: 15px; }
   th { text-align: left; font-weight: 500; font-size: 13px; color: var(--ink-2); padding: 0 0 10px; }
@@ -270,10 +271,13 @@
     .bar .fresh { display: none; }
     .hero-copy { max-width: none; }
     .fixed .figure { height: 400px; margin-top: 24px; }
-    .fixed .stops { padding-top: 16px; }
+    .fixed .stops { padding-top: 64px; }
     .band .wrap { grid-template-columns: 1fr; gap: 22px; padding-top: 24px; padding-bottom: 30px; }
     .seg { height: 40px; }
-    .seg div span { display: none; }
+    .seg div b, .seg div span { display: none; }
+    .seglegend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; margin-top: 12px; font-size: 14px; }
+    .seglegend li { display: flex; justify-content: space-between; gap: 8px; }
+    .seglegend b { font-weight: 700; }
     .bfigs { grid-template-columns: 1fr 1fr; gap: 18px; }
     .leadp { padding: 0 16px 20px; margin: 0 calc(var(--gutter) * -1); }
     .tabs { gap: 22px; overflow-x: auto; scrollbar-width: none; }
@@ -345,6 +349,7 @@
       <div style="min-width:0">
         <div class="seg" data-fill="seg"></div>
         <div class="lab2" data-fill="segcap" style="margin-top:10px">Where the commits went</div>
+        <ul class="seglegend" data-fill="seglegend"></ul>
       </div>
       <dl class="bfigs" data-ui data-fill="bfigs"></dl>
     </div>
@@ -385,7 +390,7 @@
       </div>
       <div class="col">
         <h2>Busiest this week</h2>
-        <p class="cap">Commits in the last 7 days. The line is 30 days of commits; red is this week.</p>
+        <p class="cap">Commits in the last 7 days. The line is 30 days of commits; the bright end is this week.</p>
         <ul class="prows" data-ui data-fill="busy"></ul>
       </div>
       <div class="col">
@@ -453,6 +458,8 @@
     put("seg", top.map(function (s, i) {
       return '<div style="flex:' + c30(s) + '" class="' + (i === 0 ? "top" : "") + '" title="' + s.name + ", " + fmt(c30(s)) + ' commits"><b>' + s.name + "</b><span>" + fmt(c30(s)) + "</span></div>";
     }).join("") + '<div class="rest" style="flex:' + restN + '"><b>' + (read.length - 7) + " others</b><span>" + fmt(restN) + "</span></div>");
+    put("seglegend", top.slice(0, 5).map(function (s) { return "<li><b>" + s.name + "</b><span>" + fmt(c30(s)) + "</span></li>"; }).join("") +
+      "<li><span>" + (read.length - 5) + " others</span><span>" + fmt(total - sum(top.slice(0, 5).map(c30))) + "</span></li>");
     put("bfigs", [[C.diverging, "Code and price apart", "rd"], [C.cold, "Gone cold"], [C.invisible, "No public repository"], ["-", "est. block", "", "data-block"]]
       .map(function (f) { return "<div><dd><b class=\"" + (f[2] || "") + "\" " + (f[3] || "") + ">" + f[0] + "</b></dd><dt class=\"lab2\">" + f[1] + "</dt></div>"; }).join(""));
 
@@ -465,7 +472,7 @@
       return '<li class="wrow"><a href="/fleet#sn' + s.n + '"><div><div class="n">' + s.name + '</div><div class="s">SN ' + s.n + " · " + last + "</div></div>" +
         '<div class="boxes" aria-label="' + [s.c7 > 0, c30(s) > 0, s.a30 >= 3, s.m30 > 0, !s.opaque].filter(Boolean).length + ' of 5">' +
         box(s.c7 > 0) + box(c30(s) > 0) + box(s.a30 >= 3) + box(s.m30 > 0) + box(!s.opaque) + "</div>" +
-        '<div class="c ' + (s.m30 < 0 ? "dn" : "") + '">' + pct(s.m30).replace("▲ ", "").replace("▼ ", "") + "</div></a></li>";
+        '<div class="c ' + (s.m30 < 0 ? "dn" : s.m30 > 0 ? "up" : "") + '">' + pct(s.m30).replace("▲ ", "").replace("▼ ", "") + "</div></a></li>";
     }).join(""));
     put("allLink", "All " + A.scored + " scored subnets");
 
@@ -480,7 +487,7 @@
     var cold = scored.filter(function (s) { return s.cold; }).slice(0, 6);
     put("coldCap", C.cold + " subnets on the board stopped committing while their token kept trading. Days since the last commit.");
     put("cold", cold.map(function (s) {
-      return '<li class="prow"><div><div class="n">' + s.name + '</div><div class="w">SN ' + s.n + " · price 30 d <span class=\"" + (s.m30 < 0 ? "dn" : "") + "\">" + pct(s.m30) + "</span></div></div>" +
+      return '<li class="prow"><div><div class="n">' + s.name + '</div><div class="w">SN ' + s.n + " · price 30 d <span class=\"" + (s.m30 < 0 ? "dn" : s.m30 > 0 ? "up" : "") + "\">" + pct(s.m30) + "</span></div></div>" +
         '<div class="x fig">' + s.dsc + "<small>d</small></div></li>";
     }).join(""));
 
@@ -591,7 +598,7 @@
       var price = s.m30;
       var last = s.dsc === 0 ? "today" : s.dsc + " days ago";
       return '<div class="lh"><div><h3>' + s.name + "<span>SN " + s.n + "</span></h3><p>" + (X.WHY[s.why] || "On the board") + ". Score " + s.score + " of 100.</p></div>" +
-        '<div class="k"><b class="fig ' + (price < 0 ? "dn" : "") + '" data-to="' + price + '">' + X.pct(price) + "</b><span>price, 30 days</span></div></div>" +
+        '<div class="k"><b class="fig ' + (price < 0 ? "dn" : price > 0 ? "up" : "") + '" data-to="' + price + '">' + X.pct(price) + "</b><span>price, 30 days</span></div></div>" +
         '<div class="chart"><svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-label="Daily commits for ' + s.name + ' over 90 days" role="img"><g class="bars pre">' + bars + '</g><path class="cum" d="' + cum + '"/></svg>' +
         '<div class="readout" aria-hidden="true"></div>' +
         '<div class="ax"><span>' + short(dateOf(0)) + "</span><span>" + short(dateOf(30)) + "</span><span>" + short(dateOf(60)) + "</span><span>" + short(dateOf(89)) + " today</span></div>" +
@@ -601,8 +608,8 @@
           ["Commits, 30 days", X.c30(s), "of " + X.fmt(X.sum(d)) + " in 90 days"],
           ["Authors, 30 days", s.a30, "people pushing code"],
           ["Last commit", s.dsc === 0 ? "today" : s.dsc + " d", last === "today" ? "code moved today" : "ago"],
-          ["Price, 7 days", X.pct(s.m7).replace("▲ ", "").replace("▼ ", ""), "after " + X.pct(price).replace("▲ ", "").replace("▼ ", "") + " over 30"]
-        ].map(function (t) { return '<div><div class="v fig">' + t[1] + '</div><div class="h">' + t[0] + '</div><div class="t">' + t[2] + "</div></div>"; }).join("") + "</div>";
+          ["Price, 7 days", X.pct(s.m7).replace("▲ ", "").replace("▼ ", ""), "after " + X.pct(price).replace("▲ ", "").replace("▼ ", "") + " over 30", s.m7 < 0 ? "dn" : s.m7 > 0 ? "up" : ""]
+        ].map(function (t) { return '<div><div class="v fig ' + (t[3] || "") + '">' + t[1] + '</div><div class="h">' + t[0] + '</div><div class="t">' + t[2] + "</div></div>"; }).join("") + "</div>";
     }
 
     var cur = 0, auto = MOVES, timer = null, inView = false;
@@ -830,7 +837,7 @@ async function three() {
     { pos: [26, 12, 82], look: [52, 1, 22], fov: 42 },
     { pos: [48, 17, 92], look: [30, 0.4, 38], fov: 38 },
   ];
-  const PHONE = { pos: [30, 96, 124], look: [6, -2, 24], fov: 44 };
+  const PHONE = { pos: [4, 92, 116], look: [2, -10, 8], fov: 44 };
   const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
   const lerp = (a, b, t) => a + (b - a) * t;
   const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
@@ -839,6 +846,13 @@ async function three() {
     if (!FLY) {
       const s = OVER ? STOPS[0] : PHONE;
       camPos.set(...s.pos); camLook.set(...s.look); camera.fov = s.fov;
+      if (!OVER && !STILL) {
+        // Phones: no flight, so the camera sways slowly across the field instead.
+        const k = (now - t0) / 1000;
+        camPos.x += Math.sin(k * 0.22) * 26;
+        camPos.y += Math.sin(k * 0.15) * 8;
+        camLook.x += Math.sin(k * 0.22) * 8;
+      }
     } else {
       const seg = Math.min(STOPS.length - 2, Math.floor(p * (STOPS.length - 1)));
       const local = p * (STOPS.length - 1) - seg;
@@ -989,7 +1003,7 @@ async function three() {
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(function step(now) {
       if (!visible || document.hidden) return;
-      const drifting = FLY && progress < 0.06;
+      const drifting = (FLY && progress < 0.06) || (!FLY && !OVER && !STILL);
       if (grow) {
         place(growAt(now));
         if (now - grow > 1050) { grow = null; place(); }
