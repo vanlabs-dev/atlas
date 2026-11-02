@@ -377,5 +377,57 @@ class HeartbeatTests(unittest.TestCase):
             self.assertTrue(row[0].startswith("20"))
 
 
+class LockedStoreTests(unittest.TestCase):
+    def setUp(self):
+        tg._SECRET_VALUES.clear()
+
+    def test_send_alert_returns_false_on_a_locked_store(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = _config_with_creds(tmp)
+            tg.open_store(config["db"]).close()
+            holder = sqlite3.connect(config["db"])
+            holder.execute("BEGIN EXCLUSIVE")
+            try:
+                real_connect = sqlite3.connect
+                with mock.patch.object(tg.sqlite3, "connect",
+                                       side_effect=lambda path, timeout=0:
+                                       real_connect(path, timeout=0.1)):
+                    self.assertFalse(tg.send_alert(
+                        tg.Message(severity="act", headline="x"),
+                        "probe-drift", config=config,
+                        poster=lambda u, d, t: (200, OK_BODY)))
+            finally:
+                holder.rollback()
+                holder.close()
+
+    def test_scan_commits_before_delivery(self):
+        # The adapter's durable inserts must be committed before any send
+        # or rewrite, so a long model call never holds the store locked.
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            config["classes"] = {"schema-drift": {
+                "enabled": True, "tier": "instant",
+                "source_db": os.path.join(tmp, "x.db")}}
+            store = tg.open_store(config["db"])
+            seen = []
+
+            def adapter(source_db, wm, ctx):
+                ctx["connection"].execute(
+                    "INSERT INTO pending_signal (event_row_id, line, "
+                    "detected_at) VALUES (1, 'l', 'now')")
+                return [{"event_id": "schema-drift:c1",
+                         "event_class": "schema-drift",
+                         "created_at": tg._utc_now(), "text": "t"}], None
+
+            def poster(url, data, timeout):
+                seen.append(store.in_transaction)
+                return 200, OK_BODY
+            with mock.patch.dict(tg._ADAPTERS, {"schema-drift": adapter}):
+                tg.notify_scan(config, "tok12345", "42", store,
+                               poster=poster)
+            self.assertEqual(seen, [False])
+            store.close()
+
+
 if __name__ == "__main__":
     unittest.main()

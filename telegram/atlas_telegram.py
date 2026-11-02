@@ -3353,12 +3353,19 @@ def send_alert(msg: "Message", event_class: str,
         event_id = "%s:%s" % (event_class, digest.hexdigest()[:16])
     event = message_event(msg, event_id, event_class, _utc_now(), max_chars,
                           glosses)
-    connection = open_store(resolve(config["db"]))
     try:
-        status = deliver_event(connection, config, token, chat_id, event,
-                               poster=poster, tier=TIER_INSTANT)
-    finally:
-        connection.close()
+        connection = open_store(resolve(config["db"]))
+        try:
+            status = deliver_event(connection, config, token, chat_id,
+                                   event, poster=poster, tier=TIER_INSTANT)
+        finally:
+            connection.close()
+    except sqlite3.Error as exc:
+        # A locked or broken store is not handed over: the caller keeps
+        # its own retry (the probe's state, the upgrade job's pending slot).
+        print("telegram: store unavailable: %s" % redact(str(exc)),
+              file=sys.stderr)
+        return False
     return status in HANDED_OVER
 
 
@@ -3655,6 +3662,11 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
             summary["classes"][event_class] = {
                 "error": redact(str(exc))[:200]}
             continue
+        # Land the adapter's pending_churn / pending_signal inserts now: an
+        # open write transaction would hold the store locked across the
+        # model rewrite, and the health watch, probe and upgrade job write
+        # here too (change: alert-delivery-reliability).
+        connection.commit()
         # Delivery tier (changes: pulse-briefing, rotation-signal-gate).
         # Only instant classes page. A briefing-tier class records its
         # events as briefed and surfaces through the pulse briefing; a
@@ -3707,6 +3719,7 @@ def notify_scan(config: Dict[str, Any], token: str, chat_id: str,
                     connection.executemany(
                         "DELETE FROM pending_signal WHERE event_row_id = ?",
                         [(rid,) for rid in event["digest_signal_ids"]])
+                connection.commit()
             except Exception as exc:  # never let one event break the loop
                 counts["error"] += 1
                 ledger_record(connection, event["event_id"],
@@ -3782,15 +3795,25 @@ def _cmd_health(config: Dict[str, Any]) -> int:
     the unit failure streaks."""
     import atlas_health
     token, chat_id = resolve_credentials(config)
-    connection = open_store(resolve(config["db"]))
+    try:
+        connection = open_store(resolve(config["db"]))
+    except sqlite3.Error as exc:
+        print("health: store unavailable, skipping this tick: %s"
+              % redact(str(exc)), file=sys.stderr)
+        return 0
     try:
         try:
             flushed: Any = flush_pending_sends(connection, config, token,
                                                chat_id)
         except Exception as exc:  # the queue never blocks the checks
             flushed = {"error": redact(str(exc))[:200]}
-        summary = atlas_health.run_health(connection, config,
-                                          _health_sender(config))
+        try:
+            summary = atlas_health.run_health(connection, config,
+                                              _health_sender(config))
+        except sqlite3.Error as exc:
+            print("health: store busy, skipping this tick: %s"
+                  % redact(str(exc)), file=sys.stderr)
+            return 0
         summary["retry_queue"] = flushed
     finally:
         connection.close()
@@ -3803,15 +3826,24 @@ def _cmd_unit_failed(config: Dict[str, Any], unit: str,
     """Run by atlas-notify-failure@<unit> through OnFailure=."""
     import atlas_health
     resolve_credentials(config)
-    connection = open_store(resolve(config["db"]))
-    try:
-        atlas_health.open_health(connection)
-        outcome = atlas_health.record_unit_failure(
-            connection, unit, system, _utc_now(), _health_sender(config))
-    finally:
-        connection.close()
+    outcome = "unrecorded"
+    for wait in (0, 5, 15, 30):  # a busy store must not lose the page
+        time.sleep(wait)
+        try:
+            connection = open_store(resolve(config["db"]))
+            try:
+                atlas_health.open_health(connection)
+                outcome = atlas_health.record_unit_failure(
+                    connection, unit, system, _utc_now(),
+                    _health_sender(config))
+            finally:
+                connection.close()
+            break
+        except sqlite3.Error as exc:
+            print("unit-failed: store busy: %s" % redact(str(exc)),
+                  file=sys.stderr)
     print(json.dumps({"unit": unit, "outcome": outcome}, sort_keys=True))
-    return 0
+    return 1 if outcome == "unrecorded" else 0
 
 
 def _cmd_test(config: Dict[str, Any], event_class: str) -> int:
