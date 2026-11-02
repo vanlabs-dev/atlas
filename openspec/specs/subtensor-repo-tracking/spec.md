@@ -6,7 +6,9 @@ non-shallow local clone with a safe fail-preserving update process, recorded
 change ranges, an incremental full-text index, and read-only Hermes tools
 that answer repository questions with commit and file references and report
 freshness honestly (PRD §12.6 ATLAS-REPO-001…009).
+
 ## Requirements
+
 ### Requirement: Repository identity validation before setup
 
 Before any clone is created, Atlas SHALL confirm and record: repository
@@ -60,7 +62,8 @@ push URL SHALL be disabled at setup as defense in depth. (ATLAS-REPO-003)
 ### Requirement: Safe journaled update process
 
 The update process SHALL: verify the remote matches the pinned identity;
-verify the working tree is clean; fetch remote changes and tags; record
+verify the working tree is clean; verify free disk is at or above the
+configured `min_free_bytes`; fetch remote changes and tags; record
 previous and new tracked SHAs; determine whether the tracked branch
 changed; advance the working tree only by fast-forward or by deterministic
 reset to the confirmed remote branch (recording when the range was not
@@ -94,6 +97,12 @@ interval decision (PRD §21 Q20) is recorded. (ATLAS-REPO-004)
 
 - **WHEN** the clone's remote URL no longer matches the pinned identity
 - **THEN** `update` aborts before fetching and records the mismatch
+
+#### Scenario: Low disk stops the fetch
+
+- **WHEN** free disk at the clone is below `min_free_bytes`
+- **THEN** `update` records the run as disk-limited, starts no fetch,
+  leaves the tree untouched, and exits non-zero
 
 #### Scenario: Failure preserves last good state
 
@@ -225,4 +234,3 @@ resources. (ATLAS-REPO-009)
 - **WHEN** an update completes
 - **THEN** no compilation or test execution of the tracked repository was
   invoked by any Atlas component
-
