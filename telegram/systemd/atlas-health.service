@@ -1,0 +1,22 @@
+# Atlas out-of-band health watch (change: alert-delivery-reliability).
+# Runs outside Hermes and outside the alert scan: retries queued Telegram
+# sends, then checks the Hermes gateway, the scan heartbeat, the LLM, and
+# the unit failure streaks. Pages are fixed templates sent straight to the
+# Bot API; nothing here calls Hermes or a model.
+# Install (user-level, as pi; linger is on):
+#   cp /home/pi/atlas/telegram/systemd/atlas-health.{service,timer} \
+#     /home/pi/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now atlas-health.timer
+[Unit]
+Description=Atlas health watch (user-level; no root)
+Wants=network-online.target
+After=network-online.target
+OnFailure=atlas-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/pi/atlas
+ExecStart=/usr/bin/python3 /home/pi/atlas/telegram/atlas_telegram.py health
+TimeoutStartSec=4min
+Nice=10

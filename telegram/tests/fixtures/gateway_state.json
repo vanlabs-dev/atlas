@@ -1,0 +1,30 @@
+{
+  "pid": 1808391,
+  "kind": "hermes-gateway",
+  "argv": ["-c", "gateway", "run"],
+  "start_time": 184545159,
+  "gateway_state": "running",
+  "exit_reason": null,
+  "restart_requested": false,
+  "active_agents": 0,
+  "platforms": {
+    "telegram": {
+      "state": "connected",
+      "error_code": null,
+      "error_message": null,
+      "updated_at": "2026-11-02T10:02:54.387695+00:00",
+      "writer_pid": 1808391,
+      "writer_start_time": 184545159,
+      "needs_attention": false,
+      "retrying_since": null
+    }
+  },
+  "updated_at": "2026-11-03T04:00:00.000000+00:00",
+  "code_sha": "0000000",
+  "code_version": "0.0.0",
+  "session_store": {"status": "ok"},
+  "multiplex_standalone_reason": "",
+  "served_profiles": [],
+  "active_work": null,
+  "parked_profiles": {}
+}

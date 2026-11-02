@@ -31,10 +31,10 @@
 
 ## 7. Health watch
 
-- [ ] 7.1 `telegram/atlas_health.py` with `health_state` table, threshold logic, recovery notes, template-only pages. Verify: unit tests for page once, recovery, re-page.
-- [ ] 7.2 Gateway check (ActiveState, MainPID, NRestarts delta, state-file fields and age) with a pinned fixture of the current shape. Verify: tests for restart-no-page, down-two-ticks, malformed file.
-- [ ] 7.3 Scan heartbeat check and LLM check (Hermes log tail plus rewrite fallbacks). Verify: tests with fixture log lines for expired login, single fallback, recovery.
-- [ ] 7.4 `atlas_telegram.py health` command flushes the queue then runs the checks; `atlas-health.{service,timer}` every 5 min. Verify: CLI test with injected readers; readme_sync passes.
+- [x] 7.1 `telegram/atlas_health.py` with `health_state` table, threshold logic, recovery notes, template-only pages. Verify: unit tests for page once, recovery, re-page.
+- [x] 7.2 Gateway check (ActiveState, MainPID, NRestarts delta, state-file fields and age) with a pinned fixture of the current shape. Verify: tests for restart-no-page, down-two-ticks, malformed file.
+- [x] 7.3 Scan heartbeat check and LLM check (Hermes log tail plus rewrite fallbacks). Verify: tests with fixture log lines for expired login, single fallback, recovery.
+- [x] 7.4 `atlas_telegram.py health` command flushes the queue then runs the checks; `atlas-health.{service,timer}` every 5 min. Verify: CLI test with injected readers; readme_sync passes.
 
 ## 8. Unit failure notifier
 
