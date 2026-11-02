@@ -941,3 +941,42 @@ approved in full the same day.
   back to templates and the econ judge returns `unjudged`.
 - Rollback: `rewrite.enabled` false; set the two tiers back to `instant`.
 
+
+## Briefing-tier alerts routed (2026-11-02, change: alert-tier-trim)
+
+The operator switched the pulse briefing off on 2026-10-19 (`aaa1f25`)
+because it was too noisy. Nothing recorded why. Four classes stayed at the
+`briefing` tier, so their events were recorded as `briefed` and reached
+nobody (audit C1). Pi ledger, 2026-10-19 to 2026-11-02: 50 econ-code events
+(13 high), 12 registry events (all renames), 4 knowledge ingests.
+
+Options put to the operator:
+
+- Turn the briefing back on: about 1 message a day, the noise it was turned
+  off for.
+- Move briefing-tier classes to instant, trimmed to high-value events only.
+
+The operator chose the second. Then the operator declined econ alerts on the
+effectiveness read (7-day horizon, 399 filled, class median -2.702%,
+baseline median -2.275%): subnets with an econ alert do worse than the fleet.
+
+Result:
+
+- The briefing stays off. `load_config` refuses any `briefing` tier while it
+  is off.
+- `subnet-registry` is `instant` for registrations and deregistrations.
+  Renames are `subnet-rename`, `shadow` (C2). None of either kind happened in
+  the 14 days.
+- `econ-code` is `shadow`. Only a high verdict is emitted as `econ-code`;
+  every other econ event is `econ-code-minor`, also `shadow`. A later
+  promotion pages high verdicts only, and still needs the promotion rule.
+- `knowledge-ingestion` and `gate-crossing-no-effect` are `shadow`.
+- Digest lines take their source class's tier (C10). `signal-digest` is
+  registered. Every current source is shadowed, so the digest (11 messages in
+  the 14 days) stops.
+
+Net effect on the last 14 days: no new pages; 11 digests fewer. The other
+instant classes are unchanged (about 28 pages in the window). Detection,
+verdicts and the effectiveness ledger continue for every class.
+
+Rollback: set a class tier in `telegram/config.json`.
