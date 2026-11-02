@@ -8,7 +8,7 @@ import sys
 import tempfile
 import unittest
 
-from _helpers import (VERIFIER_SOURCE, amv, base_bundle, make_record,
+from _helpers import (VERIFIER_SOURCE, WRITE_PATHS_CLOSED, amv, base_bundle, make_record,
                       results_by_check)
 
 ALL_ATTESTS = list(amv.ATTESTATION_ITEMS)
@@ -139,7 +139,8 @@ class EndToEndTests(unittest.TestCase):
         with open(os.path.join(self.data_dir, "config.yaml"), "w",
                   encoding="utf-8") as handle:
             handle.write("memory:\n  write_approval: on\n"
-                         "skills:\n  write_approval: on\n")
+                         "skills:\n  write_approval: on\n"
+                         + WRITE_PATHS_CLOSED)
         from _helpers import make_session_db
         make_session_db(os.path.join(self.data_dir, "state.db"))
         self.record_path = os.path.join(self.tmp.name, "record.json")

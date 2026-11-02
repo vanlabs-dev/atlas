@@ -105,6 +105,18 @@ APPROVAL_KEYS: Tuple[str, ...] = ("memory.write_approval",
 # installed source; anything else (including absence) leaves the gate OFF
 APPROVAL_ENABLED_VALUES = frozenset(
     {"on", "true", "yes", "1", "approve", "enabled"})
+# The Telegram agent reads and answers; it has no path that writes files
+# or runs commands, so the approval gates cannot be bypassed. Any name
+# outside this list fails, including every `hermes-*` bundle (a bundle
+# carries terminal and file tools) and a missing list (Hermes then falls
+# back to `hermes-telegram`). MCP servers come from `mcp_servers` and
+# need no entry here.
+TELEGRAM_TOOLSETS_KEY = "platform_toolsets.telegram"
+TELEGRAM_TOOLSETS_ALLOWED = frozenset(
+    {"web", "x_search", "vision", "memory", "session_search", "clarify",
+     "todo"})
+# Every entry is a permanent approval for a dangerous command pattern.
+COMMAND_ALLOWLIST_KEY = "command_allowlist"
 MEMORY_DIR_NAME = "memories"
 MEMORY_FILES: Tuple[str, ...] = ("MEMORY.md", "USER.md")
 SESSION_DB_NAME = "state.db"
@@ -318,6 +330,42 @@ def parse_config_scalars(text: str) -> Dict[str, str]:
     return values
 
 
+def parse_config_lists(text: str) -> Dict[str, List[str]]:
+    """YAML-lite scan of config.yaml: dotted key path -> list of strings.
+
+    Reads block lists (`key:` then `- item` lines) and flow lists
+    (`key: []`, `key: [a, b]`). Other values are ignored."""
+    lists: Dict[str, List[str]] = {}
+    stack: List[Tuple[int, str]] = []
+    current: Optional[Tuple[int, str]] = None
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        item = re.match(r"^([ \t]*)-(?:\s+(.*))?$", line)
+        if item and current is not None and \
+                len(item.group(1).expandtabs(2)) >= current[0]:
+            value = (item.group(2) or "").split(" #", 1)[0].strip()
+            lists[current[1]].append(value.strip("\"'"))
+            continue
+        current = None
+        match = _YAML_KEY.match(line)
+        if not match:
+            continue
+        indent = len(match.group("indent").expandtabs(2))
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+        path = ".".join([key for _, key in stack] + [match.group("key")])
+        value = match.group("value").split(" #", 1)[0].strip()
+        if not value:
+            lists[path] = []
+            current = (indent, path)
+        elif value.startswith("[") and value.endswith("]"):
+            lists[path] = [part.strip().strip("\"'")
+                           for part in value[1:-1].split(",") if part.strip()]
+        stack.append((indent, match.group("key")))
+    return lists
+
+
 def inspect_session_store(path: str) -> Dict[str, Any]:
     """Read-only inspection of the Hermes session store.
 
@@ -406,9 +454,44 @@ def check_approval_gating(record: Dict[str, Any],
                     "(enabled spellings: %s)"
                     % (key, value,
                        ", ".join(sorted(APPROVAL_ENABLED_VALUES))))
+        _check_write_paths(config["path"], config["text"], findings,
+                           evidence)
     return ahv._resolve("approval-gating", findings, denied, unknowns,
-                        "memory and skill writes are approval-gated",
+                        "memory and skill writes are approval-gated and "
+                        "Telegram has no other write path",
                         evidence)
+
+
+def _check_write_paths(path: str, text: str, findings: List[str],
+                       evidence: List[str]) -> None:
+    """The gates hold only if the Telegram agent has no other write path:
+    no terminal, file, code or bundle toolset, and no permanent approval
+    for a dangerous command."""
+    lists = parse_config_lists(text)
+    toolsets = lists.get(TELEGRAM_TOOLSETS_KEY)
+    if not toolsets:
+        findings.append(
+            "%s is not set in %s, so Hermes uses the full hermes-telegram "
+            "bundle (terminal and file writes); list only: %s"
+            % (TELEGRAM_TOOLSETS_KEY, path,
+               ", ".join(sorted(TELEGRAM_TOOLSETS_ALLOWED))))
+    else:
+        extra = [name for name in toolsets
+                 if name not in TELEGRAM_TOOLSETS_ALLOWED]
+        if extra:
+            findings.append(
+                "%s holds toolsets outside the read-and-answer list: %s"
+                % (TELEGRAM_TOOLSETS_KEY, ", ".join(extra)))
+        else:
+            evidence.append("%s: %s" % (TELEGRAM_TOOLSETS_KEY,
+                                        ", ".join(toolsets)))
+    approvals = lists.get(COMMAND_ALLOWLIST_KEY, [])
+    if approvals:
+        findings.append(
+            "%s holds %d permanent approval(s): %s; set it to []"
+            % (COMMAND_ALLOWLIST_KEY, len(approvals), "; ".join(approvals)))
+    else:
+        evidence.append("%s: empty" % COMMAND_ALLOWLIST_KEY)
 
 
 def _scan_memory_text(name: str, item: Dict[str, Any],

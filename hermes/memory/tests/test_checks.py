@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 
-from _helpers import (GREEN_CONFIG, amv, base_bundle, make_record,
+from _helpers import (GREEN_CONFIG, WRITE_PATHS_CLOSED, amv, base_bundle, make_record,
                       make_session_db, results_by_check, store_item,
                       text_item)
 
@@ -46,13 +46,14 @@ class ApprovalGatingTests(unittest.TestCase):
     def test_absent_key_is_finding_not_unknown(self):
         # pinned v0.18.2 fact: the gate DEFAULTS OFF, so absence is a
         # determinable "off", not an indeterminate state
-        result = self._run("memory:\n  memory_enabled: true\n")
+        result = self._run("memory:\n  memory_enabled: true\n"
+                           + WRITE_PATHS_CLOSED)
         self.assertEqual(result.status, amv.ahv.CHECK_FINDING)
         self.assertEqual(len(result.findings), 2)  # both keys absent
         self.assertIn("defaults the gate OFF", result.findings[0])
 
     def test_one_gate_off_is_finding(self):
-        config = "memory:\n  write_approval: on\n"
+        config = "memory:\n  write_approval: on\n" + WRITE_PATHS_CLOSED
         result = self._run(config)
         self.assertEqual(result.status, amv.ahv.CHECK_FINDING)
         self.assertEqual(len(result.findings), 1)
@@ -79,6 +80,59 @@ class ApprovalGatingTests(unittest.TestCase):
         result = self._run(config_status="unsupported-on-device")
         self.assertEqual(result.status, amv.ahv.CHECK_FINDING)
         self.assertIn("install record is inaccurate", result.findings[0])
+
+
+class WritePathTests(unittest.TestCase):
+    GATES = "memory:\n  write_approval: on\nskills:\n  write_approval: on\n"
+
+    def _run(self, tail):
+        bundle = base_bundle()
+        bundle["config_file"] = text_item(text=self.GATES + tail)
+        return amv.check_approval_gating(make_record(), bundle)
+
+    def test_missing_telegram_list_is_finding(self):
+        result = self._run("command_allowlist: []\n")
+        self.assertEqual(result.status, amv.ahv.CHECK_FINDING)
+        self.assertIn("hermes-telegram bundle", result.findings[0])
+
+    def test_bundle_is_finding(self):
+        result = self._run("command_allowlist: []\nplatform_toolsets:\n"
+                           "  telegram:\n    - hermes-telegram\n")
+        self.assertEqual(len(result.findings), 1)
+        self.assertIn("hermes-telegram", result.findings[0])
+
+    def test_write_toolsets_are_findings(self):
+        for name in ("terminal", "file", "code_execution", "cronjob",
+                     "delegation", "skills", "browser"):
+            result = self._run("command_allowlist: []\nplatform_toolsets:\n"
+                               "  telegram:\n    - web\n    - %s\n" % name)
+            self.assertEqual(result.status, amv.ahv.CHECK_FINDING, name)
+            self.assertIn(name, result.findings[0])
+
+    def test_other_platforms_are_not_judged(self):
+        result = self._run(WRITE_PATHS_CLOSED)
+        self.assertEqual(result.status, amv.ahv.CHECK_OK)
+
+    def test_block_allowlist_is_finding(self):
+        result = self._run("command_allowlist:\n  - recursive delete\n"
+                           "  - 'script execution via -e/-c flag'\n"
+                           "platform_toolsets:\n  telegram:\n    - web\n")
+        self.assertEqual(len(result.findings), 1)
+        self.assertIn("2 permanent approval(s)", result.findings[0])
+        self.assertIn("recursive delete", result.findings[0])
+
+    def test_unindented_and_flow_allowlists_are_findings(self):
+        for allow in ("command_allowlist:\n- execute_code\n",
+                      "command_allowlist: [execute_code]\n"):
+            result = self._run(allow + "platform_toolsets:\n"
+                               "  telegram:\n    - web\n")
+            self.assertEqual(len(result.findings), 1, allow)
+            self.assertIn("execute_code", result.findings[0])
+
+    def test_flow_toolset_list_is_read(self):
+        result = self._run("command_allowlist: []\nplatform_toolsets:\n"
+                           "  telegram: [web, terminal]\n")
+        self.assertIn("terminal", result.findings[0])
 
 
 class MemoryHygieneTests(unittest.TestCase):
