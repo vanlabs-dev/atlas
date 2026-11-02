@@ -28,7 +28,7 @@ atlas_live.py          store, quota ledger, HTTP, pinned-schema validation,
                        recording, and
                        the `poll-gate` / `status` CLIs (emission-gate
                        state + crossing events, change: gate-crossing-signal)
-atlas_live_server.py   `atlas-live` stdio MCP server (six tools)
+atlas_live_server.py   `atlas-live` stdio MCP server (twelve tools)
 atlas_probe.py         chain-read probe: `check` (upgrade merge gate) and
                        `watch` (hourly, pages probe-drift) against live
                        runtime metadata
@@ -81,8 +81,26 @@ keyless** full neurons with incentive/emission; optional
 (default TaoStats for `spec_version`; optional `source=taoswap` block
 head only), `live_portfolio` (TaoSwap coldkey balance + PnL/APY; ss58
 or aliases SECURE/5FART/CRUSTY from `config.wallet_aliases`),
-`live_status` (health events, quota, last successes; no provider
-calls).
+`live_status` (health events, quota, last successes and the last chain
+read; no provider calls).
+
+Four tools replace the disabled metagraphed MCP (change:
+livedata-metagraphed-gaps, 2026-11-02):
+
+- `live_validators`: TaoSwap. Every validator by total stake, one
+  subnet's validators (`netuid`), or one validator's subnets and top
+  delegators (`hotkey`).
+- `live_hyperparams`: chain first. Each hyperparameter is read from Finney
+  storage at one finalized block. TaoSwap fills unset items and
+  cross-checks set ones; a mismatch is `conflicting` with both values.
+  The items are declared in `CHAIN_READS`, so the hourly probe checks
+  them.
+- `live_account`: TaoSwap ledger and transfers of one coldkey or alias.
+- `live_events`: TaoSwap chain events, newest or for one block.
+
+Each caps its lists and states the cap and the total. A hotkey or
+coldkey must pass a full SS58 check (prefix 42, checksum) before any
+call.
 
 A validated `chain_head` response also persists the last-seen live
 `spec_version` and writes a durable `spec_upgrades` event on any change

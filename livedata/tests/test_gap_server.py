@@ -179,6 +179,15 @@ class HyperparamsToolTests(GapServerBase):
         self.assertIn((al.CHAIN_PROVIDER, al.CHAIN_AUDIT_OPERATION), rows)
         self.assertIn(("taoswap", "subnet_detail_taoswap"), rows)
 
+    def test_status_reports_last_chain_read(self):
+        payloads = call_server(self.config_path, [
+            tool_call(1, "live_hyperparams", {"netuid": 1}),
+            tool_call(2, "live_status", {}),
+        ])
+        self.assertIsNotNone(payloads[2]["last_chain_read"])
+        import atlas_live_server as server
+        self.assertEqual(server.CHAIN_AUDIT_PROVIDER, al.CHAIN_PROVIDER)
+
     def test_invalid_netuid_makes_no_call(self):
         before = self.total_requests()
         payloads = call_server(self.config_path, [
