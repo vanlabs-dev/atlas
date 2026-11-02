@@ -206,7 +206,10 @@ def cmd_watch(config: Dict[str, Any]) -> int:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     al.write_private(path, json.dumps(state, sort_keys=True))
     print(json.dumps(result, indent=2, sort_keys=True))
-    return 0 if result["ok"] else 1
+    # Drift is paged by watch_decide itself; a non-zero exit would page it
+    # again through OnFailure= (change: alert-delivery-reliability). Only
+    # an unexpected error ends the unit failed. `check` still exits 1.
+    return 0
 
 
 def main(argv: Optional[List[str]] = None) -> int:

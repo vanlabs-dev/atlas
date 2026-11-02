@@ -13,6 +13,7 @@ Description=Atlas subtensor repository update
 Wants=network-online.target
 After=network-online.target
 
+OnFailure=atlas-notify-failure@%n.service
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/python3 /home/pi/atlas/repotrack/atlas_repo.py update

@@ -11,6 +11,7 @@ Description=Atlas chain-read probe (user-level; no root)
 Wants=network-online.target
 After=network-online.target
 
+OnFailure=atlas-notify-failure@%n.service
 [Service]
 Type=oneshot
 WorkingDirectory=/home/pi/atlas

@@ -1,0 +1,18 @@
+# System-side variant of atlas-notify-failure@ for the one Atlas system
+# unit, atlas-dashboard.service (change: alert-delivery-reliability). It
+# runs as pi, so it uses pi's Telegram credentials and the same ledger.
+# Install (operator, needs sudo):
+#   sudo cp /home/pi/atlas/telegram/systemd/atlas-notify-failure-sys@.service \
+#     /etc/systemd/system/
+#   sudo cp /home/pi/atlas/fleet/systemd/atlas-dashboard.service \
+#     /etc/systemd/system/
+#   sudo systemctl daemon-reload
+[Unit]
+Description=Atlas failure page for system unit %i
+
+[Service]
+Type=oneshot
+User=pi
+WorkingDirectory=/home/pi/atlas
+ExecStart=/usr/bin/python3 /home/pi/atlas/telegram/atlas_telegram.py unit-failed --system %i
+TimeoutStartSec=2min

@@ -15,6 +15,7 @@ Description=Atlas subnet-repo-fleet reconcile pass
 Wants=network-online.target
 After=network-online.target
 
+OnFailure=atlas-notify-failure@%n.service
 [Service]
 Type=oneshot
 WorkingDirectory=/home/pi/atlas

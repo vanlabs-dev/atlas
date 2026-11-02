@@ -16,6 +16,7 @@ Description=Atlas runtime upgrade job (user-level; no root)
 Wants=network-online.target
 After=network-online.target
 
+OnFailure=atlas-notify-failure@%n.service
 [Service]
 Type=oneshot
 WorkingDirectory=/home/pi/atlas
