@@ -110,6 +110,7 @@ and `atlas-fleet`. Scheduled work runs as user-level systemd timers.
 | Capability | Purpose |
 |---|---|
 | [`agent-voice`](openspec/specs/agent-voice/spec.md) | One voice for every operator-facing surface. |
+| [`alert-plain-rewrite`](openspec/specs/alert-plain-rewrite/spec.md) | Rewrite paged Telegram alerts in plain language with a model pass whose output is checked by code, and fall back to the deterministic template whenever the check or the call fails. |
 | [`chain-read-probe`](openspec/specs/chain-read-probe/spec.md) | Proves that every storage item Atlas reads still exists on the live chain with the expected shape, so a runtime rename or removal is caught instead of read silently as a default. |
 | [`device-inventory`](openspec/specs/device-inventory/spec.md) | Collect a read-only inventory of the target device (hardware, OS, users, services, listening ports) as a redacted, schema-valid record. |
 | [`econ-alert-intelligence`](openspec/specs/econ-alert-intelligence/spec.md) | Put a language-model materiality judgment between econ-path detection and the operator's phone. |
