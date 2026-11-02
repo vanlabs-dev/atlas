@@ -3125,7 +3125,8 @@ def fail_closed_events(source_db: str, watermark: Optional[str],
                 continue  # observed inside the window: healthy
             first_fail = conn.execute(
                 "SELECT MIN(timestamp) FROM integration_health "
-                "WHERE provider = ? AND timestamp > COALESCE(?, '')",
+                "WHERE provider = ? AND category = 'provider-failure' "
+                "AND timestamp > COALESCE(?, '')",
                 (provider, last_good)).fetchone()[0]
             if first_fail is None or first_fail > cutoff:
                 continue  # no failure record, or not yet a whole window

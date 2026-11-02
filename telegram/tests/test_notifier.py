@@ -1229,6 +1229,27 @@ class FailClosedTests(unittest.TestCase):
         events, _ = tg.fail_closed_events(self.db, None, self.ctx)
         self.assertEqual(events, [])
 
+    def test_invariant_notes_do_not_set_the_outage_start(self):
+        # G7 (change: alert-delivery-reliability): invariant-divergence
+        # rows share the finney-rpc provider but are not failures.
+        self.seed(good_hours_ago=10, fail_hours_ago=7)
+        conn = sqlite3.connect(self.db)
+        early = (datetime.datetime.now(datetime.timezone.utc)
+                 - datetime.timedelta(hours=9)).isoformat()
+        conn.execute(
+            "INSERT INTO integration_health (timestamp, provider, operation, "
+            "category, detail) VALUES (?, 'finney-rpc', 'invariant', "
+            "'invariant-divergence', 'note')", (early,))
+        conn.commit()
+        failure = conn.execute(
+            "SELECT timestamp FROM integration_health WHERE category = "
+            "'provider-failure'").fetchone()[0]
+        conn.close()
+        events, _ = tg.fail_closed_events(self.db, None, self.ctx)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["event_id"],
+                         "fail-closed:gate_state:%s" % failure)
+
 
 class TransportTests(unittest.TestCase):
     """change: telegram-alert-redesign. Buttons, link previews, and the
