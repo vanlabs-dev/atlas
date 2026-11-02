@@ -35,7 +35,7 @@
 
 ## 5. knowledge_status (A3)
 
-- [ ] 5.1 Join `kb_status` on the active `run_id` and add `staged_newer_run`. Verify: a new test in `knowledge/tests/test_server.py` with an older active run and a newer staged run.
+- [x] 5.1 Join `kb_status` on the active `run_id` and add `staged_newer_run`. Verify: a new test in `knowledge/tests/test_server.py` with an older active run and a newer staged run.
 
 ## 6. Docs and close-out
 

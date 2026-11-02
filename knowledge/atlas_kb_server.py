@@ -269,10 +269,19 @@ class KnowledgeStore:
                 states = connection.execute(
                     "SELECT evidence_state, count(*) FROM units "
                     "WHERE active = 1 GROUP BY evidence_state").fetchall()
-                run = connection.execute(
-                    "SELECT coverage_date, intake_date, files_json FROM "
-                    "intake_runs ORDER BY intake_date DESC LIMIT 1"
-                ).fetchone()
+                run = newer = None
+                if active:
+                    # The active run's own row, never simply the newest
+                    # ingest: a staged run must not pose as the served one.
+                    run = connection.execute(
+                        "SELECT coverage_date, intake_date, files_json FROM "
+                        "intake_runs WHERE run_id = ?",
+                        (active[0][0],)).fetchone()
+                if run:
+                    newer = connection.execute(
+                        "SELECT run_id, coverage_date FROM intake_runs "
+                        "WHERE intake_date > ? ORDER BY intake_date DESC "
+                        "LIMIT 1", (run[1],)).fetchone()
             finally:
                 connection.close()
         except sqlite3.Error as exc:
@@ -290,6 +299,9 @@ class KnowledgeStore:
             "units_by_state": {state: count for state, count in states},
             "coverage_date": run[0] if run else None,
             "corpus_files": json.loads(run[2]) if run else None,
+            "staged_newer_run": ({"run_id": newer[0],
+                                  "coverage_date": newer[1]}
+                                 if newer else None),
             "note": "Knowledge is current as of coverage_date; live "
                     "chain/market data is NOT available through this "
                     "tool.",
