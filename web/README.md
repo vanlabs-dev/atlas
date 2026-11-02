@@ -2,7 +2,8 @@
 
 The subnt.dev site: a home page that explains Atlas, and four boards
 (mining triage, fleet attention, network pulse, runtime upgrades). Next.js
-16, Tailwind v4, Motion. Design record: [DESIGN.md](DESIGN.md).
+16, Tailwind v4, Three.js for the home page field. Design record:
+[DESIGN.md](DESIGN.md).
 
 ## Run
 
@@ -42,6 +43,6 @@ Pages show when their data was produced, and a stale label past 48 hours.
 
 ## Deploy
 
-Vercel, project root `web/`. `vercel.json` runs `scripts/vercel-ignore.sh`,
+Vercel, project root `web/`, production from `main`. `vercel.json` runs `scripts/vercel-ignore.sh`,
 which skips the build when nothing under `web/` changed since the last
 deployed commit, and builds when that commit is unknown.

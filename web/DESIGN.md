@@ -4,8 +4,8 @@ Approved: 2026-11-02 (owner, comp D "Flight and instrument"). It
 replaces comp F, "Strata as an instrument" (2026-10-30), across the
 whole site.
 
-Reference comp: `docs/explore/home-motion/d-combined.html` on branch
-`explore/home-motion`, with the picker `index.html` beside it (real
+Reference comp: `docs/explore/home-motion/d-combined.html`, with the
+picker `index.html` beside it (real
 fixture data; screenshots beside it). It is a picture of the system,
 not code to copy. Comps A to C and the comp F stills stay beside it for
 history.
@@ -89,6 +89,13 @@ Every other house rule still holds.
 - Under it, one sentence with real figures from the data layer: "Code,
   chain and market, all from one Raspberry Pi. In the last 30 days
   it read {commits30} commits across {repos} repositories."
+- "Code and price apart": Atlas ranks every subnet by commits in 30
+  days and by price change in 7 days; the gap is code rank minus price
+  rank, in places out of 100, and 40 or more counts as apart. Copy that
+  shows the gap shows the 7-day price beside it, and says "places" or
+  "ranks", never "points".
+- A statement describes what is on screen. Never pair a picture of one
+  ranking with a sentence about another.
 - Plain, specific sentences. Digits, not words. No "we". No hype verbs.
 
 ## Type
@@ -149,8 +156,11 @@ Every other house rule still holds.
    rows in red. Flat Lambert shading, no bloom or glow. The days rise
    left to right once on load (1 s). On wide screens a 420vh stage
    holds while the scroll flies the camera through three stops, each
-   with a statement: the quiet back, the run along 90 days to today,
-   the busiest rows up close. Pointing lifts a row and a tag names it.
+   with a statement that describes what is on screen: "One row for
+   every subnet" (the quiet back), "90 days of commits" (how to read a
+   mark, and what red means), "Where the code is moving" (the busiest
+   front rows, naming the busiest subnet). Pointing lifts a row and a
+   tag names it.
    Labels (dates, the today edge with "est. block N", names) are HTML
    projected from 3D. Phones: copy first, the field as a figure with a
    slow sway. Reduced motion: still. No WebGL: drawn flat.
@@ -160,9 +170,10 @@ Every other house rule still holds.
    names in the bar.
 3. **The lead panel.** The top 3 of the fleet board as tabs that advance
    every 8 s while in view (a red line fills under the tab), until the
-   visitor takes over. Each: name, why it ranks, price over 30 days, 90
-   days of commit bars (last 30 in red) with a running total, five
-   figures. Pointing at the chart reads one day.
+   visitor takes over. Each: name, why it ranks, the 7-day price as the
+   large figure (30-day beside it), 90 days of commit bars (last 30 in
+   red) with a running total, and five figures ending with the gap
+   ("Code against price"). Pointing at the chart reads one day.
 4. **Next on the board.** Rows 4 to 12, each with five squares (code
    this week, code this month, three or more authors, price up over 30
    days, emission route visible) that fill in green row by row.
