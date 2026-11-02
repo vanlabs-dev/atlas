@@ -216,8 +216,8 @@ scan (no history replay). **Schedule (change: alert-delivery-reliability, 2026-1
     row, so a `/restart` stays quiet;
   - the alert scan: no completed scan for 3 hours;
   - the LLM: a Claude auth failure in the Hermes logs newer than the last
-    model reply, or 2 or more rewrite fallbacks for a model error in a row
-    within 2 hours;
+    model reply, or 2 or more rewrite fallbacks for a model error or an
+    unverified toolset (`toolset-unverified`) in a row within 2 hours;
   - the LAN board (`atlas-dashboard.service`): not active, or restarted.
     Its `Restart=on-failure` keeps it out of `failed`, so `OnFailure=`
     alone fires only after the start limit.
@@ -237,7 +237,12 @@ scan (no history replay). **Schedule (change: alert-delivery-reliability, 2026-1
   `gateway_state`, `pid`, `updated_at` and `platforms.telegram`, and that
   `agent.log` still logs `API call #N: model=`. If the shape changed, the
   watch pages "cannot read gateway state" and the LLM check falls back to
-  rewrite outcomes.
+  rewrite outcomes. The rewrite and the econ judge check their toolset
+  (`bot_room`) against the installed Hermes before each run's first call
+  and stop on any tool (change: rewrite-judge-lockdown). That probe does
+  not load MCP servers, so also read the first new `oneshot` session in
+  `~/.hermes/state.db`: its `tool_names` hash must map to a
+  `system_prompts` row with an empty `tools` list.
 
 Config: [config.json](config.json). Setup: [docs/operator-setup.md](docs/operator-setup.md).
 Tests: `python -m pytest telegram/tests -q` (or `python3 -m unittest discover

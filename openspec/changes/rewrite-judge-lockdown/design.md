@@ -25,9 +25,19 @@ and Hermes root that one-shot really uses, then runs
 It fails closed on any tool, an unknown name, a non-zero exit, a timeout
 or unreadable output. The result is cached per process.
 
-The probe does not start MCP servers. Tool selection is strict for named
-toolsets, so MCP tools do not join `bot_room`. After deploy, the session
-record of the first real call confirms the surface is empty.
+The shipped probe does not start MCP servers, and the `todo` leak came
+through MCP: the `tool_search` catalog listed every Atlas MCP tool although
+tool selection excluded them. The probe cannot see that path. A one-off
+run on the Pi with `discover_mcp_tools()` first showed `bot_room` still
+yields no tools and no bridge with all four Atlas servers loaded. After
+deploy, and after each Hermes update, the session record of the first
+real call confirms the surface is empty.
+
+`--ignore-rules` is a session policy field on the `-z` path (Hermes
+`gateway_chat._POLICY`); the agent factory maps it to
+`skip_context_files` and `skip_memory`. Hermes's own parser accepts the
+exact argv. The first real call's session record (`cwd` `/tmp`, lower
+`input_tokens` than earlier rewrites) is the end-to-end evidence.
 
 Rejected: a user-defined empty toolset in `~/.hermes/config.yaml`. It is
 a Pi config change, and Hermes validates `-t` against built-in, plugin
@@ -68,4 +78,7 @@ code as of 2026-10-22, and matched to cached replies by cache key.
   operator test sends.
 
 Every reject falls back to the template, so a false reject costs wording,
-not an alert.
+not an alert. These replies came from the version 3 prompt; the version 4
+prompt asks the model to keep direction and negation, so the live reject
+rate may differ. Signal digests are no longer paged (every digest source
+is shadow since alert-tier-trim), so the 8 unrebuilt digests do not recur.
