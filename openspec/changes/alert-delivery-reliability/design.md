@@ -174,6 +174,14 @@ Facts on the Pi, verified 2026-11-03:
 13. **G7.** The `fail_closed_events` first-failure query adds
     `AND category = 'provider-failure'`.
 
+14. **Dashboard in the health watch.** `Restart=on-failure` with
+    `RestartSec=10` keeps the dashboard out of `failed`, so `OnFailure=`
+    fires only at the start limit. The watch checks its `ActiveState` and
+    `NRestarts` like the gateway, with threshold 2.
+15. **Busy store.** The scan commits the adapter inserts before it sends or
+    rewrites, so a model call never holds the lock. `send_alert` returns
+    False on `sqlite3.Error`. The health tick skips. `unit-failed` retries.
+
 ## Risks / Trade-offs
 
 - **Narrowing the shared redaction rule** changes five modules. It is

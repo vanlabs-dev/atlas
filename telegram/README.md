@@ -217,7 +217,10 @@ scan (no history replay). **Schedule (change: alert-delivery-reliability, 2026-1
   - the alert scan: no completed scan for 3 hours;
   - the LLM: a Claude auth failure in the Hermes logs newer than the last
     model reply, or 2 or more rewrite fallbacks for a model error in a row
-    within 2 hours.
+    within 2 hours;
+  - the LAN board (`atlas-dashboard.service`): not active, or restarted.
+    Its `Restart=on-failure` keeps it out of `failed`, so `OnFailure=`
+    alone fires only after the start limit.
 
   The thresholds are in `health` in `config.json`, with the defaults in
   `atlas_health.py`.
@@ -225,7 +228,9 @@ scan (no history replay). **Schedule (change: alert-delivery-reliability, 2026-1
   `OnFailure=atlas-notify-failure@%n.service`. The dashboard, a system
   unit, uses `atlas-notify-failure-sys@`. Each unit pages once per failure
   streak, and the health watch ends the streak after a successful run.
-  Handled outcomes exit 0, so a unit failure means a crash: the upgrade
+  A busy store makes `send_alert` return False (the caller keeps its own
+  retry), skips one health tick, and makes `unit-failed` retry for about
+  50 s. Handled outcomes exit 0, so a unit failure means a crash: the upgrade
   job after a reported failure or an RPC blip, and the probe watch after
   a drift page.
 - **After a Hermes update:** check that `gateway_state.json` still has

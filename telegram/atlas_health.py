@@ -54,12 +54,16 @@ DEFAULTS: Dict[str, Any] = {
     "heartbeat_hours": 3,
     "llm_window_hours": 2,
     "hermes_logs": ["~/.hermes/logs/agent.log", "~/.hermes/logs/errors.log"],
+    # Restart=on-failure keeps this system unit out of `failed`, so
+    # OnFailure= alone rarely fires; the watch checks it like the gateway.
+    "dashboard_unit": "atlas-dashboard.service",
     "log_tail_bytes": 262144,
 }
 
 CHECK_GATEWAY = "gateway"
 CHECK_SCAN = "scan"
 CHECK_LLM = "llm"
+CHECK_DASHBOARD = "dashboard"
 
 # Rewrite fallbacks that mean the model did not answer (not a check
 # rejection, budget or switch-off).
@@ -200,6 +204,28 @@ def check_gateway(readers: Readers, connection: sqlite3.Connection,
     return None
 
 
+def check_dashboard(readers: Readers, connection: sqlite3.Connection,
+                    hcfg: Dict[str, Any]) -> Optional[str]:
+    unit = hcfg.get("dashboard_unit")
+    if not unit:
+        return None
+    props = readers.show(unit, ["ActiveState", "NRestarts", "LoadState"],
+                         True)
+    if not props or props.get("LoadState") == "not-found":
+        return None  # not installed here, or systemctl gave no answer
+    restarts = props.get("NRestarts")
+    previous = _meta_get(connection, "health:dashboard_nrestarts")
+    if restarts is not None and restarts.isdigit():
+        _meta_set(connection, "health:dashboard_nrestarts", restarts)
+    active = props.get("ActiveState") or "unknown"
+    if active != "active":
+        return "the dashboard service is %s" % active
+    if (previous is not None and previous.isdigit() and restarts
+            and restarts.isdigit() and int(restarts) > int(previous)):
+        return "the dashboard service restarted"
+    return None
+
+
 def check_scan(readers: Readers, connection: sqlite3.Connection,
                hcfg: Dict[str, Any]) -> Optional[str]:
     last = _parse(_meta_get(connection, tg.SCAN_HEARTBEAT_KEY))
@@ -289,6 +315,12 @@ _WORDS = {
         "rewrites fail; alerts still go out in template form.",
         "log in to Claude again on the Pi",
         "Claude is answering for Atlas again"),
+    CHECK_DASHBOARD: (
+        "The Atlas LAN board is down",
+        "The rotation dashboard is not serving: %s.",
+        "on the Pi run %s" % tg.mono(
+            "journalctl -b -u atlas-dashboard.service -n 50"),
+        "The Atlas LAN board is back"),
 }
 
 
@@ -433,6 +465,7 @@ def run_health(connection: sqlite3.Connection, config: Dict[str, Any],
         (CHECK_GATEWAY, check_gateway, int(hcfg["gateway_threshold"])),
         (CHECK_SCAN, check_scan, 1),
         (CHECK_LLM, check_llm, 1),
+        (CHECK_DASHBOARD, check_dashboard, int(hcfg["gateway_threshold"])),
     ]
     for name, check, threshold in checks:
         try:

@@ -314,5 +314,58 @@ class CliTests(unittest.TestCase):
                 "unit-failure:atlas-probe.service:"))
 
 
+class TemplateScrubTests(unittest.TestCase):
+    """Every page this change sends must pass the scrubber, or it would turn
+    into a withheld notice."""
+
+    def test_all_templates_are_sendable(self):
+        config = make_config(tempfile.gettempdir())
+        _lex, glosses = tg.voice_maps(config)
+        since = NOW.isoformat()
+        msgs = []
+        for check in (ah.CHECK_GATEWAY, ah.CHECK_SCAN, ah.CHECK_LLM,
+                      ah.CHECK_DASHBOARD):
+            msgs.append(ah._outage_message(check, "the Claude login has "
+                                           "expired", since))
+            msgs.append(ah._recovery_message(check, since))
+        sent = []
+        conn = tg.open_store(os.path.join(tempfile.mkdtemp(), "t.db"))
+        ah.open_health(conn)
+        ah.record_unit_failure(conn, "atlas-upgrade.service", False, since,
+                               lambda m, c, i: sent.append(m) or True)
+        ah.record_unit_failure(conn, "atlas-dashboard.service", True, since,
+                               lambda m, c, i: sent.append(m) or True)
+        conn.close()
+        msgs += sent
+        msgs.append(tg.Message.from_dict(tg.withheld_event(
+            config, "schema-drift", "schema-drift:42")["message"]))
+        for msg in msgs:
+            tg.assert_sendable(tg.render_plain(msg, 3500, glosses))
+            tg.assert_sendable(tg.render_html(msg, 3500, glosses))
+
+
+class DashboardTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.readers.units["atlas-dashboard.service"] = {
+            "ActiveState": "active", "NRestarts": "0", "LoadState": "loaded"}
+
+    def test_restart_loop_pages_once(self):
+        self.tick()
+        for n in range(1, 5):
+            self.readers.units["atlas-dashboard.service"]["NRestarts"] = str(n)
+            self.tick()
+        board = [m for m in self.sent if m[0].startswith("health:dashboard:")]
+        self.assertEqual(len(board), 1)
+        self.assertIn("The Atlas LAN board is down", board[0][1])
+
+    def test_not_installed_is_silent(self):
+        self.readers.units["atlas-dashboard.service"] = {
+            "LoadState": "not-found", "ActiveState": "inactive"}
+        self.tick()
+        self.tick()
+        self.assertEqual(self.sent, [])
+
+
 if __name__ == "__main__":
     unittest.main()
