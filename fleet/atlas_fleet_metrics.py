@@ -369,7 +369,9 @@ def scan_clone_emissions(clone_dir: str, cfg: Dict[str, Any],
     routes: List[Dict[str, Any]] = []
     opaque = False
     for path in paths:
-        abs_path = os.path.join(clone_dir, path.replace("/", os.sep))
+        abs_path = _fleet()._repotrack().contained_file(clone_dir, path)
+        if abs_path is None:
+            continue  # a link or an out-of-clone path is never read
         try:
             size = os.path.getsize(abs_path)
             if size > cfg["max_file_bytes"]:

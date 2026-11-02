@@ -195,7 +195,7 @@ class ReadOnlySurfaceTests(unittest.TestCase):
         # mutating pipeline (setup/update/index) is unreachable from here
         allowed = {"load_config", "_resolve", "local_sha",
                    "working_tree_dirty", "freshness", "FatalRepoError",
-                   "META_INDEXED_SHA", "CONFIG_FILE"}
+                   "META_INDEXED_SHA", "CONFIG_FILE", "contained_file"}
         used = set(re.findall(r"\barp\.(\w+)", self.source))
         self.assertEqual(used - allowed, set())
 

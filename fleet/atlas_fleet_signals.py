@@ -1255,7 +1255,9 @@ def seed_epoch(connection: sqlite3.Connection, cfg: Dict[str, Any],
     adopted = 0
     events: Dict[str, int] = {}
     for path in manifest_paths:
-        abs_path = os.path.join(clone_dir, path.replace("/", os.sep))
+        abs_path = _fleet()._repotrack().contained_file(clone_dir, path)
+        if abs_path is None:
+            continue  # a link or an out-of-clone path is never read
         try:
             with open(abs_path, "r", encoding="utf-8",
                       errors="replace") as handle:

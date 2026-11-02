@@ -70,8 +70,7 @@ class SetupCloneTests(unittest.TestCase):
 
     def test_size_cap_quarantines_and_cleans_up(self):
         import secrets
-        # count-objects reports KiB, so the fixture must be comfortably
-        # larger than the cap and incompressible enough to survive packing.
+        # the cap bounds the HEAD tree's file sizes, sized before checkout
         big_origin = h.make_origin(self.tmp, name="big-origin", files={
             "data.txt": secrets.token_hex(200000)})
         clone = os.path.join(self.tmp, "fleet", "99")

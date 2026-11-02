@@ -183,7 +183,12 @@ def index_slot(connection: Any, netuid: int, epoch: int, clone_dir: str,
 
     indexed = removed = skipped = 0
     for rel_path in candidates:
-        abs_path = os.path.join(clone_dir, rel_path)
+        abs_path = rt.contained_file(clone_dir, rel_path)
+        if abs_path is None:
+            # a link or an out-of-clone path: never read, drop any old row
+            _remove_one(connection, netuid, rel_path)
+            skipped += 1
+            continue
         if not os.path.isfile(abs_path):
             removed += 1 if _remove_one(connection, netuid, rel_path) else 0
             continue

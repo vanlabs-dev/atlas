@@ -516,7 +516,8 @@ def _auth_env(token: Optional[str]) -> Optional[Dict[str, str]]:
 
 
 def _run_git(cwd: Optional[str], args: List[str], token: Optional[str] = None,
-             timeout: int = GIT_TIMEOUT) -> Tuple[int, str, str]:
+             timeout: int = GIT_TIMEOUT,
+             stdin: Optional[str] = None) -> Tuple[int, str, str]:
     env = dict(os.environ)
     env["GIT_TERMINAL_PROMPT"] = "0"  # never block waiting for credentials
     auth = _auth_env(token)
@@ -526,7 +527,7 @@ def _run_git(cwd: Optional[str], args: List[str], token: Optional[str] = None,
     try:
         proc = subprocess.run(command, capture_output=True, text=True,
                               timeout=timeout, encoding="utf-8",
-                              errors="replace", env=env)
+                              errors="replace", env=env, input=stdin)
     except FileNotFoundError:
         raise FleetError("git executable not found")
     except subprocess.TimeoutExpired:
@@ -573,6 +574,62 @@ def _tracked_file_count(clone_dir: str) -> int:
     return len([line for line in out.splitlines() if line.strip()])
 
 
+def _prefetch_tree_blobs(clone_dir: str, rev: str,
+                         token: Optional[str] = None) -> bool:
+    """Fetch every blob of `rev`'s tree that a blobless clone lacks, in one
+    batch. Without it `ls-tree -l` lazy-fetches one blob per round trip."""
+    code, out, _ = _run_git(clone_dir, [
+        "rev-list", "--objects", "--no-walk", "--missing=print", rev])
+    if code != 0:
+        return False
+    missing = [line[1:].strip() for line in out.splitlines()
+               if line.startswith("?")]
+    if not missing:
+        return True
+    code, _out, _err = _run_git(clone_dir, [
+        "-c", "fetch.negotiationAlgorithm=noop", "fetch", "--no-tags",
+        "--no-write-fetch-head", "--recurse-submodules=no",
+        "--filter=blob:none", "--stdin", "origin"], token=token,
+        stdin="\n".join(missing) + "\n")
+    return code == 0
+
+
+def _head_tree_stats(clone_dir: str, rev: str = "HEAD",
+                     token: Optional[str] = None
+                     ) -> Optional[Tuple[int, int]]:
+    """(file count, byte sum) of `rev`'s tree from one `ls-tree -r -l`.
+
+    Gitlinks print `-` as their size and count as zero bytes. The tree's
+    missing blobs are fetched first in one batch, compressed into `.git`;
+    nothing is written to the working tree, so a breach is caught before
+    checkout or advance (change: fleet-clone-containment)."""
+    if not _prefetch_tree_blobs(clone_dir, rev, token=token):
+        return None
+    code, out, _ = _run_git(clone_dir, ["ls-tree", "-r", "-l", rev])
+    if code != 0:
+        return None
+    files = total = 0
+    for line in out.splitlines():
+        meta = line.split("\t", 1)[0].split()
+        if len(meta) < 4:
+            continue
+        files += 1
+        if meta[3].isdigit():
+            total += int(meta[3])
+    return files, total
+
+
+def _disk_short(clone_dir: str, caps: Dict[str, Any], need: int = 0) -> bool:
+    """True when free disk at the clone root is below the ceiling plus
+    `need` bytes. No ceiling configured, or an unreadable probe, never
+    blocks (mirrors the reconcile disk check)."""
+    min_free = caps.get("min_free_bytes")
+    if min_free is None:
+        return False
+    free = _default_disk_free(os.path.dirname(os.path.abspath(clone_dir)))
+    return free is not None and free < min_free + need
+
+
 def _clone_state(clone_dir: str, status: str, branch: Optional[str] = None,
                  size: Optional[int] = None) -> Dict[str, Any]:
     return {
@@ -590,9 +647,9 @@ def setup_clone(clone_dir: str, url: str, token: Optional[str] = None,
 
     `git clone --filter=blob:none --no-checkout --no-recurse-submodules`
     fetches the commit graph and trees but no historical blobs; the
-    file-count cap is enforced on the tree BEFORE checkout so an oversized
-    repo never materialises its blobs; the size cap is enforced after
-    checkout. On any cap breach the clone is removed and the slot is
+    file-count and size caps are enforced on the HEAD tree BEFORE checkout
+    so an oversized repo never writes its working tree, and free disk is
+    checked before checkout. On any cap breach the clone is removed and the slot is
     quarantined. The push URL is disabled (we never push). The remote
     default branch is checked out and recorded — no third-party API call.
     Subnet code is never built, tested, or executed."""
@@ -616,6 +673,25 @@ def setup_clone(clone_dir: str, url: str, token: Optional[str] = None,
         return {"status": "quarantined",
                 "error": "tracked file count exceeds cap %d" % max_files}
 
+    max_bytes = caps.get("max_bytes")
+    tree_bytes = 0
+    if max_bytes is not None or caps.get("min_free_bytes") is not None:
+        stats = _head_tree_stats(clone_dir, token=token)
+        if stats is None:
+            _rmtree(clone_dir)
+            return {"status": "unreachable",
+                    "error": "cannot size the HEAD tree"}
+        tree_bytes = stats[1]
+    if max_bytes is not None and tree_bytes > max_bytes:
+        _rmtree(clone_dir)
+        return {"status": "quarantined",
+                "error": "tree size %d exceeds cap %d" % (tree_bytes,
+                                                          max_bytes)}
+    if _disk_short(clone_dir, caps, tree_bytes):
+        _rmtree(clone_dir)
+        return {"status": "disk-limited",
+                "error": "free disk below the ceiling before checkout"}
+
     branch = _default_branch(clone_dir)
     code, _out, err = _run_git(clone_dir, ["checkout", branch], token=token)
     if code != 0:
@@ -623,24 +699,23 @@ def setup_clone(clone_dir: str, url: str, token: Optional[str] = None,
         return {"status": "unreachable", "error": redact(err.strip()[:300])}
 
     size = _repotrack().clone_size_bytes(clone_dir)
-    max_bytes = caps.get("max_bytes")
-    if max_bytes is not None and size is not None and size > max_bytes:
-        _rmtree(clone_dir)
-        return {"status": "quarantined",
-                "error": "clone size %d exceeds cap %d" % (size, max_bytes)}
-
     _run_git(clone_dir, ["remote", "set-url", "--push", "origin",
                          PUSH_URL_DISABLED])
     return _clone_state(clone_dir, "active", branch=branch, size=size)
 
 
 def update_clone(clone_dir: str, branch: str, prev_sha: str,
-                 token: Optional[str] = None) -> Dict[str, Any]:
+                 token: Optional[str] = None,
+                 caps: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Advance a fleet clone: clean-tree check -> fetch -> fast-forward or
     deterministic reset (never a merge) -> recorded change range (reusing
     repotrack's `collect_range` for the exact recorded shape). Any failure
     preserves the clone's last good state. The change range is returned for
-    the reconcile driver to persist scoped to the slot's (netuid, epoch)."""
+    the reconcile driver to persist scoped to the slot's (netuid, epoch).
+    After the fetch and before the advance, the new head's tree is sized
+    against `caps["max_bytes"]` (a breach is `quarantined`, tree left at
+    `prev_sha`) and free disk is checked (`disk-limited`)."""
+    caps = caps or {}
     if not _is_git_clone(clone_dir):
         return {"status": "missing"}
     dirty = _repotrack().working_tree_dirty(clone_dir)
@@ -660,6 +735,24 @@ def update_clone(clone_dir: str, branch: str, prev_sha: str,
     if new_sha == prev_sha:
         return {"status": "no-change", "prev_sha": prev_sha,
                 "new_sha": new_sha}
+
+    max_bytes = caps.get("max_bytes")
+    tree_bytes = 0
+    if max_bytes is not None or caps.get("min_free_bytes") is not None:
+        stats = _head_tree_stats(clone_dir, new_sha, token=token)
+        if stats is None:
+            return {"status": "fetch-failed",
+                    "error": "cannot size the fetched tree"}
+        tree_bytes = stats[1]
+    if max_bytes is not None and tree_bytes > max_bytes:
+        return {"status": "quarantined", "prev_sha": prev_sha,
+                "new_sha": new_sha,
+                "error": "tree size %d exceeds cap %d" % (tree_bytes,
+                                                          max_bytes)}
+    if _disk_short(clone_dir, caps):
+        return {"status": "disk-limited", "prev_sha": prev_sha,
+                "new_sha": new_sha,
+                "error": "free disk below the ceiling before advance"}
 
     ancestor_code, _o, _e = _run_git(
         clone_dir, ["merge-base", "--is-ancestor", prev_sha, new_sha])
@@ -797,6 +890,11 @@ def _persist_update(connection: sqlite3.Connection, netuid: int, epoch: int,
             "last_reconciled": now, "last_fetch_success": now})
         if status == "ok":
             _record_range(connection, netuid, epoch, result, now)
+    elif status == "quarantined":
+        # the fetched head breached the size cap: the tree, local_sha and
+        # index stay at the last good head; the slot stops updating.
+        upsert_slot(connection, {"netuid": netuid, "status": "quarantined",
+                                 "last_reconciled": now})
     else:
         # fetch-failed / advance-failed / local-modifications / missing:
         # preserve last good state, record only that we tried.
@@ -982,8 +1080,16 @@ def _apply_action(connection: sqlite3.Connection, action: Dict[str, Any],
             return _apply_action(
                 connection, {**action, "action": REPOINT,
                              "reason": "origin-mismatch"}, ctx, summary)
+        if not ctx.disk_check():
+            # below the disk ceiling: no fetch; the slot keeps its state
+            upsert_slot(connection, {"netuid": netuid, "last_reconciled":
+                                     ctx.now})
+            audit(connection, ctx.actor, "disk-limited", netuid,
+                  "update deferred")
+            summary["disk-limited"] += 1
+            return None
         result = ctx.update(clone_dir, slot["default_branch"],
-                            slot["local_sha"], token=ctx.token)
+                            slot["local_sha"], token=ctx.token, caps=ctx.caps)
         _persist_update(connection, netuid, slot["epoch"], result, ctx.now)
         audit(connection, ctx.actor, "update", netuid, result["status"])
         _bump(summary, "update" if result["status"] in (
@@ -1018,7 +1124,10 @@ def reconcile(connection: sqlite3.Connection,
         return free is None or free >= min_free
 
     now = now or _utc_now()
-    ctx = _Pass(clone_root=clone_root, caps=config.get("caps"), token=token,
+    caps = dict(config.get("caps") or {})
+    if min_free is not None:
+        caps["min_free_bytes"] = min_free
+    ctx = _Pass(clone_root=clone_root, caps=caps, token=token,
                 block=None, now=now, actor=actor,
                 setup=setup or setup_clone, update=update or update_clone,
                 disk_check=disk_check,
