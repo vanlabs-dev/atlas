@@ -13,8 +13,8 @@
 
 ## 3. Account and events
 
-- [ ] 3.1 Add the `account_ledger_taoswap`, `account_transactions_taoswap`, `events_taoswap` and `block_events_taoswap` operations, with schemas, post-processors and envelopes. Verify: fixture validation tests, plus a drift test for each schema.
-- [ ] 3.2 Add the `live_account` tool (coldkey or alias, `limit` defaulting to 20, maximum 50, newest first) and the `live_events` tool (optional `block`, same limits). Verify: server tests cover a bounded output, a stated cap, the block reference on block events, and a refused malformed coldkey.
+- [x] 3.1 Add the `account_ledger_taoswap`, `account_transactions_taoswap`, `events_taoswap` and `block_events_taoswap` operations, with schemas, post-processors and envelopes. Verify: fixture validation tests, plus a drift test for each schema.
+- [x] 3.2 Add the `live_account` tool (coldkey or alias, `limit` defaulting to 20, maximum 50, newest first) and the `live_events` tool (optional `block`, same limits). Verify: server tests cover a bounded output, a stated cap, the block reference on block events, and a refused malformed coldkey.
 
 ## 4. Hyperparameters chain-first
 

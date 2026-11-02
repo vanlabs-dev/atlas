@@ -1,0 +1,40 @@
+{
+  "_source": "TaoSwap /account-transactions/ report 20261102T064402Z-1eeebab4 (change: livedata-metagraphed-gaps); amounts in rao",
+  "type": "object",
+  "required": ["stake_transfers", "transfers"],
+  "properties": {
+    "stake_transfers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["block", "operation"],
+        "properties": {
+          "block": {"type": "integer"},
+          "timestamp": {"type": ["string", "null"]},
+          "operation": {"type": "string"},
+          "hotkey": {"type": ["string", "null"]},
+          "dest_hotkey": {"type": ["string", "null"]},
+          "subnet_id": {"type": ["integer", "null"]},
+          "dest_subnet_id": {"type": ["integer", "null"]},
+          "amount_rao": {"type": ["integer", "null"]},
+          "alpha_amount": {"type": ["integer", "null"]}
+        }
+      }
+    },
+    "transfers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["block", "sender", "receiver"],
+        "properties": {
+          "block": {"type": "integer"},
+          "timestamp": {"type": ["string", "null"]},
+          "sender": {"type": "string"},
+          "receiver": {"type": "string"},
+          "amount_rao": {"type": ["integer", "null"]},
+          "is_protocol": {"type": ["boolean", "null"]}
+        }
+      }
+    }
+  }
+}

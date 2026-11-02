@@ -225,6 +225,50 @@ TOOLS: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "live_account",
+        "description": (
+            "One coldkey's on-chain history from TaoSwap (keyless), "
+            "newest first. kind=ledger: every TAO and alpha movement "
+            "(transfers, buys, sells, moves) with a total count. "
+            "kind=transfers: stake transfers and TAO transfers. "
+            "kind=both (default). account is an ss58 coldkey or a "
+            "configured alias (SECURE, 5FART, CRUSTY). limit caps each "
+            "list (default 20, max 50). Amounts in TAO."),
+        "inputSchema": {
+            "type": "object",
+            "properties": dict(_LAST_KNOWN, **{
+                "account": {"type": "string",
+                            "description": "ss58 coldkey OR wallet alias"},
+                "kind": {"type": "string",
+                         "enum": ["ledger", "transfers", "both"],
+                         "description": "default both"},
+                "limit": {"type": "integer", "minimum": 1,
+                          "maximum": 50},
+            }),
+            "required": ["account"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "live_events",
+        "description": (
+            "Chain events from TaoSwap (keyless): section, method, "
+            "extrinsic index and data (provider text, cut at 200 "
+            "characters). No block: the newest events. block: that "
+            "block's events with their total count. limit caps the "
+            "list (default 20, max 50). Events carry block numbers, "
+            "not times."),
+        "inputSchema": {
+            "type": "object",
+            "properties": dict(_LAST_KNOWN, **{
+                "block": {"type": "integer", "minimum": 0},
+                "limit": {"type": "integer", "minimum": 1,
+                          "maximum": 50},
+            }),
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "live_status",
         "description": (
             "Live-data integration health: recent health events (drift/"
@@ -551,6 +595,44 @@ class LiveTools:
         return self._run(op_name, dynamic_params=params,
                          include_last_known=include_last_known)
 
+    def account(self, account: str, kind: str, limit,
+                include_last_known) -> Dict[str, Any]:
+        out: Dict[str, Any] = {"status": "ok", "account": account,
+                               "provider": "taoswap", "kind": kind}
+        parts = []
+        if kind in ("ledger", "both"):
+            parts.append(("ledger", self._run(
+                "account_ledger_taoswap",
+                dynamic_params={"account": account, "limit": limit or 20},
+                include_last_known=include_last_known)))
+        if kind in ("transfers", "both"):
+            parts.append(("transfers", self._run(
+                "account_transactions_taoswap",
+                dynamic_params={"account": account,
+                                "limit_shown": limit or 20},
+                include_last_known=include_last_known)))
+        failed = [name for name, result in parts
+                  if result.get("status") != "ok"]
+        out.update(parts)
+        if len(failed) == len(parts):
+            out["status"] = "live-unavailable"
+            out["message"] = "account provider call(s) failed: %s" % (
+                ", ".join(failed))
+        elif failed:
+            out["partial"] = True
+            out["failed_parts"] = failed
+        return out
+
+    def events(self, block, limit, include_last_known) -> Dict[str, Any]:
+        if block is not None:
+            return self._run("block_events_taoswap",
+                             dynamic_params={"block": block,
+                                             "limit": limit or 20},
+                             include_last_known=include_last_known)
+        return self._run("events_taoswap",
+                         dynamic_params={"limit": limit or 20},
+                         include_last_known=include_last_known)
+
     def resolve_account(self, account_or_alias: str) -> Dict[str, Any]:
         """Resolve wallet alias from config.wallet_aliases or pass ss58."""
         raw = (account_or_alias or "").strip()
@@ -722,6 +804,41 @@ def handle_tool_call(tools: LiveTools, audit: AuditLog, name: str,
             else:
                 payload = tools.validators(netuid, hotkey, limit,
                                            include_last_known)
+        elif name == "live_account":
+            resolved = tools.resolve_account(
+                str(arguments.get("account") or ""))
+            kind = arguments.get("kind") or "both"
+            limit = arguments.get("limit")
+            if not _valid_ss58(resolved["account"]):
+                payload = structured_error(
+                    "invalid", "account must be an ss58 coldkey or known "
+                    "alias (SECURE, 5FART, CRUSTY)", retry_safe=False)
+            elif kind not in ("ledger", "transfers", "both"):
+                payload = structured_error(
+                    "invalid", "kind must be ledger|transfers|both",
+                    retry_safe=False)
+            elif limit is not None and not _int_in(limit, 1, 50):
+                payload = structured_error(
+                    "invalid", "limit must be integer 1..50",
+                    retry_safe=False)
+            else:
+                payload = tools.account(resolved["account"], kind, limit,
+                                        include_last_known)
+                if resolved.get("alias"):
+                    payload["alias"] = resolved["alias"]
+        elif name == "live_events":
+            block = arguments.get("block")
+            limit = arguments.get("limit")
+            if block is not None and not _non_negative_int(block):
+                payload = structured_error(
+                    "invalid", "block must be a non-negative integer",
+                    retry_safe=False)
+            elif limit is not None and not _int_in(limit, 1, 50):
+                payload = structured_error(
+                    "invalid", "limit must be integer 1..50",
+                    retry_safe=False)
+            else:
+                payload = tools.events(block, limit, include_last_known)
         elif name == "live_status":
             payload = tools.status()
         else:

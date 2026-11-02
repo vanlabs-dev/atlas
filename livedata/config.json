@@ -420,6 +420,74 @@
         "expected_cadence": "near-live stake; daily yields (yields_as_of)"
       },
       "_note": "change: livedata-metagraphed-gaps. omit=monitoring,history cuts the body from 2 MB to about 20 KB (report 20261102T064402Z-1eeebab4). page_size bounds the delegator page; client_params.limit caps subnets and delegators shown (default 15, max 64). The hotkey is SS58-checked before the call."
+    },
+    "account_ledger_taoswap": {
+      "provider": "taoswap",
+      "path": "/v1/account-ledger/",
+      "params": {
+        "page_size": 50
+      },
+      "client_params": [
+        "limit"
+      ],
+      "schema": "taoswap/account-ledger.v1",
+      "envelope": {
+        "must_hit_provider": true,
+        "max_local_age_s": 60,
+        "expected_cadence": "per-block indexer; newest row dates the answer"
+      },
+      "_note": "change: livedata-metagraphed-gaps. Every TAO and alpha movement of one coldkey. `account` is SS58-checked before the call. client_params.limit caps rows (default 20, max 50), newest first. No max upstream age: an account can be quiet for months."
+    },
+    "account_transactions_taoswap": {
+      "provider": "taoswap",
+      "path": "/account-transactions/",
+      "params": {
+        "limit": 50
+      },
+      "client_params": [
+        "limit_shown"
+      ],
+      "schema": "taoswap/account-transactions.v1",
+      "envelope": {
+        "must_hit_provider": true,
+        "max_local_age_s": 60,
+        "expected_cadence": "per-block indexer; newest row dates the answer"
+      },
+      "_note": "change: livedata-metagraphed-gaps. Stake transfers and TAO transfers of one coldkey. The provider `limit` is pinned at 50; client_params.limit_shown caps each list (default 20, max 50)."
+    },
+    "events_taoswap": {
+      "provider": "taoswap",
+      "path": "/events/",
+      "params": {
+        "page_size": 50
+      },
+      "client_params": [
+        "limit"
+      ],
+      "schema": "taoswap/events.v1",
+      "envelope": {
+        "must_hit_provider": true,
+        "max_local_age_s": 60,
+        "expected_cadence": "near-live chain events; rows carry blocks, not times"
+      },
+      "_note": "change: livedata-metagraphed-gaps. Newest chain events. Rows have no timestamp; block_reference is the newest block. client_params.limit caps rows (default 20, max 50)."
+    },
+    "block_events_taoswap": {
+      "provider": "taoswap",
+      "path": "/blocks/{block}/events/",
+      "params": {
+        "page_size": 50
+      },
+      "client_params": [
+        "limit"
+      ],
+      "schema": "taoswap/block-events.v1",
+      "envelope": {
+        "must_hit_provider": true,
+        "max_local_age_s": 60,
+        "expected_cadence": "historical block; immutable"
+      },
+      "_note": "change: livedata-metagraphed-gaps. Events of one block. client_params.limit caps rows (default 20, max 50); total_count states how many exist."
     }
   }
 }

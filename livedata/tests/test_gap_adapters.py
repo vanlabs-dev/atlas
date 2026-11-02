@@ -118,6 +118,78 @@ class ValidatorAdapterTests(GapHarness):
         self.assertNotIn("provider-failure", self.health())
 
 
+COLDKEY = "5GsbTgfvgCH4xdqSkiPb7EaBBFLHjWH5vfEALhJaewSFpZX9"
+
+
+class AccountEventAdapterTests(GapHarness):
+    def test_ledger_newest_first_in_tao(self):
+        result = self.run_op("account_ledger_taoswap",
+                             {"account": COLDKEY, "limit": 3})
+        self.assert_envelope(result)
+        entries = result["values"]["entries"]
+        blocks = [row["block"] for row in entries]
+        self.assertEqual(blocks, sorted(blocks, reverse=True))
+        self.assertEqual(len(entries), 3)
+        self.assertEqual(result["values"]["total_count"], 368)
+        self.assertEqual(result["block_reference"], blocks[0])
+        self.assertTrue(any(row["tao"] == 1.0 for row in entries))
+        self.assertIsNotNone(result["upstream_timestamp"])
+
+    def test_transactions_two_lists_capped(self):
+        result = self.run_op("account_transactions_taoswap",
+                             {"account": COLDKEY, "limit_shown": 2})
+        self.assert_envelope(result)
+        values = result["values"]
+        self.assertEqual(len(values["stake_transfers"]), 2)
+        self.assertEqual(len(values["transfers"]), 2)
+        blocks = [row["block"] for row in values["stake_transfers"]]
+        self.assertEqual(blocks, sorted(blocks, reverse=True))
+        self.assertTrue(result["upstream_timestamp"].endswith("+00:00"))
+
+    def test_transactions_pin_provider_limit(self):
+        operation = self.config["operations"][
+            "account_transactions_taoswap"]
+        self.assertEqual(operation["params"]["limit"], 50)
+        self.assertIn("limit_shown", operation["client_params"])
+
+    def test_events_newest_first(self):
+        result = self.run_op("events_taoswap", {"limit": 2})
+        self.assert_envelope(result)
+        events = result["values"]["events"]
+        self.assertEqual(len(events), 2)
+        self.assertEqual(result["block_reference"], events[0]["block"])
+        self.assertEqual(result["freshness_status"], "unknown-upstream")
+
+    def test_block_events_cut_long_data(self):
+        result = self.run_op("block_events_taoswap", {"block": 8819803})
+        self.assert_envelope(result)
+        self.assertEqual(result["block_reference"], 8819803)
+        self.assertEqual(result["values"]["total_count"], 194)
+        self.assertTrue(all(len(row["data"]) <= 200
+                            for row in result["values"]["events"]))
+
+    def test_block_events_for_another_block_fail_closed(self):
+        self.fixture.set_override("/blocks/1/events/", 200, json.dumps(
+            self.fixture.routes["/blocks/8819803/events/"]).encode())
+        result = self.run_op("block_events_taoswap", {"block": 1})
+        self.assertEqual(result["error"]["category"], "schema-drift")
+
+    def test_drift_on_each_schema(self):
+        cases = (("account_ledger_taoswap", "/v1/account-ledger/",
+                  {"account": COLDKEY}, {"results": []}),
+                 ("account_transactions_taoswap", "/account-transactions/",
+                  {"account": COLDKEY}, {"transfers": []}),
+                 ("events_taoswap", "/events/", None,
+                  {"pagination": {}, "results": [{"block": 1}]}),
+                 ("block_events_taoswap", "/blocks/5/events/",
+                  {"block": 5}, {"results": []}))
+        for op, path, params, body in cases:
+            self.fixture.set_override(path, 200, json.dumps(body).encode())
+            result = self.run_op(op, params)
+            self.assertEqual(result["error"]["category"], "schema-drift",
+                             op)
+
+
 class Ss58Tests(unittest.TestCase):
     GOOD = (HOTKEY,
             "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",

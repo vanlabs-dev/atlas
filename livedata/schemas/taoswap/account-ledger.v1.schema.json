@@ -1,0 +1,29 @@
+{
+  "_source": "TaoSwap /v1/account-ledger/ report 20261102T064402Z-1eeebab4 (change: livedata-metagraphed-gaps); amounts in rao",
+  "type": "object",
+  "required": ["results", "pagination"],
+  "properties": {
+    "pagination": {"type": "object", "required": ["total_count"],
+                   "properties": {"total_count": {"type": "integer"}}},
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["block", "kind"],
+        "properties": {
+          "block": {"type": "integer"},
+          "event_idx": {"type": ["integer", "null"]},
+          "timestamp": {"type": ["string", "null"]},
+          "kind": {"type": "string"},
+          "netuid": {"type": ["integer", "null"]},
+          "dest_netuid": {"type": ["integer", "null"]},
+          "tao_rao": {"type": ["integer", "null"]},
+          "alpha_rao": {"type": ["integer", "null"]},
+          "counterparty": {"type": ["string", "null"]},
+          "hotkey": {"type": ["string", "null"]},
+          "success": {"type": ["boolean", "null"]}
+        }
+      }
+    }
+  }
+}
