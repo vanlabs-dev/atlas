@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas, comp B: fly-through</title>
+<meta name="description" content="Atlas reads all 128 Bittensor subnets: code, chain and market, from one Raspberry Pi at home.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500&family=Schibsted+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+  // Decide the stage mode before first paint: the flight needs WebGL, room and motion.
+  (function () {
+    var gl = false;
+    try { var c = document.createElement("canvas"); gl = !!(c.getContext("webgl2") || c.getContext("webgl")); } catch (e) {}
+    var still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var wide = innerWidth >= 900;
+    var h = document.documentElement;
+    if (!gl) h.classList.add("nogl");
+    if (still) h.classList.add("still");
+    // overlay: copy over the field on wide screens. fly: overlay plus the scroll flight.
+    if (gl && wide) h.classList.add("overlay");
+    h.classList.add(gl && wide && !still ? "fly" : "fixed");
+  })();
+</script>
+<script src="./data.js"></script>
+<style>
+  :root {
+    --ground: #08090a; --s1: #0f1113; --s2: #15181b; --rule: #1d1f22;
+    --ink: #f2f3f5; --ink-2: #a3a8b1; --ink-3: #7d838d;
+    --accent: #5d93ff; --accent-2: #a8c8ff; --down: #f0646a;
+    --display: "Newsreader", Georgia, serif;
+    --text: "Schibsted Grotesk", system-ui, sans-serif;
+    --gutter: clamp(16px, 4vw, 64px);
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @media (prefers-color-scheme: light) {
+    /* The comp is drawn for the dark target scheme. */
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { background: var(--ground); color-scheme: dark; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font: 400 16px/1.5 var(--text); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; border-radius: 2px; }
+  .wrap { max-width: 1600px; margin: 0 auto; padding: 0 var(--gutter); }
+
+  /* Header */
+  .bar { position: absolute; inset: 0 0 auto 0; z-index: 5; }
+  .bar .wrap { display: flex; align-items: baseline; gap: 40px; padding-top: 28px; }
+  .mark { font: 500 28px/1 var(--display); letter-spacing: -0.02em; text-decoration: none; }
+  .bar nav { display: flex; gap: 28px; }
+  .bar nav a { color: var(--ink-2); text-decoration: none; font-size: 16px; transition: color 160ms ease; }
+  .bar nav a:hover { color: var(--ink); }
+
+  /* Stage */
+  .stage { position: relative; }
+  .fly .stage { height: 420vh; }
+  .pin { position: relative; overflow: hidden; }
+  .fly .pin { position: sticky; top: 0; height: 100vh; min-height: 640px; }
+  .field { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+  .overlay .pin::before {
+    /* The one scrim: keeps the left column of copy legible over the field. */
+    content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background: linear-gradient(90deg, rgba(8,9,10,0.94) 0%, rgba(8,9,10,0.84) 32%, rgba(8,9,10,0) 60%);
+  }
+  .labels { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  .lab { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 13px; line-height: 1.2; color: var(--ink-2); will-change: transform; }
+  .lab span { color: var(--ink-3); }
+  .lab.axis { transform-origin: 0 0; }
+  .lab.name { color: var(--ink); }
+  .lab.name b { font-weight: 400; color: var(--ink-3); margin-right: 8px; }
+  .lab.name.head { color: var(--accent-2); }
+  .today { position: absolute; left: 0; top: 0; z-index: 2; font-size: 13px; line-height: 1.35; white-space: nowrap; pointer-events: none; }
+  .today .t { color: var(--accent-2); }
+  .today .b { color: var(--ink-2); }
+  .today .b strong { color: var(--ink); font-weight: 500; margin-left: 6px; }
+  .today .tick { display: block; height: 2px; width: 0; background: var(--accent); margin-top: 4px; }
+
+  .copy { position: relative; z-index: 3; }
+  .fly .copy { position: absolute; left: 0; right: 0; top: clamp(120px, 21vh, 220px); }
+  .hero-copy { max-width: min(760px, 56vw); }
+  h1 { margin: 0; font: 500 clamp(48px, 6.4vw, 112px)/0.95 var(--display); letter-spacing: -0.028em; }
+  .lead { margin: 28px 0 0; max-width: 40ch; font-size: clamp(19px, 1.55vw, 22px); line-height: 1.45; color: var(--ink-2); }
+  .lead strong { color: var(--ink); font-weight: 500; }
+  .acts { margin-top: 36px; display: flex; flex-wrap: wrap; align-items: center; gap: 28px; }
+  .btn { display: inline-flex; align-items: center; height: 48px; padding: 0 22px; border-radius: 4px; background: var(--ink); color: var(--ground); font-weight: 500; text-decoration: none; transition: background-color 150ms ease; }
+  .btn:hover { background: var(--accent-2); }
+  .btn:active { transform: translateY(1px); }
+  .ul { font-weight: 500; text-decoration: none; border-bottom: 1px solid var(--ink-3); padding-bottom: 2px; transition: border-color 150ms ease; }
+  .ul:hover { border-color: var(--ink); }
+
+  .stops { list-style: none; margin: 0; padding: 0; }
+  .overlay .figure { position: absolute; inset: 0; }
+  .overlay.fixed .pin { display: block; }
+  .overlay.fixed .figure { position: absolute; inset: 0 0 auto 0; height: 100vh; min-height: 640px; margin: 0; }
+  .overlay.fixed .copy { min-height: max(100vh, 640px); padding-top: clamp(120px, 21vh, 220px); }
+  .overlay.fixed .pin::before { height: max(100vh, 640px); }
+  .fly .stops-wrap { position: absolute; z-index: 3; left: 0; right: 0; bottom: clamp(72px, 13vh, 140px); pointer-events: none; }
+  .fly .stops { position: relative; height: 0; }
+  .fly .stop { position: absolute; left: 0; bottom: 0; opacity: 0; visibility: hidden; }
+  .stop h2 { margin: 0; max-width: 15ch; font: 500 clamp(40px, 4.4vw, 64px)/1 var(--display); letter-spacing: -0.02em; }
+  .stop p { margin: 20px 0 0; max-width: 34ch; font-size: 20px; line-height: 1.45; color: var(--ink-2); }
+  .stop p strong { color: var(--ink); font-weight: 500; }
+  .fly .hero-copy { will-change: opacity, transform; }
+
+  .tagp { position: absolute; z-index: 4; left: 0; top: 0; padding: 7px 10px; border-radius: 4px; background: var(--s2); color: var(--ink); font-size: 13px; line-height: 1.3; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 120ms ease; }
+  .tagp b { font-weight: 500; color: var(--ink-3); margin-right: 6px; }
+  .tagp.on { opacity: 1; }
+
+  /* Fixed mode: phones, reduced motion, no WebGL. Copy first, the field as a figure, then the stops. */
+  .fixed .pin { display: flex; flex-direction: column; }
+  .fixed .copy { order: 1; padding-top: clamp(112px, 16vh, 180px); }
+  .fixed .figure { order: 2; }
+  .fixed .stops-wrap { order: 3; }
+  .fixed .hero-copy { max-width: 900px; }
+  .fixed .figure { position: relative; height: clamp(440px, 62vh, 720px); margin-top: 56px; }
+  .fixed .stops { display: grid; gap: 48px; padding: 56px 0 0; }
+  @media (min-width: 900px) { .fixed .stops { grid-template-columns: repeat(3, 1fr); gap: 56px; } }
+  .fixed .stop h2 { font-size: clamp(32px, 3.4vw, 48px); }
+  .fixed .stop p { font-size: 18px; }
+  .fixed .labels .name, .fixed .labels .axis.mid { display: none; }
+  @media (min-width: 768px) { .fixed .labels .name { display: block; } }
+
+  /* Below the stage */
+  .sec { padding-top: clamp(120px, 12vw, 200px); }
+  .fly .sec.first { padding-top: clamp(80px, 8vw, 140px); }
+  .h2 { margin: 0; font: 500 clamp(40px, 4.4vw, 64px)/1 var(--display); letter-spacing: -0.02em; }
+  .find { margin: 20px 0 0; max-width: 34ch; font-size: 20px; line-height: 1.45; color: var(--ink-2); }
+  .split { display: grid; gap: 48px; }
+  @media (min-width: 768px) { .split { grid-template-columns: 4fr 8fr; gap: 40px; } }
+  @media (min-width: 1100px) { .split { gap: 72px; } }
+  .figs { margin: 48px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 36px 28px; }
+  .figs dt { order: 2; font-size: 16px; line-height: 1.35; color: var(--ink-2); margin-top: 8px; }
+  .figs div { display: flex; flex-direction: column; }
+  .figs dd { order: 1; margin: 0; font: 500 64px/1 var(--display); letter-spacing: -0.02em; }
+  table { width: 100%; border-collapse: collapse; font-size: 16px; }
+  th { text-align: left; font-weight: 500; font-size: 13px; color: var(--ink-3); padding: 0 16px 12px 0; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  td { padding: 15px 16px 15px 0; border-bottom: 1px solid var(--rule); white-space: nowrap; vertical-align: middle; }
+  tbody tr { transition: background-color 150ms ease; }
+  tbody tr:hover { background: var(--s1); }
+  .r { text-align: right; }
+  .n3 { color: var(--ink-3); margin-right: 10px; }
+  .i2 { color: var(--ink-2); }
+  .up { color: var(--accent-2); } .dn { color: var(--down); }
+  td a { text-decoration: none; transition: color 150ms ease; }
+  td a:hover { color: var(--accent-2); }
+  .lane { display: block; width: 120px; height: 18px; }
+  .scroll-x { overflow-x: auto; }
+  .more { display: inline-block; margin-top: 32px; }
+  .hide-sm { display: none; }
+  @media (max-width: 1099px) { .lane-col { display: none; } }
+  @media (min-width: 900px) { .hide-sm { display: table-cell; } }
+
+  .boards { list-style: none; margin: 48px 0 0; padding: 0; }
+  .boards a { display: grid; gap: 8px; padding: 26px 0; text-decoration: none; border-radius: 10px; transition: background-color 150ms ease, padding 0s; }
+  .boards a:hover { background: var(--s1); }
+  @media (min-width: 768px) { .boards a { grid-template-columns: 4fr 4fr 4fr; gap: 32px; align-items: baseline; padding: 28px 20px; margin: 0 -20px; } }
+  .boards .bn { font: 500 28px/1 var(--display); letter-spacing: -0.01em; }
+  .boards .bq { color: var(--ink); }
+  .boards .bf { color: var(--ink-2); }
+
+  .foot { padding: clamp(140px, 14vw, 220px) 0 40px; }
+  .foot .big { display: block; font: 500 clamp(96px, 24vw, 400px)/0.8 var(--display); letter-spacing: -0.045em; margin-left: -0.04em; }
+  .foot .row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 40px; margin-top: 40px; color: var(--ink-2); font-size: 16px; }
+  .foot nav { display: flex; flex-wrap: wrap; gap: 24px; }
+  .foot nav a { text-decoration: none; color: var(--ink); }
+  .foot nav a:hover { color: var(--accent-2); }
+
+  @media (max-width: 767px) {
+    .bar nav { gap: 16px; }
+    .bar nav a { font-size: 15px; }
+    .bar .wrap { gap: 24px; flex-wrap: wrap; }
+    .hero-copy { max-width: none; }
+    .fixed .figure { height: 400px; margin-top: 24px; }
+    .fixed .stops { padding-top: 16px; }
+    .figs dd { font-size: 48px; }
+    .lane { width: 84px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0ms !important; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="wrap">
+    <a class="mark" href="#top">Atlas</a>
+    <nav aria-label="Boards">
+      <a href="/mining">Mining</a><a href="/fleet">Fleet</a><a href="/network">Network</a><a href="/upgrades">Upgrades</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="stage" aria-labelledby="hero-title">
+    <div class="pin">
+      <div class="figure">
+        <canvas class="field" role="img" aria-label="90 days of commits for all 128 subnets, one row per subnet, one column per day, newest on the right. Quiet subnets sit at the back, the busiest at the front."></canvas>
+        <div class="labels" aria-hidden="true"></div>
+        <div class="today" aria-hidden="true"><span class="t">today</span><br><span class="b">est. block<strong data-block>-</strong></span><span class="tick"></span></div>
+        <div class="tagp" aria-hidden="true"></div>
+      </div>
+      <div class="copy">
+        <div class="wrap">
+          <div class="hero-copy">
+            <h1 id="hero-title">Atlas reads all 128 Bittensor subnets.</h1>
+            <p class="lead">Code, chain and market, from one Raspberry Pi at home. In the last 30 days it read <strong data-fill="commits30">9,779 commits</strong> across <strong data-fill="repos">104 repositories</strong>.</p>
+            <div class="acts">
+              <a class="btn" href="/fleet">Open the fleet board</a>
+              <a class="ul" href="#reads">What it reads</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="stops-wrap">
+        <div class="wrap" style="position:relative">
+          <ol class="stops" role="list">
+            <li class="stop" data-stop="1">
+              <h2>One row for every subnet</h2>
+              <p data-fill="stop1">128 rows, 90 days deep. 24 subnets have no code Atlas can read; they lie at the back as dotted lines.</p>
+            </li>
+            <li class="stop" data-stop="2">
+              <h2>Ninety days to today</h2>
+              <p data-fill="stop2">Each mark is one subnet on one day, as tall as its commits. 18 subnets went silent in the last 30 days.</p>
+            </li>
+            <li class="stop" data-stop="3">
+              <h2>The busiest code, up close</h2>
+              <p data-fill="stop3">32 subnets show code and price moving 40 points or more apart. Cathedral leads the fleet board.</p>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <section class="sec first split" aria-labelledby="fleet-title">
+      <div>
+        <h2 class="h2" id="fleet-title">Fleet attention</h2>
+        <p class="find" data-fill="fleetFind">32 subnets show code and price moving 40 points or more apart. Cathedral leads.</p>
+        <dl class="figs" data-fill="figs"></dl>
+      </div>
+      <div style="min-width:0">
+        <div class="scroll-x">
+          <table>
+            <caption class="visually-hidden" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Top of the fleet board</caption>
+            <thead><tr><th scope="col">Subnet</th><th scope="col" class="r">Score</th><th scope="col" class="hide-sm">Why it ranks</th><th scope="col" class="r hide-sm">Commits, 30 d</th><th scope="col" class="r">Price, 30 d</th><th scope="col" class="lane-col">Last 30 days</th></tr></thead>
+            <tbody data-fill="head"></tbody>
+          </table>
+        </div>
+        <a class="ul more" href="/fleet" data-fill="allLink">All 103 scored subnets</a>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="boards-title">
+      <h2 class="h2" id="boards-title">Four boards</h2>
+      <ul class="boards" data-fill="boards"></ul>
+    </section>
+
+    <section class="sec split" id="reads" aria-labelledby="reads-title" style="scroll-margin-top:32px">
+      <div>
+        <h2 class="h2" id="reads-title">What it reads</h2>
+        <p class="find">Every source is read-only. A stale, partial or contradictory input is reported as unavailable, never filled in.</p>
+      </div>
+      <div class="scroll-x">
+        <table>
+          <caption style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Sources Atlas reads and outputs it sends</caption>
+          <thead><tr><th scope="col">Kind</th><th scope="col">Source</th><th scope="col" class="hide-sm">What Atlas does</th></tr></thead>
+          <tbody data-fill="reads"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <footer class="foot">
+    <div class="wrap">
+      <span class="big" aria-hidden="true">Atlas</span>
+      <div class="row">
+        <span data-fill="age">Read from a scrubbed snapshot.</span>
+        <nav aria-label="Footer"><a href="/mining">Mining</a><a href="/fleet">Fleet</a><a href="/network">Network</a><a href="/upgrades">Upgrades</a><a href="https://github.com/vanlabs-dev/atlas">Source</a></nav>
+      </div>
+    </div>
+  </footer>
+</main>
+
+<script>
+  // Fill the copy from the data layer. Classic script, so the figures are right on the first frame.
+  (function () {
+    var A = window.ATLAS, S = A.slots;
+    var sum = function (a) { return a.reduce(function (x, y) { return x + y; }, 0); };
+    var fmt = function (v, d) { return v.toLocaleString("en-GB", { maximumFractionDigits: d || 0 }); };
+    var signed = function (v) { return v === null || v === undefined ? "-" : (v > 0 ? "+" : v < 0 ? "−" : "") + fmt(Math.abs(v), 1) + "%"; };
+    var read = S.filter(function (s) { return s.daily; });
+    var c30 = function (s) { return s.daily ? sum(s.daily.slice(-30)) : null; };
+    var commits30 = sum(read.map(c30));
+    var silent = read.filter(function (s) { return c30(s) === 0; }).length;
+    var scored = S.filter(function (s) { return s.score !== null; }).sort(function (a, b) { return b.score - a.score; });
+    var lead = scored[0];
+    var C = A.counts, F = A.facts;
+    var WHY = { emission: "Emission route changed", divergence: "Code and price apart", abandon: "Code gone quiet", fresh: "Economics code just changed" };
+    var put = function (k, html) { document.querySelectorAll('[data-fill="' + k + '"]').forEach(function (el) { el.innerHTML = html; }); };
+
+    put("commits30", fmt(commits30) + " commits");
+    put("repos", read.length + " repositories");
+    put("stop1", "128 rows, 90 days deep. <strong>" + (128 - read.length) + " subnets</strong> have no code Atlas can read; they lie at the back as dotted lines.");
+    put("stop2", "Each mark is one subnet on one day, as tall as its commits. <strong>" + silent + " subnets</strong> went silent in the last 30 days.");
+    put("stop3", "<strong>" + C.diverging + " subnets</strong> show code and price moving 40 points or more apart. " + lead.name + " leads the fleet board.");
+    put("fleetFind", C.diverging + " subnets show code and price moving 40 points or more apart. " + lead.name + " leads.");
+    put("figs", [[C.diverging, "code and price apart"], [C.cold, "gone cold this month"], [C.emission, "emission routes changed"], [C.invisible, "with no public repository"]]
+      .map(function (f) { return "<div><dt>" + f[1] + "</dt><dd>" + f[0] + "</dd></div>"; }).join(""));
+
+    var lane = function (d) {
+      if (!d) return '<svg class="lane" viewBox="0 0 120 18" aria-hidden="true"><line x1="0" y1="17" x2="120" y2="17" stroke="#2a2e33" stroke-dasharray="2 3"/></svg>';
+      var last = d.slice(-30), mx = Math.max.apply(null, d.concat([1]));
+      return '<svg class="lane" viewBox="0 0 120 18" aria-hidden="true">' + last.map(function (c, i) {
+        if (!c) return "";
+        var h = Math.max(2, 18 * Math.log1p(c) / Math.log1p(mx));
+        return '<rect x="' + (i * 4) + '" y="' + (18 - h) + '" width="2.6" height="' + h + '" fill="#a3a8b1" fill-opacity="' + (0.45 + 0.55 * h / 18) + '"/>';
+      }).join("") + "</svg>";
+    };
+    put("head", scored.slice(0, 8).map(function (r) {
+      var m = r.m30;
+      return "<tr><td><a href=\"/fleet#sn" + r.n + "\"><span class=\"n3\">" + r.n + "</span>" + (r.name || "unnamed") + "</a></td>" +
+        "<td class=\"r\">" + r.score + "</td>" +
+        "<td class=\"i2 hide-sm\">" + (WHY[r.why] || r.why || "-") + "</td>" +
+        "<td class=\"r hide-sm\">" + (r.daily ? fmt(c30(r)) : "-") + "</td>" +
+        "<td class=\"r " + (m > 0 ? "up" : m < 0 ? "dn" : "") + "\">" + signed(m) + "</td>" +
+        "<td class=\"lane-col\">" + lane(r.daily) + "</td></tr>";
+    }).join(""));
+    put("allLink", "All " + A.scored + " scored subnets");
+
+    var day = function (iso) { return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); };
+    put("boards", [
+      ["/mining", "Mining triage", "Where can a new miner still earn?", F.cpu + " of " + F.miningTotal + " subnets have miner code that runs on a CPU."],
+      ["/fleet", "Fleet attention", "Whose code moved, and does price agree?", A.scored + " repositories scored by how their code moved, set against price."],
+      ["/network", "Network pulse", "How is the whole chain doing?", "Subnets hold " + fmt(F.subnetsSharePct, 2) + "% of staked TAO, read daily for " + F.vitalDays + " days."],
+      ["/upgrades", "Runtime upgrades", "How often does the chain runtime change?", F.specs + " runtime specs seen. The latest is " + F.latestSpec + ", on " + day(F.latestSpecAt) + "."]
+    ].map(function (b) { return '<li><a href="' + b[0] + '"><span class="bn">' + b[1] + '</span><span class="bq">' + b[2] + '</span><span class="bf">' + b[3] + "</span></a></li>"; }).join(""));
+
+    put("reads", [
+      ["Code", "Every subnet repository", "cloned, indexed, never run"],
+      ["Code", "The subtensor source", "verified clone, change records"],
+      ["Chain", "Finney RPC", "spec, emission gate, parameters"],
+      ["Markets", "TaoSwap, TaoStats, CoinGecko", "fail-closed readers"],
+      ["Facts", "Validated corpus", "each fact carries its date"],
+      ["Out", "Telegram", "the few changes worth reading"],
+      ["Out", "subnt.dev", "this site, from a scrubbed snapshot"]
+    ].map(function (r) { return '<tr><td class="i2">' + r[0] + "</td><td>" + r[1] + "</td><td class=\"i2 hide-sm\">" + r[2] + "</td></tr>"; }).join(""));
+    put("age", "Read from a scrubbed snapshot of " + day(A.generatedAt) + ". No holdings, no wallets.");
+  })();
+</script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/gsap.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/ScrollTrigger.min.js"></script>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }</script>
+<script type="module">
+const A = window.ATLAS;
+const H = document.documentElement;
+const FLY = H.classList.contains("fly");
+const OVER = H.classList.contains("overlay");
+const STILL = H.classList.contains("still");
+const NOGL = H.classList.contains("nogl");
+const sum = (a) => a.reduce((x, y) => x + y, 0);
+
+// Rows in sediment order: no code at the back, then silent, then by 30-day commits, busiest at the front.
+const rows = A.slots.map((s) => ({
+  ...s,
+  c30: s.daily ? sum(s.daily.slice(-30)) : null,
+  tot: s.daily ? sum(s.daily) : 0,
+})).sort((a, b) => (a.daily ? 1 : 0) - (b.daily ? 1 : 0) || (a.c30 ?? 0) - (b.c30 ?? 0) || (a.daily && b.daily ? a.tot - b.tot : 0));
+const NR = rows.length, ND = 90;
+const rowZ = (i) => i - (NR - 1) / 2;          // back (quiet) is negative z, front (busy) positive
+const dayX = (d) => d - (ND - 1) / 2;           // oldest left, today right
+let maxC = 1;
+rows.forEach((r) => r.daily && r.daily.forEach((c) => { if (c > maxC) maxC = c; }));
+const level = (c) => Math.log1p(c) / Math.log1p(maxC);
+const end = new Date(A.generatedAt);
+const dayDate = (d) => new Date(end.getTime() - (ND - 1 - d) * 864e5);
+const short = (dt) => dt.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+const leadN = A.slots.filter((s) => s.score !== null).sort((a, b) => b.score - a.score)[0].n;
+
+const pin = document.querySelector(".pin");
+const fig = document.querySelector(".figure");
+const canvas = document.querySelector(".field");
+const labels = document.querySelector(".labels");
+const todayEl = document.querySelector(".today");
+const tagEl = document.querySelector(".tagp");
+const heroCopy = document.querySelector(".hero-copy");
+const stopEls = [...document.querySelectorAll(".stop")];
+
+// Block clock: estimated from the last block Atlas saw, one block every 12 s.
+const blockEl = document.querySelector("[data-block]");
+const tick = todayEl.querySelector(".tick");
+const anchorAt = Date.parse(A.anchor.at);
+function clock() {
+  const since = Date.now() - anchorAt;
+  blockEl.textContent = (A.anchor.block + Math.floor(since / 12000)).toLocaleString("en-GB");
+  if (!STILL) {
+    const into = since % 12000;
+    tick.style.transition = "none";
+    tick.style.width = (into / 12000) * 100 + "%";
+    tick.getBoundingClientRect();
+    tick.style.transition = `width ${12000 - into}ms linear`;
+    tick.style.width = "100%";
+  }
+  setTimeout(clock, 12000 - (since % 12000) + 20);
+}
+clock();
+
+if (NOGL) flat(); else three();
+
+// No WebGL: the same field drawn flat, newest on the right, busiest at the bottom.
+function flat() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const draw = () => {
+    const w = fig.clientWidth, h = fig.clientHeight;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    const cw = w / ND, rh = (h - 40) / NR;
+    rows.forEach((r, i) => {
+      const y = 8 + i * rh;
+      for (let d = 0; d < ND; d++) {
+        if (!r.daily) { if (d % 3 === 0) { ctx.fillStyle = "#2a2e33"; ctx.fillRect(d * cw, y + rh - 1, 1.5, 1); } continue; }
+        const c = r.daily[d]; if (!c) continue;
+        const t = level(c);
+        ctx.fillStyle = r.tier === "head" ? `rgba(93,147,255,${0.35 + 0.65 * t})` : `rgba(242,243,245,${0.18 + 0.7 * t})`;
+        ctx.fillRect(d * cw + 1, y + rh * (1 - Math.max(0.25, t)), cw * 0.7, Math.max(1, rh * Math.max(0.25, t)));
+      }
+    });
+    todayEl.style.transform = `translate(${w - 140}px, ${h - 34}px)`;
+  };
+  draw();
+  addEventListener("resize", draw);
+}
+
+async function three() {
+  const THREE = await import("three");
+  let dirty = true, visible = true;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  renderer.setClearColor(0x08090a, 1);
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x08090a, 120, 260);
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 600);
+  scene.add(new THREE.AmbientLight(0xffffff, 1.35));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+  sun.position.set(-0.5, 1, 0.35);
+  scene.add(sun);
+
+  // One flat box per subnet per day with commits. Height and tone follow log1p(commits).
+  const marks = [];
+  rows.forEach((r, i) => r.daily && r.daily.forEach((c, d) => { if (c > 0) marks.push({ i, d, t: level(c) }); }));
+  const geo = new THREE.BoxGeometry(1, 1, 1); geo.translate(0, 0.5, 0);
+  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial(), marks.length);
+  const HMAX = 5.5;
+  const inkLo = new THREE.Color(0x3b3f46), inkHi = new THREE.Color(0xd9dce1);
+  const blueLo = new THREE.Color(0x26468a), blueHi = new THREE.Color(0x86acff);
+  const lit = new THREE.Color(0xa8c8ff);
+  const tmpC = new THREE.Color(), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+  const byRow = Array.from({ length: NR }, () => []);
+  marks.forEach((k, idx) => {
+    byRow[k.i].push(idx);
+    k.h = 0.35 + k.t * HMAX;
+    k.color = (rows[k.i].tier === "head" ? tmpC.copy(blueLo).lerp(blueHi, k.t) : tmpC.copy(inkLo).lerp(inkHi, k.t)).clone();
+    mesh.setColorAt(idx, k.color);
+  });
+  scene.add(mesh);
+
+  // Baselines: a dark line under every row with code, a dotted line for rows with none. A blue today edge.
+  const base = [];
+  rows.forEach((r, i) => {
+    if (r.daily) base.push({ x: 0, z: rowZ(i), w: ND, d: 0.08, c: 0x1b1e22 });
+    else for (let d = 0; d < ND; d += 3) base.push({ x: dayX(d), z: rowZ(i), w: 0.3, d: 0.3, c: 0x2c3036 });
+  });
+  base.push({ x: dayX(ND - 1) + 0.9, z: 0, w: 0.12, d: NR + 2, c: 0x5d93ff });
+  const bmesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial(), base.length);
+  base.forEach((b, k) => {
+    m4.compose(v.set(b.x, 0.02, b.z), q.identity(), sc.set(b.w, 0.04, b.d));
+    bmesh.setMatrixAt(k, m4);
+    bmesh.setColorAt(k, tmpC.set(b.c));
+  });
+  scene.add(bmesh);
+
+  let hover = -1;
+  function place(grow) {
+    marks.forEach((k, idx) => {
+      const g = grow === undefined ? 1 : grow(k.d);
+      const on = k.i === hover;
+      m4.compose(v.set(dayX(k.d), on ? 0.6 : 0, rowZ(k.i)), q.identity(), sc.set(0.62, Math.max(0.001, k.h * g), 0.44));
+      mesh.setMatrixAt(idx, m4);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+  function paintRow(i, on) {
+    if (i < 0) return;
+    byRow[i].forEach((idx) => mesh.setColorAt(idx, on ? lit : marks[idx].color));
+    mesh.instanceColor.needsUpdate = true;
+  }
+
+  // Camera stops along the flight. Progress 0 is the hero, 1 faces the busiest rows.
+  const STOPS = [
+    { pos: [24, 86, 134], look: [10, -8, 10], fov: 37 },       // the whole field from high above
+    { pos: [-58, 36, -108], look: [10, -6, -14], fov: 42 },     // the quiet back, where the dotted rows lie
+    { pos: [26, 12, 82], look: [52, 1, 22], fov: 42 },        // along the time axis to today
+    { pos: [48, 17, 92], look: [30, 0.4, 38], fov: 38 },     // turned to face the busiest rows
+  ];
+  const PHONE = { pos: [30, 96, 124], look: [6, -2, 24], fov: 44 };
+  const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+  let progress = 0, t0 = performance.now();
+  function frame(p, now) {
+    if (!FLY) {
+      const s = OVER ? STOPS[0] : PHONE;
+      camPos.set(...s.pos); camLook.set(...s.look); camera.fov = s.fov;
+    } else {
+      const seg = Math.min(STOPS.length - 2, Math.floor(p * (STOPS.length - 1)));
+      const local = p * (STOPS.length - 1) - seg;
+      const e = ease(Math.min(1, Math.max(0, (local - 0.16) / 0.68)));
+      const a = STOPS[seg], b = STOPS[seg + 1];
+      camPos.set(lerp(a.pos[0], b.pos[0], e), lerp(a.pos[1], b.pos[1], e), lerp(a.pos[2], b.pos[2], e));
+      camLook.set(lerp(a.look[0], b.look[0], e), lerp(a.look[1], b.look[1], e), lerp(a.look[2], b.look[2], e));
+      camera.fov = lerp(a.fov, b.fov, e);
+      // A very slow drift while the hero rests, fading out as the flight starts.
+      const rest = Math.max(0, 1 - p / 0.06);
+      const s = (now - t0) / 1000;
+      camPos.x += Math.sin(s * 0.09) * 4 * rest;
+      camPos.y += Math.sin(s * 0.06) * 1.5 * rest;
+    }
+    camera.position.copy(camPos);
+    camera.lookAt(camLook);
+    camera.updateProjectionMatrix();
+  }
+
+  // HTML labels pinned to points in the field.
+  const axis = [0, 30, 60, ND - 1].map((d, k) => {
+    const el = document.createElement("div");
+    el.className = "lab axis" + (k === 1 || k === 2 ? " mid" : "");
+    const ago = ND - 1 - d;
+    el.innerHTML = `${short(dayDate(d))} <span>${ago ? ago + 1 + " days ago" : ""}</span>`;
+    labels.appendChild(el);
+    return { el, p: new THREE.Vector3(dayX(d) - 0.3, 0, rowZ(NR - 1) + 2.2) };
+  });
+  const named = [];
+  for (let i = NR - 1; i >= 0 && named.length < 6; i--) named.push(i);
+  const li = rows.findIndex((r) => r.n === leadN);
+  if (!named.includes(li)) named.push(li);
+  const names = named.map((i) => {
+    const r = rows[i];
+    const el = document.createElement("div");
+    el.className = "lab name" + (r.tier === "head" ? " head" : "");
+    el.innerHTML = `<b>${r.n}</b>${r.name ?? "SN" + r.n}`;
+    labels.appendChild(el);
+    return { el, i, p: new THREE.Vector3(dayX(ND - 1) + 2.2, 0.2, rowZ(i)) };
+  });
+  const todayP = new THREE.Vector3(dayX(ND - 1) + 1.2, 0, rowZ(0) - 1);
+  const proj = new THREE.Vector3();
+  function project(p3) {
+    proj.copy(p3).project(camera);
+    const w = fig.clientWidth, h = fig.clientHeight;
+    return { x: (proj.x * 0.5 + 0.5) * w, y: (-proj.y * 0.5 + 0.5) * h, ok: proj.z < 1 && proj.z > -1 };
+  }
+  function placeLabels() {
+    const w = fig.clientWidth, h = fig.clientHeight;
+    const lo = OVER ? w * 0.42 : 0;
+    // Names belong to the overview and the close-up; dates to the overview and the run to today.
+    const nameOn = !FLY || progress < 0.06 || progress > 0.8;
+    const axisOn = !FLY || progress < 0.06 || progress > 0.45;
+    axis.forEach(({ el, p }) => {
+      const s = project(p);
+      const show = axisOn && s.ok && s.x > lo && s.x < w - 120 && s.y > 0 && s.y < h - 8;
+      el.style.opacity = show ? 1 : 0;
+      el.style.transform = `translate(${s.x}px, ${s.y + 6}px)`;
+    });
+    const placed = names.map((n) => ({ n, s: project(n.p) })).sort((a, b) => a.s.y - b.s.y);
+    let last = -1e9;
+    placed.forEach(({ n, s }) => {
+      const show = nameOn && s.ok && s.x > lo && s.x < w - 130 && s.y > 60 && s.y < h - 30 && s.y - last > 17;
+      if (show) last = s.y;
+      n.el.style.opacity = show ? 1 : 0;
+      n.el.style.transform = `translate(${s.x}px, ${s.y - 8}px)`;
+    });
+    const t = project(todayP);
+    const tx = Math.min(w - 150, Math.max(lo, t.x + 10)), ty = Math.max(76, Math.min(h - 60, t.y - 40));
+    todayEl.style.opacity = t.ok && axisOn ? 1 : 0;
+    todayEl.style.transform = `translate(${tx}px, ${ty}px)`;
+  }
+
+  function size() {
+    const w = fig.clientWidth, h = fig.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    // Shift the picture right on wide screens so the field sits clear of the copy column.
+    if (OVER) camera.setViewOffset(w, h, -w * 0.14, 0, w, h); else camera.clearViewOffset();
+    camera.updateProjectionMatrix();
+    dirty = true;
+  }
+
+  // Load: the 90 days rise left to right once, then settle. Off under reduced motion.
+  let grow = STILL ? null : performance.now();
+  const easeOut = (t) => 1 - Math.pow(1 - t, 4);
+  function growAt(now) {
+    const s = (now - grow) / 1000;
+    return (d) => easeOut(Math.min(1, Math.max(0, (s - (d / ND) * 0.45) / 0.55)));
+  }
+
+  // Scroll drives the flight, locked to the scrollbar.
+  function onProgress(p) {
+    progress = p;
+    heroCopy.style.opacity = Math.max(0, 1 - p / 0.09);
+    heroCopy.style.transform = `translateY(${-p * 240}px)`;
+    heroCopy.style.visibility = p > 0.1 ? "hidden" : "visible";
+    stopEls.forEach((el, k) => {
+      const at = (k + 1) / 3;
+      const o = Math.max(0, 1 - Math.abs(p - at) / 0.11);
+      el.style.opacity = o;
+      el.style.visibility = o < 0.02 ? "hidden" : "visible";
+      el.style.transform = `translateY(${(p - at) * -120}px)`;
+    });
+    dirty = true;
+  }
+  if (FLY) {
+    const stage = document.querySelector(".stage");
+    if (window.ScrollTrigger) {
+      gsap.registerPlugin(ScrollTrigger);
+      ScrollTrigger.create({ trigger: stage, start: "top top", end: "bottom bottom", onUpdate: (st) => onProgress(st.progress) });
+    } else {
+      const read = () => { const r = stage.getBoundingClientRect(); onProgress(Math.min(1, Math.max(0, -r.top / (r.height - innerHeight)))); };
+      addEventListener("scroll", read, { passive: true }); read();
+    }
+  }
+
+  // Hover: the row under the pointer lifts in the light blue and a tag names it.
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
+  function pick(e) {
+    const r = canvas.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    ndc.set((x / r.width) * 2 - 1, -(y / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    let i = -1;
+    const box = ray.intersectObject(mesh, false)[0];
+    if (box && box.instanceId !== undefined) i = marks[box.instanceId].i;
+    else if (ray.ray.intersectPlane(plane, hit) && Math.abs(hit.x) < ND / 2 + 1) {
+      const k = Math.round(hit.z + (NR - 1) / 2);
+      if (k >= 0 && k < NR) i = k;
+    }
+    if (FLY && e.target.closest && e.target.closest(".hero-copy, .stop")) i = -1;
+    setHover(i, x, y);
+  }
+  function setHover(i, x, y) {
+    if (i !== hover) { paintRow(hover, false); hover = i; paintRow(hover, true); place(); dirty = true; }
+    if (i < 0) { tagEl.classList.remove("on"); return; }
+    const r = rows[i];
+    tagEl.innerHTML = `<b>${r.n}</b>${r.name ?? "SN" + r.n}, ${r.daily ? r.c30.toLocaleString("en-GB") + " commits in 30 days" : "no readable code"}`;
+    const w = fig.clientWidth;
+    tagEl.style.transform = `translate(${Math.min(x + 14, w - tagEl.offsetWidth - 8)}px, ${y - 38}px)`;
+    tagEl.classList.add("on");
+  }
+  fig.parentElement.addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") pick(e); });
+  fig.parentElement.addEventListener("pointerleave", () => setHover(-1));
+  canvas.addEventListener("click", pick);
+
+  // Render only while the stage is on screen and something changed.
+  new IntersectionObserver((es) => { visible = es[0].isIntersecting; if (visible) loop(); }, { rootMargin: "100px" }).observe(fig);
+  addEventListener("resize", size);
+  size();
+  place(grow ? growAt(performance.now()) : undefined);
+  let raf = 0;
+  function loop() {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(function step(now) {
+      if (!visible || document.hidden) return;
+      const drifting = FLY && progress < 0.06;
+      if (grow) {
+        place(growAt(now));
+        if (now - grow > 1050) { grow = null; place(); }
+        dirty = true;
+      }
+      if (dirty || drifting) {
+        frame(progress, now);
+        renderer.render(scene, camera);
+        placeLabels();
+        dirty = false;
+      }
+      raf = requestAnimationFrame(step);
+    });
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) loop(); });
+  if (STILL) { frame(0, performance.now()); renderer.render(scene, camera); placeLabels(); }
+  loop();
+}
+</script>
+</body>
+</html>

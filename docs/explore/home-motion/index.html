@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home motion options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500&family=Schibsted+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ground: #08090a; --s1: #0f1113; --s2: #15181b;
+    --ink: #f2f3f5; --ink-2: #a3a8b1; --ink-3: #7d838d;
+    --accent: #5d93ff; --accent-2: #a8c8ff;
+    --gutter: clamp(16px, 4vw, 64px);
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--ground); color: var(--ink); font: 400 17px/1.5 "Schibsted Grotesk", system-ui, sans-serif; }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; }
+  .wrap { max-width: 1600px; margin: 0 auto; padding: 0 var(--gutter); }
+  header { padding: clamp(56px, 8vw, 120px) 0 clamp(48px, 6vw, 88px); display: grid; gap: 24px; }
+  h1 { font: 500 clamp(44px, 6vw, 96px)/0.95 "Newsreader", serif; letter-spacing: -0.028em; max-width: 14ch; }
+  header p { max-width: 58ch; font-size: 20px; color: var(--ink-2); }
+  header p strong { color: var(--ink); font-weight: 500; }
+  .opt { display: grid; gap: clamp(24px, 3vw, 56px); padding: clamp(40px, 5vw, 72px) 0; }
+  @media (min-width: 1000px) { .opt { grid-template-columns: 7fr 5fr; align-items: start; } }
+  .shots { display: grid; grid-template-columns: 1fr 22%; gap: 12px; align-items: start; }
+  .shots img { width: 100%; height: auto; display: block; border-radius: 6px; background: var(--s1); }
+  .shots a { display: block; transition: opacity 180ms ease; }
+  .shots a:hover { opacity: 0.86; }
+  h2 { font: 500 clamp(36px, 3.6vw, 56px)/1 "Newsreader", serif; letter-spacing: -0.02em; }
+  .lead { margin-top: 14px; font-size: 20px; color: var(--ink-2); max-width: 44ch; }
+  dl { margin-top: 28px; display: grid; grid-template-columns: max-content 1fr; gap: 12px 24px; }
+  dt { color: var(--ink-3); }
+  dd { max-width: 52ch; }
+  code { font-size: 0.92em; }
+  .go { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 28px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; height: 46px; padding: 0 22px; border-radius: 4px; background: var(--ink); color: var(--ground); text-decoration: none; font-weight: 500; transition: background-color 180ms ease, transform 140ms var(--ease-out); }
+  .btn:hover { background: var(--accent-2); }
+  .btn:active { transform: scale(0.98); }
+  .link { text-decoration: none; border-bottom: 1px solid var(--ink-3); padding-bottom: 2px; font-weight: 500; transition: border-color 180ms ease; }
+  .link:hover { border-color: var(--ink); }
+  .base { background: var(--s1); border-radius: 10px; padding: clamp(24px, 3vw, 40px); margin: clamp(24px, 4vw, 56px) 0 clamp(80px, 10vw, 140px); }
+  footer { padding: 0 0 64px; color: var(--ink-3); }
+  @media (max-width: 640px) { .shots { grid-template-columns: 1fr; } .shots a + a { width: 50%; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <h1>Three ways to move the home page.</h1>
+    <p>Each option runs on the real fixture data and keeps the approved headline. They differ in <strong>what moves and why</strong>: the data rearranges itself, the camera travels through the data, or the page works as an instrument in your hands. Open each live; scroll, point and drag.</p>
+  </header>
+
+  <section class="opt" aria-labelledby="a-title">
+    <div class="shots">
+      <a href="a-resort.html"><img src="a-1440.png" alt="Option A at 1440 pixels wide" loading="lazy" width="1440" height="900"></a>
+      <a href="a-resort.html"><img src="a-390.png" alt="Option A at 390 pixels wide" loading="lazy" width="390" height="844"></a>
+    </div>
+    <div>
+      <h2 id="a-title">A. Re-sort</h2>
+      <p class="lead">One field of 128 subnet marks that regroups itself as you scroll.</p>
+      <dl>
+        <dt>What moves</dt><dd>Each subnet's 90-day strip flies between four arrangements on a held stage: by number, ranked by commits, code against price, then the head of the fleet board.</dd>
+        <dt>Encodes</dt><dd>Daily commits per subnet, 30-day commits, 30-day price change, fleet tier.</dd>
+        <dt>Look</dt><dd>Funnel Display and Funnel Sans. Current dark ground, signal blue.</dd>
+        <dt>Port</dt><dd data-port="a">About 1 to 1.5 days. The canvas engine moves into one client component; scroll progress can come from <code>motion</code>'s <code>useScroll</code>, so no new dependency. Funnel needs a DESIGN.md decision.</dd>
+      </dl>
+      <div class="go"><a class="btn" href="a-resort.html">Open option A</a></div>
+    </div>
+  </section>
+
+  <section class="opt" aria-labelledby="b-title">
+    <div class="shots">
+      <a href="b-flythrough.html"><img src="b-1440.png" alt="Option B at 1440 pixels wide" loading="lazy" width="1440" height="900"></a>
+      <a href="b-flythrough.html"><img src="b-390.png" alt="Option B at 390 pixels wide" loading="lazy" width="390" height="844"></a>
+    </div>
+    <div>
+      <h2 id="b-title">B. Fly-through</h2>
+      <p class="lead">The strata as a 3D terrain, with the camera travelling through it on scroll.</p>
+      <dl>
+        <dt>What moves</dt><dd>The camera, from a high oblique view of all 128 subnets down along 90 days to today, then round to the busiest rows. Pointing lifts a row.</dd>
+        <dt>Encodes</dt><dd>Daily commits as bar height, sediment order, fleet tier, the estimated block.</dd>
+        <dt>Look</dt><dd>Current identity kept: Newsreader, Schibsted Grotesk, signal blue. It shows what motion alone changes.</dd>
+        <dt>Port</dt><dd data-port="b">Medium, about 2 days. Three.js is a new dependency (plain Three in one client component, no react-three-fiber). GSAP can be swapped for <code>motion</code>. Needs WebGL: browsers without it get a flat 2D field.</dd>
+      </dl>
+      <div class="go"><a class="btn" href="b-flythrough.html">Open option B</a></div>
+    </div>
+  </section>
+
+  <section class="opt" aria-labelledby="c-title">
+    <div class="shots">
+      <a href="c-instrument.html"><img src="c-1440.png" alt="Option C at 1440 pixels wide" loading="lazy" width="1440" height="900"></a>
+      <a href="c-instrument.html"><img src="c-390.png" alt="Option C at 390 pixels wide" loading="lazy" width="390" height="844"></a>
+    </div>
+    <div>
+      <h2 id="c-title">C. Live instrument</h2>
+      <p class="lead">A 90-day scrubber that recounts the figures and re-ranks the subnets as you drag.</p>
+      <dl>
+        <dt>What moves</dt><dd>The busiest subnets re-rank as the time cursor moves, and their names stretch or narrow with their share of activity. The block clock rolls every 12 seconds.</dd>
+        <dt>Encodes</dt><dd>Rolling 7-day commits per subnet, total commits per day, the estimated block.</dd>
+        <dt>Look</dt><dd>Archivo with its width axis, one family. Cool light ground, one hot signal colour.</dd>
+        <dt>Port</dt><dd data-port="c">Low to moderate, about a day. <code>motion</code> is already installed and drives the re-rank and digit rolls. Archivo moves to <code>next/font</code>; a light token set and DESIGN.md changes are needed.</dd>
+      </dl>
+      <div class="go"><a class="btn" href="c-instrument.html">Open option C</a></div>
+    </div>
+  </section>
+
+  <section class="base" aria-labelledby="f-title">
+    <h2 id="f-title">Today's page, for comparison</h2>
+    <p class="lead">Comp F, Strata as an instrument, as it ships now.</p>
+    <div class="shots" style="margin-top: 28px">
+      <img src="f-current-1440.png" alt="The current home page at 1440 pixels wide" loading="lazy" width="2880" height="1800">
+      <img src="f-current-390.png" alt="The current home page at 390 pixels wide" loading="lazy">
+    </div>
+  </section>
+</main>
+<footer class="wrap">Branch explore/home-motion. Data from the scrubbed web fixtures, built by build-data.py.</footer>
+</body>
+</html>
