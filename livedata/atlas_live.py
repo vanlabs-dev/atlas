@@ -1214,6 +1214,121 @@ def _pp_validator_detail_taoswap(payload, params):
         "block_reference": None}
 
 
+_RAO = 1e9
+_EVENT_DATA_CHARS = 200
+
+
+def _tao(rao: Any) -> Optional[float]:
+    return rao / _RAO if isinstance(rao, int) and \
+        not isinstance(rao, bool) else None
+
+
+def _newest(rows: List[Dict[str, Any]]) -> Tuple[Optional[str], Optional[int]]:
+    """Timestamp and block of the newest row, for the envelope."""
+    if not rows:
+        return None, None
+    top = max(rows, key=lambda row: row["block"])
+    stamp = top.get("timestamp")
+    if isinstance(stamp, str) and stamp.endswith("Z"):
+        stamp = stamp[:-1] + "+00:00"
+    return stamp, top["block"]
+
+
+def _pp_account_ledger_taoswap(payload, params):
+    limit = _list_limit(params, 20, 50)
+    rows = sorted(payload["results"],
+                  key=lambda row: (row["block"], row.get("event_idx") or 0),
+                  reverse=True)
+    stamp, block = _newest(rows)
+    return {"values": {
+        "account": params.get("account"),
+        "entries": [{"block": row["block"],
+                     "timestamp": row.get("timestamp"),
+                     "kind": row["kind"],
+                     "tao": _tao(row.get("tao_rao")),
+                     "alpha": _tao(row.get("alpha_rao")),
+                     "netuid": row.get("netuid"),
+                     "dest_netuid": row.get("dest_netuid"),
+                     "counterparty": row.get("counterparty"),
+                     "hotkey": row.get("hotkey"),
+                     "success": row.get("success")}
+                    for row in rows[:limit]],
+        "shown": min(len(rows), limit), "cap": limit,
+        "total_count": payload["pagination"]["total_count"]},
+        "units": "tao in TAO, alpha in subnet alpha (both from rao / 1e9)",
+        "upstream_timestamp": stamp,
+        "block_reference": block}
+
+
+def _pp_account_transactions_taoswap(payload, params):
+    limit = _list_limit({"limit": params.get("limit_shown")}, 20, 50)
+    stakes = sorted(payload["stake_transfers"],
+                    key=lambda row: row["block"], reverse=True)
+    transfers = sorted(payload["transfers"], key=lambda row: row["block"],
+                       reverse=True)
+    stamp, block = _newest(stakes + transfers)
+    return {"values": {
+        "account": params.get("account"),
+        "stake_transfers": [{"block": row["block"],
+                             "timestamp": row.get("timestamp"),
+                             "operation": row["operation"],
+                             "netuid": row.get("subnet_id"),
+                             "dest_netuid": row.get("dest_subnet_id"),
+                             "hotkey": row.get("hotkey"),
+                             "dest_hotkey": row.get("dest_hotkey"),
+                             "tao": _tao(row.get("amount_rao")),
+                             "alpha": _tao(row.get("alpha_amount"))}
+                            for row in stakes[:limit]],
+        "transfers": [{"block": row["block"],
+                       "timestamp": row.get("timestamp"),
+                       "sender": row["sender"],
+                       "receiver": row["receiver"],
+                       "tao": _tao(row.get("amount_rao")),
+                       "is_protocol": row.get("is_protocol")}
+                      for row in transfers[:limit]],
+        "cap": limit,
+        "note": "TaoSwap returns at most 50 of each list; older history "
+                "is not included"},
+        "units": "tao in TAO, alpha in subnet alpha (both from rao / 1e9)",
+        "upstream_timestamp": stamp,
+        "block_reference": block}
+
+
+def _event_rows(payload, limit):
+    rows = sorted(payload["results"],
+                  key=lambda row: (row["block"], row["idx"]), reverse=True)
+    return rows, [{"block": row["block"], "idx": row["idx"],
+                   "extrinsic_idx": row.get("extrinsic_idx"),
+                   "section": row["section"], "method": row["method"],
+                   "data": (row.get("data") or "")[:_EVENT_DATA_CHARS]}
+                  for row in rows[:limit]]
+
+
+def _pp_events_taoswap(payload, params):
+    limit = _list_limit(params, 20, 50)
+    rows, shown = _event_rows(payload, limit)
+    return {"values": {"events": shown, "shown": len(shown), "cap": limit},
+            "units": "event data is provider text, cut at %d characters"
+                     % _EVENT_DATA_CHARS,
+            "upstream_timestamp": None,
+            "block_reference": rows[0]["block"] if rows else None}
+
+
+def _pp_block_events_taoswap(payload, params):
+    limit = _list_limit(params, 20, 50)
+    rows, shown = _event_rows(payload, limit)
+    if any(row["block"] != params.get("block") for row in rows):
+        raise FatalLiveError("block events carry a different block")
+    return {"values": {"block": params.get("block"), "events": shown,
+                       "shown": len(shown), "cap": limit,
+                       "total_count": payload["pagination"].get(
+                           "total_count")},
+            "units": "event data is provider text, cut at %d characters"
+                     % _EVENT_DATA_CHARS,
+            "upstream_timestamp": None,
+            "block_reference": params.get("block")}
+
+
 def _pp_network_stats_taoswap(payload, params):
     return {"values": {key: payload.get(key) for key in (
         "date", "total_staked_tao", "available_tao", "root_stake_tao",
@@ -1328,6 +1443,10 @@ POSTPROCESSORS = {
     "validators_taoswap": _pp_validators_taoswap,
     "subnet_validators_taoswap": _pp_subnet_validators_taoswap,
     "validator_detail_taoswap": _pp_validator_detail_taoswap,
+    "account_ledger_taoswap": _pp_account_ledger_taoswap,
+    "account_transactions_taoswap": _pp_account_transactions_taoswap,
+    "events_taoswap": _pp_events_taoswap,
+    "block_events_taoswap": _pp_block_events_taoswap,
     "network_stats_taoswap": _pp_network_stats_taoswap,
     "metagraph_taoswap": _pp_metagraph_taoswap,
     "blocks_taoswap": _pp_blocks_taoswap,

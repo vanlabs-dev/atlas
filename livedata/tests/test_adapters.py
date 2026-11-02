@@ -60,6 +60,11 @@ class HappyPathTests(AdapterHarness):
             "subnet_validators_taoswap": {"netuid": 1},
             "validator_detail_taoswap": {
                 "hotkey": "5E2LP6EnZ54m3wS8s1yPvD5c3xo71kQroBw7aUVK32TKeZ5u"},
+            "account_ledger_taoswap": {
+                "account": "5GsbTgfvgCH4xdqSkiPb7EaBBFLHjWH5vfEALhJaewSFpZX9"},
+            "account_transactions_taoswap": {
+                "account": "5GsbTgfvgCH4xdqSkiPb7EaBBFLHjWH5vfEALhJaewSFpZX9"},
+            "block_events_taoswap": {"block": 8819803},
         }
         for op in self.config["operations"]:
             result = self.run_op(op, dynamic_params=extras.get(op))

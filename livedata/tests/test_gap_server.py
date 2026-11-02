@@ -83,5 +83,65 @@ class ValidatorsToolTests(GapServerBase):
         self.assertEqual(payloads[1]["error"]["category"], "not-found")
 
 
+COLDKEY = "5GsbTgfvgCH4xdqSkiPb7EaBBFLHjWH5vfEALhJaewSFpZX9"
+
+
+class AccountEventsToolTests(GapServerBase):
+    def test_account_both_bounded(self):
+        payloads = call_server(self.config_path, [
+            tool_call(1, "live_account", {"account": COLDKEY, "limit": 2})])
+        out = payloads[1]
+        self.assertEqual(out["status"], "ok", out)
+        self.assert_envelope(out["ledger"])
+        self.assert_envelope(out["transfers"])
+        self.assertEqual(out["ledger"]["values"]["cap"], 2)
+        self.assertEqual(len(out["ledger"]["values"]["entries"]), 2)
+        self.assertEqual(len(out["transfers"]["values"]["transfers"]), 2)
+
+    def test_account_alias(self):
+        self.config["wallet_aliases"] = {
+            "SECURE": {"ss58": COLDKEY, "role": "primary"}}
+        path = write_config(self.tmp.name, self.config)
+        payloads = call_server(path, [
+            tool_call(1, "live_account", {"account": "secure",
+                                          "kind": "ledger"})])
+        self.assertEqual(payloads[1]["alias"], "SECURE")
+        self.assertNotIn("transfers", payloads[1])
+
+    def test_account_partial_when_one_part_fails(self):
+        self.fixture.set_override("/account-transactions/", 503)
+        payloads = call_server(self.config_path, [
+            tool_call(1, "live_account", {"account": COLDKEY})])
+        self.assertTrue(payloads[1]["partial"])
+        self.assertEqual(payloads[1]["failed_parts"], ["transfers"])
+
+    def test_events_latest_and_block(self):
+        payloads = call_server(self.config_path, [
+            tool_call(1, "live_events", {"limit": 3}),
+            tool_call(2, "live_events", {"block": 8819803}),
+        ])
+        self.assert_envelope(payloads[1])
+        self.assertEqual(len(payloads[1]["values"]["events"]), 3)
+        self.assert_envelope(payloads[2])
+        self.assertEqual(payloads[2]["block_reference"], 8819803)
+        self.assertEqual(payloads[2]["values"]["cap"], 20)
+
+    def test_invalid_inputs_make_no_provider_call(self):
+        before = self.total_requests()
+        payloads = call_server(self.config_path, [
+            tool_call(1, "live_account", {"account": "5F" + "a" * 46}),
+            tool_call(2, "live_account", {"account": COLDKEY,
+                                          "kind": "all"}),
+            tool_call(3, "live_account", {"account": COLDKEY,
+                                          "limit": 51}),
+            tool_call(4, "live_events", {"block": -5}),
+            tool_call(5, "live_events", {"block": "8819803"}),
+        ])
+        for request_id in range(1, 6):
+            self.assertEqual(payloads[request_id]["error"]["category"],
+                             "invalid", request_id)
+        self.assertEqual(self.total_requests(), before)
+
+
 if __name__ == "__main__":
     unittest.main()
