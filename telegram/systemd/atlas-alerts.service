@@ -1,0 +1,23 @@
+# Atlas alert scan (change: alert-delivery-reliability). The gate poll and
+# the Telegram scan used to ride the repo update as ExecStartPost lines, so
+# a failed fetch skipped every alert (about 19 hours dark in 2026-09). They
+# run here on their own timer. The leading `-` keeps the scan running when
+# the gate poll fails. The scan retries queued messages first, then writes
+# the heartbeat the health watch checks.
+# Install (user-level, as pi; linger is on):
+#   cp /home/pi/atlas/telegram/systemd/atlas-alerts.{service,timer} \
+#     /home/pi/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now atlas-alerts.timer
+[Unit]
+Description=Atlas gate poll and alert scan (user-level; no root)
+Wants=network-online.target
+After=network-online.target
+OnFailure=atlas-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/pi/atlas
+ExecStart=-/usr/bin/python3 /home/pi/atlas/livedata/atlas_live.py poll-gate
+ExecStart=/usr/bin/python3 /home/pi/atlas/telegram/atlas_telegram.py scan
+TimeoutStartSec=20min
