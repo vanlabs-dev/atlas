@@ -22,4 +22,4 @@
 ## 4. Close
 
 - [x] 4.1 Every Python suite and `npm --prefix web test` pass; `python3 tools/readme_sync.py`. Verify: command output.
-- [ ] 4.2 After deploy: read-only query lists link rows in `fleet.db` and `repotrack.db`; propose the targeted purge to the operator.
+- [x] 4.2 After deploy: read-only query lists link rows in `fleet.db` and `repotrack.db`; propose the targeted purge to the operator.

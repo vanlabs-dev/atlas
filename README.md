@@ -119,6 +119,7 @@ livedata stores, and deploys to Vercel from `main`.
 | [`agent-voice`](openspec/specs/agent-voice/spec.md) | One voice for every operator-facing surface. |
 | [`alert-plain-rewrite`](openspec/specs/alert-plain-rewrite/spec.md) | Rewrite paged Telegram alerts in plain language with a model pass whose output is checked by code, and fall back to the deterministic template whenever the check or the call fails. |
 | [`chain-read-probe`](openspec/specs/chain-read-probe/spec.md) | Proves that every storage item Atlas reads still exists on the live chain with the expected shape, so a runtime rename or removal is caught instead of read silently as a default. |
+| [`clone-file-containment`](openspec/specs/clone-file-containment/spec.md) | Defines how Atlas resolves and reads files inside the clones it does not control, the subnet fleet clones and the subtensor clone, so that a committed symlink can never make Atlas read, index or serve a file through a link or outside the clone. |
 | [`device-inventory`](openspec/specs/device-inventory/spec.md) | Collect a read-only inventory of the target device (hardware, OS, users, services, listening ports) as a redacted, schema-valid record. |
 | [`econ-alert-intelligence`](openspec/specs/econ-alert-intelligence/spec.md) | Put a language-model materiality judgment between econ-path detection and the operator's phone. |
 | [`fleet-rotation-metrics`](openspec/specs/fleet-rotation-metrics/spec.md) | Turn the subnet-repo fleet's read-only data into a rotation cockpit. |
