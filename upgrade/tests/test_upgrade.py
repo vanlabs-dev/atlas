@@ -20,6 +20,7 @@ import atlas_upgrade as au  # noqa: E402
 
 sys.path.insert(0, os.path.join(au.ROOT, "knowledge"))
 import atlas_kb as akb  # noqa: E402
+tg = au.tg
 
 SOURCES = "| Grounded at | Finney `spec_version` **%d** |\n"
 BASE, COMMIT = "b" * 40, "c" * 40
@@ -377,7 +378,28 @@ class GateTest(Base):
         self.assertEqual(len(job.sent), 1)
         self.assertIn("retrying", job.sent[0])
         self.assertIn("(attempt 1 of 3)", job.sent[0].split("\n")[0])
+        # Fixed wording only (change: alert-delivery-reliability).
+        self.assertIn(au.GATE_PHRASES[gate], job.sent[0])
+        raw = state["last_error"].split(": ", 1)[1].splitlines()[0]
+        self.assertNotIn(raw, job.sent[0])
         return job
+
+    def test_raw_auth_error_never_reaches_the_report(self):
+        job = self.job()
+        state = {"spec": 470, "attempt": 1, "status": "running"}
+        job.fail(state, "edit", "Failed to authenticate: OAuth token has "
+                                "expired. Authorization: Bearer abcdefgh123")
+        self.assertEqual(len(job.sent), 1)
+        self.assertNotIn("OAuth", job.sent[0])
+        self.assertNotIn("Bearer", job.sent[0])
+        tg.assert_sendable(job.sent[0])
+        self.assertIn("OAuth", state["last_error"])
+
+    def test_unknown_gate_uses_generic_phrase(self):
+        job = self.job()
+        state = {"spec": 470, "attempt": 1, "status": "running"}
+        job.fail(state, "mystery", "boom")
+        self.assertIn("The mystery step failed.", job.sent[0])
 
     def test_edit_timeout(self):
         self.fails_at("edit", lambda j: j.broken.add("claude"))
