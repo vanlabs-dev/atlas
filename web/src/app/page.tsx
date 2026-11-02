@@ -57,6 +57,8 @@ export default async function Home() {
   const top = byC.slice(0, 7);
   const topSum = sum(top.map((s) => s.c30 ?? 0));
   const top5 = byC.slice(0, 5);
+  const busiest = byC[0];
+  const top10Pct = Math.round((100 * sum(byC.slice(0, 10).map((s) => s.c30 ?? 0))) / total);
 
   const watch = rows.slice(3, 12);
   const cold = rows.filter((r) => r.cold).slice(0, 6);
@@ -122,7 +124,8 @@ export default async function Home() {
             <li className="stop">
               <h2>The busiest code, up close</h2>
               <p>
-                <strong>{counts.diverging} subnets</strong> show code and price moving 40 points or more apart. {lead.name} leads the fleet board.
+                <strong>{busiest.name}</strong> wrote {num(busiest.c30)} commits in 30 days, the most of any subnet. The 10 busiest wrote {top10Pct}% of all
+                the code Atlas read. Red rows head the fleet board.
               </p>
             </li>
           </ol>
