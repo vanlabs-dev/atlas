@@ -88,7 +88,7 @@
     "price_retention_days": 120,
     "judge": {
       "_comment": "econ-alert intelligence gate (change: econ-alert-intelligence-gate). DEFAULTS OFF: with `enabled` false (or an empty `toolset`) econ detection keeps the legacy path-match-and-page behaviour; flipping `enabled` is the whole rollback. When on, each econ candidate's diff is read from the local clone and judged by Grok via the local Hermes one-shot CLI (reuses the ratified X OAuth subscription: NO api key, provider, or model id here; the model is whatever Hermes is configured to use). `toolset` must resolve to zero tools in the installed Hermes (one-shot mode bypasses approvals): `bot_room` does today, and the judge checks it before its first call each run, returning `unjudged` otherwise (change: rewrite-judge-lockdown). The gate stays off while it is empty. `high/med` verdicts page (high breaks the per-netuid cooldown), `low` digests, `none` drops (a `high_stakes_paths` match floors it to a digest so consensus/weight/emission changes are never silently dropped). `max_calls_per_run`/`max_calls_per_day` cap model calls (over-budget or timeout ships `unjudged`, never blocks the pass); `max_diff_bytes` bounds the diff fed to the judge. The extract systemd unit must resolve `hermes_path` with a healthy OAuth session. Deploy is forward-only (no historical re-judging).",
-      "enabled": true,
+      "enabled": false,
       "hermes_path": "/home/pi/.local/bin/hermes",
       "toolset": "bot_room",
       "timeout_seconds": 120,
