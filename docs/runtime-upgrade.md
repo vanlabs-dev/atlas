@@ -71,6 +71,11 @@ code) and never edits that tree.
     has no local commits. Save the commit and run id to state, then
     `git push origin HEAD:main` (never forced). Read back the remote
     `main`, then `git -C ~/atlas pull --ff-only`.
+    Only this push gets the deploy key (`GIT_SSH_COMMAND` with
+    `~/.ssh/atlas_maintenance_ed25519`). The live tree has no
+    `core.sshCommand`, so no other push from the Pi can use it. The Pi's
+    `core.hooksPath` points at `tools/git-hooks`, whose `pre-commit`
+    rejects any author or committer other than `vaNlabs <vanlabs@pm.me>`.
 12. **Activate.** `knowledge/atlas_kb.py activate --actor atlas-upgrade`,
     only after the read-back matches.
 13. **Report.** One Telegram outcome per run. `updated` lists the commits
