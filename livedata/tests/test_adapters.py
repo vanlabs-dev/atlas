@@ -57,6 +57,9 @@ class HappyPathTests(AdapterHarness):
             "portfolio_pnl_apy_taoswap": {
                 "account": "5EcUreZxeehdR5qssdtVPP7yZPemKqhbuEc5gdG9pwcSF69m"},
             "subnet_identity_taostats": {"page": 1},
+            "subnet_validators_taoswap": {"netuid": 1},
+            "validator_detail_taoswap": {
+                "hotkey": "5E2LP6EnZ54m3wS8s1yPvD5c3xo71kQroBw7aUVK32TKeZ5u"},
         }
         for op in self.config["operations"]:
             result = self.run_op(op, dynamic_params=extras.get(op))

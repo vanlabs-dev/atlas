@@ -1,0 +1,33 @@
+{
+  "_source": "TaoSwap /v2/subnets/{netuid}/validators/ report 20261102T064402Z-1eeebab4 (change: livedata-metagraphed-gaps)",
+  "type": "object",
+  "required": ["netuid", "results", "pagination"],
+  "properties": {
+    "netuid": {"type": "integer"},
+    "yields_as_of": {"type": ["string", "null"]},
+    "pagination": {
+      "type": "object",
+      "required": ["total_count"],
+      "properties": {"total_count": {"type": "integer"}}
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["hotkey", "stake"],
+        "properties": {
+          "hotkey": {"type": "string"},
+          "coldkey": {"type": ["string", "null"]},
+          "uid": {"type": ["integer", "null"]},
+          "stake": {"type": "number"},
+          "take": {"type": ["number", "null"]},
+          "apy_7d": {"type": ["number", "null"]},
+          "vtrust": {"type": ["number", "null"]},
+          "dividends": {"type": ["number", "null"]},
+          "last_update_block": {"type": ["integer", "null"]},
+          "identity": {"type": ["object", "null"]}
+        }
+      }
+    }
+  }
+}

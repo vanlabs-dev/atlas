@@ -1,0 +1,127 @@
+{
+ "_source": "trimmed from TaoSwap responses of 2026-11-02 (change: livedata-metagraphed-gaps); public validator data",
+ "routes": {
+  "/v2/subnets/1/validators/": {
+   "netuid": 1,
+   "yields_as_of": "2026-11-01",
+   "results": [
+    {
+     "hotkey": "5Ev5mQXPh6Ch22MmTQMTrZjj7a1atSSE5i8z8USZAW8Pnh9s",
+     "coldkey": "5FHxxe8ZKYaNmGcSLdG5ekxXeZDhQnk9cbpHdsJW8RunGpSs",
+     "uid": 26,
+     "identity": {
+      "name": "Kraken"
+     },
+     "stake": 218289.527077159,
+     "take": 17.9995422293431,
+     "apy_7d": 92.32457041864393,
+     "vtrust": 0.9896543831540399,
+     "dividends": 0.08291752498664835,
+     "last_update_block": 9416482
+    },
+    {
+     "hotkey": "5CUbyC2Ez7tWYYmnFSSwjqkw26dFNo9cXH8YmcxBSfxi2XSG",
+     "coldkey": "5E9fVY1jexCNVMjd2rdBsAxeamFGEMfzHcyTn2fHgdHeYc5p",
+     "uid": 253,
+     "identity": {
+      "name": "Yuma, a DCG Company"
+     },
+     "stake": 275576.964474594,
+     "take": 17.9995422293431,
+     "apy_7d": 60.502767435834414,
+     "vtrust": 0.9997253376058595,
+     "dividends": 0.10608072022583352,
+     "last_update_block": 9416468
+    },
+    {
+     "hotkey": "5HbNZ77cXQXbUjXG3YLVBGk6N4WbtKtGQYAWLXd2aWa8fqGe",
+     "coldkey": "5FRXwb2qsEhqDQQKcm5m2MF26xTWwW65MHTEtKFFydypuqjG",
+     "uid": 252,
+     "identity": {
+      "name": "Macrocosmos"
+     },
+     "stake": 1937374.02307532,
+     "take": 17.9995422293431,
+     "apy_7d": 60.99121929938862,
+     "vtrust": 0.9999847409781033,
+     "dividends": 0.7501945525291829,
+     "last_update_block": 9416512
+    }
+   ],
+   "pagination": {
+    "page": 1,
+    "page_size": 100,
+    "total_count": 3,
+    "reachable_count": 9,
+    "total_pages": 1,
+    "has_next": false,
+    "has_previous": false
+   }
+  },
+  "/v2/validators/5E2LP6EnZ54m3wS8s1yPvD5c3xo71kQroBw7aUVK32TKeZ5u/": {
+   "validator_hotkey": "5E2LP6EnZ54m3wS8s1yPvD5c3xo71kQroBw7aUVK32TKeZ5u",
+   "validator_coldkey": "5GsbTgfvgCH4xdqSkiPb7EaBBFLHjWH5vfEALhJaewSFpZX9",
+   "take": 0.0,
+   "apy_7d": 6.038334096728924,
+   "apy_30d": 6.171331770921389,
+   "yields_as_of": "2026-11-01",
+   "total_stake": "1399438.250780262",
+   "total_stake_root": "1022000.693569942",
+   "total_stake_alpha": "377437.557210320",
+   "count_delegators": 9557,
+   "dominance": "17.9443",
+   "identity": {
+    "name": "tao.bot"
+   },
+   "stakes": [
+    {
+     "subnet_id": 53,
+     "subnet_name": "engy",
+     "stake": 25311.049616716,
+     "percent": 1.8086578384293648
+    },
+    {
+     "subnet_id": 28,
+     "subnet_name": "SayGM",
+     "stake": 27942.443630384,
+     "percent": 1.9966900014919977
+    },
+    {
+     "subnet_id": 51,
+     "subnet_name": "lium.io",
+     "stake": 47296.111434034,
+     "percent": 3.379649756440763
+    },
+    {
+     "subnet_id": 0,
+     "subnet_name": "root",
+     "stake": 1022000.693569942,
+     "percent": 73.02935252771044
+    }
+   ],
+   "delegators": [
+    {
+     "account": "5GzGtUFNxufJoa5mASaC8pJjaz8WynzVZ4KBLzpGbXyJpmGm",
+     "subnet_id": 0,
+     "alpha_root_tao": 60333.449848028,
+     "rank": 1
+    },
+    {
+     "account": "5Djp1yQutUuTj2z2UiBzYZNTBukWAj2eJi47z6usLwbfQj6v",
+     "subnet_id": 0,
+     "alpha_root_tao": 32256.625472723,
+     "rank": 2
+    },
+    {
+     "account": "5FCLLh7FFwPXsfPh9SfY32MR344BVJszoD9htLaL6V3LvZuG",
+     "subnet_id": 0,
+     "alpha_root_tao": 30085.271212719,
+     "rank": 3
+    }
+   ],
+   "delegators_pagination": {
+    "total_count": 40870
+   }
+  }
+ }
+}

@@ -1,0 +1,49 @@
+{
+  "_source": "TaoSwap /v2/validators/{hotkey}/?omit=monitoring,history report 20261102T064402Z-1eeebab4 (change: livedata-metagraphed-gaps); stake totals arrive as strings",
+  "type": "object",
+  "required": ["validator_hotkey", "total_stake", "stakes", "delegators"],
+  "properties": {
+    "validator_hotkey": {"type": "string"},
+    "validator_coldkey": {"type": ["string", "null"]},
+    "identity": {"type": ["object", "null"]},
+    "take": {"type": ["number", "null"]},
+    "apy_7d": {"type": ["number", "null"]},
+    "apy_30d": {"type": ["number", "null"]},
+    "yields_as_of": {"type": ["string", "null"]},
+    "total_stake": {"type": ["string", "number"]},
+    "total_stake_root": {"type": ["string", "number", "null"]},
+    "total_stake_alpha": {"type": ["string", "number", "null"]},
+    "count_delegators": {"type": ["integer", "null"]},
+    "dominance": {"type": ["string", "number", "null"]},
+    "stakes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["subnet_id", "stake"],
+        "properties": {
+          "subnet_id": {"type": "integer"},
+          "subnet_name": {"type": ["string", "null"]},
+          "stake": {"type": "number"},
+          "percent": {"type": ["number", "null"]}
+        }
+      }
+    },
+    "delegators": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["account"],
+        "properties": {
+          "account": {"type": "string"},
+          "subnet_id": {"type": ["integer", "null"]},
+          "alpha_root_tao": {"type": ["number", "null"]},
+          "rank": {"type": ["integer", "null"]}
+        }
+      }
+    },
+    "delegators_pagination": {
+      "type": ["object", "null"],
+      "properties": {"total_count": {"type": ["integer", "null"]}}
+    }
+  }
+}

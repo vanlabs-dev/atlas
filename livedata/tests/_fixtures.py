@@ -23,8 +23,19 @@ def _today():
     return _now_utc().strftime("%Y-%m-%d")
 
 
+GAPS_FIXTURE = os.path.join(_HERE, "fixtures", "taoswap-gaps.json")
+
+
 def payloads() -> Dict[str, Any]:
-    """Valid canned responses per fixture path (match pinned schemas)."""
+    """Valid canned responses per fixture path (match pinned schemas),
+    plus the recorded metagraphed-gap routes."""
+    routes = _base_payloads()
+    with open(GAPS_FIXTURE, "r", encoding="utf-8") as handle:
+        routes.update(json.load(handle)["routes"])
+    return routes
+
+
+def _base_payloads() -> Dict[str, Any]:
     now = _now_utc()
     return {
         "/api/v3/simple/price": {

@@ -1069,7 +1069,8 @@ def _pp_validators_taoswap(payload, params):
         except (TypeError, ValueError):
             return 0.0
 
-    top = sorted(rows, key=stake, reverse=True)[:15]
+    limit = _list_limit(params, 15, 64)
+    top = sorted(rows, key=stake, reverse=True)[:limit]
     pruned = [{
         "name": (row.get("identity") or {}).get("name"),
         "hotkey": row["validator_hotkey"],
@@ -1079,10 +1080,138 @@ def _pp_validators_taoswap(payload, params):
         "delegators": row.get("count_delegators"),
     } for row in top]
     return {"values": {"validators": pruned,
+                       "shown": len(pruned), "cap": limit,
                        "total_listed": len(rows)},
-            "units": "stake in TAO; take/apy fractional",
+            "units": "stake in TAO; take and apy_7d in percent (0-100)",
             "upstream_timestamp": None,
             "block_reference": None}
+
+
+_BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+SS58_PREFIX = 42  # generic Substrate prefix, used by Bittensor
+
+
+def valid_ss58(address: Any) -> bool:
+    """True for a well-formed SS58 account address with prefix 42.
+
+    Decodes base58, then checks the layout (1 prefix byte, 32-byte
+    account id, 2 checksum bytes) and the blake2b-512 `SS58PRE`
+    checksum. A caller-supplied hotkey or coldkey goes into a provider
+    URL or query only after this passes (change:
+    livedata-metagraphed-gaps)."""
+    if not isinstance(address, str) or not 40 <= len(address) <= 50:
+        return False
+    number = 0
+    for char in address:
+        index = _BASE58.find(char)
+        if index < 0:
+            return False
+        number = number * 58 + index
+    leading = len(address) - len(address.lstrip("1"))
+    raw = b"\x00" * leading + (
+        number.to_bytes((number.bit_length() + 7) // 8, "big")
+        if number else b"")
+    if len(raw) != 35 or raw[0] != SS58_PREFIX:
+        return False
+    digest = hashlib.blake2b(b"SS58PRE" + raw[:33], digest_size=64).digest()
+    return raw[33:] == digest[:2]
+
+
+def _list_limit(params: Dict[str, Any], default: int, maximum: int) -> int:
+    """Client-side cap for a ranked list (change: livedata-metagraphed-gaps)."""
+    value = params.get("limit")
+    if not isinstance(value, int) or isinstance(value, bool):
+        return default
+    return max(1, min(value, maximum))
+
+
+def _as_float(value: Any) -> Optional[float]:
+    """TaoSwap sends some stake totals as strings."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _date_iso(value: Any) -> Optional[str]:
+    """A TaoSwap `YYYY-MM-DD` date as midnight UTC, else None."""
+    if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return value + "T00:00:00+00:00"
+    return None
+
+
+def _identity_name(row: Dict[str, Any]) -> Optional[str]:
+    identity = row.get("identity")
+    return identity.get("name") if isinstance(identity, dict) else None
+
+
+def _pp_subnet_validators_taoswap(payload, params):
+    limit = _list_limit(params, 15, 64)
+    rows = sorted(payload["results"], key=lambda row: row["stake"],
+                  reverse=True)
+    pruned = [{
+        "hotkey": row["hotkey"],
+        "coldkey": row.get("coldkey"),
+        "uid": row.get("uid"),
+        "name": _identity_name(row),
+        "stake": row["stake"],
+        "take_pct": row.get("take"),
+        "apy_7d_pct": row.get("apy_7d"),
+        "vtrust": row.get("vtrust"),
+        "dividends": row.get("dividends"),
+        "last_update_block": row.get("last_update_block"),
+    } for row in rows[:limit]]
+    return {"values": {"netuid": payload["netuid"],
+                       "validators": pruned,
+                       "shown": len(pruned), "cap": limit,
+                       "total_count": payload["pagination"]["total_count"],
+                       "yields_as_of": payload.get("yields_as_of")},
+            "units": "stake is TaoSwap's stake weight on this subnet; "
+                     "take_pct and apy_7d_pct in percent (0-100); vtrust "
+                     "and dividends 0-1",
+            "upstream_timestamp": _date_iso(payload.get("yields_as_of")),
+            "block_reference": None}
+
+
+def _pp_validator_detail_taoswap(payload, params):
+    limit = _list_limit(params, 15, 64)
+    stakes = sorted(payload["stakes"], key=lambda row: row["stake"],
+                    reverse=True)
+    delegators = payload["delegators"]
+    paging = payload.get("delegators_pagination") or {}
+    return {"values": {
+        "hotkey": payload["validator_hotkey"],
+        "coldkey": payload.get("validator_coldkey"),
+        "name": _identity_name(payload),
+        "take_pct": payload.get("take"),
+        "apy_7d_pct": payload.get("apy_7d"),
+        "apy_30d_pct": payload.get("apy_30d"),
+        "total_stake_tao": _as_float(payload["total_stake"]),
+        "total_stake_root_tao": _as_float(payload.get("total_stake_root")),
+        "total_stake_alpha_tao": _as_float(
+            payload.get("total_stake_alpha")),
+        "dominance_pct": _as_float(payload.get("dominance")),
+        "delegator_count": payload.get("count_delegators"),
+        "subnets": [{"netuid": row["subnet_id"],
+                     "name": row.get("subnet_name"),
+                     "stake": row["stake"],
+                     "share_pct": row.get("percent")}
+                    for row in stakes[:limit]],
+        "subnets_total": len(stakes),
+        "top_delegators": [{"account": row["account"],
+                            "netuid": row.get("subnet_id"),
+                            "stake_tao": row.get("alpha_root_tao"),
+                            "rank": row.get("rank")}
+                           for row in delegators[:limit]],
+        "delegators_listed": paging.get("total_count"),
+        "cap": limit,
+        "yields_as_of": payload.get("yields_as_of")},
+        "units": "stake in TAO (alpha valued in TAO); take, apy, "
+                 "dominance and share in percent (0-100)",
+        "upstream_timestamp": _date_iso(payload.get("yields_as_of")),
+        "block_reference": None}
 
 
 def _pp_network_stats_taoswap(payload, params):
@@ -1197,6 +1326,8 @@ POSTPROCESSORS = {
     "price_daily_taoswap": _pp_price_daily_taoswap,
     "subnets_taoswap": _pp_subnets_taoswap,
     "validators_taoswap": _pp_validators_taoswap,
+    "subnet_validators_taoswap": _pp_subnet_validators_taoswap,
+    "validator_detail_taoswap": _pp_validator_detail_taoswap,
     "network_stats_taoswap": _pp_network_stats_taoswap,
     "metagraph_taoswap": _pp_metagraph_taoswap,
     "blocks_taoswap": _pp_blocks_taoswap,
@@ -1317,6 +1448,17 @@ def run_operation(connection: sqlite3.Connection, config: Dict[str, Any],
     body = result.get("body") or b""
     body_sha = __import__("hashlib").sha256(body).hexdigest() if body \
         else None
+
+    if not result["ok"] and result.get("status") == 404 and path_keys:
+        # A templated path names one resource; 404 means it does not
+        # exist (unknown netuid, hotkey or block), not an outage.
+        audit_call(connection, provider, op_name, params, started,
+                   finished, 404, operation["schema"], "not-validated",
+                   body_sha, "not-found")
+        return _failure(connection, config, provider, op_name, params_key,
+                        "not-found", "%s has no such %s"
+                        % (provider, "/".join(path_keys)), False,
+                        include_last_known)
 
     if not result["ok"]:
         audit_call(connection, provider, op_name, params, started,
