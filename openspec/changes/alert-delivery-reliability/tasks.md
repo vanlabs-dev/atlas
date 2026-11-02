@@ -2,8 +2,8 @@
 
 ## 1. Transport: 429 body, message_id, ledger text
 
-- [ ] 1.1 `_do_post` returns `(code, body)` on `HTTPError`; `send_message` parses `retry_after` and `message_id`, never retries a 429 inline. Verify: test drives `_do_post` with a stubbed `urlopen` raising a 429 `HTTPError` and asserts `retry_after` reaches the result.
-- [ ] 1.2 Ledger gains additive `text` and `message_id` columns, filled on delivery (redacted, capped). Verify: test delivers one event and reads both columns; an old store opens and migrates.
+- [x] 1.1 `_do_post` returns `(code, body)` on `HTTPError`; `send_message` parses `retry_after` and `message_id`, never retries a 429 inline. Verify: test drives `_do_post` with a stubbed `urlopen` raising a 429 `HTTPError` and asserts `retry_after` reaches the result.
+- [x] 1.2 Ledger gains additive `text` and `message_id` columns, filled on delivery (redacted, capped). Verify: test delivers one event and reads both columns; an old store opens and migrates.
 
 ## 2. Durable retry queue
 
