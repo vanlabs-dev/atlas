@@ -7,8 +7,8 @@ import re
 import tempfile
 import unittest
 
-from _helpers import (CORPUS_DIR, SERVER_SOURCE, call_server, ingest_real_corpus,
-                      tool_call)
+from _helpers import (CORPUS_DIR, SERVER_SOURCE, akb, call_server,
+                      ingest_real_corpus, tool_call)
 
 
 class ServerTests(unittest.TestCase):
@@ -109,6 +109,21 @@ class ServerTests(unittest.TestCase):
         audit_path = os.path.join(os.path.dirname(self.db),
                                   "tool-audit.jsonl")
         self.assertTrue(os.path.exists(audit_path))
+
+
+class StagedNewerRunTests(unittest.TestCase):
+    """A3: status names the served run, and a newer staged one apart."""
+
+    def test_newer_staged_run_is_flagged_not_reported_as_active(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db, active_run, _report = ingest_real_corpus(tmp)
+            payloads = call_server(db, [tool_call(1, "knowledge_status")])
+            self.assertIsNone(payloads[1]["staged_newer_run"])
+            newer_run, _ = akb.ingest(db, tmp)
+            payloads = call_server(db, [tool_call(1, "knowledge_status")])
+            result = payloads[1]
+            self.assertEqual(result["active_run"], active_run)
+            self.assertEqual(result["staged_newer_run"]["run_id"], newer_run)
 
 
 class NotActivatedTests(unittest.TestCase):
