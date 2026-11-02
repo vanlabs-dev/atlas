@@ -61,8 +61,34 @@ class CallShapeTests(unittest.TestCase):
         self.assertEqual(seen["input"], "PROMPT")
         self.assertNotIn("PROMPT", seen["argv"])
         self.assertEqual(seen["timeout"], 9.0)
-        self.assertEqual(seen["cwd"], oneshot.ONESHOT_CWD)
         self.assertNotIn("atlas", seen["cwd"])
+
+    def test_each_call_gets_a_private_empty_dir(self):
+        seen = []
+
+        def runner(argv, **kwargs):
+            cwd = kwargs["cwd"]
+            seen.append((cwd, os.listdir(cwd),
+                         os.stat(cwd).st_mode & 0o777))
+            return "done"
+        for _ in range(2):
+            oneshot.run_oneshot("P", "claude", "sys", 1.0, runner)
+        (first, list1, mode1), (second, list2, _mode2) = seen
+        self.assertNotEqual(first, second)
+        self.assertEqual((list1, list2), ([], []))
+        self.assertEqual(mode1, 0o700)
+        self.assertEqual(os.path.dirname(first), oneshot.ONESHOT_CWD)
+        self.assertFalse(os.path.exists(first))
+
+    def test_dir_is_removed_when_the_call_raises(self):
+        seen = []
+
+        def runner(argv, **kwargs):
+            seen.append(kwargs["cwd"])
+            raise OSError("no binary")
+        with self.assertRaises(OSError):
+            oneshot.run_oneshot("P", "claude", "sys", 1.0, runner)
+        self.assertFalse(os.path.exists(seen[0]))
 
     def test_nonce_is_random(self):
         self.assertNotEqual(oneshot.new_nonce(), oneshot.new_nonce())
@@ -87,6 +113,13 @@ class SurfaceTests(unittest.TestCase):
     def test_missing_init_is_refused(self):
         self.assertSurface(stream(init=False))
         self.assertSurface("")
+
+    def test_a_later_init_with_tools_is_refused(self):
+        clean = json.dumps({"type": "system", "subtype": "init",
+                            "tools": [], "mcp_servers": []})
+        dirty = json.dumps({"type": "system", "subtype": "init",
+                            "tools": ["Bash"], "mcp_servers": []})
+        self.assertSurface(clean + "\n" + dirty + "\n" + stream(init=False))
 
     def test_init_without_lists_is_refused(self):
         self.assertSurface(json.dumps({"type": "system",
