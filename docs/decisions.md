@@ -945,7 +945,8 @@ approved in full the same day.
 ## Briefing-tier alerts routed (2026-11-02, change: alert-tier-trim)
 
 The operator switched the pulse briefing off on 2026-10-19 (`aaa1f25`)
-because it was too noisy. Nothing recorded why. Four classes stayed at the
+because it was too noisy. Nothing recorded that at the time; the operator
+confirmed it on 2026-11-02. Four classes stayed at the
 `briefing` tier, so their events were recorded as `briefed` and reached
 nobody (audit C1). Pi ledger, 2026-10-19 to 2026-11-02: 50 econ-code events
 (13 high), 12 registry events (all renames), 4 knowledge ingests.
@@ -956,9 +957,11 @@ Options put to the operator:
   off for.
 - Move briefing-tier classes to instant, trimmed to high-value events only.
 
-The operator chose the second. Then the operator declined econ alerts on the
-effectiveness read (7-day horizon, 399 filled, class median -2.702%,
-baseline median -2.275%): subnets with an econ alert do worse than the fleet.
+The operator chose the second. Shown the effectiveness read for econ-code
+(7-day horizon, 399 filled, class median -2.702%, baseline median -2.275%),
+the operator replied: "No i do not want those alerts that are going red."
+Read as: no econ alerts. The read covers every econ alert, not high verdicts
+alone.
 
 Result:
 
@@ -966,7 +969,9 @@ Result:
   is off.
 - `subnet-registry` is `instant` for registrations and deregistrations.
   Renames are `subnet-rename`, `shadow` (C2). None of either kind happened in
-  the 14 days.
+  the 14 days. Registrations and deregistrations are protocol events, not a
+  trading cue and not measured, so the operator promoted them outside the
+  effectiveness gate.
 - `econ-code` is `shadow`. Only a high verdict is emitted as `econ-code`;
   every other econ event is `econ-code-minor`, also `shadow`. A later
   promotion pages high verdicts only, and still needs the promotion rule.
