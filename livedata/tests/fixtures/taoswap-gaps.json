@@ -349,6 +349,57 @@
      "data": "{\"who\": \"5EYCAe5jLQhn6ofDSvqnamdFGeCvHs9TSZtbJ84bdf7qQRc6\", \"amount\": 589}"
     }
    ]
+  },
+  "/v2/subnets/1/": {
+   "id": 1,
+   "name": "Apex",
+   "hyperparameters": {
+    "rho": 10,
+    "kappa": 32767,
+    "immunity_period": 7200,
+    "min_allowed_weights": 1,
+    "max_weight_limit": 65535.0,
+    "tempo": 99,
+    "min_difficulty": "10000000",
+    "max_difficulty": "1000000000000000000",
+    "weights_version": "21706",
+    "weights_rate_limit": "100",
+    "adjustment_interval": 112,
+    "activity_cutoff": 4950,
+    "registration_allowed": true,
+    "target_regs_per_interval": 2,
+    "min_burn": "500000",
+    "max_burn": "100000000000",
+    "bonds_moving_avg": 900000,
+    "max_regs_per_block": 1,
+    "serving_rate_limit": 10,
+    "max_validators": 128,
+    "adjustment_alpha": "17893341751498265066",
+    "difficulty": "10000000",
+    "commit_reveal_period": 1,
+    "commit_reveal_weights_enabled": true,
+    "alpha_high": 58982,
+    "alpha_low": 45875,
+    "liquid_alpha_enabled": false,
+    "alpha_sigmoid_steepness": 1000.0,
+    "yuma_version": 2,
+    "subnet_is_active": true,
+    "transfers_enabled": true,
+    "bonds_reset_enabled": false,
+    "user_liquidity_enabled": false,
+    "activity_cutoff_factor": 50000,
+    "burn_half_life": 360,
+    "burn_increase_mult": 1.26,
+    "collateral_drain_ratio": 1.0,
+    "collateral_lock_share": 0,
+    "min_childkey_take": 0,
+    "owner_cut_enabled": true,
+    "owner_cut_auto_lock_enabled": false,
+    "owner_emission": 0.179995422293431,
+    "validator_emission": 0.4100022888532845,
+    "miner_emission": 0.4100022888532845,
+    "max_n": 256
+   }
   }
  }
 }

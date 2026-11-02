@@ -18,9 +18,9 @@
 
 ## 4. Hyperparameters chain-first
 
-- [ ] 4.1 From the subtensor clone at the live spec, list the per-netuid hyperparameter storage items with their type and hasher. Pin them in `livedata/config.json` under `hyperparams.items`, mapping each to its TaoSwap key. Add the codecs they need (`u64` at least). Verify: a test derives every item key, passes the prefix self-test, and decodes a recorded payload for each codec.
-- [ ] 4.2 Add `subnet_detail_taoswap` and the hyperparameter read: chain items batched at one finalized block, TaoSwap fill for unset storage, normalized exact comparison, and per-item `chain`, `taoswap`, `conflicting` or `unavailable` status. Verify: tests cover each source label, a conflict, chain-down fallback, TaoSwap-down with chain values, both down, and an unknown netuid.
-- [ ] 4.3 Add the `live_hyperparams` tool (`netuid` required). Verify: a server test returns block number and hash for chain values, and an audit record is written for both the chain read and the TaoSwap call.
+- [x] 4.1 From the subtensor clone at the live spec, list the per-netuid hyperparameter storage items with their type and hasher. Declare them in `CHAIN_READS` and list them in a `HYPERPARAMS` table (codec, TaoSwap key) in `livedata/atlas_live.py` (changed during apply, see design.md decision 1). Add the codecs they need (`u64` at least). Verify: a test derives every item key, passes the prefix self-test, and decodes a recorded payload for each codec.
+- [x] 4.2 Add `subnet_detail_taoswap` and the hyperparameter read: chain items batched at one finalized block, TaoSwap fill for unset storage, normalized exact comparison, and per-item `chain`, `taoswap`, `conflicting` or `unavailable` status. Verify: tests cover each source label, a conflict, chain-down fallback, TaoSwap-down with chain values, both down, and an unknown netuid.
+- [x] 4.3 Add the `live_hyperparams` tool (`netuid` required). Verify: a server test returns block number and hash for chain values, and an audit record is written for both the chain read and the TaoSwap call.
 
 ## 5. Integration and docs
 

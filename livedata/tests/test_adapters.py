@@ -65,6 +65,7 @@ class HappyPathTests(AdapterHarness):
             "account_transactions_taoswap": {
                 "account": "5GsbTgfvgCH4xdqSkiPb7EaBBFLHjWH5vfEALhJaewSFpZX9"},
             "block_events_taoswap": {"block": 8819803},
+            "subnet_detail_taoswap": {"netuid": 1},
         }
         for op in self.config["operations"]:
             result = self.run_op(op, dynamic_params=extras.get(op))

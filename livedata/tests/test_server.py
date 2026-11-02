@@ -72,7 +72,8 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(
             sorted(tool["name"] for tool in payloads[2]["tools"]),
             ["live_account", "live_burn_leaderboard", "live_chain_head",
-             "live_events", "live_metagraph", "live_network_stats",
+             "live_events", "live_hyperparams", "live_metagraph",
+             "live_network_stats",
              "live_portfolio", "live_price", "live_status", "live_subnets",
              "live_validators"])
 
@@ -258,7 +259,7 @@ class SurfaceTests(unittest.TestCase):
         allowed = {"load_config", "load_env", "open_store", "resolve",
                    "QuotaLedger", "run_operation", "health_event",
                    "redact", "FatalLiveError", "CONFIG_FILE",
-                   "valid_ss58"}
+                   "valid_ss58", "run_hyperparams"}
         used = set(re.findall(r"\bal\.(\w+)", self.source))
         self.assertEqual(used - allowed, set())
 

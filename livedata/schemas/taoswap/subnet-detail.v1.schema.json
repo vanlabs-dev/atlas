@@ -1,0 +1,10 @@
+{
+  "_source": "TaoSwap /v2/subnets/{netuid}/ report 20261102T064402Z-1eeebab4 (change: livedata-metagraphed-gaps); only the fields live_hyperparams reads are pinned",
+  "type": "object",
+  "required": ["id", "hyperparameters"],
+  "properties": {
+    "id": {"type": "integer"},
+    "name": {"type": ["string", "null"]},
+    "hyperparameters": {"type": "object"}
+  }
+}

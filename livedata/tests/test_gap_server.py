@@ -1,6 +1,7 @@
 """atlas-live tools that replace the disabled metagraphed MCP (change:
 livedata-metagraphed-gaps), over real pipes against the fixture provider."""
 
+import copy
 import os
 import sys
 import tempfile
@@ -10,6 +11,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(_HERE))
 sys.path.insert(0, _HERE)
 
+import atlas_live as al  # noqa: E402
 from _fixtures import FixtureProvider, make_config, write_config  # noqa: E402
 from test_server import call_server, tool_call  # noqa: E402
 
@@ -140,6 +142,52 @@ class AccountEventsToolTests(GapServerBase):
         for request_id in range(1, 6):
             self.assertEqual(payloads[request_id]["error"]["category"],
                              "invalid", request_id)
+        self.assertEqual(self.total_requests(), before)
+
+
+class HyperparamsToolTests(GapServerBase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        gate = copy.deepcopy(al.load_config()["gate_signal"])
+        gate["rpc_endpoints"] = [cls.fixture.base_url + "/rpc"]
+        cls.config["gate_signal"] = gate
+        cls.config_path = write_config(cls.tmp.name, cls.config)
+
+    def test_chain_values_cite_the_block(self):
+        payloads = call_server(self.config_path, [
+            tool_call(1, "live_hyperparams", {"netuid": 1})])
+        out = payloads[1]
+        self.assertEqual(out["status"], "ok", out)
+        self.assertEqual(out["provider"], "chain+taoswap")
+        self.assertEqual(out["block_reference"]["number"], 9416594)
+        self.assertTrue(out["block_reference"]["hash"].startswith("0x"))
+        items = out["values"]["items"]
+        self.assertEqual(items["Tempo"]["status"], "chain")
+        self.assertEqual(items["Rho"]["status"], "taoswap")
+        self.assertEqual(items["ActivityCutoff"]["status"], "conflicting")
+
+    def test_both_reads_audited(self):
+        call_server(self.config_path, [
+            tool_call(1, "live_hyperparams", {"netuid": 1})])
+        connection = al.open_store(self.config["db"])
+        try:
+            rows = connection.execute(
+                "SELECT provider, operation FROM audit").fetchall()
+        finally:
+            connection.close()
+        self.assertIn((al.CHAIN_PROVIDER, al.CHAIN_AUDIT_OPERATION), rows)
+        self.assertIn(("taoswap", "subnet_detail_taoswap"), rows)
+
+    def test_invalid_netuid_makes_no_call(self):
+        before = self.total_requests()
+        payloads = call_server(self.config_path, [
+            tool_call(1, "live_hyperparams", {"netuid": "1"}),
+            tool_call(2, "live_hyperparams", {}),
+        ])
+        for request_id in (1, 2):
+            self.assertEqual(payloads[request_id]["error"]["category"],
+                             "invalid")
         self.assertEqual(self.total_requests(), before)
 
 

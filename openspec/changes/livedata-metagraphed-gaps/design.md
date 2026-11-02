@@ -44,21 +44,27 @@
 ## Decisions
 
 1. **Hyperparameters from storage items, not the runtime API.**
-   - Read each item from a list in `livedata/config.json`
-     (`hyperparams.items`: storage item, codec, hasher, TaoSwap key).
-     Use the existing netuid-keyed derivation and self-test, batched at
-     one finalized block.
+   - Each item is declared in `CHAIN_READS` (hasher and value type), and
+     a `HYPERPARAMS` table in `livedata/atlas_live.py` gives its codec and
+     TaoSwap key. Reads use the existing derivation and self-test, batched
+     at one finalized block.
+   - Changed during apply: the plan put the item list in
+     `livedata/config.json`. `storage_prefix` refuses any item missing
+     from `CHAIN_READS`, and the hourly probe checks every `CHAIN_READS`
+     entry against live metadata. Declaring the items there gives each one
+     that check. A config list would bypass it.
+   - Both places are inside the upgrade job's edit scope, so a runtime that
+     renames an item can still be fixed there.
    - Alternative rejected: `state_call` on
      `SubnetInfoRuntimeApi_get_subnet_hyperparams_v2`. It returns every
      value with defaults applied, but it is one SCALE struct whose field
      order changes between runtime specs. A wrong layout decodes into
      plausible wrong numbers, while a wrong storage key fails the
      self-test or reads empty.
-   - The item list lives in config, which is inside the upgrade job's edit
-     scope, so a runtime that renames an item can be fixed there.
-   - The implementation verifies each item's type and hasher against the
-     subtensor clone at the live spec before pinning it.
-   - New codecs: `u64`, plus any width the verified items need.
+   - Declarations come from the subtensor source at spec 487; none of them
+     changed since 486. `atlas_probe.py check` passed against live spec
+     486 after they were added.
+   - New codec: `i16`. `u64` already existed; `TaoBalance` is a `u64`.
 
 2. **TaoSwap fills unset storage and cross-checks the rest.**
    - Substrate does not store ValueQuery defaults, so an unset item reads

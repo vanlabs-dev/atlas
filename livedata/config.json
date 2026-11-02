@@ -488,6 +488,18 @@
         "expected_cadence": "historical block; immutable"
       },
       "_note": "change: livedata-metagraphed-gaps. Events of one block. client_params.limit caps rows (default 20, max 50); total_count states how many exist."
+    },
+    "subnet_detail_taoswap": {
+      "provider": "taoswap",
+      "path": "/v2/subnets/{netuid}/",
+      "params": {},
+      "schema": "taoswap/subnet-detail.v1",
+      "envelope": {
+        "must_hit_provider": true,
+        "max_local_age_s": 60,
+        "expected_cadence": "near-live subnet record; no upstream time"
+      },
+      "_note": "change: livedata-metagraphed-gaps. One subnet's record (about 190 KB). live_hyperparams reads its `hyperparameters` object to fill unset chain storage and cross-check set storage."
     }
   }
 }
