@@ -114,9 +114,10 @@ export default async function Home() {
               </p>
             </li>
             <li className="stop">
-              <h2>Ninety days to today</h2>
+              <h2>90 days of commits</h2>
               <p>
-                Each mark is one subnet on one day, as tall as its commits. Red marks the subnets the fleet board ranks highest.
+                Each mark is one subnet on one day, as tall as its commits, from 90 days ago to today. Red marks the subnets the fleet board ranks
+                highest.
               </p>
             </li>
             <li className="stop">
