@@ -117,6 +117,18 @@ class ValidatorAdapterTests(GapHarness):
         self.assertFalse(result["error"]["retry_safe"])
         self.assertNotIn("provider-failure", self.health())
 
+    def test_every_404_is_a_health_event(self):
+        # TaoSwap answers a retired endpoint with the same 404 body, so a
+        # moved endpoint must stay visible in live_status
+        self.run_op("subnet_validators_taoswap", {"netuid": 99999})
+        self.run_op("metagraph_taoswap", {"netuid": 99999})
+        self.assertEqual(self.health().count("not-found"), 2)
+
+    def test_404_on_untemplated_path_stays_provider_failure(self):
+        self.fixture.set_override("/v2/validators/", 404)
+        result = self.run_op("validators_taoswap")
+        self.assertEqual(result["error"]["category"], "provider-failure")
+
 
 COLDKEY = "5GsbTgfvgCH4xdqSkiPb7EaBBFLHjWH5vfEALhJaewSFpZX9"
 
