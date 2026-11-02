@@ -374,5 +374,20 @@ class ReadKnobsTest(unittest.TestCase):
         self.assertEqual(result["SubnetEmissionEnabled"]["off"], [2])
 
 
+class WatchExitTest(unittest.TestCase):
+    def test_drift_is_paged_not_a_unit_failure(self):
+        import tempfile
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            config = {"output_dir": tmp}
+            failing = {"ok": False, "spec": 1, "block": 1, "failures": [
+                {"pallet": "P", "item": "I", "reason": "missing"}]}
+            with mock.patch.object(ap, "probe", return_value=failing), \
+                    mock.patch.object(ap, "telegram_send",
+                                      return_value=True), \
+                    mock.patch.object(ap.al, "resolve", side_effect=str):
+                self.assertEqual(ap.cmd_watch(config), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

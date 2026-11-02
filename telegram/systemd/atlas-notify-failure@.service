@@ -1,0 +1,17 @@
+# Atlas unit failure notifier (change: alert-delivery-reliability). Every
+# Atlas user unit names it in OnFailure=atlas-notify-failure@%n.service.
+# It pages once per unit per failure streak with fixed text and a journal
+# command, never raw log lines. The health watch ends the streak once the
+# unit's next run succeeds. This unit has no OnFailure= of its own.
+# Install (user-level, as pi):
+#   cp /home/pi/atlas/telegram/systemd/atlas-notify-failure@.service \
+#     /home/pi/.config/systemd/user/
+#   systemctl --user daemon-reload
+[Unit]
+Description=Atlas failure page for %i
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/pi/atlas
+ExecStart=/usr/bin/python3 /home/pi/atlas/telegram/atlas_telegram.py unit-failed %i
+TimeoutStartSec=2min

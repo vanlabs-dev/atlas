@@ -38,8 +38,8 @@
 
 ## 8. Unit failure notifier
 
-- [ ] 8.1 `atlas_telegram.py unit-failed <unit> [--system]` with `unit_failures` streak table; health run ends a streak when `Result=success`. Verify: tests for three failures one page, fail-succeed-fail two pages.
-- [ ] 8.2 `atlas-notify-failure@.service` (user) and `atlas-notify-failure-sys@.service` (system, `User=pi`); `OnFailure=` on every Atlas user unit and a sudo drop-in for the dashboard. Verify: units reviewed; readme_sync passes.
+- [x] 8.1 `atlas_telegram.py unit-failed <unit> [--system]` with `unit_failures` streak table; health run ends a streak when `Result=success`. Verify: tests for three failures one page, fail-succeed-fail two pages.
+- [x] 8.2 `atlas-notify-failure@.service` (user) and `atlas-notify-failure-sys@.service` (system, `User=pi`); `OnFailure=` on every Atlas user unit and a sudo drop-in for the dashboard. Verify: units reviewed; readme_sync passes.
 
 ## 9. Docs and close
 

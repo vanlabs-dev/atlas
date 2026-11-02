@@ -22,6 +22,7 @@ Description=Atlas rotation-cockpit dashboard (LAN-only static server)
 After=network-online.target
 Wants=network-online.target
 
+OnFailure=atlas-notify-failure-sys@%n.service
 [Service]
 Type=simple
 User=pi
