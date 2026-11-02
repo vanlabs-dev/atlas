@@ -288,5 +288,79 @@ class WithheldTests(unittest.TestCase):
             conn.close()
 
 
+def _config_with_creds(tmp):
+    env = os.path.join(tmp, "creds.env")
+    with open(env, "w") as handle:
+        handle.write("TELEGRAM_BOT_TOKEN=tok1234567890\n"
+                     "TELEGRAM_ALERT_CHAT_ID=42\n")
+    return make_config(tmp, credential_env_files=[env])
+
+
+class SendAlertTests(unittest.TestCase):
+    def setUp(self):
+        tg._SECRET_VALUES.clear()
+
+    def test_records_in_ledger_and_dedups(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = _config_with_creds(tmp)
+            posts = []
+
+            def poster(url, data, timeout):
+                posts.append(data)
+                return 200, OK_BODY
+            msg = tg.Message(severity="act", headline="Probe drift test")
+            self.assertTrue(tg.send_alert(msg, "probe-drift", config=config,
+                                          poster=poster))
+            self.assertTrue(tg.send_alert(msg, "probe-drift", config=config,
+                                          poster=poster))
+            self.assertEqual(len(posts), 1)
+            conn = sqlite3.connect(config["db"])
+            row = conn.execute(
+                "SELECT event_id, event_class, status, message_id "
+                "FROM events").fetchone()
+            conn.close()
+            self.assertTrue(row[0].startswith("probe-drift:"))
+            self.assertEqual(row[1:], ("probe-drift", "delivered", 777))
+
+    def test_queued_counts_as_handed_over(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = _config_with_creds(tmp)
+
+            def dead(url, data, timeout):
+                raise OSError("down")
+            msg = tg.Message(severity="act", headline="Upgrade report test")
+            self.assertTrue(tg.send_alert(msg, "upgrade-report",
+                                          config=config, poster=dead))
+            conn = sqlite3.connect(config["db"])
+            self.assertEqual(conn.execute(
+                "SELECT COUNT(*) FROM pending_send").fetchone()[0], 1)
+            conn.close()
+
+    def test_permanent_failure_is_not_handed_over(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = _config_with_creds(tmp)
+            msg = tg.Message(severity="act", headline="Rejected")
+            self.assertFalse(tg.send_alert(
+                msg, "probe-drift", config=config,
+                poster=lambda u, d, t: (403, "forbidden")))
+
+
+class ProbeSendTests(unittest.TestCase):
+    def test_probe_uses_send_alert_with_its_class(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+            _HERE)), "livedata"))
+        import atlas_probe as ap
+        calls = []
+        with mock.patch.object(
+                ap._tg(), "send_alert",
+                side_effect=lambda msg, cls: calls.append(cls) or True):
+            self.assertTrue(ap.telegram_send(ap.cleared_message(
+                {"spec": 486, "block": 1})))
+            self.assertTrue(ap.telegram_send(ap.drift_message(
+                {"ok": False, "spec": 486, "failures": [
+                    {"pallet": "P", "item": "I", "reason": "missing"}]})))
+        self.assertEqual(calls, ["probe-cleared", "probe-drift"])
+
+
 if __name__ == "__main__":
     unittest.main()

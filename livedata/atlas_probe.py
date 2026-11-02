@@ -180,25 +180,18 @@ def watch_decide(result: Dict[str, Any], state: Dict[str, Any],
 
 
 def telegram_send(msg: Any) -> bool:
-    """Deliver one Message through the telegram module's renderer,
-    credentials, scrubber, and HTML-to-plain fallback. Returns False on
-    any refusal or delivery failure."""
+    """Deliver one Message through the telegram module's single send path
+    (ledger, scrubber, retry queue). True once the message is handed over,
+    including queued for a later retry (change: alert-delivery-
+    reliability). False only when Telegram is not configured."""
     tg = _tg()
+    event_class = ("probe-cleared" if msg.severity == "done"
+                   else "probe-drift")
     try:
-        config = tg.load_config()
-        token, chat_id = tg.resolve_credentials(config)
-        max_chars = int(config.get("message_max_chars", 3500))
-        _lexicon, glosses = tg.voice_maps(config)
-        text = tg.render_plain(msg, max_chars, glosses)
-        html = tg.render_html(msg, max_chars, glosses)
-        tg.assert_sendable(text)
-        tg.assert_sendable(html)
-    except (tg.FatalTelegramError, tg.ScrubRefusal) as exc:
+        return tg.send_alert(msg, event_class)
+    except tg.FatalTelegramError as exc:
         print("telegram: %s" % tg.redact(str(exc)), file=sys.stderr)
         return False
-    result, _note = tg.send_with_fallback(config, token, chat_id, text, html,
-                                          list(msg.buttons))
-    return bool(result["delivered"])
 
 
 def cmd_watch(config: Dict[str, Any]) -> int:

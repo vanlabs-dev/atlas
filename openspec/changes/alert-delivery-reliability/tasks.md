@@ -17,7 +17,7 @@
 
 ## 4. One send path for probe and upgrade
 
-- [ ] 4.1 `tg.send_alert(msg, event_id, event_class)`; `atlas_probe.telegram_send` and `Job.send` use it with stable event ids. Verify: probe and upgrade tests assert ledger rows and that a queued send counts as handed over.
+- [x] 4.1 `tg.send_alert(msg, event_id, event_class)`; `atlas_probe.telegram_send` and `Job.send` use it with stable event ids. Verify: probe and upgrade tests assert ledger rows and that a queued send counts as handed over.
 - [ ] 4.2 Upgrade `fail()` uses `GATE_PHRASES`; raw detail only in state and stderr. Verify: test with an OAuth error detail asserts the report passes `assert_sendable` and holds no raw text.
 - [ ] 4.3 `_run_locked` exits 0 after a handled `StepFailed` and after live spec unavailable. Verify: upgrade tests for both exits; README/docs exit-code note updated in `docs/runtime-upgrade.md`.
 
