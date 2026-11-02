@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -3321,6 +3322,43 @@ def queue_send(connection: sqlite3.Connection, event: Dict[str, Any],
          text, html, json.dumps([list(b) for b in
                                  (event.get("buttons") or [])]), tier))
     connection.commit()
+
+
+HANDED_OVER = (STATUS_DELIVERED, STATUS_QUEUED, STATUS_SUPPRESSED,
+               STATUS_SCRUB_REFUSED)
+
+
+def send_alert(msg: "Message", event_class: str,
+               event_id: Optional[str] = None,
+               config: Optional[Dict[str, Any]] = None,
+               poster: Optional[Callable[..., Tuple[int, str]]] = None
+               ) -> bool:
+    """The one send path for senders outside the scan: the probe, the
+    upgrade job, the health watch and the unit failure notifier (change:
+    alert-delivery-reliability). Ledger, scrubber, withheld notice and
+    retry queue all apply. The default event id hashes the rendered text,
+    so an identical message inside the coalescing window is not resent.
+    True when the message is handed over: delivered, queued for retry,
+    a duplicate, or refused with its withheld notice sent. Those are all
+    final for the caller. Raises FatalTelegramError on bad config or
+    credentials."""
+    config = config or load_config()
+    token, chat_id = resolve_credentials(config)
+    max_chars = int(config.get("message_max_chars", 3500))
+    _lexicon, glosses = voice_maps(config)
+    if event_id is None:
+        digest = hashlib.sha256(
+            render_plain(msg, max_chars, glosses).encode("utf-8"))
+        event_id = "%s:%s" % (event_class, digest.hexdigest()[:16])
+    event = message_event(msg, event_id, event_class, _utc_now(), max_chars,
+                          glosses)
+    connection = open_store(resolve(config["db"]))
+    try:
+        status = deliver_event(connection, config, token, chat_id, event,
+                               poster=poster, tier=TIER_INSTANT)
+    finally:
+        connection.close()
+    return status in HANDED_OVER
 
 
 def rate_limited_until(connection: sqlite3.Connection) -> Optional[float]:

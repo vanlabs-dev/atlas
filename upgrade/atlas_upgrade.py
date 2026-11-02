@@ -240,7 +240,11 @@ class Job:
         if self.dry_run:
             print("[dry-run report] " + msg.plain())
             return True
-        return atlas_probe.telegram_send(msg)
+        try:
+            return tg.send_alert(msg, "upgrade-report")
+        except tg.FatalTelegramError as exc:
+            print("telegram: %s" % tg.redact(str(exc)), file=sys.stderr)
+            return False
 
     # -- helpers ------------------------------------------------------------
 

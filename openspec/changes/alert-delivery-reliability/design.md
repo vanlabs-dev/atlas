@@ -133,9 +133,11 @@ Facts on the Pi, verified 2026-11-03:
    - The upgrade job's single pending slot remains as a fallback for when
      the store cannot be opened. In normal runs the queue owns retry, so
      there is no double send.
-   - Event ids: `probe:<signature>`,
-     `upgrade:<spec>:<attempt>:<kind>`, `unit-failure:<unit>:<since>`,
-     `health:<check>:<since>`.
+   - Event ids default to `<class>:<sha256 of the rendered text>[:16]`,
+     so an identical message inside the coalescing window is not resent.
+     The probe uses `probe-drift` and `probe-cleared`, and the upgrade job
+     uses `upgrade-report`. The health watch passes explicit ids:
+     `health:<check>:<since>` and `unit-failure:<unit>:<since>`.
 10. **Scrubber.**
     - The rule becomes
       `(?i)(?<![\w-])(--?(?:password|…|auth)) +(\S+)`. A redaction test
