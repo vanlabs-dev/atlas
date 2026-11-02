@@ -87,7 +87,7 @@ Every other house rule still holds.
 
 - h1: "Atlas reads all 128 Bittensor subnets."
 - Under it, one sentence with real figures from the data layer: "Code,
-  chain and market, from one Raspberry Pi at home. In the last 30 days
+  chain and market, all from one Raspberry Pi. In the last 30 days
   it read {commits30} commits across {repos} repositories."
 - Plain, specific sentences. Digits, not words. No "we". No hype verbs.
 

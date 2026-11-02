@@ -132,7 +132,7 @@ export default async function Home() {
           Atlas reads all 128 Bittensor subnets.
         </h1>
         <p className="lede">
-          Code, chain and market, from one Raspberry Pi at home. In the last 30 days it read <strong>{num(total)} commits</strong> across{" "}
+          Code, chain and market, all from one Raspberry Pi. In the last 30 days it read <strong>{num(total)} commits</strong> across{" "}
           <strong>{read.length} repositories</strong>.
         </p>
         <div className="acts">
