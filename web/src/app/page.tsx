@@ -4,7 +4,7 @@ import { getFleet } from "@/data/fleet";
 import { getMining } from "@/data/mining";
 import { getNetwork } from "@/data/network";
 import { getUpgrades } from "@/data/upgrades";
-import { BOARDS, SOURCE } from "@/components/boards";
+import { BOARDS } from "@/components/boards";
 import { Figures, row, table, td, th } from "@/components/board-shell";
 import { Strata, type StrataSlot } from "@/components/home/strata";
 import { Lane } from "@/components/lane";
@@ -169,7 +169,7 @@ export default async function Home() {
           </ul>
         </section>
 
-        <section id="reads" aria-labelledby="reads-title" className="grid scroll-mt-8 gap-10 pb-[clamp(96px,11vw,140px)] lg:grid-cols-[4fr_8fr] lg:gap-16">
+        <section id="reads" aria-labelledby="reads-title" className="grid scroll-mt-8 gap-10 lg:grid-cols-[4fr_8fr] lg:gap-16">
           <div>
             <h2 id="reads-title" className="font-display text-section leading-none tracking-[-0.02em]">
               What it reads
@@ -200,42 +200,6 @@ export default async function Home() {
               ))}
             </tbody>
           </table>
-        </section>
-
-        <section aria-labelledby="about-title" className="grid gap-10 lg:grid-cols-[4fr_8fr] lg:gap-16">
-          <h2 id="about-title" className="font-display text-section leading-none tracking-[-0.02em]">
-            How it runs
-          </h2>
-          <div className="grid gap-x-12 gap-y-10 sm:grid-cols-2">
-            <div>
-              <h3 className="text-lead font-medium">At home, closed</h3>
-              <p className="mt-2 text-ink-2">
-                Atlas lives on a Raspberry Pi 5 on a home network. Nothing reaches in. Data leaves only as a validated snapshot with operator details scrubbed out.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-lead font-medium">It upgrades itself</h3>
-              <p className="mt-2 text-ink-2">
-                When the chain runtime moves, a job rewrites the corpus in a worktree, runs every test and a live probe, and only then pushes.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-lead font-medium">It shows its gaps</h3>
-              <p className="mt-2 text-ink-2">
-                Atlas scores {rows.length} of 128 subnet slots. The other {128 - rows.length} have no public repository or code it cannot read, and stay unscored rather than guessed at.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-lead font-medium">It gives no advice</h3>
-              <p className="mt-2 text-ink-2">
-                The boards rank evidence. They hold no wallet, track no one, and recommend no trade.{" "}
-                <a href={SOURCE} className="text-ink underline decoration-ink-3 underline-offset-4 transition-colors duration-150 hover:text-accent-2">
-                  Read the source
-                </a>
-                .
-              </p>
-            </div>
-          </div>
         </section>
       </div>
     </main>
