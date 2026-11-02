@@ -71,6 +71,9 @@ GATEWAY_FRESH_SECONDS = 600  # Hermes rewrites its state file about once a min
 RESTART_CONFIRM_TRIES, RESTART_CONFIRM_PAUSE = 6, 5
 CODE_COMMITS_SHOWN = 10
 CORPUS_PATH = "knowledge/corpus"
+# Paths no long-lived process loads: a pull touching only these needs no
+# gateway restart. Every upgrade commit edits docs/decisions.md.
+NON_CODE_PATHS = (CORPUS_PATH, "knowledge/supersession-markers.json", "docs")
 KB_ACTIVATE = "python3 knowledge/atlas_kb.py activate --run %s"
 PULL_CMD = "git -C ~/atlas pull --ff-only origin main"
 
@@ -481,9 +484,10 @@ class Job:
         return result.out.strip() if result.rc == 0 else None
 
     def code_commits(self, old: str, new: str) -> List[str]:
-        """`old..new` commits that touch anything outside the corpus."""
+        """`old..new` commits that touch code, not just corpus or docs."""
         result = self.run(["git", "log", "--format=%h %s", "%s..%s"
-                           % (old, new), "--", ".", ":!" + CORPUS_PATH],
+                           % (old, new), "--", "."]
+                          + [":!" + path for path in NON_CODE_PATHS],
                           self.root, TIMEOUT["git"])
         return result.out.splitlines() if result.rc == 0 else []
 
@@ -688,7 +692,8 @@ class Job:
             state.update(status="waiting", wait_reason=exc.reason)
             self.report(state, "waiting-" + exc.reason, tg.Message(
                 severity=tg.severity_for("upgrade-waiting"),
-                headline=headline, meaning=meaning, next_action=action))
+                headline=headline, meaning=meaning, next_action=action),
+                key="%s:waiting-%s" % (spec, exc.reason))
             self.save_state(state)
             return 0
         state.pop("wait_reason", None)
@@ -742,8 +747,12 @@ class Job:
         state.pop("post_push", None)
         if ctx.get("code_commits"):
             state["restart"] = {"commit": ctx["commit"]}
-            self.try_restart(state)
+        # Saved before the restart: a job killed while the gateway stops
+        # must not read as an interrupted activation.
         self.save_state(state)
+        if state.get("restart"):
+            self.try_restart(state)
+            self.save_state(state)
         return 0
 
     @staticmethod
@@ -772,11 +781,11 @@ class Job:
                          TIMEOUT["git"])
         if dirty.rc != 0 or dirty.out.strip():
             raise Waiting("dirty", _tail(dirty.out or dirty.err, 200))
-        fetch = self.run(["git", "fetch", "origin"], self.root,
-                         TIMEOUT["git"], self.git_env)
-        if fetch.rc != 0 or not self.is_ancestor("HEAD", "origin/main"):
-            # A failed fetch leaves origin/main stale, never ahead, so
-            # the ancestry check still holds against local commits.
+        # A failed fetch leaves origin/main stale, and a stale ref still
+        # exposes local commits; prepare's own fetch then fails the attempt.
+        self.run(["git", "fetch", "origin"], self.root, TIMEOUT["git"],
+                 self.git_env)
+        if not self.is_ancestor("HEAD", "origin/main"):
             raise Waiting("diverged", "HEAD is not an ancestor of "
                           "origin/main")
         smoke = self.run([self.claude, "-p", "--restricted",

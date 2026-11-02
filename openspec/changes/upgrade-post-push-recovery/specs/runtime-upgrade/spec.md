@@ -58,8 +58,8 @@ SHALL NOT report again for the same `hashes.json`.
 
 ### Requirement: Gateway restarts after new code
 
-After a run's pull brings in commits that change files outside
-`knowledge/corpus`, the job SHALL restart `hermes-gateway`, so that its MCP
+After a run's pull brings in commits that change files other than the
+corpus, the supersession markers or `docs/`, the job SHALL restart `hermes-gateway`, so that its MCP
 servers load the new code. It SHALL restart only when the restart is safe:
 - The unit is active.
 - The gateway's state file is fresh.
@@ -69,7 +69,7 @@ After a restart, the job SHALL confirm the unit is active again. When the
 restart is unsafe or fails, the job SHALL send one "restart needed" report
 and SHALL retry on later timer runs until a restart succeeds. A pending or
 failed restart SHALL NOT change the upgrade outcome. The `updated` report
-SHALL list the non-corpus commits the pull brought in, capped at a fixed
+SHALL list those code commits, capped at a fixed
 number with a count of the rest.
 
 #### Scenario: Pull brings code
@@ -84,7 +84,8 @@ number with a count of the rest.
   later run restarts the gateway once it is idle
 
 #### Scenario: Corpus-only pull
-- **WHEN** the pull brings in only the upgrade's corpus commit
+- **WHEN** the pull brings in only the upgrade's corpus and
+  `docs/decisions.md` commit
 - **THEN** the gateway is not restarted
 
 ## MODIFIED Requirements
@@ -132,8 +133,7 @@ pushed commit and the active knowledge run matches `hashes.json`.
 
 Each run that starts an attempt or changes state SHALL end in exactly one
 Telegram report:
-- `updated`: spec, commit, summary of changes, and non-corpus commits
-  pulled.
+- `updated`: spec, commit, summary of changes, and code commits pulled.
 - `retrying`: failing gate and next attempt time.
 - `blocked`: failing gate and branch name, or, after the push, the pull and
   activate commands.
