@@ -15,8 +15,8 @@ Hermes one-shot model. Four gaps (audit C4, C5, B6, B7):
 - Both prompts close their data with a fixed tag. Data that contains the
   tag, or a file name in the opening tag, can end the fence early.
 - Both calls run with toolset `todo`. In the installed Hermes that gives
-  the model `todo_list` plus a tool-search bridge whose catalog lists the
-  Atlas MCP tools. The calls also run in the repository, so Hermes loads
+  the model `todo_list` and, through a tool-search bridge, every Atlas
+  MCP tool and `x_search`. The calls also run in the repository, so Hermes loads
   its AGENTS.md into the prompt.
 
 ## What Changes
@@ -33,15 +33,22 @@ Hermes one-shot model. Four gaps (audit C4, C5, B6, B7):
 - Each prompt fences its data with a tag that carries a random id per
   call. `<` in the data is escaped. The judge's file names move inside
   the fence.
-- Both calls use toolset `bot_room`, which resolves to zero tools in
-  Hermes v0.22.5. Before its first call, each process asks the installed
-  Hermes, through the launcher's own interpreter, what the toolset
-  resolves to. Any tool, an unknown name or a probe failure stops the
-  calls: the rewrite falls back with `toolset-unverified` (the health
-  watch pages on repeats), and the judge returns `unjudged`.
-- Both calls pass `--ignore-rules` and `HERMES_IGNORE_RULES=1` and run
-  outside the repository, so no AGENTS.md, SOUL.md or memory text enters
-  the prompt.
+- Both calls stop using Hermes and run `claude -p` directly, with the
+  login the runtime upgrade job uses: `--restricted`, `--tools ""`,
+  `--strict-mcp-config` with no MCP config, `--setting-sources ""`,
+  `--disable-slash-commands`, `--max-turns 1`, `--no-session-persistence`,
+  the prompt on stdin, and `/tmp` as the working directory. Every CLI
+  `hermes -z` call runs through the Hermes gateway, which merges every
+  enabled MCP server and `x_search` into an explicit `-t` pick, so no
+  Hermes flag gives an empty surface (found after the first deploy, see
+  design).
+- Code reads each call's `stream-json` `init` event and uses the reply
+  only when it lists no tools and no MCP servers. Otherwise the rewrite
+  falls back with `tools-exposed` (the health watch pages on repeats) and
+  the judge records `unjudged`. The rewrite's `hermes-error` reason
+  becomes `model-error`.
+- No model id enters Atlas: the CLI's default model is used. Config keys
+  `hermes_path` and `toolset` become `claude_path`.
 - `rewrite.next_allowed_classes` is removed. `PROMPT_VERSION` is 4, so
   cached replies from the old shape are not reused.
 
@@ -54,14 +61,18 @@ Some faithful replies now fall back to the template (see design).
 ### Modified Capabilities
 
 - `alert-plain-rewrite`: what the model writes, the check rules, the
-  fence, and the verified no-tools call.
-- `econ-alert-intelligence`: the fence and the verified no-tools call.
+  fence, the per-call no-tools proof, the model CLI and its reason codes.
+- `econ-alert-intelligence`: the fence, the per-call no-tools proof and
+  the model CLI.
 
 ## Impact
 
 - `hermes/atlas_oneshot.py` (new), `telegram/atlas_plain_rewrite.py`,
   `telegram/atlas_telegram.py`, `telegram/atlas_health.py`,
-  `fleet/atlas_econ_judge.py`, `telegram/config.json`,
-  `fleet/config.json`, tests.
+  `fleet/atlas_econ_judge.py`, `fleet/atlas_fleet_signals.py`,
+  `telegram/config.json`, `fleet/config.json`, `telegram/README.md`,
+  tests.
 - No unit change. Deploy is a Pi pull. No gateway restart: the MCP
-  servers do not import these modules.
+  servers do not import these modules. The Telegram agent, the gateway
+  and the model battery stay on Hermes.
+- The two calls no longer follow Hermes's model setting.

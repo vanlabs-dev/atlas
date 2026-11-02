@@ -35,11 +35,11 @@ def _stub_runner(*results):
     calls = []
     seq = list(results)
 
-    def runner(argv, capture_output=True, text=True, timeout=None,
-               cwd=None, env=None):
-        calls.append({"argv": argv, "timeout": timeout, "cwd": cwd,
-                      "env": env})
-        item = seq.pop(0) if seq else _Completed(0, "{}")
+    def runner(argv, input=None, capture_output=True, text=True,
+               timeout=None, cwd=None, env=None):
+        calls.append({"argv": argv, "input": input, "timeout": timeout,
+                      "cwd": cwd, "env": env})
+        item = seq.pop(0) if seq else _Completed(0, _stream("{}"))
         if isinstance(item, Exception):
             raise item
         return item
@@ -53,8 +53,20 @@ _OK_JSON = ('{"what_changed": "raised validator weight cap", '
             '"significance": "high", "direction": "emissions_up", '
             '"evidence": "weight_cap = 0.25"}')
 
-_JCFG = {"hermes_path": "/usr/bin/hermes", "toolset": "plain",
-         "timeout_seconds": 30}
+_JCFG = {"claude_path": "/usr/bin/claude", "timeout_seconds": 30}
+
+
+def _stream(text, tools=(), servers=(), init=True):
+    """`claude -p --output-format stream-json` stdout for one call."""
+    import json
+    lines = []
+    if init:
+        lines.append(json.dumps({"type": "system", "subtype": "init",
+                                 "tools": list(tools),
+                                 "mcp_servers": list(servers)}))
+    lines.append(json.dumps({"type": "result", "subtype": "success",
+                             "is_error": False, "result": text}))
+    return "\n".join(lines) + "\n"
 
 
 class TestContentHash(unittest.TestCase):
@@ -149,46 +161,49 @@ class TestRedaction(unittest.TestCase):
 
 class TestJudgeInvocation(unittest.TestCase):
     def test_valid_verdict_parsed(self):
-        runner = _stub_runner(_Completed(0, _OK_JSON))
+        runner = _stub_runner(_Completed(0, _stream(_OK_JSON)))
         judge = ej.make_default_judge(_JCFG, runner=runner)
         v = judge("diff", ["reward.py"], {"netuid": 5})
         self.assertEqual(v["status"], "ok")
         self.assertEqual(v["significance"], "high")
 
-    def test_locked_down_invocation_carries_toolset_only(self):
-        runner = _stub_runner(_Completed(0, _OK_JSON))
+    def test_locked_down_invocation_has_no_tools(self):
+        runner = _stub_runner(_Completed(0, _stream(_OK_JSON)))
         judge = ej.make_default_judge(_JCFG, runner=runner)
-        judge("diff", ["reward.py"], {"netuid": 5})
-        argv = runner.calls[0]["argv"]
-        self.assertIn("-t", argv)
-        self.assertEqual(argv[argv.index("-t") + 1], "plain")
-        self.assertIn("-z", argv)
-        # no memory/tool flags leak the untrusted diff into the agent
-        self.assertNotIn("--memory", argv)
-        self.assertFalse(any("mem" in str(a).lower() for a in argv))
-        # no AGENTS.md, SOUL.md or memory text enters the prompt, and the
-        # call runs outside the repository (change: rewrite-judge-lockdown)
-        self.assertIn("--ignore-rules", argv)
-        self.assertEqual(runner.calls[0]["env"]["HERMES_IGNORE_RULES"], "1")
-        self.assertNotIn("atlas", runner.calls[0]["cwd"])
+        judge("+diff text", ["reward.py"], {"netuid": 5})
+        call = runner.calls[0]
+        argv = call["argv"]
+        self.assertEqual(argv[:2], ["/usr/bin/claude", "-p"])
+        for flag in ("--restricted", "--strict-mcp-config",
+                     "--disable-slash-commands", "--no-session-persistence"):
+            self.assertIn(flag, argv)
+        self.assertEqual(argv[argv.index("--tools") + 1], "")
+        self.assertEqual(argv[argv.index("--setting-sources") + 1], "")
+        self.assertEqual(argv[argv.index("--max-turns") + 1], "1")
+        self.assertNotIn("--mcp-config", argv)
+        self.assertNotIn("--model", argv)
+        # the untrusted diff travels on stdin, outside the repository
+        self.assertIn("+diff text", call["input"])
+        self.assertFalse(any("+diff text" in a for a in argv))
+        self.assertNotIn("atlas", call["cwd"])
 
     def test_malformed_then_retry_succeeds(self):
-        runner = _stub_runner(_Completed(0, "garbage"),
-                              _Completed(0, _OK_JSON))
+        runner = _stub_runner(_Completed(0, _stream("garbage")),
+                              _Completed(0, _stream(_OK_JSON)))
         judge = ej.make_default_judge(_JCFG, runner=runner)
         v = judge("diff", ["reward.py"], {"netuid": 5})
         self.assertEqual(v["significance"], "high")
         self.assertEqual(len(runner.calls), 2)
 
     def test_malformed_twice_is_unjudged(self):
-        runner = _stub_runner(_Completed(0, "garbage"),
-                              _Completed(0, "still garbage"))
+        runner = _stub_runner(_Completed(0, _stream("garbage")),
+                              _Completed(0, _stream("still garbage")))
         judge = ej.make_default_judge(_JCFG, runner=runner)
         v = judge("diff", ["reward.py"], {"netuid": 5})
         self.assertEqual(v["status"], ej.UNJUDGED)
 
     def test_timeout_is_unjudged(self):
-        runner = _stub_runner(subprocess.TimeoutExpired("hermes", 30))
+        runner = _stub_runner(subprocess.TimeoutExpired("claude", 30))
         judge = ej.make_default_judge(_JCFG, runner=runner)
         v = judge("diff", ["reward.py"], {"netuid": 5})
         self.assertEqual(v["status"], ej.UNJUDGED)
@@ -213,16 +228,15 @@ class TestJudgeInvocation(unittest.TestCase):
         captured = {}
 
         def runner(argv, **kwargs):
-            captured["prompt"] = argv[2]
+            captured["prompt"] = kwargs["input"]
             import types
             return types.SimpleNamespace(
                 returncode=0, stderr="",
-                stdout='{"what_changed": "x", "why_it_matters": "y", '
-                       '"significance": "low", "direction": "neutral", '
-                       '"evidence": "z"}')
+                stdout=_stream('{"what_changed": "x", "why_it_matters": '
+                               '"y", "significance": "low", "direction": '
+                               '"neutral", "evidence": "z"}'))
 
-        jcfg = {"hermes_path": "hermes", "toolset": "locked",
-                "timeout_seconds": 5,
+        jcfg = {"claude_path": "claude", "timeout_seconds": 5,
                 "significance_anchors": ["X-HIGH-ANCHOR",
                                          "Y-PAYOUT-PATH-RULE"]}
         judge = ej.make_default_judge(jcfg, runner=runner)
@@ -267,36 +281,39 @@ class TestJudgeInvocation(unittest.TestCase):
         self.assertGreaterEqual(len(tag(first)), 16)
 
 
-class TestToolsetCheck(unittest.TestCase):
-    """B7: the judge runs only when its toolset gives the model no tools."""
+class TestToolSurface(unittest.TestCase):
+    """B7: a verdict counts only when the call proved it had no tools."""
 
-    def test_failed_check_makes_no_call(self):
-        runner = _stub_runner(_Completed(0, _OK_JSON))
-        judge = ej.make_default_judge(
-            _JCFG, runner=runner,
-            verify=lambda path, name: "toolset todo exposes 1 tools")
-        v = judge("diff", ["reward.py"], {"netuid": 5})
-        self.assertEqual(v["status"], ej.UNJUDGED)
-        self.assertIn("toolset check failed", v["evidence"])
-        self.assertEqual(runner.calls, [])
+    def test_exposed_tool_is_unjudged_without_retry(self):
+        for surface in ({"tools": ["Read"]}, {"servers": [{"name": "x"}]},
+                        {"init": False}):
+            runner = _stub_runner(_Completed(0, _stream(_OK_JSON, **surface)),
+                                  _Completed(0, _stream(_OK_JSON)))
+            judge = ej.make_default_judge(_JCFG, runner=runner)
+            v = judge("diff", ["reward.py"], {"netuid": 5})
+            self.assertEqual(v["status"], ej.UNJUDGED)
+            self.assertIn("tool surface not empty", v["evidence"])
+            self.assertEqual(len(runner.calls), 1)
 
-    def test_passed_check_judges(self):
-        seen = []
-        runner = _stub_runner(_Completed(0, _OK_JSON))
-        judge = ej.make_default_judge(
-            _JCFG, runner=runner,
-            verify=lambda path, name: seen.append(name) or None)
-        v = judge("diff", ["reward.py"], {"netuid": 5})
-        self.assertEqual(v["status"], "ok")
-        self.assertEqual(seen, ["plain"])
+    def test_empty_surface_judges(self):
+        runner = _stub_runner(_Completed(0, _stream(_OK_JSON)))
+        judge = ej.make_default_judge(_JCFG, runner=runner)
+        self.assertEqual(judge("diff", ["reward.py"], {"netuid": 5})["status"],
+                         "ok")
 
-    def test_shipped_config_uses_the_no_tools_toolset(self):
+    def test_claude_key_shape_is_redacted(self):
+        self.assertNotIn("sk-ant-api03-ABCDEFGHIJKLMNOPQRST",
+                         ej.redact_secrets("bad sk-ant-api03-ABCDEFGHIJKLMNOPQRST"))
+
+    def test_shipped_config_names_the_cli(self):
         import json
         import os
         here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         with open(os.path.join(here, "config.json")) as handle:
             jcfg = json.load(handle)["signals"]["judge"]
-        self.assertEqual(jcfg["toolset"], "bot_room")
+        self.assertEqual(jcfg["claude_path"], "/home/pi/.local/bin/claude")
+        self.assertNotIn("toolset", jcfg)
+        self.assertNotIn("hermes_path", jcfg)
 
 
 if __name__ == "__main__":

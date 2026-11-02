@@ -1,20 +1,28 @@
 #!/usr/bin/env python3
-"""Locked-down Hermes one-shot calls (change: rewrite-judge-lockdown).
+"""Locked-down one-shot model calls (change: rewrite-judge-lockdown).
 
-The alert rewrite and the econ judge send untrusted text to the local
-Hermes one-shot CLI. One-shot mode bypasses approvals, so each call must
-reach a model that has no tools, no project context and no memory. This
-module owns that call shape and the startup check that proves it.
+The alert rewrite and the econ judge send untrusted text to a model. Each
+call must reach a model that has no tools, no project context and no
+memory, and must prove it per call. This module owns that call shape.
 
-- `NO_TOOLS_TOOLSET` is a Hermes toolset that resolves to zero tools.
-  Hermes has no named empty toolset; `bot_room` is a feature toolset that is
-  empty today. `verify_no_tools` asks the installed Hermes, through the
-  launcher's own interpreter, what the toolset resolves to, and fails
-  closed on any tool, any error or any parse failure.
-- `oneshot_argv` adds `--ignore-rules`, and `oneshot_env` sets
-  `HERMES_IGNORE_RULES`, so no AGENTS.md, SOUL.md, memory or skill text
-  enters the prompt. `ONESHOT_CWD` keeps the call out of the repository.
-- `new_nonce` gives each prompt a fence tag the data cannot predict.
+The calls do not go through Hermes. Every `hermes -z` call runs through the
+Hermes gateway, which merges every enabled MCP server and other toolsets
+into an explicit `-t` pick, so no Hermes flag gives an empty surface. The
+calls run `claude -p` directly instead, with the login the runtime upgrade
+job already uses:
+
+- `--restricted`, `--tools ""`, `--strict-mcp-config` (and no
+  `--mcp-config`): no built-in tools and no MCP servers.
+- `--setting-sources ""`, `--disable-slash-commands`: no settings files,
+  plugins, hooks or skills.
+- `--max-turns 1`, `--no-session-persistence`: one turn, nothing kept.
+- The prompt goes on stdin; the working directory is outside the
+  repository, so no AGENTS.md or CLAUDE.md is found.
+
+`stream-json` output carries an `init` event that lists the tools and MCP
+servers of that very call. `parse_stream` refuses the reply unless the
+event is present and both lists are empty. No model id is set: the CLI's
+default model is used.
 
 Standard library only. Callers inject the runner, so tests touch no
 subprocess.
@@ -24,143 +32,82 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import secrets
-import subprocess
 import tempfile
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, List
 
-NO_TOOLS_TOOLSET = "bot_room"
 ONESHOT_CWD = tempfile.gettempdir()
-PROBE_TIMEOUT_SECONDS = 60.0
 
 Runner = Callable[..., Any]
 
-# The launcher chain on the Pi: `~/.local/bin/hermes` is `exec <launcher>`,
-# and the launcher is `exec <python> -I -c '...sys.path.insert(0, <root>)'`.
-_EXEC_RE = re.compile(r"^\s*exec\s+(\S+)(.*)$", re.MULTILINE)
-_ROOT_RE = re.compile(r"sys\.path\.insert\(0,\s*'\"'\"'([^'\"]+)'\"'\"'\)"
-                      r"|sys\.path\.insert\(0,\s*['\"]([^'\"]+)['\"]\)")
+_FLAGS = ("-p", "--restricted", "--strict-mcp-config", "--tools", "",
+          "--setting-sources", "", "--disable-slash-commands",
+          "--max-turns", "1", "--no-session-persistence",
+          "--output-format", "stream-json", "--verbose")
 
-# Runs inside the Hermes runtime. Prints one JSON line: whether the
-# toolset name is valid for `-t`, and the tool definitions it yields.
-_PROBE = (
-    "import sys, json, logging\n"
-    "root, name = sys.argv[1], sys.argv[2]\n"
-    "sys.path.insert(0, root)\n"
-    "sys._hermes_pin_default_home = True\n"
-    "import hermes_bootstrap\n"
-    "logging.disable(logging.CRITICAL)\n"
-    "import toolsets, model_tools\n"
-    "defs = model_tools.get_tool_definitions(enabled_toolsets=[name], "
-    "quiet_mode=True)\n"
-    "print(json.dumps({'valid': bool(toolsets.validate_toolset(name)), "
-    "'tools': [d['function']['name'] for d in defs]}))\n"
-)
 
-_verified: Dict[Tuple[str, str], Optional[str]] = {}
+class OneshotError(Exception):
+    """A call whose output cannot be used. `surface` is True when the
+    call exposed a tool or MCP server, or did not report its surface."""
+
+    def __init__(self, detail: str, surface: bool = False) -> None:
+        super().__init__(detail)
+        self.surface = surface
 
 
 def new_nonce() -> str:
     return secrets.token_hex(8)
 
 
-def oneshot_argv(hermes_path: str, prompt: str, toolset: str) -> List[str]:
-    return [os.path.expanduser(hermes_path), "-z", prompt, "-t", toolset,
-            "--ignore-rules"]
+def oneshot_argv(claude_path: str, system_prompt: str) -> List[str]:
+    return ([os.path.expanduser(claude_path)] + list(_FLAGS)
+            + ["--system-prompt", system_prompt])
 
 
-def oneshot_env() -> Dict[str, str]:
-    env = dict(os.environ)
-    env["HERMES_IGNORE_RULES"] = "1"
-    return env
-
-
-def run_oneshot(prompt: str, hermes_path: str, toolset: str,
+def run_oneshot(prompt: str, claude_path: str, system_prompt: str,
                 timeout: float, runner: Runner) -> Any:
-    return runner(oneshot_argv(hermes_path, prompt, toolset),
+    """Run one call. Returns the completed process; raises what the runner
+    raises (subprocess.TimeoutExpired, OSError)."""
+    return runner(oneshot_argv(claude_path, system_prompt), input=prompt,
                   capture_output=True, text=True, timeout=timeout,
-                  cwd=ONESHOT_CWD, env=oneshot_env())
+                  cwd=ONESHOT_CWD)
 
 
-def _read(path: str) -> str:
-    with open(path, "r", encoding="utf-8", errors="replace") as handle:
-        return handle.read(65536)
-
-
-def launcher_runtime(hermes_path: str,
-                     reader: Callable[[str], str] = _read
-                     ) -> Tuple[str, str]:
-    """(interpreter, Hermes root) that `hermes_path` really runs. Follows
-    shell `exec` wrappers until it reaches the Python launcher. Raises
-    ValueError when the chain has an unexpected shape."""
-    path = os.path.expanduser(hermes_path)
-    for _hop in range(4):
-        text = reader(path)
-        match = _EXEC_RE.search(text)
-        if not match:
-            raise ValueError("no exec line in %s" % path)
-        target, rest = match.group(1), match.group(2)
-        if " -c " in rest or rest.strip().startswith("-I"):
-            root = _ROOT_RE.search(text)
-            if not root:
-                raise ValueError("no Hermes root in %s" % path)
-            return target, root.group(1) or root.group(2)
-        path = target
-    raise ValueError("launcher chain too deep at %s" % path)
-
-
-def probe_toolset(hermes_path: str, toolset: str, runner: Runner,
-                  reader: Callable[[str], str] = _read
-                  ) -> Dict[str, Any]:
-    """Ask the installed Hermes what `toolset` resolves to. Raises
-    ValueError on any failure."""
-    python, root = launcher_runtime(hermes_path, reader)
-    try:
-        done = runner([python, "-I", "-c", _PROBE, root, toolset],
-                      capture_output=True, text=True,
-                      timeout=PROBE_TIMEOUT_SECONDS, cwd=ONESHOT_CWD)
-    except subprocess.TimeoutExpired:
-        raise ValueError("probe timed out")
-    except OSError as exc:
-        raise ValueError("probe failed to start: %s" % exc)
-    if done.returncode != 0:
-        raise ValueError("probe exit %s" % done.returncode)
-    lines = [l for l in (done.stdout or "").splitlines() if l.strip()]
-    try:
-        result = json.loads(lines[-1])
-    except (IndexError, ValueError):
-        raise ValueError("probe output unreadable")
-    if (not isinstance(result, dict)
-            or not isinstance(result.get("tools"), list)):
-        raise ValueError("probe output has the wrong shape")
-    return result
-
-
-def verify_no_tools(hermes_path: str, toolset: str, runner: Runner,
-                    reader: Callable[[str], str] = _read,
-                    cache: Optional[Dict[Tuple[str, str], Optional[str]]]
-                    = None) -> Optional[str]:
-    """None when `toolset` is valid and yields no tools in the installed
-    Hermes; else a short reason. Checked once per process."""
-    memo = _verified if cache is None else cache
-    key = (hermes_path, toolset)
-    if key in memo:
-        return memo[key]
-    if not toolset:
-        problem: Optional[str] = "no toolset configured"
-    else:
+def parse_stream(stdout: str) -> str:
+    """The reply text of one `stream-json` call. Raises OneshotError when
+    the call reported a non-empty or missing tool surface, failed, or
+    produced no result."""
+    init = None
+    result = None
+    for line in (stdout or "").splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
         try:
-            result = probe_toolset(hermes_path, toolset, runner, reader)
-        except ValueError as exc:
-            problem = str(exc)
-        else:
-            if not result.get("valid"):
-                problem = "toolset %s is unknown to Hermes" % toolset
-            elif result["tools"]:
-                problem = "toolset %s exposes %d tools" % (
-                    toolset, len(result["tools"]))
-            else:
-                problem = None
-    memo[key] = problem
-    return problem
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        if (event.get("type") == "system" and event.get("subtype") == "init"
+                and init is None):
+            init = event
+        elif event.get("type") == "result":
+            result = event
+    if init is None:
+        raise OneshotError("no init event", surface=True)
+    tools = init.get("tools")
+    servers = init.get("mcp_servers")
+    if not isinstance(tools, list) or not isinstance(servers, list):
+        raise OneshotError("init event has no tool lists", surface=True)
+    if tools or servers:
+        raise OneshotError("call exposed %d tools and %d MCP servers"
+                           % (len(tools), len(servers)), surface=True)
+    if result is None:
+        raise OneshotError("no result event")
+    if result.get("is_error") or result.get("subtype") != "success":
+        raise OneshotError("result %s" % (result.get("subtype") or "error"))
+    text = result.get("result")
+    if not isinstance(text, str) or not text.strip():
+        raise OneshotError("empty result")
+    return text

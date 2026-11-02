@@ -66,9 +66,9 @@ CHECK_LLM = "llm"
 CHECK_DASHBOARD = "dashboard"
 
 # Rewrite fallbacks that mean the model did not answer (not a check
-# rejection, budget or switch-off). `toolset-unverified` means the startup
-# check could not prove the call has no tools, so no rewrite runs.
-_LLM_DOWN_REASONS = ("hermes-error", "timeout", "toolset-unverified")
+# rejection, budget or switch-off). `tools-exposed` means a call reported
+# a tool or MCP server (or no surface at all), so its reply was discarded.
+_LLM_DOWN_REASONS = ("model-error", "timeout", "tools-exposed")
 _LOG_TIME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
 _AUTH_FAIL = "Failed to authenticate"
 _CALL_OK_RE = re.compile(r"API call #\d+: model=")

@@ -34,7 +34,7 @@ class HookBase(unittest.TestCase):
         self.config = make_config(self.tmp.name)
         self.config["voice"]["alert_terms"] = TERMS
         self.config["rewrite"] = {
-            "enabled": True, "toolset": "none", "hermes_path": "hermes",
+            "enabled": True, "claude_path": "claude",
             "timeout_seconds": 25, "scan_budget_seconds": 180}
         self.db = self.config["classes"]["chain-runtime-upgrade"]["source_db"]
         seed_livedata(self.db, live_spec=452, upgrades=[(450, 452, 8951570)])
@@ -74,14 +74,14 @@ class RewriteHookTests(HookBase):
         self.assertEqual((status, rewrite), ("delivered", "used"))
         self.assertIsNotNone(ms)
 
-    def test_hermes_down_sends_the_template(self):
-        runner = runner_returning(FileNotFoundError("hermes"))
+    def test_model_cli_down_sends_the_template(self):
+        runner = runner_returning(FileNotFoundError("claude"))
         posts = self.scan(runner)
         self.assertIn("Bittensor just updated its software (version 452)",
                       posts[0])
         status, rewrite, _ms = self.ledger_row()
         self.assertEqual(status, "delivered")
-        self.assertTrue(rewrite.startswith("fallback:hermes-error"))
+        self.assertTrue(rewrite.startswith("fallback:model-error"))
 
     def test_failed_check_sends_the_template(self):
         bad = dict(REPLY, meaning="It jumped 30 versions.")

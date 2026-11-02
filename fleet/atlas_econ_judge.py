@@ -5,13 +5,14 @@ Reads the diff of an econ-path change candidate and returns an
 evidence-grounded significance verdict, so the fleet-signals econ path can
 decide alert vs digest vs drop instead of paging on a bare path match.
 
-Model access REUSES the ratified Hermes X OAuth subscription: the judge
-shells out to the local `hermes` one-shot CLI (`-z <prompt>`, an explicit
-no-tools toolset, no memory write) — the same subprocess pattern the
-model-validation battery uses (hermes/modelval/run_battery.py). There is no
-API key, provider endpoint, or model id in this module; the model is whatever
-Hermes is configured to use. One-shot mode auto-bypasses approvals, so the
-invocation ALWAYS carries an explicit `-t <toolset>` restriction.
+Model access reuses the local `claude` CLI login (change:
+rewrite-judge-lockdown): the judge runs `claude -p` through
+`hermes/atlas_oneshot.py` with no tools, no MCP servers, no settings or
+skills, one turn and no session kept, and accepts a verdict only when that
+call's own `init` event lists no tools. It does not use Hermes: the Hermes
+gateway merges MCP servers into any explicit toolset pick. There is no API
+key, provider endpoint, or model id in this module; the CLI's default
+model is used.
 
 Diff content originates in arbitrary third-party subnet repositories and is
 treated as untrusted data: it is fenced from the instructions in the prompt,
@@ -43,17 +44,18 @@ VALID_DIRECTION = ("emissions_up", "emissions_down", "reshuffle",
                    "neutral", "unknown")
 UNJUDGED = "unjudged"
 
-# Provenance marker stored on verdict rows. NOT a model id (the model is
-# selected by Hermes config) — records only that the local Hermes path made
-# the call, so nothing here trips model-validation's no-hard-coded-id scan.
-JUDGE_PROVENANCE = "hermes-oneshot"
+# Provenance marker stored on verdict rows. NOT a model id (the CLI picks
+# its default model). It records only which local path made the call, so
+# nothing here trips model-validation's no-hard-coded-id scan.
+JUDGE_PROVENANCE = "claude-oneshot"
 
 # Secret shapes redacted from any invocation error text before it can be
 # stored or displayed. Mirrors the leak-detector shapes in
 # hermes/atlas_hermes_verify.py (defense in depth — the judge handles no
-# credential itself, but Hermes error text must never leak one).
+# credential itself, but CLI error text must never leak one).
 _SECRET_RES = [
     re.compile(r"xai-[A-Za-z0-9]{16,}"),
+    re.compile(r"sk-ant-[A-Za-z0-9_\-]{16,}"),
     re.compile(r"sk-[A-Za-z0-9]{16,}"),
     re.compile(r"(?i)bearer\s+[A-Za-z0-9._\-]{8,}"),
     re.compile(r"eyJ[A-Za-z0-9._\-]{20,}"),
@@ -257,64 +259,56 @@ def _unjudged(reason: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Hermes one-shot invocation
+# Model invocation
 # ---------------------------------------------------------------------------
 
-# (argv, capture_output, text, timeout) -> object with .returncode/.stdout/.stderr
+# (argv, input, capture_output, text, timeout, cwd) -> object with
+# .returncode/.stdout/.stderr
 Runner = Callable[..., Any]
 
+SYSTEM_PROMPT = ("You judge code diffs from Bittensor subnet repositories. "
+                 "Follow the instructions in the user message and reply "
+                 "with the JSON object only.")
 
-def _run_hermes(prompt: str, hermes_path: str, toolset: str, timeout: float,
-                runner: Runner) -> "subprocess.CompletedProcess[str]":
-    return oneshot.run_oneshot(prompt, hermes_path, toolset, timeout, runner)
 
-
-def make_default_judge(jcfg: Dict[str, Any], runner: Optional[Runner] = None,
-                       verify: Optional[Callable[[str, str], Optional[str]]]
-                       = None
+def make_default_judge(jcfg: Dict[str, Any], runner: Optional[Runner] = None
                        ) -> Callable[[str, Sequence[str], Dict[str, Any]],
                                      Dict[str, Any]]:
     """Build the injectable judge callable `(diff, files, context) -> verdict`
-    bound to the Hermes CLI. `runner` defaults to subprocess.run; tests pass a
-    stub so no subprocess or network is touched.
-
-    Before the first call the judge checks that `toolset` gives the model
-    no tools (`verify(hermes_path, toolset)`, once per process). It defaults
-    to the real Hermes probe with the real runner; an injected runner has
-    no Hermes behind it, so it is checked only when `verify` is passed too.
-    A failed check makes every verdict `unjudged`."""
+    bound to the `claude` CLI. `runner` defaults to subprocess.run; tests
+    pass a stub so no subprocess or network is touched. A call whose `init`
+    event shows any tool, or no surface, is never retried and gives
+    `unjudged`."""
     run = runner or subprocess.run
-    hermes_path = jcfg["hermes_path"]
-    toolset = jcfg["toolset"]
+    claude_path = jcfg["claude_path"]
     timeout = jcfg["timeout_seconds"]
     anchors = jcfg.get("significance_anchors")
-    if verify is None and runner is None:
-        def verify(path: str, name: str) -> Optional[str]:
-            return oneshot.verify_no_tools(path, name, subprocess.run)
 
     def judge(diff_text: str, files: Sequence[str],
               context: Dict[str, Any]) -> Dict[str, Any]:
-        if verify is not None:
-            problem = verify(hermes_path, toolset)
-            if problem:
-                return _unjudged("toolset check failed: %s" % problem)
         prompt = build_prompt(diff_text, files, context.get("netuid"),
                               bool(context.get("partial_view")),
                               anchors=anchors)
         last_reason = "unparseable verdict"
-        for attempt in range(2):  # one call + one retry
+        for _attempt in range(2):  # one call + one retry
             try:
-                completed = _run_hermes(prompt, hermes_path, toolset,
-                                        timeout, run)
+                completed = oneshot.run_oneshot(prompt, claude_path,
+                                                SYSTEM_PROMPT, timeout, run)
             except subprocess.TimeoutExpired:
                 return _unjudged("timeout after %ss" % timeout)
             except OSError as exc:
                 return _unjudged("invoke failed: %s" % exc)
             code = completed.returncode
-            out = completed.stdout or ""
             err = (completed.stderr or "").strip()
             if code != 0:
                 last_reason = err[-200:] or ("exit %s" % code)
+                continue
+            try:
+                out = oneshot.parse_stream(completed.stdout or "")
+            except oneshot.OneshotError as exc:
+                if exc.surface:
+                    return _unjudged("tool surface not empty: %s" % exc)
+                last_reason = "unusable output: %s" % exc
                 continue
             try:
                 return normalize_verdict(parse_verdict(out))

@@ -1,14 +1,20 @@
+## RENAMED Requirements
+
+- FROM: `### Requirement: Rewrites are cached by content and reuse the Hermes subscription`
+- TO: `### Requirement: Rewrites are cached by content and reuse the Claude subscription`
+
 ## MODIFIED Requirements
 
 ### Requirement: Paged alerts are rewritten in plain language by a checked model pass
 
-Before an instant-tier event is sent, the notifier SHALL ask the local Hermes
-one-shot CLI to rewrite the event's headline and meaning sentence in plain
-language for a reader who does not know Bittensor internals. The model SHALL
+Before an instant-tier event is sent, the notifier SHALL ask the local
+Claude Code CLI in print mode (`claude -p`) to rewrite the event's headline
+and meaning sentence in plain language for a reader who does not know
+Bittensor internals. The model SHALL
 NOT write the facts, the body lines or the `Next:` line: the sent message
 SHALL carry them exactly as the template wrote them. The model call SHALL run
-with a verified no-tools toolset, with project rules, context files and
-memory disabled, and outside the repository. It SHALL return a fixed JSON
+with no tools and no MCP servers, verified per call, with settings files,
+skills and session persistence disabled, and outside the repository. It SHALL return a fixed JSON
 shape of `headline` and `meaning`; any other key SHALL be ignored. The
 rewrite SHALL change words only. It SHALL NOT add a fact, a figure, a subnet,
 a cause, a prediction, an assurance or advice that the event does not carry.
@@ -31,7 +37,7 @@ The pass SHALL NOT run for `briefing` or `shadow` events.
 #### Scenario: Briefing and shadow events make no model call
 
 - **WHEN** a scan processes an event whose tier is `briefing` or `shadow`
-- **THEN** no Hermes call is made for that event
+- **THEN** no model call is made for that event
 
 ### Requirement: A rewrite is accepted only if every figure and name comes from the input
 
@@ -101,8 +107,8 @@ id generated per call, and every `<` in the fenced data SHALL be escaped so
 the data cannot open or close a tag. The model output SHALL be bound to the
 fixed JSON shape and SHALL only ever be rendered through the escaping
 renderer. Subnet names and ids SHALL be copied from the event, never taken
-from model output. Secret shapes SHALL be redacted from any Hermes error text
-before it is stored.
+from model output. Secret shapes SHALL be redacted from any model CLI error
+text before it is stored.
 
 #### Scenario: Commit subject contains an instruction
 
@@ -117,30 +123,87 @@ before it is stored.
 - **THEN** the prompt carries exactly one closing tag, the line appears with
   `<` escaped inside the fence, and a new call uses a different tag
 
+### Requirement: Failure of the pass falls back to the template and never blocks delivery
+
+When the model call times out, exits non-zero, returns unparseable output,
+shows a non-empty tool surface, or fails the check, the notifier SHALL send
+the deterministic template for the event in the new layout. One retry MAY be
+made for a non-zero exit or an unparseable reply. The total time the pass
+adds to one event SHALL NOT exceed the configured `timeout_seconds` times
+two. The fallback SHALL be recorded in the ledger with its reason. A model
+CLI outage SHALL NOT suppress, delay past that bound, or drop any alert.
+
+#### Scenario: Hermes is down
+
+- **WHEN** the `claude` binary is missing, its login has expired, or every
+  call times out
+- **THEN** every paged alert is sent from its template, each ledger row
+  records `rewrite-fallback` with the reason, and no alert is lost
+
+### Requirement: The pass is observable
+
+`atlas_telegram.py status` SHALL report, for the last 28 days, how many paged
+alerts used the rewrite, how many fell back and why, and the median added
+latency. Each sent alert's ledger row SHALL record whether the rewrite or the
+template was sent.
+
+#### Scenario: Status shows fallback reasons
+
+- **WHEN** the operator runs `atlas_telegram.py status`
+- **THEN** the output lists rewrite used, fallback count by reason (`timeout`,
+  `check-failed`, `unparseable`, `model-error`, `tools-exposed`,
+  `disabled`) and the median added latency
+
+### Requirement: Rewrites are cached by content and reuse the Claude subscription
+
+The rewrite SHALL be cached by a hash of the model input and the prompt
+version, so a repeat of the same content makes no second call. The pass SHALL
+use the local `claude` CLI with the subscription it is logged in with, the
+same login the runtime upgrade job uses. It SHALL introduce no API key,
+provider endpoint or model id into Atlas code or configuration; the CLI's
+default model is used. A `rewrite.enabled` switch of `false` SHALL restore
+template-only sending with no other change.
+
+#### Scenario: Same content, one call
+
+- **WHEN** two events with identical rewrite input are processed
+- **THEN** the second uses the cached result and makes no model call
+
+#### Scenario: Rollback is one switch
+
+- **WHEN** `rewrite.enabled` is set to `false`
+- **THEN** the next scan sends template alerts and makes no model call
+
 ## ADDED Requirements
 
-### Requirement: Model calls run only with a verified no-tools toolset
+### Requirement: Every model call proves an empty tool surface
 
-Before its first rewrite or judge call, each process SHALL ask the installed
-Hermes, through the interpreter its launcher runs, what the configured
-toolset resolves to. The call SHALL proceed only when the name is valid and
-yields no tool definitions. When the check finds a tool, an unknown name or
-any failure, no model call SHALL be made: the rewrite SHALL fall back with
-reason `toolset-unverified`, which the health watch counts as a model
-failure, and the econ judge SHALL return `unjudged`. The shipped toolset
-SHALL be `bot_room`. Every call SHALL pass `--ignore-rules`, set
-`HERMES_IGNORE_RULES=1`, and run outside the repository.
+Each rewrite and judge call SHALL run `claude -p` with `--restricted`,
+`--strict-mcp-config` and no `--mcp-config`, `--tools ""`,
+`--setting-sources ""`, `--disable-slash-commands`, `--max-turns 1` and
+`--no-session-persistence`, with `stream-json` output, the prompt on
+stdin, and a working directory outside the repository. Code SHALL read
+the CLI's `init` event of that call and SHALL accept the reply only when
+the event is present and lists no tools and no MCP servers. Otherwise the
+reply SHALL be discarded: the rewrite SHALL fall back with reason
+`tools-exposed`, which the health watch counts as a model failure, and the
+econ judge SHALL record `unjudged`. The call SHALL NOT go through the
+Hermes gateway, which merges MCP servers and other toolsets into any
+explicit toolset pick.
 
-#### Scenario: A toolset with tools stops the pass
+#### Scenario: A call that exposes a tool is discarded
 
-- **WHEN** the configured toolset is `todo` and the installed Hermes
-  resolves it to tools
-- **THEN** no Hermes call is made, every paged alert is sent from its
-  template with `toolset-unverified`, and repeated fallbacks page through
-  the health watch
+- **WHEN** the `init` event of a call lists any tool or MCP server
+- **THEN** the reply is not used, the alert is sent from its template with
+  `tools-exposed`, and repeated fallbacks page through the health watch
 
-#### Scenario: The empty toolset passes
+#### Scenario: A call without an init event is discarded
 
-- **WHEN** the configured toolset is `bot_room` and the installed Hermes
-  resolves it to no tools
-- **THEN** the pass runs, and the check is not repeated in that process
+- **WHEN** the CLI output carries no `init` event
+- **THEN** the reply is not used and the fallback reason is `tools-exposed`
+
+#### Scenario: The empty surface passes
+
+- **WHEN** the `init` event lists no tools and no MCP servers and the reply
+  passes the check
+- **THEN** the rewrite is used
