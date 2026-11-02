@@ -328,10 +328,21 @@ class DetectTest(Base):
         self.assertEqual(self.claude_calls(job), [])
 
     def test_live_spec_unavailable(self):
+        # An RPC blip is a handled outcome: exit 0, no page, no OnFailure=
+        # (change: alert-delivery-reliability).
         job = self.job()
         job.broken.add("rpc")
-        self.assertEqual(job.run_once(), 1)
+        self.assertEqual(job.run_once(), 0)
         self.assertEqual(job.sent, [])
+
+    def test_unexpected_error_exits_non_zero(self):
+        job = self.job()
+
+        def crash():
+            raise RuntimeError("bug")
+        job.corpus_spec = crash
+        with self.assertRaises(RuntimeError):
+            job.run_once()  # propagates: python exits non-zero
 
     def test_order_activation_after_push(self):
         job = self.job()
@@ -367,7 +378,7 @@ class GateTest(Base):
     def fails_at(self, gate, prepare):
         job = self.job()
         prepare(job)
-        self.assertEqual(job.run_once(), 1)
+        self.assertEqual(job.run_once(), 0)
         state = job.state()
         self.assertEqual(state["status"], "retrying")
         self.assertTrue(state["last_error"].startswith(gate + ":"),
@@ -469,7 +480,7 @@ class PostPushTest(Base):
     def test_activation_failure_blocks_at_once(self):
         job = self.job()
         job.broken.add("activate")
-        self.assertEqual(job.run_once(), 1)
+        self.assertEqual(job.run_once(), 0)
         state = job.state()
         self.assertEqual((state["status"], state["attempt"]), ("blocked", 1))
         self.assertIn("blocked after the push", job.sent[0])
@@ -692,7 +703,7 @@ class WaitReasonTest(Base):
     def test_fetch_failure_is_not_reported_as_divergence(self):
         job = self.job()
         job.broken.add("git-fetch")
-        self.assertEqual(job.run_once(), 1)
+        self.assertEqual(job.run_once(), 0)
         state = job.state()
         self.assertTrue(state["last_error"].startswith("prepare:"))
         self.assertNotIn(au.WAIT_REASONS["diverged"][0], "".join(job.sent))
@@ -716,7 +727,7 @@ class WaitReasonTest(Base):
     def test_divergence_before_push_fails_at_push(self):
         job = self.job()
         job.broken.add("diverged-late")
-        self.assertEqual(job.run_once(), 1)
+        self.assertEqual(job.run_once(), 0)
         state = job.state()
         self.assertEqual(state["status"], "retrying")
         self.assertTrue(state["last_error"].startswith("push:"))
@@ -730,7 +741,7 @@ class RecoveryTest(Base):
     def pull_blocked(self):
         job = self.job()
         job.broken.add("git-pull")
-        self.assertEqual(job.run_once(), 1)
+        self.assertEqual(job.run_once(), 0)
         return job
 
     def test_pull_failure_blocks_with_commands(self):
