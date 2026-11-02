@@ -2,8 +2,8 @@
 
 ## 1. Discovery gate
 
-- [ ] 1.1 Extend `livedata/discover_taoswap.py` with probes for `/v2/subnets/{netuid}/` (two netuids), `/v2/subnets/{netuid}/validators/`, `/v2/validators/{hotkey}/`, `/v1/account-ledger/` and `/account-transactions/` (an active and an idle coldkey), `/events/`, and `/blocks/{block}/events/`, plus negative tests: an unknown netuid and a malformed hotkey. Raise `MAX_CALLS` only to what the probes need. Verify: a test in `livedata/tests/` asserts every new path is probed and the call count stays at or under `MAX_CALLS`.
-- [ ] 1.2 Run the discovery on the workstation. Record the report id, observed shapes, nullability, pagination and any rate headers in `docs/decisions.md`, together with the metagraphed decision (disabled 2026-11-02, OAuth only). Verify: the report exists under `var/livedata/`, and the decisions entry names its id.
+- [x] 1.1 Extend `livedata/discover_taoswap.py` with probes for `/v2/subnets/{netuid}/` (two netuids), `/v2/subnets/{netuid}/validators/`, `/v2/validators/{hotkey}/`, `/v1/account-ledger/` and `/account-transactions/` (an active and an idle coldkey), `/events/`, and `/blocks/{block}/events/`, plus negative tests: an unknown netuid and a malformed hotkey. Raise `MAX_CALLS` only to what the probes need. Verify: a test in `livedata/tests/` asserts every new path is probed and the call count stays at or under `MAX_CALLS`.
+- [x] 1.2 Run the discovery on the workstation. Record the report id, observed shapes, nullability, pagination and any rate headers in `docs/decisions.md`, together with the metagraphed decision (disabled 2026-11-02, OAuth only). Verify: the report exists under `var/livedata/`, and the decisions entry names its id.
 
 ## 2. Validators
 
