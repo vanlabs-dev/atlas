@@ -235,7 +235,11 @@
         "max_upstream_age_s": 3600,
         "max_local_age_s": 60,
         "expected_cadence": "near-live"
-      }
+      },
+      "client_params": [
+        "limit"
+      ],
+      "_note": "Every validator ranked by total stake. client_params.limit caps the list (default 15, max 64). take and apy are percent (0-100)."
     },
     "network_stats_taoswap": {
       "provider": "taoswap",
@@ -379,6 +383,43 @@
         "expected_cadence": "near-live identity (owner-edited, rarely)"
       },
       "_note": "netuid -> on-chain SubnetIdentity.github_repo for the subnet-repo-fleet reconciler; paginated (aggregated to completion by run_subnet_identity); the endpoint does not provide the owner ss58"
+    },
+    "subnet_validators_taoswap": {
+      "provider": "taoswap",
+      "path": "/v2/subnets/{netuid}/validators/",
+      "params": {
+        "page_size": 100
+      },
+      "client_params": [
+        "limit"
+      ],
+      "schema": "taoswap/subnet-validators.v1",
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 172800,
+        "max_local_age_s": 60,
+        "expected_cadence": "near-live stake; daily yields (yields_as_of)"
+      },
+      "_note": "change: livedata-metagraphed-gaps. One subnet's validators ranked by stake weight; client_params.limit caps the list (default 15, max 64). Upstream time is the yields_as_of date."
+    },
+    "validator_detail_taoswap": {
+      "provider": "taoswap",
+      "path": "/v2/validators/{hotkey}/",
+      "params": {
+        "omit": "monitoring,history",
+        "page_size": 64
+      },
+      "client_params": [
+        "limit"
+      ],
+      "schema": "taoswap/validator-detail.v1",
+      "envelope": {
+        "must_hit_provider": true,
+        "max_upstream_age_s": 172800,
+        "max_local_age_s": 60,
+        "expected_cadence": "near-live stake; daily yields (yields_as_of)"
+      },
+      "_note": "change: livedata-metagraphed-gaps. omit=monitoring,history cuts the body from 2 MB to about 20 KB (report 20261102T064402Z-1eeebab4). page_size bounds the delegator page; client_params.limit caps subnets and delegators shown (default 15, max 64). The hotkey is SS58-checked before the call."
     }
   }
 }

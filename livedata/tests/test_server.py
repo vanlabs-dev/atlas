@@ -73,7 +73,7 @@ class ServerTests(unittest.TestCase):
             sorted(tool["name"] for tool in payloads[2]["tools"]),
             ["live_burn_leaderboard", "live_chain_head", "live_metagraph",
              "live_network_stats", "live_portfolio", "live_price",
-             "live_status", "live_subnets"])
+             "live_status", "live_subnets", "live_validators"])
 
     def test_price_two_providers_no_taostats(self):
         before = self.fixture.count("/api/price/latest/v1")
@@ -256,7 +256,8 @@ class SurfaceTests(unittest.TestCase):
     def test_only_sanctioned_atlas_live_surface(self):
         allowed = {"load_config", "load_env", "open_store", "resolve",
                    "QuotaLedger", "run_operation", "health_event",
-                   "redact", "FatalLiveError", "CONFIG_FILE"}
+                   "redact", "FatalLiveError", "CONFIG_FILE",
+                   "valid_ss58"}
         used = set(re.findall(r"\bal\.(\w+)", self.source))
         self.assertEqual(used - allowed, set())
 

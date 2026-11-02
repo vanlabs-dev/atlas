@@ -203,6 +203,28 @@ TOOLS: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "live_validators",
+        "description": (
+            "CURRENT validators from TaoSwap (keyless). No argument: every "
+            "validator ranked by total stake. netuid: that subnet's "
+            "validators ranked by stake weight, with uid, vtrust and "
+            "dividends. hotkey: one validator with its subnets and top "
+            "delegators. take and apy are percent (0-100). limit caps "
+            "each list (default 15, max 64); the answer states the cap "
+            "and the total count."),
+        "inputSchema": {
+            "type": "object",
+            "properties": dict(_LAST_KNOWN, **{
+                "netuid": {"type": "integer", "minimum": 0},
+                "hotkey": {"type": "string",
+                           "description": "ss58 validator hotkey"},
+                "limit": {"type": "integer", "minimum": 1,
+                          "maximum": 64},
+            }),
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "live_status",
         "description": (
             "Live-data integration health: recent health events (drift/"
@@ -515,6 +537,20 @@ class LiveTools:
             },
         }
 
+    def validators(self, netuid, hotkey, limit,
+                   include_last_known) -> Dict[str, Any]:
+        params: Dict[str, Any] = {"limit": limit or 15}
+        if hotkey is not None:
+            params["hotkey"] = hotkey
+            op_name = "validator_detail_taoswap"
+        elif netuid is not None:
+            params["netuid"] = netuid
+            op_name = "subnet_validators_taoswap"
+        else:
+            op_name = "validators_taoswap"
+        return self._run(op_name, dynamic_params=params,
+                         include_last_known=include_last_known)
+
     def resolve_account(self, account_or_alias: str) -> Dict[str, Any]:
         """Resolve wallet alias from config.wallet_aliases or pass ss58."""
         raw = (account_or_alias or "").strip()
@@ -563,14 +599,18 @@ class AuditLog:
 
 
 def _valid_ss58(account: str) -> bool:
-    if not isinstance(account, str):
-        return False
-    # Substrate ss58 is base58; Bittensor addresses commonly start with 5
-    # and are 47–48 chars. Keep this a light structural check only.
-    if not (40 <= len(account) <= 50):
-        return False
-    alphabet = set("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
-    return all(ch in alphabet for ch in account)
+    """Full SS58 check (base58, prefix 42, checksum): see al.valid_ss58."""
+    return al.valid_ss58(account)
+
+
+def _non_negative_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) \
+        and value >= 0
+
+
+def _int_in(value: Any, low: int, high: int) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) \
+        and low <= value <= high
 
 
 def handle_tool_call(tools: LiveTools, audit: AuditLog, name: str,
@@ -659,6 +699,29 @@ def handle_tool_call(tools: LiveTools, audit: AuditLog, name: str,
                 payload = tools.burn_leaderboard(
                     limit, min_burn, max_burn, only_enabled,
                     exclude_full, include_last_known)
+        elif name == "live_validators":
+            netuid = arguments.get("netuid")
+            hotkey = arguments.get("hotkey")
+            limit = arguments.get("limit")
+            if netuid is not None and hotkey is not None:
+                payload = structured_error(
+                    "invalid", "give netuid or hotkey, not both",
+                    retry_safe=False)
+            elif netuid is not None and not _non_negative_int(netuid):
+                payload = structured_error(
+                    "invalid", "netuid must be a non-negative integer",
+                    retry_safe=False)
+            elif hotkey is not None and not _valid_ss58(hotkey):
+                payload = structured_error(
+                    "invalid", "hotkey must be a valid ss58 address",
+                    retry_safe=False)
+            elif limit is not None and not _int_in(limit, 1, 64):
+                payload = structured_error(
+                    "invalid", "limit must be integer 1..64",
+                    retry_safe=False)
+            else:
+                payload = tools.validators(netuid, hotkey, limit,
+                                           include_last_known)
         elif name == "live_status":
             payload = tools.status()
         else:

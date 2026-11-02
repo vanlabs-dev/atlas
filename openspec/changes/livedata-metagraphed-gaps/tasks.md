@@ -7,9 +7,9 @@
 
 ## 2. Validators
 
-- [ ] 2.1 Add the `subnet_validators_taoswap` and `validator_detail_taoswap` operations, with pinned schemas under `livedata/schemas/taoswap/`, post-processors and envelopes. Reuse `validators_taoswap` for the ranked list. Verify: fixture tests from the discovery samples pass validation, and a drifted fixture fails closed with a health event.
-- [ ] 2.2 Add the stdlib SS58 validator (base58, prefix 42, blake2b `SS58PRE` checksum) and alias resolution through `config.wallet_aliases`. Verify: tests accept known-good addresses and reject a bad checksum, a wrong length and non-base58 text, each with no provider call.
-- [ ] 2.3 Add the `live_validators` tool (no argument, `netuid`, or `hotkey`; `limit` defaulting to 15, maximum 64). Verify: server tests cover all three modes, the cap, the total count, the metadata envelope and the invalid-input error.
+- [x] 2.1 Add the `subnet_validators_taoswap` and `validator_detail_taoswap` operations, with pinned schemas under `livedata/schemas/taoswap/`, post-processors and envelopes. Reuse `validators_taoswap` for the ranked list. Verify: fixture tests from the discovery samples pass validation, and a drifted fixture fails closed with a health event.
+- [x] 2.2 Add the stdlib SS58 validator (base58, prefix 42, blake2b `SS58PRE` checksum) and alias resolution through `config.wallet_aliases`. Verify: tests accept known-good addresses and reject a bad checksum, a wrong length and non-base58 text, each with no provider call.
+- [x] 2.3 Add the `live_validators` tool (no argument, `netuid`, or `hotkey`; `limit` defaulting to 15, maximum 64). Verify: server tests cover all three modes, the cap, the total count, the metadata envelope and the invalid-input error.
 
 ## 3. Account and events
 
