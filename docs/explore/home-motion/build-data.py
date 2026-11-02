@@ -31,6 +31,11 @@ for netuid in range(1, 129):
         "score": r.get("score"),
         "m30": r.get("momentum30d"),
         "cold": r.get("cold"),
+        "c7": r.get("commits7"),
+        "a30": r.get("authors30"),
+        "dsc": r.get("daysSinceCommit"),
+        "m7": r.get("momentum7d"),
+        "opaque": r.get("emissionOpaque"),
         "daily": daily.get(netuid),
     })
 
@@ -54,6 +59,7 @@ data = {
         "latestSpec": specs[-1]["newSpec"],
         "latestSpecAt": specs[-1]["observedAt"][:10],
     },
+    "specs": [{"spec": e["newSpec"], "at": e["observedAt"][:10]} for e in specs[-8:]],
 }
 OUT.write_text("window.ATLAS = " + json.dumps(data, separators=(",", ":")) + ";\n")
 print(f"wrote {OUT} ({OUT.stat().st_size} bytes)")
