@@ -48,8 +48,8 @@ The delivery watermark lives in this module's ledger (never in the fleet
 store); ledger dedup keys are the fleet's own per-class dedup keys
 (cluster: term+episode; watchlist: term+netuid+epoch; econ: range id), so
 even a watermark reset cannot double-send. Extraction runs in the fleet
-unit and this scan runs in the repo unit — delivery may lag extraction by
-up to one cycle by design.
+unit and this scan runs on `atlas-alerts.timer`, so delivery may lag
+extraction by up to one cycle by design.
 
 **Gate-crossing alerts** page confirmed crossings only (livedata applies
 the hysteresis and 2-poll confirmation before an event exists). The
@@ -179,20 +179,60 @@ python telegram/atlas_telegram.py init                       # seed watermarks t
 python telegram/atlas_telegram.py scan                       # deliver new events
 python telegram/atlas_telegram.py test --class schema-drift  # one test alert
 python telegram/atlas_telegram.py status                     # ledger + watermarks
+python telegram/atlas_telegram.py health                     # retry queue, then health checks
+python telegram/atlas_telegram.py unit-failed atlas-fleet.service  # what OnFailure= runs
 ```
 
 Run `init` before enabling any schedule, or the first `scan` treats the
 whole backlog as new. Re-run `init` after an upgrade to seed only new classes
 (it never rolls a seeded watermark back); the pre-tiering SHA-valued
 repository watermark migrates itself to a `change_ranges.id` on the first
-scan (no history replay). **Schedule (decided 2026-07-12; gate poll added 2026-07-28):** the hourly
-`atlas-repotrack-update.service` runs two best-effort `ExecStartPost=-…`
-steps after the repo update: `livedata/atlas_live.py poll-gate` (the
-emission-gate pass; inert
-unless `gate_signal.enabled`), then `atlas_telegram.py scan`. The ordering
-matters: each poll records fresh events *before* the scan reads them, so
-they alert in the same run. All are best-effort — a notifier or provider
-failure never fails the repo unit (isolation).
+scan (no history replay). **Schedule (change: alert-delivery-reliability, 2026-11-03):**
+`atlas-alerts.timer` runs hourly at :15. Its oneshot runs
+`livedata/atlas_live.py poll-gate` first (a failure there is ignored), then
+`atlas_telegram.py scan`. The scan used to ride the repo update as
+`ExecStartPost` steps, so a failed fetch skipped every alert.
+
+## Delivery reliability (change: alert-delivery-reliability)
+
+- **Retry queue.** A send that fails on a network error, a 5xx or a 429
+  is kept in `pending_send` with its rendered text, HTML and buttons. The
+  next scan or health run resends it as-is, with a "Late send. Detected
+  ..." line on top. Entries expire after 24 hours as `failed`. A 429 sets
+  `meta.rate_limited_until` from `retry_after`, and every sender holds
+  until then. 400, 401, 403 and 404 are final. Digests and briefing parts
+  are never queued: their own state already re-sends them.
+- **Ledger.** A delivered row keeps the sent text and the Telegram
+  `message_id`. The probe, the upgrade job, the health watch and the unit
+  failure notifier all send through `send_alert`, so they share the ledger,
+  scrubber and queue.
+- **Withheld notice.** A message the scrubber refuses is final. One fixed
+  notice names its class and event id, and none of its text.
+- **Health watch.** `atlas-health.timer` runs `health` every 5 minutes,
+  outside Hermes. It pages once per outage, and once more on recovery,
+  for:
+  - the Hermes gateway: unit state, restart count, and
+    `~/.hermes/gateway_state.json`. It pages after 2 failed checks in a
+    row, so a `/restart` stays quiet;
+  - the alert scan: no completed scan for 3 hours;
+  - the LLM: a Claude auth failure in the Hermes logs newer than the last
+    model reply, or 2 or more rewrite fallbacks for a model error in a row
+    within 2 hours.
+
+  The thresholds are in `health` in `config.json`, with the defaults in
+  `atlas_health.py`.
+- **Unit failures.** Every Atlas unit names
+  `OnFailure=atlas-notify-failure@%n.service`. The dashboard, a system
+  unit, uses `atlas-notify-failure-sys@`. Each unit pages once per failure
+  streak, and the health watch ends the streak after a successful run.
+  Handled outcomes exit 0, so a unit failure means a crash: the upgrade
+  job after a reported failure or an RPC blip, and the probe watch after
+  a drift page.
+- **After a Hermes update:** check that `gateway_state.json` still has
+  `gateway_state`, `pid`, `updated_at` and `platforms.telegram`, and that
+  `agent.log` still logs `API call #N: model=`. If the shape changed, the
+  watch pages "cannot read gateway state" and the LLM check falls back to
+  rewrite outcomes.
 
 Config: [config.json](config.json). Setup: [docs/operator-setup.md](docs/operator-setup.md).
 Tests: `python -m pytest telegram/tests -q` (or `python3 -m unittest discover

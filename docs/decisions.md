@@ -1025,3 +1025,43 @@ Discovery gate: TaoSwap contract report
 
 Not replaced: metagraphed's health incidents, subnet API and endpoint
 listings, semantic search and `ask`.
+
+## Alert delivery reliability (2026-11-03, change: alert-delivery-reliability)
+
+Audit WP9 (items C3, C6, C7, C8, C9, C14, C15, G7). On 2026-11-02 the
+operator decided that the first fix is a gateway health check that runs
+outside Hermes, because the agent may not restart itself.
+
+Operator decisions, 2026-11-03:
+
+- One OpenSpec change covers all of WP9.
+- The upgrade job exits 0 on an RPC blip and on any outcome it already
+  reported. Only a crash fails the unit and pages through `OnFailure=`.
+  The probe watch follows the same rule after a drift page.
+- `atlas-dashboard.service` is included. It is a system unit, so it gets a
+  system-side notifier the operator installs with sudo.
+- No paid daily `claude -p` smoke test. LLM outages are read from Hermes
+  auth errors and rewrite fallbacks. `claude auth status` is not trusted:
+  it said `loggedIn` through the 2026-10-20 expiry.
+
+Result:
+
+- `atlas-health.timer` (5 min) checks the gateway, the scan heartbeat and
+  the LLM, and closes unit failure streaks. It pages once per outage and
+  sends a recovery note.
+- The gate poll and the scan moved from repotrack `ExecStartPost` to
+  `atlas-alerts.timer`.
+- Transient send failures are queued for 24 hours, and a 429 honours
+  `retry_after`.
+- The CLI-flag redaction rule needs a flag at the start of a word, so the
+  "subnet-token" gloss no longer refuses alerts. A refused alert sends a
+  fixed withheld notice.
+- Upgrade reports use fixed phrases per gate.
+- The fail-closed outage start counts only `provider-failure` rows.
+- Persistent journald is an operator sudo step (drop-in
+  `/etc/systemd/journald.conf.d/90-atlas-persistent.conf`).
+
+Not done here: the `atlas-repo` force-kill on a gateway restart. It is
+cosmetic: no orphaned servers, only stale child records left by the
+out-of-repo `readers.py` wrapper. It moves to WP14 with F3. G7's
+briefing partial-resend case stays open while the briefing is off.

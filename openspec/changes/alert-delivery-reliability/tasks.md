@@ -43,5 +43,5 @@
 
 ## 9. Docs and close
 
-- [ ] 9.1 Update `telegram/README.md` and `docs/decisions.md` (operator decisions 2026-11-03: dashboard included, no paid smoke test, upgrade exit 0 on handled outcomes). Verify: docs read back; no em dashes.
+- [x] 9.1 Update `telegram/README.md` and `docs/decisions.md` (operator decisions 2026-11-03: dashboard included, no paid smoke test, upgrade exit 0 on handled outcomes). Verify: docs read back; no em dashes.
 - [ ] 9.2 Full Python suite loop and `npm --prefix web test` pass; `openspec validate alert-delivery-reliability` passes.
