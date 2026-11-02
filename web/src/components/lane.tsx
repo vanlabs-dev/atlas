@@ -18,7 +18,7 @@ export function Lane({ daily, days = 30 }: { daily: number[] | null; days?: numb
         const a = v ? Math.min(1, Math.log1p(v) / 2.2) : 0;
         const h = a ? Math.max(2, H * a) : 1;
         return a ? (
-          <rect key={i} x={i * 6} y={(H - h) / 2} width={4.5} height={h} className="fill-accent-2" fillOpacity={0.3 + a * 0.7} />
+          <rect key={i} x={i * 6} y={(H - h) / 2} width={4.5} height={h} className="fill-ink" fillOpacity={0.25 + a * 0.75} />
         ) : (
           <rect key={i} x={i * 6} y={(H - h) / 2} width={4.5} height={h} className="fill-rule" />
         );

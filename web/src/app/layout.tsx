@@ -1,23 +1,21 @@
 import type { Metadata, Viewport } from "next";
-import { Newsreader, Schibsted_Grotesk } from "next/font/google";
+import { Archivo } from "next/font/google";
 import { getBlockAnchor } from "@/data/chain";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
 
-const newsreader = Newsreader({
+// One family. The width axis carries the condensed figures and the hovers that widen a name.
+const archivo = Archivo({
   subsets: ["latin"],
   style: "normal",
-  axes: ["opsz"],
-  variable: "--font-newsreader",
+  axes: ["wdth"],
+  variable: "--font-archivo",
   display: "swap",
 });
-const schibsted = Schibsted_Grotesk({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-schibsted",
-  display: "swap",
-});
+
+// Runs before first paint: a browser without WebGL gets the flat field and no flight, with no layout jump.
+const NOGL = `try{var c=document.createElement("canvas");if(!(c.getContext("webgl2")||c.getContext("webgl")))document.documentElement.classList.add("nogl")}catch(e){document.documentElement.classList.add("nogl")}`;
 
 export const metadata: Metadata = {
   title: { default: "Atlas reads all 128 Bittensor subnets", template: "%s | Atlas" },
@@ -27,16 +25,17 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#08090a" },
-    { media: "(prefers-color-scheme: light)", color: "#f6f7f8" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0b" },
+    { media: "(prefers-color-scheme: light)", color: "#f2f2f0" },
   ],
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const anchor = await getBlockAnchor();
   return (
-    <html lang="en" className={`${newsreader.variable} ${schibsted.variable}`}>
+    <html lang="en" className={archivo.variable} suppressHydrationWarning>
       <body className="flex min-h-svh flex-col">
+        <script dangerouslySetInnerHTML={{ __html: NOGL }} />
         <SiteHeader anchor={anchor} />
         <div className="flex-1">{children}</div>
         <SiteFooter />

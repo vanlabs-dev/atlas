@@ -3,14 +3,14 @@ import type { BlockAnchor } from "@/data/chain";
 import { HeaderClock } from "./block-clock";
 import { SiteNav } from "./site-nav";
 
-// Slim top bar: wordmark, the four boards, the block readout. On a phone
-// the links wrap to their own row and stay visible.
+// Slim top bar: wordmark, the four boards, the block readout. A fixed height,
+// so the home page can lift its field under it. On a phone it stays one row.
 export function SiteHeader({ anchor }: { anchor: BlockAnchor | null }) {
   return (
     <header className="relative z-10">
-      <div className="wrap flex flex-wrap items-center gap-x-9 gap-y-2 py-4 md:h-[72px] md:py-0">
-        <Link href="/" className="font-display text-[24px] leading-none tracking-[-0.01em]">
-          Atlas
+      <div className="wrap flex h-16 items-center gap-x-5 md:h-[76px] md:gap-x-10">
+        <Link href="/" className="font-display text-[26px] leading-none tracking-[-0.04em] md:text-[28px]" aria-label="Atlas, home">
+          Atlas<span className="text-accent">.</span>
         </Link>
         <SiteNav />
         <div className="ml-auto hidden md:block">
