@@ -10,8 +10,7 @@ toolset, or one-shot exits 2. Findings on the Pi (Hermes v0.22.5,
   wraps the surface in `tool_search`, `tool_describe` and `tool_call`. The
   session records in `~/.hermes/state.db` show the judge and rewrite
   sessions advertised 22 to 26 deferred tools (every Atlas MCP tool plus
-  `todo_list`). The bridge scopes calls to the session's toolset, so only
-  `todo_list` was callable, but the model saw the catalog.
+  `todo_list`), all callable (see the gateway merge below).
 - `bot_room` and `context_engine` resolve to no tools. `context_engine`
   gains tools from an active context engine, so it is not used.
   `bot_room` is a group-chat feature toolset; nothing adds tools to it
@@ -35,15 +34,22 @@ tools. The probe checks the toolset name, not the surface the model sees.
 The post-deploy test call (2026-11-03) disproved the empty surface. Its
 session pin in `~/.hermes/state.db` still carries the `tool_search`,
 `tool_describe` and `tool_call` bridge, with a catalog of 26 names (the 25
-Atlas MCP tools and `x_search`). The construction path gives `[]`, so the
-bridge is added later in the real run; the source is not yet traced. The
-bridge dispatcher scopes `tool_search` and `tool_call` with
-`get_tool_definitions(enabled_toolsets=["bot_room"],
-skip_tool_search_assembly=True)`, which is `[]` on the Pi, so no tool is
-callable; the model sees tool names and descriptions only. That is
-narrower than `todo`, where `todo_list` was callable, but it is not "no
-tools". B7 stays open until the check reads the real surface, for example
-the session pin of each call.
+Atlas MCP tools and `x_search`).
+
+Cause: every CLI `-z` call runs through the Hermes gateway. The gateway
+writes an explicit `-t` pick into the `cli` platform toolsets and resolves
+them with the default merge, which adds every enabled MCP server and, when
+xAI credentials exist, `x_search`. The session's enabled toolsets are then
+`bot_room`, the four Atlas MCP servers and `x_search`, and the bridge
+scopes calls to that set, so those tools are callable. The startup probe
+resolved the bare name and missed the merge. The same held for `todo`
+since 2026-10-22, so the earlier note that calls were scoped to
+`todo_list` was wrong.
+
+No rewrite or judge session has called a tool (read-only check of all
+`oneshot` sessions, 2026-11-03). `-t bot_room,no_mcp` drops the MCP
+servers; no per-call flag drops `x_search`. B7 stays open until the call
+path gives a verified empty surface.
 
 `--ignore-rules` is a session policy field on the `-z` path (Hermes
 `gateway_chat._POLICY`); the agent factory maps it to

@@ -22,4 +22,4 @@
 
 - [x] 4.1 Read-only replay of past rewrites against the new checks (design.md).
 - [x] 4.2 Every Python suite and `npm --prefix web test` pass; `python3 tools/readme_sync.py`.
-- [ ] 4.3 After deploy (operator): Pi pull; the first rewrite and judge sessions in `~/.hermes/state.db` record an empty tool list. Failed 2026-11-03: the test call's pin carries the bridge over 26 names, none callable (design.md). Open until the surface itself is checked.
+- [ ] 4.3 After deploy (operator): Pi pull; the first rewrite and judge sessions in `~/.hermes/state.db` record an empty tool list. Failed 2026-11-03: the gateway merges the Atlas MCP servers and `x_search` into any `-t` pick, so the test call could reach 26 tools (design.md). Open until the call path gives a verified empty surface.
