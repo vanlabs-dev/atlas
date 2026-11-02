@@ -13,7 +13,7 @@ export default async function FleetPage() {
   const { rows, counts, signals, activity } = data;
   const byNetuid = new Map(rows.map((r) => [r.netuid, r]));
   const lead = rows[0];
-  const finding = `${counts.diverging} subnets show code and price moving 40 points or more apart. SN${lead.netuid} ${lead.name} leads the board with a score of ${lead.score}.`;
+  const finding = `${counts.diverging} subnets show code and price apart: their 30-day code rank and 7-day price rank differ by 40 places in 100 or more. SN${lead.netuid} ${lead.name} leads the board with a score of ${lead.score}.`;
 
   return (
     <>
