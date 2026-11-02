@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 import { BLOCK_MS, type BlockAnchor } from "@/data/chain";
 
-// One clock for the header readout and the strata seal line. It is an
+// One clock for the header readout, the home field's today edge and the band. It is an
 // estimate from the last block Atlas saw, so the text says "est.".
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setInterval> | undefined;

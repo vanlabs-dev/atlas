@@ -1,4 +1,4 @@
-// One series, one question. Flat accent bars, a faint scale of three lines,
+// One series, one question. Flat ink bars, a faint scale of three lines,
 // dates on the first and last bar. No legend: the title names the series.
 export function BarChart({
   points,
@@ -36,7 +36,7 @@ export function BarChart({
           </g>
         ))}
         {points.map((p, i) => (
-          <rect key={p.x} x={i * bw + 1} y={y(p.y)} width={Math.max(1, bw - 2)} height={H - y(p.y)} className="fill-accent" />
+          <rect key={p.x} x={i * bw + 1} y={y(p.y)} width={Math.max(1, bw - 2)} height={H - y(p.y)} className="fill-ink-2" />
         ))}
         <text x={0} y={H + 18} className="num fill-ink-3 text-[12px]">{points[0].x}</text>
         <text x={W} y={H + 18} textAnchor="end" className="num fill-ink-3 text-[12px]">{points[points.length - 1].x}</text>
