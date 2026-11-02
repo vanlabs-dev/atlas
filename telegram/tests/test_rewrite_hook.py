@@ -35,8 +35,7 @@ class HookBase(unittest.TestCase):
         self.config["voice"]["alert_terms"] = TERMS
         self.config["rewrite"] = {
             "enabled": True, "toolset": "none", "hermes_path": "hermes",
-            "timeout_seconds": 25, "scan_budget_seconds": 180,
-            "next_allowed_classes": ["chain-parameter-change"]}
+            "timeout_seconds": 25, "scan_budget_seconds": 180}
         self.db = self.config["classes"]["chain-runtime-upgrade"]["source_db"]
         seed_livedata(self.db, live_spec=452, upgrades=[(450, 452, 8951570)])
         self.store = tg.open_store(self.config["db"])
@@ -162,61 +161,42 @@ class RewriteHookTests(HookBase):
         self.assertTrue({"rewrite", "rewrite_ms"} <= columns)
 
 
-class NextLineTests(unittest.TestCase):
-    MSG = tg.Message("watch", "Subnet 82 (Noah): changed", meaning="m",
-                     facts=[("When", tg.fmt_time("2026-10-08T23:32:00+00:00"))])
+class CodeOwnedLayoutTests(unittest.TestCase):
+    """C4 (change: rewrite-judge-lockdown): the model writes the headline
+    and meaning only. Facts, body and Next stay as the template wrote
+    them, whatever else the reply carries."""
+    MSG = tg.Message(
+        "watch", "Subnet 82 (Noah): changed", meaning="m",
+        facts=[("Lock", "0% \u2192 95%"),
+               ("When", tg.fmt_time("2026-10-08T23:32:00+00:00"))],
+        body=[tg.bold("Main changes"), "\u2022 one"],
+        next_action="review your position.")
     REPLY = {"headline": "Subnet 82 (Noah): miners lock most of the fee",
-             "meaning": "m", "facts": [["Locked", "95%"]], "body": [],
-             "next": "Check the lock-up first."}
+             "meaning": "Most of the fee is now locked.",
+             "facts": [["Locked", "5%"]], "body": ["Nothing changes"],
+             "next": "Buy now."}
 
-    def test_model_next_only_when_allowed(self):
-        new = tg._rewritten_message(self.MSG, self.REPLY, [self.MSG.facts[0]],
-                                    True)
-        self.assertEqual(new.next_action, "check the lock-up first.")
-        new = tg._rewritten_message(self.MSG, self.REPLY, [self.MSG.facts[0]],
-                                    False)
-        self.assertIsNone(new.next_action)
-
-    def test_code_next_is_never_replaced(self):
-        msg = tg.Message("watch", "h", next_action="review your position.")
-        new = tg._rewritten_message(msg, self.REPLY, [], True)
+    def test_facts_body_and_next_are_the_templates(self):
+        new = tg._rewritten_message(self.MSG, self.REPLY)
+        self.assertEqual(new.headline, self.REPLY["headline"])
+        self.assertEqual(new.meaning, self.REPLY["meaning"])
+        self.assertEqual(new.facts, list(self.MSG.facts))
+        self.assertEqual(new.body, list(self.MSG.body))
         self.assertEqual(new.next_action, "review your position.")
 
-    def test_provenance_facts_are_dropped(self):
-        reply = dict(self.REPLY, facts=[["Block", "9,321,592"],
-                                        ["Locked", "95%"]])
-        new = tg._rewritten_message(self.MSG, reply, [], False)
-        self.assertEqual(new.facts, [("Locked", "95%")])
+    def test_no_template_next_stays_none(self):
+        msg = tg.Message("watch", "h", meaning="m")
+        self.assertIsNone(tg._rewritten_message(msg, self.REPLY).next_action)
 
-    def test_model_heading_line_is_not_repeated(self):
-        msg = tg.Message("watch", "h", body=[tg.bold("Main changes"),
-                                             "\u2022 one", "\u2022 two"])
-        reply = dict(self.REPLY, body=["Main changes:", "- Fixed one",
-                                       "- Fixed two"])
-        new = tg._rewritten_message(msg, reply, [], False)
-        plain = [tg._strip_mono(b) for b in new.body]
-        self.assertEqual(plain, ["Main changes", "\u2022 Fixed one",
-                                 "\u2022 Fixed two"])
+    def test_originals_go_to_the_fold(self):
+        new = tg._rewritten_message(self.MSG, self.REPLY)
+        self.assertIn("Original: Subnet 82 (Noah): changed", new.details)
+        self.assertIn("Original meaning: m", new.details)
 
-    def test_what_changed_heading_is_kept(self):
-        msg = tg.Message("watch", "h", body=[tg.bold("What changed"),
-                                             "\u2022 one"])
-        reply = dict(self.REPLY, body=["What changed", "Plain line one"])
-        new = tg._rewritten_message(msg, reply, [], False)
-        self.assertEqual([tg._strip_mono(b) for b in new.body],
-                         ["What changed", "\u2022 Plain line one"])
-
-    def test_only_a_heading_keeps_the_template_body(self):
-        msg = tg.Message("watch", "h", body=["\u2022 one"])
-        new = tg._rewritten_message(
-            msg, dict(self.REPLY, body=["Main changes"]), [], False)
-        self.assertEqual(new.body, ["\u2022 one"])
-
-    def test_time_fact_survives_and_facts_are_capped(self):
-        reply = dict(self.REPLY, facts=[["A", "1"], ["B", "2"]])
-        new = tg._rewritten_message(self.MSG, reply, [self.MSG.facts[0]], True)
-        self.assertEqual(len(new.facts), 2)
-        self.assertEqual(new.facts[-1], self.MSG.facts[0])
+    def test_empty_model_meaning_keeps_the_template_meaning(self):
+        new = tg._rewritten_message(self.MSG, dict(self.REPLY, meaning=None))
+        self.assertEqual(new.meaning, "m")
+        self.assertNotIn("Original meaning: m", new.details)
 
 
 if __name__ == "__main__":
