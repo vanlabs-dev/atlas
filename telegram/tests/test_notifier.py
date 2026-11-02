@@ -848,20 +848,53 @@ class ChainUpgradeTests(unittest.TestCase):
 
 
 class KnowledgeTierTests(unittest.TestCase):
-    def test_shipped_knowledge_class_is_briefing_tier(self):
-        # change: plain-english-alerts. The upgrade job activates every
-        # run, so the alert never asks the operator for anything.
+    def test_shipped_knowledge_class_is_shadow_tier(self):
+        # change: alert-tier-trim. The briefing is off and the upgrade job
+        # activates every run, so the alert asks for nothing.
         shipped = tg.load_config()
         spec = shipped["classes"]["knowledge-ingestion"]
         tier = tg.event_tier(shipped, spec, "knowledge-ingestion")
-        self.assertEqual(tier, "briefing")
-        self.assertEqual(tg.NON_PAGING_STATUS[tier], "briefed")
+        self.assertEqual(tier, "shadow")
+        self.assertEqual(tg.NON_PAGING_STATUS[tier], "shadowed")
 
-    def test_shipped_gate_no_effect_class_is_briefing_tier(self):
+    def test_shipped_gate_no_effect_class_is_shadow_tier(self):
         shipped = tg.load_config()
         self.assertEqual(
             tg.event_tier(shipped, shipped["classes"]["gate-crossing"],
-                          "gate-crossing-no-effect"), "briefing")
+                          "gate-crossing-no-effect"), "shadow")
+
+
+class BriefingTierGuardTests(unittest.TestCase):
+    """change: alert-tier-trim (audit C1)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def write(self, config):
+        path = os.path.join(self.tmp.name, "config.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(config, handle)
+        return path
+
+    def test_committed_config_loads(self):
+        config = tg.load_config()
+        self.assertFalse(config["briefing"]["enabled"])
+        self.assertNotIn("briefing", {
+            spec.get("tier") for spec in config["classes"].values()})
+
+    def test_briefing_tier_with_briefing_off_is_refused(self):
+        config = tg.load_config()
+        config["classes"]["econ-code"]["tier"] = "briefing"
+        with self.assertRaises(tg.FatalTelegramError) as caught:
+            tg.load_config(self.write(config))
+        self.assertIn("econ-code", str(caught.exception))
+
+    def test_briefing_tier_with_briefing_on_loads(self):
+        config = tg.load_config()
+        config["classes"]["econ-code"]["tier"] = "briefing"
+        config["briefing"]["enabled"] = True
+        tg.load_config(self.write(config))
 
 
 class TierRoutingTests(unittest.TestCase):
@@ -1094,6 +1127,33 @@ class SubnetRegistryTests(unittest.TestCase):
         # Watermark advanced: nothing replays.
         again, _ = tg.subnet_registry_events(self.db, wm, self.ctx)
         self.assertEqual(again, [])
+
+    def test_shipped_tiers_page_set_changes_not_renames(self):
+        # change: alert-tier-trim (audit C2).
+        shipped = tg.load_config()
+        self.config["classes"] = {
+            "subnet-registry": dict(shipped["classes"]["subnet-registry"],
+                                    source_db=self.db),
+            "subnet-rename": dict(shipped["classes"]["subnet-rename"])}
+        store = tg.open_store(self.config["db"])
+        self.addCleanup(store.close)
+        posts = []
+        seed_snapshot(self.db, [(100, 1, "alpha"), (100, 2, "beta-sub")])
+        tg.notify_scan(self.config, "tok", "chat", store,
+                       poster=ok_poster_factory(posts))
+        seed_snapshot(self.db, [(200, 1, "alpha-renamed"), (200, 3, "new")])
+        tg.notify_scan(self.config, "tok", "chat", store,
+                       poster=ok_poster_factory(posts))
+        decoded = " || ".join(urllib.parse.unquote_plus(p) for p in posts)
+        self.assertEqual(len(posts), 2)
+        self.assertIn("Subnet 3 registered", decoded)
+        self.assertIn("Subnet 2 deregistered", decoded)
+        self.assertNotIn("renamed", decoded)
+        self.assertEqual(sorted(store.execute(
+            "SELECT event_class, status FROM events").fetchall()), [
+            ("subnet-registry", "delivered"),
+            ("subnet-registry", "delivered"),
+            ("subnet-rename", "shadowed")])
 
 
 class FailClosedTests(unittest.TestCase):

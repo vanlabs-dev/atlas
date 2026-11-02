@@ -27,11 +27,11 @@ priority — a live chain upgrade surfaces before repo alerts in the same scan:
 | `chain-runtime-upgrade` | `var/livedata/livedata.db` (`spec_upgrades`) | the **live** Finney runtime `spec_version` changed (the network changed) |
 | `chain-parameter-change` | `var/livedata/livedata.db` (`chain_param_events`) | a root-settable economic knob changed value (change: network-drift-443): the three emission-gate bar parameters plus the basket knobs (`BasketConcentrationCap`, the `swap_basket` buy cap, since root-weight-drift; the retired `RootWeightSettingEnabled` curation switch is no longer watched). Instant tier, **no cooldown and no digest** — such a knob cannot burst, and suppressing a second flip would be the wrong failure. A bar-parameter transition also states that the bar was re-priced for every subnet and that per-subnet crossing pages were withheld for that pass |
 | `gate-crossing` | `var/livedata/livedata.db` (`gate_events`) | a subnet's demand share crossed the emission-gate bar in either direction (change: gate-crossing-signal) — an economic cliff event; instant tier with a per-netuid cooldown. Since network-drift-443 the body also names the active bar mode (rank-pinned or q-mass) and the bar's own movement, attributing the crossing to the bar when the bar alone accounts for it. Since rotation-signal-gate a crossing pages only once livedata marks it `eligible`: one reversed inside the 48h durability window is recorded and never paged, and one still `pending` holds the watermark for a later scan |
-| `fleet-signal` | `var/fleet/fleet.db` (`signal_events`, read **strictly read-only**) | fleet-signals queue (change: fleet-signals): `watchlist` pages immediately, `narrative-cluster` is registered `shadow` and sends nothing (change: telegram-alert-redesign), `econ-code` is registered `briefing` and no longer pages (change: rotation-signal-gate); `signal-digest` rows are held durably in `pending_signal`, ride the next instant fleet alert, or flush via `digest_backstop_hours` — never paged, never dropped |
+| `fleet-signal` | `var/fleet/fleet.db` (`signal_events`, read **strictly read-only**) | fleet-signals queue (change: fleet-signals): `watchlist` pages immediately, `narrative-cluster` is registered `shadow` and sends nothing (change: telegram-alert-redesign), `econ-code` is registered `shadow` and sends nothing; only a `high` verdict is emitted as `econ-code`, every other econ event as `econ-code-minor` (also `shadow`) (change: alert-tier-trim); `signal-digest` rows take their source class's tier from the dedup-key prefix, and only lines from an `instant` class are held in `pending_signal`, ride the next instant fleet alert, or flush via `digest_backstop_hours` |
 | `repository-update` | `var/repotrack/repotrack.db` (`change_ranges`) | a **significant** tracked commit range (Phase 3 timer); churn is digested, not paged |
 | `schema-drift` | `var/livedata/livedata.db` (`integration_health`) | a live provider response stopped validating (Phase 4) |
 | `knowledge-ingestion` | `var/knowledge/knowledge.db` (`intake_runs`) | a new ingest run staged units for review (Phase 2) |
-| `subnet-registry` | `var/livedata/livedata.db` (`panel_snapshot`) | a netuid appears, disappears, or changes its on-chain name between consecutive snapshots (change: pulse-briefing); the first snapshot seeds silently. Registered `briefing` since rotation-signal-gate: all six alerts in the preceding 30 days were renames |
+| `subnet-registry` | `var/livedata/livedata.db` (`panel_snapshot`) | a netuid appears, disappears, or changes its on-chain name between consecutive snapshots (change: pulse-briefing); the first snapshot seeds silently. Registrations and deregistrations page at `instant`; renames are emitted as `subnet-rename`, registered `shadow` (change: alert-tier-trim) |
 | `fail-closed` | `var/livedata/livedata.db` (`integration_health`) | the gate poll or the chain-parameter watch has recorded only failures for longer than `window_hours` (change: pulse-briefing), keyed by the outage's first failure so a persisting outage pages once |
 
 **Fleet signal alerts** name each subnet from the panel snapshot and
@@ -135,7 +135,10 @@ and rides the pulse edition, `shadow` records and is carried nowhere.
 page by accident. The tier is resolved per event, not per adapter, so the
 three classes the fleet-signal queue emits are demotable independently.
 Every processed event records the governing tier in the delivery ledger.
-Flipping a tier value is the per-class rollback.
+Flipping a tier value is the per-class rollback. `load_config` refuses a
+`briefing` tier while `briefing.enabled` is false (change:
+alert-tier-trim), so no class can be routed to an edition that is never
+sent.
 
 A class reaches a paging tier only by an operator decision recorded in
 `docs/decisions.md` against a filled effectiveness read that beats the

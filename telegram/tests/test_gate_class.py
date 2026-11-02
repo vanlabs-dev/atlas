@@ -155,8 +155,8 @@ class GateAdapterTests(unittest.TestCase):
         self.assertEqual(self.scan_with_shipped_tiers(), [])
         rows = self.store.execute(
             "SELECT event_class, status, tier FROM events").fetchall()
-        self.assertEqual(rows, [("gate-crossing-no-effect", "briefed",
-                                 "briefing")])
+        self.assertEqual(rows, [("gate-crossing-no-effect", "shadowed",
+                                 "shadow")])
 
     def test_no_effect_crossing_leaves_cooldown_alone(self):
         add_crossing(self.live_db, 7, "rose-above", share=0.0121,
