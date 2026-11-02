@@ -45,7 +45,6 @@ export default async function Home() {
 
   const read = slots.filter((s) => s.daily);
   const total = sum(read.map((s) => s.c30 ?? 0));
-  const silent = read.filter((s) => s.c30 === 0).length;
   const lead = rows[0];
   const lr = (r: (typeof rows)[number]): LeadRow => ({
     n: r.netuid, name: r.name, score: r.score, why: r.why, daily: byDaily.get(r.netuid) ?? null,
@@ -58,7 +57,6 @@ export default async function Home() {
   const topSum = sum(top.map((s) => s.c30 ?? 0));
   const top5 = byC.slice(0, 5);
   const busiest = byC[0];
-  const top10Pct = Math.round((100 * sum(byC.slice(0, 10).map((s) => s.c30 ?? 0))) / total);
 
   const watch = rows.slice(3, 12);
   const cold = rows.filter((r) => r.cold).slice(0, 6);
@@ -118,14 +116,13 @@ export default async function Home() {
             <li className="stop">
               <h2>Ninety days to today</h2>
               <p>
-                Each mark is one subnet on one day, as tall as its commits. <strong>{silent} subnets</strong> went silent in the last 30 days.
+                Each mark is one subnet on one day, as tall as its commits. Red marks the subnets the fleet board ranks highest.
               </p>
             </li>
             <li className="stop">
-              <h2>The busiest code, up close</h2>
+              <h2>Where the code is moving</h2>
               <p>
-                <strong>{busiest.name}</strong> wrote {num(busiest.c30)} commits in 30 days, the most of any subnet. The 10 busiest wrote {top10Pct}% of all
-                the code Atlas read. Red rows head the fleet board.
+                The front rows are the busiest. <strong>{busiest.name}</strong> wrote {num(busiest.c30)} commits in 30 days, more than any other subnet.
               </p>
             </li>
           </ol>
