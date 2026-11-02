@@ -111,6 +111,11 @@ Facts on the Pi, verified 2026-11-03:
      <time>" line, using a `tg-time` entity in HTML.
    - Digest events are not queued: `pending_churn` and `pending_signal`
      already hold their content durably and are cleared only on delivery.
+     Briefing parts are not queued either: the edition watermark already
+     re-sends a failed edition.
+   - A 429 sets `meta.rate_limited_until`. Every sender that shares the
+     store queues without sending until that time, so a 429 seen by one
+     process holds the scan and the health run alike.
 7. **The 429 body.** `_do_post` catches `HTTPError` and returns
    `(exc.code, body)`. `send_message` then parses
    `parameters.retry_after` and returns it. A 429 is never retried inside
