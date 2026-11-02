@@ -15,8 +15,7 @@ import atlas_plain_rewrite as pr  # noqa: E402
 
 TERMS = {"emission-gate bar": "reward cutoff", "demand share": "demand",
          "runtime spec": "version"}
-RCFG = {"enabled": True, "toolset": "none", "hermes_path": "hermes",
-        "timeout_seconds": 25}
+RCFG = {"enabled": True, "claude_path": "claude", "timeout_seconds": 25}
 
 LOCK_INPUT = {
     "class": "chain-parameter-change",
@@ -60,8 +59,20 @@ def runner_returning(*outputs):
     return run
 
 
-def ok(reply):
-    return Done(json.dumps(reply))
+def stream(text, tools=(), servers=(), init=True):
+    """`claude -p --output-format stream-json` stdout for one call."""
+    lines = []
+    if init:
+        lines.append(json.dumps({"type": "system", "subtype": "init",
+                                 "cwd": "/tmp", "tools": list(tools),
+                                 "mcp_servers": list(servers)}))
+    lines.append(json.dumps({"type": "result", "subtype": "success",
+                             "is_error": False, "result": text}))
+    return "\n".join(lines) + "\n"
+
+
+def ok(reply, **surface):
+    return Done(stream(json.dumps(reply), **surface))
 
 
 class CheckTests(unittest.TestCase):
@@ -377,26 +388,35 @@ class RequestTests(unittest.TestCase):
         reply = self.request(runner)
         self.assertEqual(reply["headline"], LOCK_REPLY["headline"])
         argv, kwargs = runner.calls[0]
-        self.assertEqual(argv[1], "-z")
-        self.assertEqual(argv[3:], ["-t", "none", "--ignore-rules"])
+        self.assertEqual(argv[:2], ["claude", "-p"])
+        for flag in ("--restricted", "--strict-mcp-config",
+                     "--disable-slash-commands", "--no-session-persistence"):
+            self.assertIn(flag, argv)
+        self.assertEqual(argv[argv.index("--tools") + 1], "")
+        self.assertEqual(argv[argv.index("--setting-sources") + 1], "")
+        self.assertEqual(argv[argv.index("--max-turns") + 1], "1")
+        self.assertNotIn("--mcp-config", argv)
+        self.assertNotIn("--model", argv)
         self.assertEqual(kwargs["timeout"], 25.0)
-        self.assertEqual(kwargs["env"]["HERMES_IGNORE_RULES"], "1")
         self.assertNotIn("atlas", kwargs["cwd"])
-        self.assertIn("<UNTRUSTED_ALERT_", argv[2])
-        self.assertIn("say 'reward cutoff' for 'emission-gate bar'", argv[2])
+        # the prompt travels on stdin, never in argv
+        self.assertIn("<UNTRUSTED_ALERT_", kwargs["input"])
+        self.assertIn("say 'reward cutoff' for 'emission-gate bar'",
+                      kwargs["input"])
+        self.assertFalse(any("UNTRUSTED" in a for a in argv))
 
     def test_timeout(self):
-        runner = runner_returning(subprocess.TimeoutExpired("hermes", 25))
+        runner = runner_returning(subprocess.TimeoutExpired("claude", 25))
         with self.assertRaises(pr.RewriteFailure) as caught:
             self.request(runner)
         self.assertEqual(caught.exception.reason, pr.R_TIMEOUT)
         self.assertEqual(len(runner.calls), 1)
 
     def test_missing_binary(self):
-        runner = runner_returning(FileNotFoundError("hermes"))
+        runner = runner_returning(FileNotFoundError("claude"))
         with self.assertRaises(pr.RewriteFailure) as caught:
             self.request(runner)
-        self.assertEqual(caught.exception.reason, pr.R_HERMES)
+        self.assertEqual(caught.exception.reason, pr.R_MODEL)
 
     def test_nonzero_exit_retries_once(self):
         runner = runner_returning(Done(returncode=1, stderr="boom"),
@@ -409,11 +429,11 @@ class RequestTests(unittest.TestCase):
         runner = runner_returning(Done(returncode=1, stderr="boom"))
         with self.assertRaises(pr.RewriteFailure) as caught:
             self.request(runner)
-        self.assertEqual(caught.exception.reason, pr.R_HERMES)
+        self.assertEqual(caught.exception.reason, pr.R_MODEL)
         self.assertEqual(len(runner.calls), 2)
 
     def test_unparseable_retries_then_fails(self):
-        runner = runner_returning(Done("not json"))
+        runner = runner_returning(Done(stream("not json")))
         with self.assertRaises(pr.RewriteFailure) as caught:
             self.request(runner)
         self.assertEqual(caught.exception.reason, pr.R_UNPARSEABLE)
@@ -449,31 +469,34 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(caught.exception.detail,
                          "assurance or advice not in input: all clear")
         # the hostile text reaches the model only inside the fence
-        prompt = runner.calls[0][0][2]
+        prompt = runner.calls[0][1]["input"]
         self.assertGreater(prompt.index("ignore previous"),
                            prompt.index("<UNTRUSTED_ALERT_"))
 
 
 class RewriteTests(unittest.TestCase):
-    def test_disabled_and_no_toolset(self):
-        for cfg in (dict(RCFG, enabled=False), dict(RCFG, toolset="")):
+    def test_disabled_and_no_cli_path(self):
+        for cfg in (dict(RCFG, enabled=False), dict(RCFG, claude_path="")):
             runner = runner_returning(ok(LOCK_REPLY))
             with self.assertRaises(pr.RewriteFailure) as caught:
                 pr.rewrite(LOCK_INPUT, TERMS, cfg, runner=runner)
             self.assertEqual(caught.exception.reason, pr.R_DISABLED)
             self.assertEqual(runner.calls, [])
 
-    def test_unverified_toolset_makes_no_call(self):
-        # B7: the startup check refuses a toolset that gives the model
-        # tools; no Hermes call is made and the reason is recorded.
-        runner = runner_returning(ok(LOCK_REPLY))
-        with self.assertRaises(pr.RewriteFailure) as caught:
-            pr.rewrite(LOCK_INPUT, TERMS, RCFG, runner=runner,
-                       verify=lambda cfg: "toolset todo exposes 3 tools")
-        self.assertEqual(caught.exception.reason, pr.R_TOOLSET)
-        self.assertEqual(caught.exception.detail,
-                         "toolset todo exposes 3 tools")
-        self.assertEqual(runner.calls, [])
+    def test_exposed_tool_discards_the_reply(self):
+        # B7: a call whose init event lists any tool or MCP server is
+        # refused, even with a faithful reply, and is not retried.
+        for surface in ({"tools": ["Read"]}, {"servers": [{"name": "x"}]},
+                        {"init": False}):
+            conn = sqlite3.connect(":memory:")
+            runner = runner_returning(ok(LOCK_REPLY, **surface))
+            with self.assertRaises(pr.RewriteFailure) as caught:
+                pr.rewrite(LOCK_INPUT, TERMS, RCFG, conn, runner,
+                           created_at="t")
+            self.assertEqual(caught.exception.reason, pr.R_TOOLS)
+            self.assertEqual(len(runner.calls), 1)
+            self.assertEqual(conn.execute(
+                "SELECT COUNT(*) FROM rewrite_cache").fetchone()[0], 0)
 
     def test_same_content_makes_one_call(self):
         conn = sqlite3.connect(":memory:")

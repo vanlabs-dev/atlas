@@ -261,15 +261,14 @@ def signals_cfg(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # Econ-alert intelligence gate (change: econ-alert-intelligence-gate).
-# Defaults OFF: with `enabled` false (or no `toolset`), econ detection keeps
-# today's path-match-and-page behaviour, so enabling/disabling is the whole
-# rollback. `toolset` is the no-tools identifier from `hermes tools list` on
-# the box (one-shot mode bypasses approvals, so a restriction is mandatory).
-# Auth is the Hermes X OAuth subscription — no key, provider, or model id here.
+# Defaults OFF: with `enabled` false (or no `claude_path`), econ detection
+# keeps today's path-match-and-page behaviour, so enabling/disabling is the
+# whole rollback. The judge runs `claude -p` with no tools and checks each
+# call's own tool surface (change: rewrite-judge-lockdown). Auth is the
+# `claude` CLI login; no key, provider, or model id here.
 DEFAULT_JUDGE_CFG: Dict[str, Any] = {
     "enabled": False,
-    "hermes_path": "~/.local/bin/hermes",
-    "toolset": "",
+    "claude_path": "",
     "timeout_seconds": 120,
     "max_calls_per_run": 20,
     "max_calls_per_day": 200,
@@ -290,9 +289,9 @@ def judge_cfg(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _gate_active(jcfg: Dict[str, Any]) -> bool:
-    """The gate runs only when explicitly enabled AND given a toolset; any
+    """The gate runs only when explicitly enabled AND given a CLI path; any
     misconfiguration falls back to the legacy econ path (fail-safe)."""
-    return bool(jcfg.get("enabled") and jcfg.get("toolset"))
+    return bool(jcfg.get("enabled") and jcfg.get("claude_path"))
 
 
 def _utc_now() -> str:

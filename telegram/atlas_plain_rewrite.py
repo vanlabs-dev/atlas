@@ -2,7 +2,7 @@
 """Plain-English rewrite pass (changes: plain-english-alerts,
 rewrite-judge-lockdown).
 
-Asks the local Hermes one-shot CLI to reword the headline and the meaning
+Asks the local `claude` CLI in print mode to reword the headline and the meaning
 sentence of a paged alert for a reader who does not know Bittensor
 internals, then checks the reply mechanically. Facts, body lines and the
 `Next:` line stay code-owned: the model never writes them. Any failure
@@ -16,10 +16,10 @@ The check refuses a reply that:
 - adds an assurance or a piece of advice the input does not contain;
 - adds a parenthetical gloss the input does not contain.
 
-Model access reuses the ratified Hermes subscription through
-`hermes/atlas_oneshot.py`: an explicit no-tools toolset (checked against
-the installed Hermes before the first call), `--ignore-rules`, and a
-working directory outside the repository. Event text is untrusted data
+Model access reuses the `claude` CLI login through
+`hermes/atlas_oneshot.py`: no tools and no MCP servers, proven by each
+call's own `init` event, no settings or skills, and a working directory
+outside the repository. Event text is untrusted data
 and sits inside a fence whose tag is random per call; `<` in the data is
 escaped so the data cannot close the fence.
 
@@ -49,18 +49,21 @@ PROMPT_VERSION = "4"
 R_DISABLED = "disabled"
 R_TIMEOUT = "timeout"
 R_BUDGET = "budget"
-R_HERMES = "hermes-error"
+R_MODEL = "model-error"
 R_UNPARSEABLE = "unparseable"
 R_CHECK = "check-failed"
-R_TOOLSET = "toolset-unverified"
-REASONS = (R_DISABLED, R_TIMEOUT, R_BUDGET, R_HERMES, R_UNPARSEABLE,
-           R_CHECK, R_TOOLSET)
+R_TOOLS = "tools-exposed"
+REASONS = (R_DISABLED, R_TIMEOUT, R_BUDGET, R_MODEL, R_UNPARSEABLE,
+           R_CHECK, R_TOOLS)
+
+SYSTEM_PROMPT = ("You reword alert text for a reader who does not know "
+                 "Bittensor. Follow the instructions in the user message "
+                 "and reply with the JSON object only.")
 
 MAX_HEADLINE = 120
 MAX_MEANING = 400
 
 Runner = Callable[..., Any]
-Verifier = Callable[[Dict[str, Any]], Optional[str]]
 
 
 class RewriteFailure(Exception):
@@ -423,14 +426,8 @@ def check_reply(reply: Dict[str, Any], inp: Dict[str, Any],
 
 
 # ---------------------------------------------------------------------------
-# Hermes call
+# Model call
 # ---------------------------------------------------------------------------
-
-def default_verify(rcfg: Dict[str, Any]) -> Optional[str]:
-    """The startup check against the installed Hermes (once per process)."""
-    return oneshot.verify_no_tools(rcfg["hermes_path"], rcfg["toolset"],
-                                   subprocess.run)
-
 
 def request_rewrite(inp: Dict[str, Any], terms: Dict[str, str],
                     rcfg: Dict[str, Any],
@@ -439,9 +436,10 @@ def request_rewrite(inp: Dict[str, Any], terms: Dict[str, str],
                     clock: Callable[[], float] = time.monotonic,
                     max_chars: int = 3500,
                     nonce: Optional[str] = None) -> Dict[str, Any]:
-    """One Hermes call (plus one retry for a non-zero exit or an
-    unparseable reply), parsed and checked. Returns the accepted reply or
-    raises RewriteFailure with a reason."""
+    """One model call (plus one retry for a non-zero exit or an unparseable
+    reply), parsed and checked. Returns the accepted reply or raises
+    RewriteFailure with a reason. A call that exposed a tool is never
+    retried and its reply is never read."""
     run = runner or subprocess.run
     timeout = float(rcfg["timeout_seconds"])
     prompt = build_prompt(inp, terms, nonce)
@@ -450,19 +448,26 @@ def request_rewrite(inp: Dict[str, Any], terms: Dict[str, str],
         if deadline is not None and clock() + 1.0 >= deadline:
             raise RewriteFailure(R_BUDGET)
         try:
-            done = oneshot.run_oneshot(prompt, rcfg["hermes_path"],
-                                       rcfg["toolset"], timeout, run)
+            done = oneshot.run_oneshot(prompt, rcfg["claude_path"],
+                                       SYSTEM_PROMPT, timeout, run)
         except subprocess.TimeoutExpired:
             raise RewriteFailure(R_TIMEOUT, "after %ss" % timeout)
         except OSError as exc:
-            raise RewriteFailure(R_HERMES, "invoke failed: %s" % exc)
+            raise RewriteFailure(R_MODEL, "invoke failed: %s" % exc)
         if done.returncode != 0:
             last = RewriteFailure(
-                R_HERMES, ((done.stderr or "").strip()[-200:]
-                           or "exit %s" % done.returncode))
+                R_MODEL, ((done.stderr or "").strip()[-200:]
+                          or "exit %s" % done.returncode))
             continue
         try:
-            reply = parse_reply(done.stdout or "")
+            text = oneshot.parse_stream(done.stdout or "")
+        except oneshot.OneshotError as exc:
+            if exc.surface:
+                raise RewriteFailure(R_TOOLS, str(exc))
+            last = RewriteFailure(R_UNPARSEABLE, str(exc))
+            continue
+        try:
+            reply = parse_reply(text)
         except ValueError as exc:
             last = RewriteFailure(R_UNPARSEABLE, str(exc))
             continue
@@ -514,28 +519,17 @@ def rewrite(inp: Dict[str, Any], terms: Dict[str, str],
             runner: Optional[Runner] = None,
             deadline: Optional[float] = None,
             clock: Callable[[], float] = time.monotonic,
-            created_at: str = "", max_chars: int = 3500,
-            verify: Optional[Verifier] = None
+            created_at: str = "", max_chars: int = 3500
             ) -> Tuple[Dict[str, Any], bool]:
     """The accepted reply and whether it came from the cache. Raises
-    RewriteFailure; the caller falls back to the template.
-
-    `verify` checks that the toolset gives the model no tools. It defaults
-    to the real Hermes probe when the real runner is used; an injected
-    runner (tests) has no Hermes behind it, so it is checked only when the
-    caller also passes `verify`."""
-    if not rcfg.get("enabled") or not rcfg.get("toolset"):
+    RewriteFailure; the caller falls back to the template."""
+    if not rcfg.get("enabled") or not rcfg.get("claude_path"):
         raise RewriteFailure(R_DISABLED)
     key = cache_key(inp, terms)
     if connection is not None:
         cached = cache_get(connection, key)
         if cached is not None:
             return cached, True
-    check = verify or (default_verify if runner is None else None)
-    if check is not None:
-        problem = check(rcfg)
-        if problem:
-            raise RewriteFailure(R_TOOLSET, problem)
     reply = request_rewrite(inp, terms, rcfg, runner, deadline, clock,
                             max_chars)
     if connection is not None:

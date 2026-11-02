@@ -1,66 +1,73 @@
 # Design
 
-## The no-tools toolset
+## The call path
+
+Both calls run `claude -p` directly (`hermes/atlas_oneshot.py`):
+
+```
+claude -p --restricted --strict-mcp-config --tools "" --setting-sources ""
+  --disable-slash-commands --max-turns 1 --no-session-persistence
+  --output-format stream-json --verbose --system-prompt <short>
+```
+
+The prompt goes on stdin, so untrusted text never sits in argv, and the
+working directory is `/tmp`, so no AGENTS.md or CLAUDE.md is found. No
+`--mcp-config` is passed, so `--strict-mcp-config` loads no server. No
+`--model` is passed: the CLI's default model is used, and no model id
+enters Atlas. Auth is the CLI's existing login on the Pi, the one the
+runtime upgrade job uses. `--bare` is not used because it never reads
+OAuth.
+
+Each call proves its own surface. The `stream-json` `init` event lists
+the tools and MCP servers of that call. `parse_stream` accepts the reply
+only when the event is present and both lists are empty; otherwise the
+reply is discarded without a retry (`tools-exposed`, or `unjudged` for
+the judge). This replaces the startup toolset probe of the first deploy.
+
+Test call on the Pi (Claude Code 2.1.280, 2026-11-03), the audit's
+"fell below the cutoff" input with the version 4 prompt: `tools: []`,
+`mcp_servers: []`, `slash_commands: []`, `cwd: /tmp`, about 1,200 prompt
+tokens (5,000 through Hermes), 5.1 s, and a reply that passes the check.
+The event also lists built-in plugins (`agents-md`, `telemetry`) and
+subagent names; with no tools there is no tool to start a subagent, and
+`/tmp` holds no AGENTS.md.
+
+Trade-off: the two calls no longer follow Hermes's model setting. A model
+change in Hermes does not reach them.
+
+## Why not Hermes
 
 Hermes has no named empty toolset. `-t` must name at least one valid
 toolset, or one-shot exits 2. Findings on the Pi (Hermes v0.22.5,
 2026-11-03):
 
-- `todo` resolves to `todo_list`. With the MCP servers loaded, Hermes
-  wraps the surface in `tool_search`, `tool_describe` and `tool_call`. The
-  session records in `~/.hermes/state.db` show the judge and rewrite
-  sessions advertised 22 to 26 deferred tools (every Atlas MCP tool plus
-  `todo_list`), all callable (see the gateway merge below).
-- `bot_room` and `context_engine` resolve to no tools. `context_engine`
-  gains tools from an active context engine, so it is not used.
-  `bot_room` is a group-chat feature toolset; nothing adds tools to it
-  today.
+- Every CLI `-z` call runs through the Hermes gateway. The gateway writes
+  an explicit `-t` pick into the `cli` platform toolsets and resolves them
+  with the default merge, which adds every enabled MCP server and, when
+  xAI credentials exist, `x_search`. With `-t bot_room` the session's
+  enabled toolsets were `bot_room`, the four Atlas MCP servers and
+  `x_search`; Hermes put the 26 tools behind its `tool_search`,
+  `tool_describe` and `tool_call` bridge, and the bridge scopes calls to
+  that set, so all were callable. `-t todo` (before this change) was the
+  same plus `todo_list`.
+- `-t bot_room,no_mcp` drops the MCP servers, but no per-call flag drops
+  `x_search`. Only the global `agent.disabled_toolsets` does, and the
+  Telegram agent lists `x_search`.
+- `--safe-mode` disables plugins, and the Claude provider is a plugin.
+- The direct `hermes_cli.oneshot.run_oneshot` path builds an empty
+  surface, but the CLI no longer uses it, so an update can remove it.
+- The first deploy shipped a startup probe that resolved the bare toolset
+  name. It passed because the merge happens later, in the gateway. The
+  post-deploy test call's session record showed the bridge.
 
-Because `bot_room` is empty by accident, not by contract, the startup
-check guards the toolset name. It does not prove the surface is empty
-(see below). `hermes/atlas_oneshot.py` follows the launcher
-chain (`~/.local/bin/hermes` to the Python launcher) to the interpreter
-and Hermes root that one-shot really uses, then runs
-`toolsets.validate_toolset` and `model_tools.get_tool_definitions` there.
-It fails closed on any tool, an unknown name, a non-zero exit, a timeout
-or unreadable output. The result is cached per process.
+A read-only check of all 510 `oneshot` sessions in `~/.hermes/state.db`
+found tool calls only in the 2026-09-24 knowledge battery, which uses the
+KB tools on purpose. No rewrite (121) or judge (350) session called a
+tool. Both calls were disabled (`7a9f412`) until this route shipped.
 
-The shipped probe does not start MCP servers, and the `todo` leak came
-through MCP: the `tool_search` catalog listed every Atlas MCP tool although
-tool selection excluded them. A one-off run on the Pi with MCP discovery,
-plugin discovery and a full `AIAgent` build showed `bot_room` yields no
-tools. The probe checks the toolset name, not the surface the model sees.
-
-The post-deploy test call (2026-11-03) disproved the empty surface. Its
-session pin in `~/.hermes/state.db` still carries the `tool_search`,
-`tool_describe` and `tool_call` bridge, with a catalog of 26 names (the 25
-Atlas MCP tools and `x_search`).
-
-Cause: every CLI `-z` call runs through the Hermes gateway. The gateway
-writes an explicit `-t` pick into the `cli` platform toolsets and resolves
-them with the default merge, which adds every enabled MCP server and, when
-xAI credentials exist, `x_search`. The session's enabled toolsets are then
-`bot_room`, the four Atlas MCP servers and `x_search`, and the bridge
-scopes calls to that set, so those tools are callable. The startup probe
-resolved the bare name and missed the merge. The same held for `todo`
-since 2026-10-22, so the earlier note that calls were scoped to
-`todo_list` was wrong.
-
-No rewrite or judge session has called a tool (read-only check of all
-`oneshot` sessions, 2026-11-03). `-t bot_room,no_mcp` drops the MCP
-servers; no per-call flag drops `x_search`. B7 stays open until the call
-path gives a verified empty surface.
-
-`--ignore-rules` is a session policy field on the `-z` path (Hermes
-`gateway_chat._POLICY`); the agent factory maps it to
-`skip_context_files` and `skip_memory`. Hermes's own parser accepts the
-exact argv. The test call's session record confirms it: `cwd` `/tmp`, no
-AGENTS.md text in the system prompt, and about 5,000 prompt tokens against
-10,000 to 17,000 for earlier rewrites.
-
-Rejected: a user-defined empty toolset in `~/.hermes/config.yaml`. It is
-a Pi config change, and Hermes validates `-t` against built-in, plugin
-and MCP names only.
+`--ignore-rules` and the `/tmp` cwd worked on the Hermes path (test
+session: no AGENTS.md text, about 5,000 prompt tokens against 10,000 to
+17,000 before); the direct call keeps both properties by construction.
 
 ## Check rules
 

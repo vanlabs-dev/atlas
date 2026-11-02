@@ -856,7 +856,7 @@ def _stub_judge(significance="high", direction="emissions_up", evidence="e",
 
 class TestEconGate(SignalsBase):
     def _gate_config(self, **judge_over):
-        judge = {"enabled": True, "toolset": "plain", "max_calls_per_run": 20,
+        judge = {"enabled": True, "claude_path": "claude", "max_calls_per_run": 20,
                  "max_calls_per_day": 200, "max_diff_bytes": 20000,
                  "high_stakes_paths": ["mechanism", "set_weights", "emission"]}
         judge.update(judge_over)

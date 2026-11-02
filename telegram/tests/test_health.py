@@ -233,19 +233,18 @@ class LlmTests(Base):
                                        ah.health_config(self.config)))
 
     def test_repeated_model_fallbacks_page(self):
-        self._rewrite("e1", "fallback:hermes-error: exit 1")
+        self._rewrite("e1", "fallback:model-error: exit 1")
         self._rewrite("e2", "fallback:timeout: after 60s")
         self.assertEqual(
             ah.check_llm(self.readers, self.conn,
                          ah.health_config(self.config)),
             "the plain-English rewrite failed 2 times in a row")
 
-    def test_unverified_toolset_pages(self):
-        # A toolset the startup check cannot prove tool-free stops every
-        # rewrite; that must reach the operator (change:
-        # rewrite-judge-lockdown).
-        self._rewrite("e1", "fallback:toolset-unverified: probe exit 1")
-        self._rewrite("e2", "fallback:toolset-unverified: probe exit 1")
+    def test_exposed_tools_page(self):
+        # A call whose tool surface is not empty discards every rewrite;
+        # that must reach the operator (change: rewrite-judge-lockdown).
+        self._rewrite("e1", "fallback:tools-exposed: no init event")
+        self._rewrite("e2", "fallback:tools-exposed: no init event")
         self.assertEqual(
             ah.check_llm(self.readers, self.conn,
                          ah.health_config(self.config)),

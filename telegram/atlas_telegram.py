@@ -3567,9 +3567,7 @@ def _rewritten_message(msg: "Message", reply: Dict[str, Any]) -> "Message":
 
 def apply_rewrite(connection: sqlite3.Connection, config: Dict[str, Any],
                   event: Dict[str, Any], deadline: Optional[float] = None,
-                  runner: Optional[Callable[..., Any]] = None,
-                  verify: Optional[Callable[[Dict[str, Any]],
-                                            Optional[str]]] = None) -> None:
+                  runner: Optional[Callable[..., Any]] = None) -> None:
     """Replace the wording of one paged event with the checked rewrite, in
     place. Sets `event["rewrite"]` to `used`, `cached` or `fallback:<reason>`
     and leaves the template untouched on any failure. Never raises for a
@@ -3585,7 +3583,7 @@ def apply_rewrite(connection: sqlite3.Connection, config: Dict[str, Any],
         terms = (config.get("voice") or {}).get("alert_terms") or {}
         reply, cached = plain_rewrite.rewrite(
             inp, terms, rcfg, connection, runner, deadline,
-            created_at=_utc_now(), max_chars=max_chars, verify=verify)
+            created_at=_utc_now(), max_chars=max_chars)
         new = _rewritten_message(msg, reply)
         _lexicon, glosses = voice_maps(config)
         event["html"] = render_html(new, max_chars, glosses)
