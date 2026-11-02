@@ -99,7 +99,7 @@ export default async function Home() {
   };
 
   return (
-    <main className="home -mt-16 md:-mt-[76px]">
+    <main className="home -mt-[92px] md:-mt-[76px]">
       <Flight
         rows={flightRows}
         leadN={lead.netuid}

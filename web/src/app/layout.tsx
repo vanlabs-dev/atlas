@@ -19,7 +19,7 @@ const archivo = Archivo({
 const NOGL = `try{var c=document.createElement("canvas"),g=c.getContext("webgl2")||c.getContext("webgl");if(g){var x=g.getExtension("WEBGL_lose_context");if(x)x.loseContext()}else document.documentElement.classList.add("nogl")}catch(e){document.documentElement.classList.add("nogl")}`;
 
 export const metadata: Metadata = {
-  title: { default: "Atlas reads all 128 Bittensor subnets", template: "%s | Atlas" },
+  title: { default: "subnt.dev: Atlas reads all 128 Bittensor subnets", template: "%s | subnt.dev" },
   description:
     "Atlas is a self-hosted system on a Raspberry Pi. It reads the code of every Bittensor subnet, the chain and the market, and shows what changed.",
 };
