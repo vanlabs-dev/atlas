@@ -3177,6 +3177,27 @@ _ADAPTERS: Dict[str, Callable[..., Tuple[List[Dict[str, Any]],
 # Delivery of one event — the isolation boundary lives in the caller
 # ---------------------------------------------------------------------------
 
+WITHHELD_CLASS = "scrub-withheld"
+
+
+def withheld_event(config: Dict[str, Any], event_class: str,
+                   event_id: str) -> Dict[str, Any]:
+    """A fixed notice for an alert the scrubber refused (change:
+    alert-delivery-reliability). It carries the class and event id only,
+    never any of the refused text, so it cannot itself be refused."""
+    msg = Message(
+        severity=severity_for(WITHHELD_CLASS),
+        headline="Atlas held back one alert",
+        meaning="A %s alert was not sent because its text matched the "
+                "secret filter. Nothing from it was sent." % rec(event_class),
+        facts=[("Event", mono(event_id))],
+        next_action="read it in the ledger on the Pi: %s" % mono(
+            "python3 telegram/atlas_telegram.py status"))
+    return message_event(msg, "withheld:%s" % event_id, WITHHELD_CLASS,
+                         _utc_now(),
+                         int(config.get("message_max_chars", 3500)), None)
+
+
 def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
                   token: str, chat_id: str, event: Dict[str, str],
                   poster: Optional[Callable[..., Tuple[int, str]]] = None,
@@ -3211,6 +3232,10 @@ def deliver_event(connection: sqlite3.Connection, config: Dict[str, Any],
                       _utc_now(), STATUS_SCRUB_REFUSED, 0, str(refusal),
                       rewrite=event.get("rewrite"),
                       rewrite_ms=event.get("rewrite_ms"))
+        if event_class != WITHHELD_CLASS:
+            deliver_event(connection, config, token, chat_id,
+                          withheld_event(config, event_class, event_id),
+                          poster=poster, tier=TIER_INSTANT)
         return STATUS_SCRUB_REFUSED
 
     hold = rate_limited_until(connection)

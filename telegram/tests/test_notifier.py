@@ -296,7 +296,11 @@ class LedgerDedupTests(unittest.TestCase):
             status = tg.deliver_event(conn, config, "tok12345", "42", event,
                                       poster=ok_poster_factory(posts))
             self.assertEqual(status, tg.STATUS_SCRUB_REFUSED)
-            self.assertEqual(posts, [])
+            # Only the fixed withheld notice goes out, never the refused
+            # text (change: alert-delivery-reliability).
+            self.assertEqual(len(posts), 1)
+            self.assertNotIn("verylongsecret", posts[0])
+            self.assertIn("held+back", posts[0])
             conn.close()
 
 
