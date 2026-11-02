@@ -52,6 +52,7 @@ export function FleetTable({ rows, activity }: { rows: FleetRow[]; activity: Sub
               <th scope="col" className={th}>Why it ranks</th>
               <th scope="col" className={`${th} text-right`}>Code against price</th>
               <th scope="col" className={`${th} text-right`}>Commits, 30 d</th>
+              <th scope="col" className={`${th} text-right`}>Price, 7 d</th>
               <th scope="col" className={`${th} text-right`}>Price, 30 d</th>
               <th scope="col" className={`${th} text-right`}>Last 30 days</th>
             </tr>
@@ -67,6 +68,10 @@ export function FleetTable({ rows, activity }: { rows: FleetRow[]; activity: Sub
                 <td className={`${td} text-ink-2`}>{r.why ? (WHY[r.why] ?? r.why) : "-"}</td>
                 <td className={`${td} num text-right`}>{signed(r.divergence)}</td>
                 <td className={`${td} num text-right`}>{num(r.commits30)}</td>
+                {/* The gap ranks 30-day commits against this 7-day price move. */}
+                <td className={`${td} num text-right ${polarity(r.momentum7d)}`}>
+                  {signed(r.momentum7d, 1, "%")}
+                </td>
                 <td className={`${td} num text-right ${polarity(r.momentum30d)}`}>
                   {signed(r.momentum30d, 1, "%")}
                 </td>
