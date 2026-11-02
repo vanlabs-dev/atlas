@@ -18,6 +18,12 @@ widened 2026-07-15 for rich TaoSwap surfaces):
                         head only (no spec_version).
 - live_portfolio      — TaoSwap portfolio balance + PnL/APY for a coldkey (ss58 or aliases SECURE/5FART/CRUSTY)
 - live_burn_leaderboard — TaoSwap miner-incentive burn ranking (0-100%)
+- live_validators     - TaoSwap validators: all, one subnet, or one hotkey
+- live_hyperparams    - subnet hyperparameters, chain storage first at one
+                        finalized block; TaoSwap fills unset items and
+                        cross-checks set ones
+- live_account        - TaoSwap ledger and transfers of one coldkey
+- live_events         - TaoSwap chain events, newest or for one block
 - live_status         — integration health, per-provider quota, last calls
 
 Every success carries the full ATLAS-LIVE-003 metadata envelope; every
@@ -300,6 +306,11 @@ TOOLS: List[Dict[str, Any]] = [
 ]
 
 
+# atlas_live.CHAIN_PROVIDER, restated so the status tool stays inside the
+# sanctioned atlas_live surface (test_only_sanctioned_atlas_live_surface)
+CHAIN_AUDIT_PROVIDER = "finney-rpc"
+
+
 def _correlation_id() -> str:
     return secretsmod.token_hex(6)
 
@@ -504,6 +515,11 @@ class LiveTools:
                 "SELECT provider, max(timestamp) FROM audit WHERE "
                 "validation_result = 'valid' GROUP BY provider"
             ).fetchall()
+            # chain reads are audited as ok/failed, not schema-valid
+            last_chain = connection.execute(
+                "SELECT max(timestamp) FROM audit WHERE provider = ? AND "
+                "validation_result = 'ok'", (CHAIN_AUDIT_PROVIDER,)
+            ).fetchone()[0]
             return {
                 "status": "ok",
                 "generated_at": _utc_now(),
@@ -511,6 +527,7 @@ class LiveTools:
                           for provider in config["providers"]},
                 "last_valid_call": {provider: ts
                                     for provider, ts in last_ok},
+                "last_chain_read": last_chain,
                 "recent_health_events": [
                     {"timestamp": ts, "provider": provider,
                      "operation": operation, "category": category,
