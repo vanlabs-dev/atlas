@@ -80,13 +80,13 @@
 
 ## 5b. Activity facts and consensus tracker
 
-- [ ] 5b.1 Compute `registered_7d`, `weighted_uids`, `widest_weight_row`, `axons_served_7d` and `consensus_mode` in Stage A, and add them to the `mine_econ` migration. Verify with regression tests:
+- [x] 5b.1 Compute `registered_7d`, `weighted_uids`, `widest_weight_row`, `axons_served_7d` and `consensus_mode` in Stage A, and add them to the `mine_econ` migration. Verify with regression tests:
   - a stale validator row (last update outside the cutoff) is not counted
   - a row from a UID without a permit is not counted
   - top-5 rows give a widest row of 5
   - an unread input gives null, not 0
   - no stored column holds an address
-- [ ] 5b.2 Add the `mine_consensus_events` table. On each committed pass, record a switch when the mode differs from the last recorded mode. Unknown modes record nothing. Verify with tests:
+- [x] 5b.2 Add the `mine_consensus_events` table. On each committed pass, record a switch when the mode differs from the last recorded mode. Unknown modes record nothing. Verify with tests:
   - the first pass of 128 subnets records 0 events
   - Yuma to Null records 1 event with its block
   - unknown records 0 events
