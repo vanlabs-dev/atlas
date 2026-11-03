@@ -4,26 +4,35 @@ import { BoardHeader } from "@/components/board-header";
 import { BarChart } from "@/components/boards/bar-chart";
 import { getNetwork } from "@/data/network";
 import { day, num, polarity, signed } from "@/lib/format";
+import { BAR_MODE, paramText, ROTATION, seriesTitle, usd } from "@/lib/network";
 
 export const metadata: Metadata = { title: "Network pulse" };
+
+const SHOWN = 10;
 
 export default async function NetworkPage() {
   const { generatedAt, data } = await getNetwork();
   const { vitals, gate, rotations, params } = data;
-  const first = vitals[0];
-  const last = vitals[vitals.length - 1];
-  const since = day(first.date);
-  const delta = (a: number | null, b: number | null) => (a === null || b === null ? null : b - a);
-  const shareChange = delta(first.subnetsSharePct, last.subnetsSharePct);
+  const first = vitals[0] ?? null;
+  const last = vitals[vitals.length - 1] ?? null;
+  const since = first ? day(first.date) : "-";
+  const delta = (a: number | null | undefined, b: number | null | undefined) => (a == null || b == null ? null : b - a);
+  const shareChange = delta(first?.subnetsSharePct, last?.subnetsSharePct);
+  const share = vitals.filter((v) => v.subnetsSharePct !== null);
+  const gateText = gate ? `The emission gate is ${gate.active ? "on" : "off"}, with ${num(gate.aboveCount)} subnets above the bar.` : "No emission gate reading.";
 
-  const finding = `Subnets hold ${num(last.subnetsSharePct, 2)}% of all staked TAO, ${signed(shareChange, 2, " points")} since ${since}. The emission gate is ${gate?.active ? "on" : "off"}, with ${num(gate?.aboveCount ?? null)} subnets above the bar.`;
+  const finding = last
+    ? `Subnets hold ${num(last.subnetsSharePct, 2)}% of all staked TAO, ${signed(shareChange, 2, " points")} since ${since}. ${gateText}`
+    : `No chain vitals in this window. ${gateText}`;
 
   const kpis = [
-    { label: "Staked TAO", value: num(last.totalStakedTao), d: delta(first.totalStakedTao, last.totalStakedTao), digits: 0, unit: "" },
-    { label: "Share in subnets", value: `${num(last.subnetsSharePct, 2)}%`, d: shareChange, digits: 2, unit: " pt" },
-    { label: "Subnet registration, TAO", value: num(last.regCostTao, 1), d: delta(first.regCostTao, last.regCostTao), digits: 1, unit: "" },
-    { label: "TAO in USD", value: last.taoUsd === null ? "-" : `$${last.taoUsd.toFixed(2)}`, d: delta(first.taoUsd, last.taoUsd), digits: 2, unit: "" },
+    { label: "Staked TAO", value: num(last?.totalStakedTao), d: delta(first?.totalStakedTao, last?.totalStakedTao), digits: 0, unit: "" },
+    { label: "Share in subnets", value: last?.subnetsSharePct == null ? "-" : `${num(last.subnetsSharePct, 2)}%`, d: shareChange, digits: 2, unit: " pt" },
+    { label: "Subnet registration, TAO", value: num(last?.regCostTao, 1), d: delta(first?.regCostTao, last?.regCostTao), digits: 1, unit: "" },
+    { label: "TAO in USD", value: usd(last?.taoUsd ?? null), d: delta(first?.taoUsd, last?.taoUsd), digits: 0, unit: "" },
   ];
+  const shownParams = params.slice(0, SHOWN);
+  const shownRotations = rotations.slice(0, SHOWN);
 
   return (
     <>
@@ -41,13 +50,17 @@ export default async function NetworkPage() {
       </section>
 
       <div className="mt-[clamp(72px,9vw,120px)] grid gap-6 lg:grid-cols-[8fr_4fr]">
-        <Panel title={`Share of staked TAO in subnets, daily, ${vitals.length} days`}>
-          <BarChart
-            label="Share of staked TAO in subnets"
-            unit="%"
-            digits={1}
-            points={vitals.filter((v) => v.subnetsSharePct !== null).map((v) => ({ x: day(v.date), y: v.subnetsSharePct as number }))}
-          />
+        <Panel title={`Share of staked TAO in subnets, ${seriesTitle(share.map((v) => v.date))}`}>
+          {share.length ? (
+            <BarChart
+              label="Share of staked TAO in subnets"
+              unit="%"
+              digits={1}
+              points={share.map((v) => ({ x: day(v.date), y: v.subnetsSharePct as number }))}
+            />
+          ) : (
+            <p className="text-ink-2">No readings in this window.</p>
+          )}
         </Panel>
         <Panel title="Emission gate">
           {gate ? (
@@ -65,8 +78,8 @@ export default async function NetworkPage() {
                 <dd className="num mt-1 text-lead">{gate.theta === null ? "-" : `${num(gate.theta * 100, 2)}%`}</dd>
               </div>
               <div>
-                <dt className="text-small text-ink-3">Bar set by</dt>
-                <dd className="mt-1 text-lead">{gate.barMode ?? "-"}</dd>
+                <dt className="text-small text-ink-3">How the bar is set</dt>
+                <dd className="mt-1 text-lead">{gate.barMode ? (BAR_MODE[gate.barMode] ?? gate.barMode) : "-"}</dd>
               </div>
             </dl>
           ) : (
@@ -92,18 +105,20 @@ export default async function NetworkPage() {
                 </tr>
               </thead>
               <tbody>
-                {params.slice(0, 10).map((p, i) => (
-                  <tr key={i} className={row}>
-                    <td className={td}>{p.item}</td>
-                    <td className={`${td} text-ink-2`}>
-                      {p.prevValue ?? "-"} to <span className="text-ink">{p.newValue ?? "-"}</span>
-                    </td>
-                    <td className={`${td} num text-right text-ink-2`}>{day(p.observedAt)}</td>
-                  </tr>
-                ))}
+                {shownParams.map((p, i) => {
+                  const t = paramText(p);
+                  return (
+                    <tr key={i} className={row}>
+                      <td className={td}>{t.name}</td>
+                      <td className={`${td} text-ink-2`}>{t.change}</td>
+                      <td className={`${td} num text-right text-ink-2`}>{day(p.observedAt)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          <p className="mt-4 text-small text-ink-3">The {shownParams.length} newest changes.</p>
         </section>
         <section aria-labelledby="rotation-title" className="min-w-0">
           <h2 id="rotation-title" className="font-display text-sub leading-none">
@@ -115,16 +130,16 @@ export default async function NetworkPage() {
               <thead>
                 <tr>
                   <th scope="col" className={th}>Subnet</th>
-                  <th scope="col" className={th}>Direction</th>
-                  <th scope="col" className={`${th} text-right`}>Root share</th>
+                  <th scope="col" className={th}>Change</th>
+                  <th scope="col" className={`${th} text-right`}>Share of root weight</th>
                   <th scope="col" className={`${th} text-right`}>Date</th>
                 </tr>
               </thead>
               <tbody>
-                {rotations.slice(0, 10).map((r, i) => (
+                {shownRotations.map((r, i) => (
                   <tr key={i} className={row}>
                     <td className={`${td} num`}>SN{r.netuid}</td>
-                    <td className={`${td} text-ink-2`}>{r.direction}</td>
+                    <td className={`${td} text-ink-2`}>{ROTATION[r.direction] ?? r.direction}</td>
                     <td className={`${td} num text-right`}>{r.newShare === null ? "-" : `${num(r.newShare * 100, 3)}%`}</td>
                     <td className={`${td} num text-right text-ink-2`}>{day(r.observedAt)}</td>
                   </tr>
@@ -132,9 +147,7 @@ export default async function NetworkPage() {
               </tbody>
             </table>
           </div>
-          <p className="mt-4 text-small text-ink-3">
-            Showing {Math.min(10, rotations.length)} of {rotations.length} events.
-          </p>
+          <p className="mt-4 text-small text-ink-3">The {shownRotations.length} newest events.</p>
         </section>
       </div>
     </>
