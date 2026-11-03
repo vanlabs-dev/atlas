@@ -69,6 +69,14 @@ Today's runtime:
      mechanism and the row, ranks on net, and stores `payback_days`.
    - Band order is `cpu` < `consumer-gpu` < `datacenter-gpu`, sorted by the
      bands' `vram_gb`.
+   - Required band: `possible` is `cpu`. Declared VRAM gives the smallest
+     band covering it. `needs-gpu` without VRAM gives the smallest GPU band,
+     marked assumed (operator decision 2026-11-03). Unknown or unscanned
+     gives the budget band, marked assumed.
+   - Measured with the v4 rules on the Pi plus the fresh snapshot: assuming
+     80 GB would have cut 13 subnets (SN9, SN120, SN14 from the top 10).
+     With 24 GB assumed, the hardware rung cuts none today: no repo declares
+     more than 24 GB (declared: 4, 8, 8, 16, 24, 24).
    - `budget_band` null: every survivor is unrated `no-budget-band`.
    - `baseline_tao_month` and `staking_apy_pct` are retired: the column
      stays and is always null.
@@ -89,6 +97,12 @@ Today's runtime:
    - Strong tokens are matched in source and dependency files
      (`requirements*.txt`, `pyproject.toml`, `Dockerfile*`, `*.yml`).
    - Weak tokens are matched in any subtree file as `gpu-mention`.
+   - A strong token gives `needs-gpu` even with no recognised entrypoint:
+     positive evidence wins over a missing entrypoint. Absence of both stays
+     `unknown`.
+   - Read-only sweep with these rules on the Pi: 10 `possible` and 6
+     `unknown` slots move to `needs-gpu`. The largest miner subtree is 390
+     files.
    - Matching is by regex with word boundaries.
    - `SCAN_VERSION` goes to `"4"`, which invalidates all stored verdicts.
      The next pass rescans 107 slots from FTS. The read-only sweep on the Pi
@@ -133,7 +147,11 @@ Today's runtime:
   effect is under 1% for pools over 2M alpha.
 - **The TAO price moves rent in TAO terms.** TAO fell 27% in 30 days. Rent
   needs a manual refresh, and the date is in the config.
-- **The publisher and web export read `net_tao_month`.** With a band set,
-  that leaks rent onto the public site. WP6 must switch it to gross or drop
-  it before the next export. `atlas-subnt.timer` is masked, so nothing
-  publishes automatically today.
+- **The web fixture export publishes `net_tao_month` and `cut_reason`.**
+  With a band set, they leak rent and the band name onto the public site.
+  The leak lists match `budget_band` and "budget band", not
+  `above-budget-band`. Operator decision: hold every fixture export until
+  WP6. The export runs by hand, and `atlas-subnt.timer` is masked.
+- **SN4 Targon leads at about 934 TAO/month with no GPU evidence.** The
+  figure follows the evidence as read. It is a reason to read the cut and
+  evidence columns, not proof that a CPU miner earns it.

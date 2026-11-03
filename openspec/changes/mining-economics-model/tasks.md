@@ -40,7 +40,8 @@
   - `baseline_tao_month` stays null
 
   Verify with regression tests:
-  - `needs-gpu` with no VRAM under consumer is cut
+  - `needs-gpu` with no VRAM under consumer survives, netted at 1.5 and marked assumed
+  - 48 GB declared under consumer is cut with both numbers in the detail
   - 16 GB declared survives and is netted at 1.5
   - unknown is costed at the budget band and marked assumed
   - a null band ranks nothing
@@ -56,6 +57,7 @@
 
   Verify with regression tests:
   - `torch.cuda` in `miner/model.py` while the entrypoint is clean gives `needs-gpu` with that path and line
+  - `torch.cuda` in a miner subtree with no recognised entrypoint gives `needs-gpu`
   - a README that says "no GPU needed" stays `possible` with mention evidence
   - validator and test paths are ignored
   - the scan-version bump invalidates stored verdicts
@@ -81,22 +83,23 @@
 
 - [ ] 7.1 Update the fixtures in `fleet/tests/mining_fixtures.py`, `subnt/tests` and `telegram/tests` for the new columns and `MODEL_VERSION` 3. Verify: the agreement tests (board, briefing, subnt head and counts) pass.
 - [ ] 7.2 Run every Python suite with the handover loop, plus `npm --prefix web test`. Verify: all pass.
-- [ ] 7.3 Real-path check on the workstation:
-  - copy the Pi `fleet.db` read-only to scratch
-  - run `run_econ`, `run_feasibility` and `run_classify` on the copy with a fresh `read_mining_snapshot` (watches not run)
-  - read `report()` and `FleetStore.mining_board` from that copy
+- [ ] 7.3 Rehearsal on the workstation (not the proof; 8.2 and 8.3 are):
+  - stream the tables the screen reads (`slots`, `index_state`, `fleet_files`, the needed `fleet_files_fts` rows, `mine_*`) from the Pi over ssh with a `mode=ro` reader into a scratch store; no file is written on the Pi
+  - run `run_econ`, `run_feasibility` and `run_classify` on it with a fresh `read_mining_snapshot` (watches not run)
+  - read `report()` and `compact_view` from it
 
-  Verify: the ranked head, the cut counts per rung and the payload size are recorded in this change's design notes.
+  Verify: the ranked head, the cut counts per rung and the compact payload size are recorded in this change's design notes.
 
 ## 8. Deploy (each step needs operator approval)
 
 - [ ] 8.1 Push.
-- [ ] 8.2 On the Pi:
-  - confirm `atlas-fleet.service` is inactive
+- [ ] 8.2 On the Pi, in order:
+  - stop `atlas-fleet.timer`, and confirm `atlas-fleet.service` is inactive
   - `git pull`
   - run `fleet/tests` and `subnt/tests`
-  - run one `python3 fleet/atlas_fleet_mining.py pass` (migrates, rescans, writes a model-3 pass)
+  - run one `python3 fleet/atlas_fleet_mining.py pass`; it migrates, rescans 107 slots, writes a model-3 pass and runs the two parameter watches, as a timer pass would
 
   Verify: `status` shows `model_version` 3, and `mining.html` shows the new labels.
-- [ ] 8.3 Operator `/restart` in Telegram. Then call `mining_board` through the real MCP server and check the compact rows.
-- [ ] 8.4 Update the tracker and session log in the handover, record the WP6 notes, and archive the change.
+- [ ] 8.3 Operator `/restart` in Telegram, then an operator ask in Telegram that makes the running `atlas-fleet` MCP child call `mining_board`. Verify: the MCP audit log shows the call, and the reply carries the compact rows and the at-spot label.
+- [ ] 8.4 Start `atlas-fleet.timer`. Verify: `list-timers` shows the next run.
+- [ ] 8.5 Update the tracker and session log in the handover: the WP6 notes and the fixture-export hold. Then archive the change.
