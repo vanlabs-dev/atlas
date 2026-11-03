@@ -1255,7 +1255,10 @@ Audit items E1 to E10. Operator decisions, 2026-11-04:
   gross bounds the rent. The allowlist now bans income, price, rent,
   payback and band fields. Residual: a reader who recomputes the model
   from public chain data can still bound the rent from the published
-  order. Recorded, not fixed.
+  order. Also found: the band and the rent are already public in this
+  repository (`fleet/config.json` `mining.budget_band` and `rent_bands`,
+  and the mining economics model entry above). Recorded, not fixed; the
+  operator decides whether that matters.
 - **Wording.** "No GPU code found" (mining-triage wording) plus the
   GPU-mention file count, never "Runs on a CPU" and never a VRAM figure on
   such a row. A hardware cut reads "Needs a larger GPU" and names no band.
