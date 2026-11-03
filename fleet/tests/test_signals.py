@@ -68,6 +68,11 @@ class SignalsBase(unittest.TestCase):
         self.conn = fleet.open_store(self.db)
         self.addCleanup(self.conn.close)
         sig.ensure_schema(self.conn)
+        # Never read the machine's real livedata store: the pass ingests and
+        # re-anchors from it, and on the Pi it holds real gate crossings.
+        saved_path = sig._livedata_db_path
+        sig._livedata_db_path = lambda: os.path.join(self.tmp, "livedata.db")
+        self.addCleanup(setattr, sig, "_livedata_db_path", saved_path)
         self.clone_root = os.path.join(self.tmp, "clones")
         self.config = {"db": self.db, "clone_root": self.clone_root,
                        "signals": {},
