@@ -739,6 +739,16 @@ class TestMeasurement(SignalsBase):
         self.assertEqual((status, v2, reason),
                          ("unavailable", "unavailable", "no-vector"))
 
+    def test_exit_in_a_jittered_timer_gap_is_recorded(self):
+        # 6 h timer, 6.5 h gap: inside the 7 h grace (operator decision
+        # 2026-11-04).
+        t0 = datetime.datetime(2026, 11, 3, 0, 0, tzinfo=datetime.timezone.utc)
+        event_id = self._instant_event(netuid=50, created_at=t0.isoformat())
+        self._pass(t0, {50: 0.01})
+        self._pass(t0 + datetime.timedelta(days=1, hours=6, minutes=30),
+                   {50: 0.02})
+        self.assertEqual(self._outcome_row(event_id, 1)[3], "recorded")
+
     def test_reregistered_netuid_is_not_one_subnet(self):
         # Regression (audit C13): SN82 read +2533% over 30 days because a
         # new subnet took the netuid inside the window.

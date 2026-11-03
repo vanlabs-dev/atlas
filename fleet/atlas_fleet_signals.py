@@ -78,8 +78,12 @@ ST_RECORDED = "recorded"
 ST_LATE = "late"
 ST_UNAVAILABLE = "unavailable"
 
-# A fill later than this after its natural moment is labeled `late`.
-LATE_GRACE_HOURS = 6
+# Grace for entry and exit vectors (change: signal-statistics-ties): a vector
+# more than this after the anchor or due time is never used, and the horizon
+# is unavailable instead. One 6 h fleet timer interval plus its observed
+# jitter: 189 of 397 gaps on the Pi ran 6 to 7 h (operator decision
+# 2026-11-04).
+LATE_GRACE_HOURS = 7
 
 # Hard bound on diff lines processed per range (defense in depth beyond
 # the file/commit caps — a single pathological blob cannot stall a pass).

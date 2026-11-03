@@ -30,7 +30,7 @@ mismeasures them (audit items C13, D7, D8, 2026-11-02, re-verified
   when both ends belong to the same registration. The rule applies to ledger
   outcomes, the fleet baseline and board momentum.
 - Entry and exit prices come from the first stored vector at or after the
-  anchor time and at or after the due time, within a 6 h grace. A horizon
+  anchor time and at or after the due time, within a 7 h grace. A horizon
   with no such vector is `unavailable`, never filled late with a different
   window.
 - Gate-crossings are anchored at `eligibility_at`, the time the alert can

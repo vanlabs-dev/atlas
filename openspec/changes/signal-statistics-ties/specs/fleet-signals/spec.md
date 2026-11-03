@@ -14,7 +14,8 @@ depend on where an event was produced. At most one price fetch SHALL occur per
 extraction pass, and its full per-subnet price vector SHALL be stored
 (config-capped retention) so fleet baselines need no extra calls. The entry
 price SHALL come from the earliest stored vector at or after the anchor time
-and within the late-grace window (6 hours). An entry with no such vector once
+and within the late-grace window (7 hours, one fleet timer interval plus
+its observed jitter). An entry with no such vector once
 the window has passed SHALL be marked unavailable, never filled from a later
 vector. A failed fetch SHALL never delay, block, or suppress the event or its
 delivery.
