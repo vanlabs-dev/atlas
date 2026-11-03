@@ -57,6 +57,9 @@ class FakeJob(au.Job):
         self.clock = 1000000.0
         self.sent = []
         self.calls = []
+        self.timeouts = []
+        self.late = []  # files that appear after the scope gate
+        self.edit_seconds = self.ingest_seconds = 0
         self.broken = set()
         self.changed = []
         self.branches = set()
@@ -70,6 +73,12 @@ class FakeJob(au.Job):
         self.restarts = 0
         self.activated = []
         self.hermes_home = os.path.join(tmp, "hermes")
+        self.added = []  # paths the edit creates (porcelain ??)
+        # Release anchors in the clone: tag commits and spec-bump commits.
+        self.tags = {live: "a%d" % live, corpus: "a%d" % corpus}
+        self.bumps = {}
+        self.anchor_spec = {"a%d" % live: live, "a%d" % corpus: corpus}
+        self.canary_checks = {name: True for name in au.sandbox.CANARY_CHECKS}
         self.set_gateway()
         self.make_kb()
 
@@ -160,9 +169,21 @@ class FakeJob(au.Job):
               SOURCES % self.live)
         self.changed.append("knowledge/corpus/SOURCES.md")
 
+    def bwrap_present(self):
+        return "bwrap" not in self.broken
+
     def run(self, cmd, cwd, timeout, env=None):
         self.calls.append(cmd)
+        self.timeouts.append(timeout)
         ok = au.Result(0, "", "")
+        if cmd[0] == au.sandbox.BWRAP:
+            inner = cmd[cmd.index("--") + 1:]
+            if au.sandbox.CANARY_PATH in inner:
+                return au.Result(0, json.dumps({"checks": self.canary_checks}),
+                                 "")
+            return self.run(inner, cwd, timeout, env)
+        if cmd[0] == "git" and cwd == self.clone:
+            return self.clone_git_fake(cmd[1:])
         if cmd[0] == "git":
             return self.git_fake(cmd[1:], cwd, env)
         if cmd[0] == "systemctl":
@@ -180,16 +201,30 @@ class FakeJob(au.Job):
                     else au.Result(0, "ok", "")
             if "claude" in self.broken:
                 return au.Result(124, "", "timed out")
+            self.clock += self.edit_seconds
             self.edit(cwd)
             return au.Result(0, "summary of edits", "")
         script = os.path.basename(cmd[1]) if len(cmd) > 1 else ""
         if cmd[1:3] == ["-m", "unittest"]:
+            if "late-write" in self.broken:
+                self.added.append("livedata/json.py")
             return au.Result(1, "", "FAILED") if "suite" in self.broken else ok
+        if script == "atlas_probe.py" and cwd == self.root:
+            if "readers" in self.broken:
+                return au.Result(1, json.dumps({"ok": False, "failures": [
+                    {"item": "Tempo", "reason": "missing"}]}), "")
+            if "probe-rpc" in self.broken:
+                return au.Result(1, json.dumps({"ok": False, "failures": [],
+                                                "error": "down"}), "")
+            return au.Result(0, json.dumps({"ok": True, "block": 9000002,
+                                            "spec": self.live}), "")
         if script == "atlas_probe.py":
             return au.Result(1, '{"ok": false}', "") \
-                if "probe" in self.broken and cwd == self.worktree \
-                else au.Result(0, '{"ok": true}', "")
+                if "probe" in self.broken else au.Result(0, '{"ok": true}', "")
+        if script == "atlas_live.py":
+            return au.Result(0, json.dumps({"block_number": 9000001}), "")
         if script == "atlas_kb.py" and cmd[2] == "ingest":
+            self.clock += self.ingest_seconds
             report = {"secret_scan_findings": [],
                       "duplicate_unit_ids": ["dup"] if "ingest" in self.broken
                       else []}
@@ -207,6 +242,30 @@ class FakeJob(au.Job):
             self.kb_activate(cmd[cmd.index("--run") + 1])
             return ok
         return ok  # repotrack update, read-knobs
+
+    def clone_git_fake(self, args):
+        ok = au.Result(0, "", "")
+        if args[0] == "rev-parse":
+            spec = int(args[-1][len("refs/tags/v"):].split("^")[0])
+            sha = self.tags.get(spec)
+            return au.Result(0, sha + "\n", "") if sha else \
+                au.Result(1, "", "")
+        if args[0] == "log" and "-S" in args:
+            spec = int(args[args.index("-S") + 1].split()[1].rstrip(","))
+            sha = self.bumps.get(spec)
+            return au.Result(0, sha + "\n" if sha else "", "")
+        if args[0] == "show":
+            sha = args[1].split(":")[0]
+            return au.Result(0, "spec_version: %s,\n" % self.anchor_spec.get(
+                sha), "")
+        if args[0] == "merge-base":
+            return au.Result(1 if "anchor-off-head" in self.broken else 0,
+                             "", "")
+        if args[0] == "log":
+            return au.Result(0, "abc1234 bump spec\n", "")
+        if args[0] == "diff":
+            return au.Result(0, "diff --git a/x b/x\n", "")
+        return ok  # archive
 
     def git_fake(self, args, cwd, env=None):
         ok = au.Result(0, "", "")
@@ -241,8 +300,12 @@ class FakeJob(au.Job):
             if cwd == self.root:
                 return au.Result(0, " M x" if "dirty" in self.broken else "",
                                  "")
-            return au.Result(0, "".join(" M %s\0" % p for p in self.changed),
+            return au.Result(0, "".join(" M %s\0" % p for p in self.changed)
+                             + "".join("?? %s\0" % p for p in self.added),
                              "")
+        if args[0] == "diff" and "--cached" in args:
+            return au.Result(0, "\0".join(self.changed + self.added
+                                          + self.late), "")
         if args[0] == "rev-parse" and args[1] == "--verify":
             return ok if args[-1][len("refs/heads/"):] in self.branches \
                 else au.Result(1, "", "")
@@ -370,7 +433,10 @@ class DetectTest(Base):
         for flag in ("--restricted", "--strict-mcp-config", "--max-turns"):
             self.assertIn(flag, cmd)
         self.assertNotIn("Bash", cmd[cmd.index("--tools") + 1])
-        self.assertIn(job.clone, cmd)
+        # The model reads the source exported at the live release, never
+        # the clone (change: upgrade-sandbox-scope).
+        self.assertNotIn(job.clone, cmd)
+        self.assertIn(os.path.join(job.var, "source-470"), cmd)
         self.assertEqual(job.calls[-1][0], sys.executable)  # activate last
 
 
@@ -932,10 +998,11 @@ class HelpersTest(unittest.TestCase):
         for path in ("knowledge/corpus/ground-truth.md",
                      "knowledge/corpus/hashes.json",
                      "knowledge/supersession-markers.json",
-                     "docs/decisions.md", "livedata/atlas_live.py",
-                     "livedata/config.json"):
+                     "docs/decisions.md"):
             self.assertTrue(ap.is_allowed(path), path)
         for path in ("livedata/atlas_probe.py", "livedata/scale_meta.py",
+                     "livedata/atlas_live.py", "livedata/config.json",
+                     "livedata/json.py", "livedata/atlas_live_server.py",
                      "livedata/tests/test_gate.py", "knowledge/atlas_kb.py",
                      "docs/runtime-upgrade.md", "AGENTS.md",
                      "upgrade/allowed_paths.py", "upgrade/prompt.md",
@@ -951,7 +1018,8 @@ class HelpersTest(unittest.TestCase):
 
     def test_tool_rules_mirror_lists(self):
         self.assertIn("Edit(docs/decisions.md)", ap.tool_rules())
-        self.assertIn("Write(livedata/atlas_probe.py)", ap.tool_denials())
+        self.assertIn("Write(livedata/**)", ap.tool_denials())
+        self.assertFalse(any("livedata" in rule for rule in ap.tool_rules()))
 
     def test_status_paths_rename(self):
         out = " M a.md\0R  new.py\0old.py\0?? dir/u.txt\0"

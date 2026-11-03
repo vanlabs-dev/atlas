@@ -1,8 +1,10 @@
 # Atlas runtime upgrade job (change: runtime-upgrade-pipeline). Runs from
 # the live tree; the model edits only in the ~/atlas-upgrade worktree. Every
 # step has its own timeout inside the job, so it records its own failures.
-# TimeoutStartSec is a backstop only: a run it kills is found by the next
-# run and reported once as stalled. (The design named RuntimeMaxSec, but
+# The job also keeps one overall run deadline (RUN_BUDGET, 50 min) inside
+# this limit (change: upgrade-sandbox-scope). TimeoutStartSec is a backstop
+# only: a run it kills is found by the next run and reported once as
+# stalled. (The design named RuntimeMaxSec, but
 # systemd ignores RuntimeMaxSec for Type=oneshot, whose whole run is the
 # start phase.) Telegram credentials come from
 # ~/.hermes/.env through the telegram module, so no EnvironmentFile.
@@ -22,4 +24,4 @@ Type=oneshot
 WorkingDirectory=/home/pi/atlas
 Environment=ATLAS_CLAUDE_BIN=/home/pi/.local/bin/claude
 ExecStart=/usr/bin/python3 /home/pi/atlas/upgrade/atlas_upgrade.py run
-TimeoutStartSec=45min
+TimeoutStartSec=60min
