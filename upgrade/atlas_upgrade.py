@@ -4,8 +4,14 @@
 When the live Finney runtime spec moves past the corpus spec, this job
 brings Atlas up to date on the Pi without an operator:
 
-    recover, detect, preflight, prepare, edit, goal, scope, test, probe,
-    ingest, push, activate, report, restart
+    recover, detect, source, preflight, prepare, edit, goal, scope,
+    citation, sandbox, test, probe, ingest, push, activate, report, restart
+
+The model may edit data only: the corpus, the supersession markers and the
+decision log (allowed_paths.py). It reads the subtensor source exported at
+the live release, never the clone's newer code. The test and probe gates
+run in a bubblewrap sandbox with no secrets (sandbox.py), checked from
+inside by a canary on every attempt (change: upgrade-sandbox-scope).
 
 Recovery runs first on every run: it finishes a pull or activation a
 failed run left behind, and keeps the active knowledge run equal to the
@@ -31,12 +37,15 @@ from __future__ import annotations
 
 import argparse
 import collections
+import contextlib
 import datetime
+import difflib
 import fcntl
 import hashlib
 import json
 import os
 import re
+import shutil
 import sqlite3
 import string
 import subprocess
@@ -48,8 +57,11 @@ _UPGRADE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(_UPGRADE_DIR)
 sys.path.insert(0, _UPGRADE_DIR)
 sys.path.insert(0, os.path.join(ROOT, "livedata"))
+sys.path.insert(0, os.path.join(ROOT, "repotrack"))
 
 import allowed_paths  # noqa: E402
+import atlas_repo as arp  # noqa: E402
+import sandbox  # noqa: E402
 import atlas_live as al  # noqa: E402
 import atlas_probe  # noqa: E402
 import atlas_telegram as tg  # noqa: E402  (atlas_probe put it on the path)
@@ -67,7 +79,18 @@ MAX_ATTEMPTS = 3
 BACKOFF_SECONDS = (3600, 4 * 3600)  # after attempt 1, after attempt 2
 MAX_TURNS = 60
 TIMEOUT = {"git": 120, "rpc": 120, "repotrack": 600, "smoke": 120,
-           "claude": 25 * 60, "suite": 5 * 60, "probe": 180, "ingest": 300}
+           "claude": 25 * 60, "suite": 5 * 60, "probe": 180, "ingest": 300,
+           "export": 300, "canary": 60}
+# One deadline per run (change: upgrade-sandbox-scope). Every step before
+# the push runs under the smaller of its own timeout and the time left,
+# less PUSH_RESERVE for push, readback, pull and activation; the push does
+# not start without that reserve. The unit's TimeoutStartSec (60 min) is a
+# backstop above RUN_BUDGET; a test keeps it that way.
+RUN_BUDGET = 50 * 60
+PUSH_RESERVE = 15 * 60
+MIN_STEP_SECONDS = 30
+# How long a run waits for the clone lock (a repotrack update in flight).
+CLONE_LOCK_WAIT = 900
 # A failure after the push has landed cannot be fixed by another attempt:
 # main already carries the grounded corpus. It blocks at once.
 POST_PUSH_GATES = ("readback", "pull", "activate")
@@ -79,6 +102,10 @@ GATE_PHRASES = {
     "edit": "The Claude editing session failed or changed nothing usable.",
     "goal": "The edit did not bring the corpus to the live spec.",
     "scope": "The edit touched files outside the allowed scope.",
+    "citation": "The edit cited a chain read this run did not make, or a "
+                "spec past the live one.",
+    "sandbox": "The gate sandbox failed its isolation check.",
+    "deadline": "The run ran out of time before the push.",
     "test": "A test suite failed on the edited tree.",
     "probe": "The chain-read probe failed on the edited tree.",
     "ingest": "Staging the knowledge run from the edited corpus failed.",
@@ -127,12 +154,37 @@ WAIT_REASONS = {
         "The Claude login check on the Pi failed. No attempt used; Atlas "
         "checks again each run.",
         "log in to Claude on the Pi"),
+    "readers": (
+        "Atlas self-update waiting: chain readers need an operator fix",
+        "The chain-read probe fails on the live tree, so a storage item "
+        "Atlas reads changed. The upgrade job may not edit chain readers. "
+        "No attempt used; Atlas checks again each run.",
+        "run python3 livedata/atlas_probe.py check on the Pi and fix the "
+        "readers"),
+    "probe": (
+        "Atlas self-update waiting: the chain-read probe could not run",
+        "The probe could not read live chain metadata. No attempt used; "
+        "Atlas checks again each run.",
+        "run python3 livedata/atlas_probe.py check on the Pi"),
+    "anchor": (
+        "Atlas self-update waiting: no release found for the live spec",
+        "The subtensor clone has no release tag and no spec-bump commit for "
+        "the live or the corpus spec, so Atlas cannot tell which code "
+        "shipped. No attempt used; Atlas checks again each run.",
+        "check the tags in var/repotrack/subtensor"),
 }
 
 SPEC_RE = re.compile(r"spec_version:\s*(\d+)")
 GROUNDED_RE = re.compile(r"Grounded at\s*\|\s*Finney `spec_version` "
                          r"\*\*(\d+)\*\*")
 INGEST_RUN_RE = re.compile(r"Ingest run (\S+):")
+# Citation gate (change: upgrade-sandbox-scope). A block citation is the
+# word block(s) followed by one or more 7+ digit numbers; a spec citation
+# is "spec" or "spec_version" followed closely by a 3-digit number.
+BLOCK_CITE_RE = re.compile(
+    r"(?i)\bblocks?\b((?:[\s,#(]*(?:and\s+|or\s+)?\d[\d,]{5,}\d)+)")
+BLOCK_NUM_RE = re.compile(r"\d[\d,]{5,}\d")
+SPEC_CITE_RE = re.compile(r"(?i)\bspec(?:_version)?\b[^0-9\n]{0,12}?(\d{3})\b")
 
 Result = collections.namedtuple("Result", "rc out err")
 
@@ -174,6 +226,75 @@ def status_paths(porcelain_z: str) -> List[str]:
             paths.append(tokens[index])
             index += 1
     return paths
+
+
+def status_entries(porcelain_z: str) -> List[Tuple[str, str]]:
+    """(XY code, path) from `git status --porcelain=v1 -z -uall`. A rename
+    or copy reports both paths under its code."""
+    entries: List[Tuple[str, str]] = []
+    tokens = porcelain_z.split("\0")
+    index = 0
+    while index < len(tokens):
+        entry = tokens[index]
+        index += 1
+        if len(entry) < 4:
+            continue
+        entries.append((entry[:2], entry[3:]))
+        if "R" in entry[:2] or "C" in entry[:2]:
+            entries.append((entry[:2], tokens[index]))
+            index += 1
+    return entries
+
+
+def cited_blocks(text: str) -> set:
+    found = set()
+    for match in BLOCK_CITE_RE.finditer(text):
+        found |= {int(n.replace(",", ""))
+                  for n in BLOCK_NUM_RE.findall(match.group(1))}
+    return found
+
+
+def citation_violations(added: List[str], live: int, run_blocks: set,
+                        base_blocks: set) -> List[str]:
+    """Added corpus lines that cite a block this run did not read and the
+    base corpus does not cite, or name a spec past the live one."""
+    found: List[str] = []
+    for line in added:
+        bad = sorted(cited_blocks(line) - run_blocks - base_blocks)
+        if bad:
+            found.append("block %s not read: %s" % (
+                ", ".join(map(str, bad)), _tail(line.strip(), 160)))
+        future = sorted({int(n) for n in SPEC_CITE_RE.findall(line)
+                         if int(n) > live})
+        if future:
+            found.append("spec %s is past live %d: %s" % (
+                ", ".join(map(str, future)), live, _tail(line.strip(), 160)))
+    return found
+
+
+def corpus_texts(corpus_dir: str) -> Dict[str, str]:
+    """Every text file under the corpus, by path relative to it."""
+    texts: Dict[str, str] = {}
+    for current, _, files in os.walk(corpus_dir):
+        for name in files:
+            path = os.path.join(current, name)
+            try:
+                with open(path, "r", encoding="utf-8") as handle:
+                    texts[os.path.relpath(path, corpus_dir)] = handle.read()
+            except (OSError, UnicodeDecodeError):
+                continue
+    return texts
+
+
+def added_lines(before: Dict[str, str], after: Dict[str, str]) -> List[str]:
+    lines: List[str] = []
+    for name in sorted(after):
+        for line in difflib.unified_diff(
+                before.get(name, "").splitlines(),
+                after[name].splitlines(), lineterm="", n=0):
+            if line.startswith("+") and not line.startswith("+++"):
+                lines.append(line[1:])
+    return lines
 
 
 def test_dirs(tree: str) -> List[str]:
@@ -232,6 +353,15 @@ class Job:
                             GIT_AUTHOR_EMAIL=AUTHOR_EMAIL,
                             GIT_COMMITTER_NAME=AUTHOR_NAME,
                             GIT_COMMITTER_EMAIL=AUTHOR_EMAIL)
+        self.deadline: Optional[float] = None
+        self.pre_push = False  # True while pre-push steps run
+        self.preflight_probe = ""  # the live tree's probe JSON
+        self.canary = os.path.join(_UPGRADE_DIR, "sandbox_canary.py")
+        # Paths the gate sandbox must hide; the canary checks each.
+        self.secret_paths = [
+            os.path.expanduser("~/.ssh"), os.path.expanduser("~/.hermes"),
+            os.path.expanduser("~/.claude"), self.hermes_home, DEPLOY_KEY,
+            os.path.join(root, ".env"), os.path.join(root, "var")]
 
     # -- seams --------------------------------------------------------------
 
@@ -242,7 +372,8 @@ class Job:
             env: Optional[Dict[str, str]] = None) -> Result:
         try:
             proc = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True,
-                                  text=True, timeout=timeout)
+                                  text=True, timeout=timeout,
+                                  stdin=subprocess.DEVNULL)
         except subprocess.TimeoutExpired:
             return Result(124, "", "timed out after %ds" % timeout)
         except OSError as exc:
@@ -251,6 +382,9 @@ class Job:
 
     def sleep(self, seconds: float) -> None:
         time.sleep(seconds)
+
+    def bwrap_present(self) -> bool:
+        return os.access(sandbox.BWRAP, os.X_OK)
 
     def live_spec(self) -> Dict[str, Any]:
         return al.read_live_spec(al.load_config())
@@ -267,9 +401,22 @@ class Job:
 
     # -- helpers ------------------------------------------------------------
 
+    def timeout(self, name: str) -> int:
+        """A step's timeout. Before the push it is capped by the run
+        deadline, less the push reserve; a step that would get under
+        MIN_STEP_SECONDS fails the attempt at the `deadline` gate."""
+        limit = TIMEOUT[name]
+        if not self.pre_push or self.deadline is None:
+            return limit
+        left = int(self.deadline - PUSH_RESERVE - self.now())
+        if left < MIN_STEP_SECONDS:
+            raise StepFailed("deadline", "%ds left before the push reserve "
+                             "at a %s step" % (max(left, 0), name))
+        return min(limit, left)
+
     def git(self, gate: str, cwd: str, *args: str,
             env: Optional[Dict[str, str]] = None) -> str:
-        result = self.run(["git"] + list(args), cwd, TIMEOUT["git"],
+        result = self.run(["git"] + list(args), cwd, self.timeout("git"),
                           env or self.git_env)
         if result.rc != 0:
             raise StepFailed(gate, "git %s: %s" % (
@@ -277,9 +424,9 @@ class Job:
         return result.out.rstrip("\n")  # porcelain lines lead with a space
 
     def py(self, gate: str, cwd: str, script: str, *args: str,
-           timeout: int, ok: Tuple[int, ...] = (0,)) -> Result:
+           timeout: str, ok: Tuple[int, ...] = (0,)) -> Result:
         result = self.run([sys.executable, script] + list(args), cwd,
-                          timeout)
+                          self.timeout(timeout))
         if result.rc not in ok:
             raise StepFailed(gate, "%s: %s" % (
                 os.path.basename(script), _tail(result.err or result.out)))
@@ -440,6 +587,7 @@ class Job:
     # -- the run ------------------------------------------------------------
 
     def run_once(self) -> int:
+        self.deadline = self.now() + RUN_BUDGET
         os.makedirs(self.var, exist_ok=True)
         with open(os.path.join(self.var, "lock"), "w") as lock:
             try:
@@ -706,10 +854,26 @@ class Job:
     def _attempt(self, state: Dict[str, Any], spec: int,
                  corpus: Optional[int], machinery_check: bool) -> int:
         # The clone must cover the live spec before any attempt is used.
-        self.run([sys.executable, os.path.join(
-            self.root, "repotrack", "atlas_repo.py"), "update"],
-            self.root, TIMEOUT["repotrack"])
-        clone = self.clone_spec()
+        # Update, spec read, release anchors, diff and source export all
+        # happen under the clone lock, so the tree cannot move between them.
+        ctx: Dict[str, Any] = {"spec": spec, "corpus": corpus}
+        try:
+            with arp.clone_lock(self.clone, CLONE_LOCK_WAIT,
+                                sleep=self.sleep):
+                self.run([sys.executable, os.path.join(
+                    self.root, "repotrack", "atlas_repo.py"), "update"],
+                    self.root, TIMEOUT["repotrack"],
+                    dict(os.environ, **{arp.LOCK_HELD_ENV:
+                                        os.path.abspath(self.clone)}))
+                clone = self.clone_spec()
+                if clone is not None and clone >= spec:
+                    try:
+                        self.prepare_source(ctx)
+                    except Waiting as exc:
+                        return self.wait(state, spec, exc)
+        except arp.LockBusy as exc:
+            print("clone busy: %s" % exc, file=sys.stderr)
+            return 0
         if clone is None or clone < spec:
             state.update(status="waiting", clone_spec=clone)
             self.report(state, "waiting", tg.Message(
@@ -724,42 +888,40 @@ class Job:
         try:
             self.check_environment()
         except Waiting as exc:
-            print("preflight %s: %s" % (exc.reason, exc.detail),
-                  file=sys.stderr)
-            headline, meaning, action = WAIT_REASONS[exc.reason]
-            state.update(status="waiting", wait_reason=exc.reason)
-            self.report(state, "waiting-" + exc.reason, tg.Message(
-                severity=tg.severity_for("upgrade-waiting"),
-                headline=headline, meaning=meaning, next_action=action),
-                key="%s:waiting-%s" % (spec, exc.reason))
-            self.save_state(state)
-            return 0
+            return self.wait(state, spec, exc)
         state.pop("wait_reason", None)
 
         state.update(status="running", attempt=int(state["attempt"]) + 1,
                      started_at=self.now(), last_error=None, step=None,
                      clone_spec=clone)
-        ctx: Dict[str, Any] = {"spec": spec, "corpus": corpus,
-                               "clone": clone}
+        ctx["clone"] = clone
         steps = [("prepare", self.step_prepare)]
         if not machinery_check:
             steps += [("edit", self.step_edit), ("goal", self.step_goal),
-                      ("scope", self.step_scope)]
-        steps += [("test", self.step_test), ("probe", self.step_probe)]
+                      ("scope", self.step_scope),
+                      ("citation", self.step_citation)]
+        steps += [("sandbox", self.step_sandbox), ("test", self.step_test),
+                  ("probe", self.step_probe)]
         if not self.dry_run:
             steps += [("ingest", self.step_ingest),
                       ("push", self.step_push),
                       ("activate", self.step_activate)]
         try:
+            self.pre_push = True
             for name, step in steps:
+                if name == "push":
+                    self.pre_push = False
+                    self.check_push_reserve()
                 state["step"] = name
                 self.save_state(state)
                 step(state, ctx)
         except StepFailed as exc:
+            self.pre_push = False
             self.keep_branch()
             self.fail(state, exc.gate, exc.detail)
             self.save_state(state)
             return 0  # reported (or queued): a handled outcome, not a crash
+        self.pre_push = False
 
         state.update(status="updated", step=None, commit=ctx.get("commit"))
         if self.dry_run:
@@ -792,6 +954,28 @@ class Job:
             self.try_restart(state)
             self.save_state(state)
         return 0
+
+    def wait(self, state: Dict[str, Any], spec: int, exc: Waiting) -> int:
+        """A failed environment or source check: `waiting`, no attempt
+        used, one report per spec and reason, in fixed wording."""
+        print("preflight %s: %s" % (exc.reason, exc.detail),
+              file=sys.stderr)
+        headline, meaning, action = WAIT_REASONS[exc.reason]
+        state.update(status="waiting", wait_reason=exc.reason)
+        self.report(state, "waiting-" + exc.reason, tg.Message(
+            severity=tg.severity_for("upgrade-waiting"),
+            headline=headline, meaning=meaning, next_action=action),
+            key="%s:waiting-%s" % (spec, exc.reason))
+        self.save_state(state)
+        return 0
+
+    def check_push_reserve(self) -> None:
+        if self.deadline is None:
+            return
+        left = self.deadline - self.now()
+        if left < PUSH_RESERVE:
+            raise StepFailed("deadline", "%ds left, the push needs %ds"
+                             % (max(int(left), 0), PUSH_RESERVE))
 
     @staticmethod
     def code_lines(commits: List[str]) -> List[str]:
@@ -832,6 +1016,23 @@ class Job:
                          self.root, TIMEOUT["smoke"])
         if smoke.rc != 0:
             raise Waiting("auth", _tail(smoke.err or smoke.out, 200))
+        # The chain readers are out of the model's scope, so a probe failure
+        # on the live tree is an operator fix, not an attempt.
+        probe = self.run([sys.executable, os.path.join(
+            self.root, "livedata", "atlas_probe.py"), "check"], self.root,
+            TIMEOUT["probe"])
+        try:
+            result = json.loads(probe.out)
+        except ValueError:
+            raise Waiting("probe", _tail(probe.err or probe.out, 200))
+        if probe.rc == 0 and result.get("ok") is True:
+            self.preflight_probe = probe.out.strip()
+            return
+        if result.get("error") or not result.get("failures"):
+            raise Waiting("probe", _tail(str(result.get("error")), 200))
+        raise Waiting("readers", "; ".join(
+            "%s: %s" % (f.get("item"), f.get("reason"))
+            for f in result["failures"][:5]))
 
     def branch_name(self, spec: int, attempt: int) -> str:
         base = "upgrade/spec-%d-a%d" % (spec, attempt)
@@ -870,58 +1071,153 @@ class Job:
         except StepFailed as exc:
             print("could not keep the attempt's edits: %s" % exc)
 
-    def spec_bump(self, ctx: Dict[str, Any]) -> Tuple[str, str]:
-        """(commit log, diff file) for the spec bump in the clone. The range
-        runs from the commit that introduced the corpus spec to HEAD; the
-        last 50 commits when that commit cannot be found."""
-        found = self.run(["git", "log", "--reverse", "--format=%H", "-S",
-                          "spec_version: %s," % ctx["corpus"], "--",
-                          "runtime/src/lib.rs"], self.clone, TIMEOUT["git"])
-        start = found.out.split()[0] if found.rc == 0 and found.out else None
-        span = ["%s..HEAD" % start] if start else ["-n", "50"]
-        log = self.run(["git", "log", "--oneline", "--no-decorate"] + span,
-                       self.clone, TIMEOUT["git"])
-        diff = self.run(["git", "diff", start, "HEAD"] if start else
-                        ["git", "log", "-p", "-n", "50"],
-                        self.clone, TIMEOUT["git"])
+    def clone_git(self, *args: str) -> Result:
+        return self.run(["git"] + list(args), self.clone, TIMEOUT["git"])
+
+    def anchor(self, spec: int) -> Tuple[str, str]:
+        """(commit, kind) of a spec's release in the clone: the `v<spec>`
+        tag, else the commit that introduced `spec_version: <spec>,` in the
+        runtime. The runtime at the anchor must state that spec and the
+        anchor must be on the clone's HEAD history. Raises Waiting."""
+        tag = self.clone_git("rev-parse", "--verify", "--quiet",
+                             "refs/tags/v%d^{commit}" % spec)
+        if tag.rc == 0 and tag.out.strip():
+            commit, kind = tag.out.strip(), "tag v%d" % spec
+        else:
+            found = self.clone_git("log", "--reverse", "--format=%H", "-S",
+                                   "spec_version: %d," % spec, "--",
+                                   "runtime/src/lib.rs")
+            first = found.out.split()[:1] if found.rc == 0 else []
+            if not first:
+                raise Waiting("anchor", "no tag or spec-bump commit for "
+                              "spec %d" % spec)
+            commit, kind = first[0], "spec-bump commit (no v%d tag)" % spec
+        shown = self.clone_git("show", "%s:runtime/src/lib.rs" % commit)
+        match = SPEC_RE.search(shown.out[:20000]) if shown.rc == 0 else None
+        if not match or int(match.group(1)) != spec:
+            raise Waiting("anchor", "anchor %s for spec %d states %s" % (
+                commit[:9], spec, match.group(1) if match else None))
+        if self.clone_git("merge-base", "--is-ancestor", commit,
+                          "HEAD").rc != 0:
+            raise Waiting("anchor", "anchor %s for spec %d is not on HEAD"
+                          % (commit[:9], spec))
+        return commit, kind
+
+    def prepare_source(self, ctx: Dict[str, Any]) -> None:
+        """Release anchors, the spec diff and log between them, and the
+        subtensor source exported at the live anchor (the only source the
+        model reads). Runs under the clone lock. Raises Waiting."""
+        if ctx["corpus"] is None:
+            raise Waiting("anchor", "the corpus states no grounded spec")
+        live, live_kind = self.anchor(ctx["spec"])
+        base, _ = self.anchor(ctx["corpus"])
+        log = self.clone_git("log", "--oneline", "--no-decorate",
+                             "%s..%s" % (base, live))
+        diff = self.clone_git("diff", base, live)
+        if log.rc != 0 or diff.rc != 0:
+            raise Waiting("anchor", "git log or diff failed between %s and "
+                          "%s" % (base[:9], live[:9]))
+        os.makedirs(self.var, exist_ok=True)
         path = os.path.join(self.var, "spec-%d.diff" % ctx["spec"])
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(diff.out)
-        return _tail(log.out, 6000), path
+        ctx.update(anchor=live, anchor_kind=live_kind, base_anchor=base,
+                   bump_log=_tail(log.out, 6000), diff_file=path,
+                   source_dir=self.export_source(ctx["spec"], live))
+
+    def export_source(self, spec: int, commit: str) -> str:
+        """`git archive` of the anchor into var/upgrade/source-<spec>,
+        reused while the anchor is unchanged."""
+        target = os.path.join(self.var, "source-%d" % spec)
+        marker = os.path.join(target, ".atlas-anchor")
+        try:
+            with open(marker, "r", encoding="utf-8") as handle:
+                if handle.read().strip() == commit:
+                    return target
+        except OSError:
+            pass
+        shutil.rmtree(target, ignore_errors=True)
+        os.makedirs(target)
+        tar = target + ".tar"
+        steps = (["git", "archive", "--format=tar", "-o", tar, commit],
+                 ["tar", "-xf", tar, "-C", target])
+        try:
+            for cmd in steps:
+                result = self.run(cmd, self.clone, TIMEOUT["export"])
+                if result.rc != 0:
+                    raise Waiting("anchor", "export of %s failed: %s" % (
+                        commit[:9], _tail(result.err or result.out, 200)))
+        finally:
+            if os.path.exists(tar):
+                os.unlink(tar)
+        with open(marker, "w", encoding="utf-8") as handle:
+            handle.write(commit + "\n")
+        return target
+
+    def read_rules(self, ctx: Dict[str, Any]) -> List[str]:
+        """Read, Grep and Glob limited to the worktree, the source export
+        and the job's directory. Absolute paths use the `//` rule form."""
+        dirs = [self.worktree, ctx["source_dir"], self.var]
+        return ["%s(/%s/**)" % (tool, os.path.abspath(d))
+                for d in dirs for tool in ("Read", "Grep", "Glob")]
+
+    def read_denials(self) -> List[str]:
+        patterns = ["//%s/**" % os.path.abspath(p).lstrip("/") for p in (
+            os.path.expanduser("~/.ssh"), os.path.expanduser("~/.hermes"),
+            os.path.expanduser("~/.claude"), self.hermes_home)]
+        patterns += ["~/.ssh/**", "~/.hermes/**", "~/.claude/**",
+                     "//**/.env", "//**/.env.*", "**/.env*"]
+        return ["%s(%s)" % (tool, p) for p in patterns
+                for tool in ("Read", "Grep", "Glob")]
 
     def step_edit(self, state: Dict[str, Any], ctx: Dict[str, Any]) -> None:
         live_py = os.path.join(self.root, "livedata", "atlas_live.py")
-        probe_py = os.path.join(self.root, "livedata", "atlas_probe.py")
         knobs = self.py("edit", self.root, live_py, "read-knobs",
-                        timeout=TIMEOUT["rpc"])
-        probe = self.py("edit", self.root, probe_py, "check",
-                        timeout=TIMEOUT["probe"], ok=(0, 1))
-        bump_log, diff_file = self.spec_bump(ctx)
+                        timeout="rpc")
+        ctx["knobs"] = knobs.out
+        # The corpus as it stood at the base, for the citation gate.
+        ctx["base_corpus"] = corpus_texts(os.path.join(
+            self.worktree, CORPUS_PATH))
         with open(os.path.join(_UPGRADE_DIR, "prompt.md"), "r",
                   encoding="utf-8") as handle:
             template = string.Template(handle.read())
         prompt = template.substitute(
             live_spec=ctx["spec"], corpus_spec=ctx["corpus"],
-            clone_dir=self.clone, clone_spec=ctx["clone"],
-            bump_log=bump_log, diff_file=diff_file,
-            knobs=knobs.out.strip(), probe=probe.out.strip(),
+            source_dir=ctx["source_dir"], anchor=ctx["anchor"][:12],
+            anchor_kind=ctx["anchor_kind"],
+            bump_log=ctx["bump_log"], diff_file=ctx["diff_file"],
+            knobs=knobs.out.strip(), probe=self.preflight_probe,
             allowed="\n".join("- `%s`" % p for p in allowed_paths.ALLOWED))
         cmd = ([self.claude, "-p", "--restricted", "--strict-mcp-config",
                 "--max-turns", str(MAX_TURNS), "--tools", MODEL_TOOLS,
-                "--add-dir", self.clone, self.var,
-                "--allowedTools", "Read", "Grep", "Glob"]
+                "--add-dir", ctx["source_dir"], self.var,
+                "--allowedTools"] + self.read_rules(ctx)
                + allowed_paths.tool_rules()
-               + ["--disallowedTools", "WebFetch", "WebSearch"]
-               + allowed_paths.tool_denials() + ["--", prompt])
-        result = self.run(cmd, self.worktree, TIMEOUT["claude"])
+               + ["--disallowedTools", "WebFetch", "WebSearch", "Bash"]
+               + allowed_paths.tool_denials() + self.read_denials()
+               + ["--", prompt])
+        result = self.run(cmd, self.worktree, self.timeout("claude"))
         if result.rc != 0:
             raise StepFailed("edit", "claude exited %d: %s" % (
                 result.rc, _tail(result.err or result.out)))
         ctx["summary"] = result.out.strip()
 
+    def changed_entries(self, gate: str) -> List[Tuple[str, str]]:
+        return status_entries(self.git(gate, self.worktree, "status",
+                                       "--porcelain=v1", "-z", "-uall"))
+
     def changed_paths(self, gate: str) -> List[str]:
-        return status_paths(self.git(gate, self.worktree, "status",
-                                     "--porcelain=v1", "-z", "-uall"))
+        return [path for _, path in self.changed_entries(gate)]
+
+    def check_scope(self) -> List[str]:
+        """Scope violations of the worktree as it is now. Returns the
+        checked paths; raises StepFailed on any violation."""
+        entries = self.changed_entries("scope")
+        bad = allowed_paths.scope_violations(entries)
+        if bad:
+            raise StepFailed("scope", "changed outside the allowed scope: %s"
+                             % ", ".join(bad))
+        return [path for _, path in entries]
 
     def step_goal(self, state: Dict[str, Any], ctx: Dict[str, Any]) -> None:
         if not self.changed_paths("goal"):
@@ -942,20 +1238,62 @@ class Job:
         head = self.git("scope", self.worktree, "rev-parse", "HEAD")
         if head != ctx["base"]:
             raise StepFailed("scope", "the session moved HEAD")
-        outside = allowed_paths.out_of_scope(self.changed_paths("scope"))
-        if outside:
-            raise StepFailed("scope", "changed outside the allowed scope: %s"
-                             % ", ".join(outside))
+        self.check_scope()
         if self.git("scope", self.root, "status", "--porcelain"):
             raise StepFailed("scope", "the live tree changed during the edit")
+
+    def step_citation(self, state: Dict[str, Any],
+                      ctx: Dict[str, Any]) -> None:
+        """Added corpus lines may cite only blocks this run read (knobs and
+        probe) or the base corpus cites, and no spec past live."""
+        run_blocks = set()
+        for raw, key in ((ctx.get("knobs"), "block_number"),
+                         (self.preflight_probe, "block")):
+            try:
+                value = json.loads(raw or "{}").get(key)
+            except ValueError:
+                value = None
+            if isinstance(value, int):
+                run_blocks.add(value)
+        before = ctx.get("base_corpus") or {}
+        base_blocks = set()
+        for text in before.values():
+            base_blocks |= cited_blocks(text)
+        after = corpus_texts(os.path.join(self.worktree, CORPUS_PATH))
+        bad = citation_violations(added_lines(before, after), ctx["spec"],
+                                  run_blocks, base_blocks)
+        if bad:
+            raise StepFailed("citation", "; ".join(bad[:5]))
+
+    def sandboxed(self, cwd: str, argv: List[str],
+                  network: bool = False) -> List[str]:
+        return sandbox.sandbox_cmd(self.worktree, cwd, argv, network=network)
+
+    def step_sandbox(self, state: Dict[str, Any],
+                     ctx: Dict[str, Any]) -> None:
+        """Prove the gate sandbox from inside, through the same builder,
+        with and without network. Fails closed."""
+        if not self.bwrap_present():
+            raise StepFailed("sandbox", "%s is missing" % sandbox.BWRAP)
+        for network in (False, True):
+            cmd = sandbox.canary_cmd(sys.executable, self.canary,
+                                     self.worktree, network,
+                                     self.secret_paths)
+            result = self.run(cmd, self.worktree, self.timeout("canary"))
+            bad = sandbox.canary_failures(result.out)
+            if bad:
+                raise StepFailed("sandbox", "canary (network %s) failed: %s"
+                                 " %s" % (network, ", ".join(bad),
+                                          _tail(result.err, 200)))
 
     def step_test(self, state: Dict[str, Any], ctx: Dict[str, Any]) -> None:
         dirs = test_dirs(self.worktree)
         if not dirs:
             raise StepFailed("test", "no test suites found")
         for path in dirs:
-            result = self.run([sys.executable, "-m", "unittest", "discover",
-                               "-s", "."], path, TIMEOUT["suite"])
+            result = self.run(self.sandboxed(path, [
+                sys.executable, "-m", "unittest", "discover", "-s", "."]),
+                path, self.timeout("suite"))
             if result.rc != 0:
                 raise StepFailed("test", "%s failed: %s" % (
                     os.path.relpath(path, self.worktree),
@@ -963,9 +1301,10 @@ class Job:
 
     def step_probe(self, state: Dict[str, Any],
                    ctx: Dict[str, Any]) -> None:
-        result = self.run([sys.executable, os.path.join(
-            self.worktree, "livedata", "atlas_probe.py"), "check"],
-            self.worktree, TIMEOUT["probe"])
+        result = self.run(self.sandboxed(self.worktree, [
+            sys.executable, os.path.join(self.worktree, "livedata",
+                                         "atlas_probe.py"), "check"],
+            network=True), self.worktree, self.timeout("probe"))
         if result.rc != 0:
             raise StepFailed("probe", _tail(result.out or result.err, 600))
 
@@ -977,7 +1316,7 @@ class Job:
             "--db", self.kb_db, "--output-dir", output_dir,
             "--corpus-dir", os.path.join(self.worktree, "knowledge",
                                          "corpus"),
-            "--actor", "atlas-upgrade", timeout=TIMEOUT["ingest"])
+            "--actor", "atlas-upgrade", timeout="ingest")
         match = INGEST_RUN_RE.search(result.out)
         if not match:
             raise StepFailed("ingest", "no run id in ingest output")
@@ -994,7 +1333,15 @@ class Job:
 
     def step_push(self, state: Dict[str, Any], ctx: Dict[str, Any]) -> None:
         wt = self.worktree
+        # Scope again on the exact tree being committed: anything written
+        # after the scope gate (by a gate or ingest) blocks the push.
+        checked = set(self.check_scope())
         self.git("push", wt, "add", "-A")
+        staged = set(filter(None, self.git(
+            "push", wt, "diff", "--cached", "--name-only", "-z").split("\0")))
+        if staged - checked:
+            raise StepFailed("scope", "staged files not checked: %s"
+                             % ", ".join(sorted(staged - checked)))
         self.git("push", wt, "commit", "-q", "-m",
                  "chore: ground Atlas at runtime spec %d" % ctx["spec"])
         author = self.git("push", wt, "log", "-1", "--format=%an <%ae>")
@@ -1030,7 +1377,7 @@ class Job:
         self.py("activate", self.root, os.path.join(
             self.root, "knowledge", "atlas_kb.py"), "activate",
             "--db", self.kb_db, "--run", ctx["run_id"],
-            "--actor", "atlas-upgrade", timeout=TIMEOUT["ingest"])
+            "--actor", "atlas-upgrade", timeout="ingest")
 
 
 def clear(job: Job, spec: int) -> int:

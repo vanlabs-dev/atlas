@@ -7,14 +7,17 @@ run commands, and you do not commit or push.
 
 - Live runtime spec: **$live_spec**. The corpus is grounded at spec
   **$corpus_spec**.
-- Tracked subtensor clone (read-only): `$clone_dir`, at spec $clone_spec.
-- Spec-bump commits in the clone:
+- Subtensor source as shipped at spec $live_spec (read-only):
+  `$source_dir`, exported at $anchor_kind `$anchor`. This is the live
+  release. Code past it has not shipped; you are not given it.
+- Commits from the spec $corpus_spec release to the spec $live_spec
+  release:
 
 ```
 $bump_log
 ```
 
-- The full diff of those commits is in `$diff_file` (read-only).
+- The full diff between the two releases is in `$diff_file` (read-only).
 
 ## Live knobs at one finalized block
 
@@ -27,9 +30,9 @@ $knobs
 
 ## Chain-read probe against live metadata
 
-Every storage item Atlas reads, checked against the live runtime metadata.
-A failure means a reader uses an item that was renamed, removed, or
-changed shape.
+Every storage item Atlas reads, checked against the live runtime metadata
+(names, shapes and defaults). It passed: the job does not start you when
+it fails. Cite its block.
 
 ```json
 $probe
@@ -39,8 +42,10 @@ $probe
 
 Follow the re-sync rules in `knowledge/corpus/SOURCES.md`:
 
-1. State only mechanics that are live at spec $live_spec. A path that was
-   added and then dropped before the spec shipped is not live.
+1. State only mechanics that are live at spec $live_spec, as shown by the
+   source and diff above. A path that was added and then dropped before
+   the spec shipped is not live. Never name a spec number above
+   $live_spec.
 2. Edit `knowledge/corpus/ground-truth.md`, `fact-patterns.md`, and
    `negative-claim-rules.md` so they state current chain facts, not history.
 3. Update `knowledge/corpus/SOURCES.md`: the sync and coverage dates, the
@@ -48,12 +53,14 @@ Follow the re-sync rules in `knowledge/corpus/SOURCES.md`:
    block above.
 4. Update the live-chain entry in `docs/decisions.md`.
 5. Review `knowledge/supersession-markers.json`.
-6. Fix `livedata/` readers and `livedata/config.json` if the upgrade
-   renamed, removed, or reshaped an item they read. Keep `CHAIN_READS` in
-   `livedata/atlas_live.py` equal to what the readers read. Remove a read
-   that no longer exists; do not point it at a guess.
+6. Cite only the two finalized blocks above (knobs and probe) for new
+   live facts. Any other new block number fails the attempt.
+7. Chain readers (`livedata/`) are out of scope. If the diff changes an
+   item Atlas reads in a way the probe cannot see, say so in your final
+   message for the operator.
 
 Do not edit `knowledge/corpus/hashes.json`: the job regenerates it.
+Do not create, rename or delete files: only edit existing ones.
 
 You may edit only these paths:
 
