@@ -195,6 +195,30 @@ Today's runtime:
     - If they differ by more than one rounding step, Null subnets take
       their earner figures from `Emission`, and the board labels which
       source was used. The result is recorded here.
+    - **Result (2026-11-03, block 9423220): keep `Incentive`.** UIDs that
+      are neither owner nor permit holder, counted as incentive earners
+      against emission earners:
+
+      | Subnet | Mode | Incentive earners | Emission earners |
+      |---|---|---|---|
+      | SN24 | Null | 0 | 9 |
+      | SN37 | Null | 1 | 22 |
+      | SN120 | Null | 10 | 192 |
+      | SN4 | Yuma | 2 | 2 |
+      | SN8 | Yuma | 16 | 72 |
+
+      - v486 `persist_netuid_epoch_terms` (`epoch/run_epoch.rs:160-183`)
+        writes `Emission` as each UID's total epoch emission, miner and
+        validator parts together.
+      - Under Null, dividends go to every staked UID, permit or not, so
+        those extra entries are stake income, not miner pay.
+      - Per-UID miner pay is published only as the
+        `IncentiveAlphaEmittedToMiners` event, not in storage.
+      - `Incentive` (per mechanism, `run_epoch.rs:126-134`) therefore stays
+        the only stored miner-pay share. The rounding note on the board
+        covers its 1/65535 step.
+      - The design's premise for a switch does not hold, so nothing
+        switches.
 
 15. **Owner pruning flag.** A pending `NullPruningTarget` below `SubnetworkN`
     is shown with both numbers. v486 trimming spares owner and immune UIDs
