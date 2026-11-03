@@ -126,8 +126,8 @@
 
 ## 8. Deploy (each step needs operator approval)
 
-- [ ] 8.1 Push.
-- [ ] 8.2 On the Pi, in order:
+- [x] 8.1 Push.
+- [x] 8.2 On the Pi, in order:
   - stop `atlas-fleet.timer`, and confirm `atlas-fleet.service` is inactive
   - `git pull`
   - run `python3 livedata/atlas_probe.py` before the next hourly probe timer, so a probe failure shows up before it pages
@@ -136,5 +136,5 @@
 
   Verify: `status` shows `model_version` 3, and `mining.html` shows the new labels.
 - [ ] 8.3 Operator `/restart` in Telegram (it reloads the `atlas-fleet` and `atlas-live` MCP servers), then an operator ask in Telegram that makes the running `atlas-fleet` MCP child call `mining_board`. Verify: the MCP audit log shows the call, and the reply carries the compact rows and the at-spot label.
-- [ ] 8.4 Start `atlas-fleet.timer`. Verify: `list-timers` shows the next run.
+- [x] 8.4 Start `atlas-fleet.timer`. Verify: `list-timers` shows the next run.
 - [ ] 8.5 Update the tracker and session log in the handover: the WP6 notes and the fixture-export hold. Then archive the change.
