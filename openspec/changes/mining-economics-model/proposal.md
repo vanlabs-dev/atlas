@@ -34,7 +34,9 @@ The operator decided the model on 2026-11-03:
   needs:
   - no GPU evidence: `cpu`
   - declared VRAM: the smallest band that covers it
-  - GPU evidence with no declared VRAM: `datacenter-gpu`
+  - GPU evidence with no declared VRAM: `consumer-gpu`, marked as assumed
+    (operator decision 2026-11-03; assuming 80 GB would cut 13 subnets on a
+    guess)
   - unknown or unscanned: the budget band, flagged as assumed
 
   The hardware rung cuts when the required band is above the budget band. Net
@@ -108,6 +110,9 @@ None.
 - **Not touched:** `livedata/`, the upgrade job, the WP10 rewrite and judge,
   and the web export.
 - **Left to WP6:**
-  - The public site reads `gross_tao_month` and `net_tao_month`. With a band
-    set, net leaks rent, which `subnt-publish` bans.
+  - The fixture export publishes `net_tao_month` and `cut_reason`. With a
+    band set, net leaks rent and `above-budget-band` names the band, which
+    `subnt-publish` bans. The hyphenated form escapes the banned-string list.
+    Operator decision 2026-11-03: hold all fixture exports until WP6 fixes
+    this.
   - Labels and verdict wording.

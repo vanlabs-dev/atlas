@@ -269,8 +269,9 @@ GPU evidence SHALL be read from every indexed file of the miner subtree,
 the entrypoint and the `min_compute` declaration, not from one file. The
 miner subtree is every path with a miner-named component outside validator,
 test, docs, example and vendored paths. A code-level GPU token SHALL yield
-`needs-gpu`. A bare mention of a GPU, vendor or card name SHALL be recorded
-as mention evidence and SHALL NOT change the verdict.
+`needs-gpu`, also when no miner entrypoint is recognised. A bare mention of
+a GPU, vendor or card name SHALL be recorded as mention evidence and SHALL
+NOT change the verdict.
 
 A `min_compute` declaration that is the unedited subnet template SHALL NOT
 count as a hardware declaration, and SHALL be recorded as template
@@ -317,6 +318,12 @@ reported as stale or unscanned.
   miner subtree calls `torch.cuda`
 - **THEN** the verdict is `needs-gpu`, citing that file and line
 
+#### Scenario: GPU code without a recognised entrypoint
+
+- **WHEN** no miner entrypoint is recognised but a miner-subtree file calls
+  `torch.cuda`
+- **THEN** the verdict is `needs-gpu`, citing that file and line
+
 #### Scenario: A bare GPU mention does not make a GPU miner
 
 - **WHEN** the only GPU evidence in a miner subtree is the word "GPU" in a
@@ -357,19 +364,27 @@ Each surviving subnet SHALL be assigned the hardware band its evidence
 requires:
 - no GPU evidence: the CPU band
 - a declared VRAM floor: the smallest band that covers it
-- GPU evidence without a declared floor: the largest band
+- GPU evidence without a declared floor: the smallest GPU band, marked as
+  assumed
 - unknown or unscanned: the budget band, marked as assumed
 
 Net income SHALL be gross minus that band's hand-set rent. The rent SHALL
 carry its source and date in configuration. With no budget band chosen, no
 subnet SHALL be ranked.
 
-#### Scenario: Undeclared GPU need is costed at the largest band
+#### Scenario: Undeclared GPU need is costed at the smallest GPU band
 
 - **WHEN** a subnet's verdict is `needs-gpu` with no declared VRAM and the
   budget band is the consumer band
-- **THEN** its required band is the datacenter band and it is cut at the
-  hardware rung
+- **THEN** its required band is the consumer band, marked as assumed, it is
+  netted at that band's rent, and it is not cut at the hardware rung
+
+#### Scenario: A declared floor above the budget is cut
+
+- **WHEN** a subnet declares 48 GB VRAM and the budget band is the 24 GB
+  consumer band
+- **THEN** it is cut at the hardware rung with a reason carrying 48 GB and
+  the band's 24 GB
 
 #### Scenario: A declared floor inside the budget is netted
 
