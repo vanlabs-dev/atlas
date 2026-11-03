@@ -234,6 +234,26 @@ def structured_error(category: str, message: str,
     }
 
 
+def _model_boundary(observations: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Mark observations stored under a different economics model than the
+    newest one, so a model change is never read as a market move. Rows
+    with no recorded version predate per-row versions (model 2 or older)."""
+    if not observations:
+        return {}
+    latest = observations[0].get("model_version")
+    crossed = False
+    for observation in observations:
+        same = observation.get("model_version") == latest
+        observation["same_model_as_latest"] = same
+        crossed = crossed or not same
+    if not crossed:
+        return {"model_boundary": False}
+    return {"model_boundary": True,
+            "model_note": "some observations were stored under an earlier "
+                          "economics model; do not compare their figures "
+                          "with later ones as a change in the subnet"}
+
+
 class FleetStore:
     """Read-only view over the fleet store + clones."""
 
@@ -411,6 +431,8 @@ class FleetStore:
                     **self._stamps(None, None, None))
             wanted = ["ts", "block_ref", "confidence", "cut_reason",
                       "cut_detail", "rank", "rank_mecid", "unrated_reason"]
+            if "model_version" in columns:
+                wanted.append("model_version")
             if field and field not in wanted:
                 wanted.append(field)
             elif not field:
@@ -441,6 +463,7 @@ class FleetStore:
             observations[0]["ts"] if observations else None,
             observations[0]["block_ref"] if observations else None,
             (feature or {}).get("scanned_at"))
+        stamps.update(_model_boundary(observations))
         if len(observations) < 2:
             return dict(structured_error(
                 "insufficient-history",
