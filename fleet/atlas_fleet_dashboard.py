@@ -14,7 +14,9 @@ shown per row:
     spike since the last snapshot can reach the top regardless of standing
     signal;
   - then divergence magnitude (repo-activity percentile vs price-momentum
-    percentile, either direction, tagged promising/dangerous);
+    percentile, either direction, stated as a neutral "points apart" fact;
+    the promising/dangerous cue was dropped unmeasured, change
+    signal-statistics-ties);
   - then emission severity (share routed off-miners; newly-changed counts
     as fresh);
   - then abandonment (cold repo, weighted up when price is elevated).
@@ -122,8 +124,10 @@ def _pct(value: Optional[float]) -> Optional[int]:
 
 def score_subnet(row: Dict[str, Any], fresh: bool, cfg: Dict[str, Any]
                  ) -> Dict[str, Any]:
-    """Return the attention score plus the dominant reason, direction cue,
-    and whether the row is a pure-opaque (headline-suppressed) case."""
+    """Return the attention score plus the dominant reason and whether the
+    row is a pure-opaque (headline-suppressed) case. No direction cue: the
+    board states how far activity and price ranks are apart and never which
+    way price should move (change: signal-statistics-ties)."""
     act = row.get("activity_pct")
     mom = row.get("momentum_pct")
     redirect = row.get("redirect_fraction_upper_bound") or 0.0
@@ -160,25 +164,13 @@ def score_subnet(row: Dict[str, Any], fresh: bool, cfg: Dict[str, Any]
     score = int(round(min(100.0, sum(weight for _n, weight in components))))
     dominant = max(components, key=lambda c: c[1])[0] if components else "quiet"
 
-    # Direction cue: promising (accumulate) vs dangerous (fade/extraction)
-    # vs watch (fresh/neutral until inspected).
-    if dominant == "divergence":
-        promising = div_signed is not None and div_signed >= 0
-        cue = ("up", "▲") if promising else ("dn", "▼")
-    elif dominant in ("emission", "abandon", "opaque"):
-        cue = ("dn", "▼")
-    elif dominant == "fresh":
-        cue = ("amb", "◆")
-    else:
-        cue = ("tx3", "◆")
-
     pure_opaque = (opaque and not paired) or (
         opaque and dominant == "opaque" and redirect < 0.1
         and (div_signed is None or abs(div_signed) < 20) and not cold
         and not (fresh or pulse_spike))
 
-    return {"score": score, "why": dominant, "cue_kind": cue[0],
-            "cue": cue[1], "div_signed": div_signed, "cold": cold,
+    return {"score": score, "why": dominant,
+            "div_signed": div_signed, "cold": cold,
             "pulse_spike": pulse_spike, "econ_fresh": bool(fresh),
             "fresh": fresh or pulse_spike, "pure_opaque": pure_opaque}
 
@@ -215,22 +207,11 @@ def build_thesis(row: Dict[str, Any], sc: Dict[str, Any],
         return ("Branch-pulse spike: %d branch tips moved since last snapshot "
                 "while the default branch %s."
                 % (changed, "sleeps" if c30 == 0 else "ships"))
-    if why == "divergence" and sc["cue_kind"] == "up":
-        if mom_p is None:
-            return ("Top-%s%% dev activity, price history not yet accrued — "
-                    "ranked on activity%s alone."
-                    % (100 - (act_p or 0),
-                       (" + %d%% %s" % (rpct, _dominant_kind(emission)))
-                       if redirect else ""))
-        return ("Repo top-%s%% active, token bottom-%s%% — market hasn't "
-                "priced %d commits/30d from %d devs."
-                % (100 - (act_p or 0), mom_p, c30, a30))
-    if why == "divergence" and sc["cue_kind"] == "dn":
-        if days is not None and mom7 is not None and mom7 > 0:
-            return ("Price %s 7d on a repo dead %dd — momentum with nothing "
-                    "behind it." % (_mom_txt(mom7), days))
-        return ("Token top-%s%% momentum on a repo cooled to %d commits/30d."
-                % (100 - (mom_p or 0), c30))
+    if why == "divergence":
+        return ("Activity rank %s, price rank %s: %d points apart. "
+                "%d commits/30d from %d devs, price %s over 7d."
+                % (act_p, mom_p, abs(sc.get("div_signed") or 0), c30, a30,
+                   _mom_txt(mom7)))
     if why == "abandon":
         if org_multi:
             return ("Org runs %d subnets and one just went cold — %dd "
@@ -287,13 +268,18 @@ def _route_summary(emission: Dict[str, Any]) -> str:
     return " + ".join(kinds[:3]) if kinds else "routing in code"
 
 
+def _mark(sc: Dict[str, Any]) -> Tuple[str, str]:
+    """(color, glyph) for a row: amber when something moved this snapshot,
+    grey otherwise. A fact marker, never a direction."""
+    return ("var(--amb)", "◆") if sc.get("fresh") else ("var(--tx3)", "◆")
+
+
 def build_badges(row: Dict[str, Any], sc: Dict[str, Any],
                  emission: Dict[str, Any]) -> List[Dict[str, str]]:
     badges: List[Dict[str, str]] = []
     div = sc.get("div_signed")
     if div is not None and abs(div) >= 15:
-        badges.append({"t": "DIV %+d" % div,
-                       "color": "var(--up)" if div >= 0 else "var(--dn)"})
+        badges.append({"t": "%d APART" % abs(div), "color": "var(--tx2)"})
     if sc["cold"] and row.get("days_since") is not None:
         badges.append({"t": "COLD %dd" % row["days_since"],
                        "color": "var(--dn)"})
@@ -376,10 +362,6 @@ def _drawer_detail(row: Dict[str, Any], sc: Dict[str, Any],
                          % (org, group["count"],
                             ", SN".join(str(n) for n in group["netuids"])))
             break
-    dir_label = {"up": "PROMISING — substance ahead of price",
-                 "dn": "DANGEROUS — price ahead of substance",
-                 "amb": "WATCH — something just moved",
-                 "tx3": "QUIET"}.get(sc["cue_kind"], "")
     opaque_note = ("Economics load from a remote server at runtime — the "
                    "real split is unknowable from the repository."
                    if row.get("emission_opaque") else None)
@@ -387,9 +369,9 @@ def _drawer_detail(row: Dict[str, Any], sc: Dict[str, Any],
                 "fork history — context only)"
                 % (row.get("total_commits_context") or 0,
                    row.get("total_authors_context") or 0))
-    return {"netuid": row.get("netuid"), "org": org or "", "cue": sc["cue"],
-            "cue_kind": sc["cue_kind"], "thesis": thesis,
-            "dir_label": dir_label, "dev_block": dev_block,
+    return {"netuid": row.get("netuid"), "org": org or "",
+            "mark": _mark(sc)[1], "mark_color": _mark(sc)[0],
+            "thesis": thesis, "dev_block": dev_block,
             "px_block": px_block, "emissions": emissions,
             "away_line": away_line, "team_note": team_note,
             "opaque_note": opaque_note, "lifetime": lifetime}
@@ -498,15 +480,14 @@ _JS = """
   var drawer=document.getElementById('drawer'),shade=document.getElementById('shade');
   function esc(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
   function open(uid){var s=DETAIL[uid];if(!s)return;
-    var cc='var(--'+s.cue_kind+')';
+    var cc=s.mark_color;
     var em=s.emissions.map(function(e){return '<div style="display:flex;align-items:baseline;gap:8px;font:400 11px monospace;margin-bottom:4px"><span style="font-weight:700;color:'+e.color+';min-width:64px;text-transform:uppercase">'+esc(e.kind)+'</span><span style="color:var(--tx)">'+esc(e.frac)+'</span><span style="color:var(--tx3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(e.dest)+'</span><span style="color:var(--tx3)">'+esc(e.cite)+'</span></div>'}).join('');
     var opaque=s.opaque_note?'<div style="font:500 11px monospace;color:var(--amb);margin-bottom:6px">'+esc(s.opaque_note)+'</div>':'';
     var team=s.team_note?'<div><div class="mono" style="font:700 10px monospace;letter-spacing:.15em;color:var(--tx3);margin-bottom:6px">TEAM CONCENTRATION</div><div class="mono" style="font-size:11.5px;line-height:1.6;color:var(--tx2)">'+esc(s.team_note)+'</div></div>':'';
-    drawer.innerHTML='<div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)"><span class="mono" style="font-weight:700;font-size:15px;color:'+cc+'">'+esc(s.cue)+'</span><span class="mono" style="font-weight:700;font-size:15px">SN'+esc(s.netuid)+'</span><span class="mono" style="font-size:11px;color:var(--tx3)">'+esc(s.org)+'</span><span style="flex:1"></span><button id="closebtn" class="mono" style="font-weight:700;font-size:12px;border:1px solid var(--line);background:none;color:var(--tx2);border-radius:6px;padding:3px 9px">ESC</button></div>'+
+    drawer.innerHTML='<div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)"><span class="mono" style="font-weight:700;font-size:15px;color:'+cc+'">'+esc(s.mark)+'</span><span class="mono" style="font-weight:700;font-size:15px">SN'+esc(s.netuid)+'</span><span class="mono" style="font-size:11px;color:var(--tx3)">'+esc(s.org)+'</span><span style="flex:1"></span><button id="closebtn" class="mono" style="font-weight:700;font-size:12px;border:1px solid var(--line);background:none;color:var(--tx2);border-radius:6px;padding:3px 9px">ESC</button></div>'+
       '<div style="flex:1;overflow:auto;padding:16px 18px;display:flex;flex-direction:column;gap:16px">'+
       '<div style="font:500 15px/1.4 sans-serif">'+esc(s.thesis)+'</div>'+
-      '<div class="mono" style="font:500 10px monospace;letter-spacing:.12em;color:'+cc+'">'+esc(s.dir_label)+'</div>'+
-      '<div><div class="mono" style="font:700 10px monospace;letter-spacing:.15em;color:var(--tx3);margin-bottom:6px">DEV ACTIVITY</div><div class="mono" style="font-size:11.5px;line-height:1.8;color:var(--tx2);white-space:pre-line">'+esc(s.dev_block)+'</div></div>'+
+            '<div><div class="mono" style="font:700 10px monospace;letter-spacing:.15em;color:var(--tx3);margin-bottom:6px">DEV ACTIVITY</div><div class="mono" style="font-size:11.5px;line-height:1.8;color:var(--tx2);white-space:pre-line">'+esc(s.dev_block)+'</div></div>'+
       '<div><div class="mono" style="font:700 10px monospace;letter-spacing:.15em;color:var(--tx3);margin-bottom:6px">PRICE MOMENTUM vs FLEET</div><div class="mono" style="font-size:11.5px;line-height:1.8;color:var(--tx2);white-space:pre-line">'+esc(s.px_block)+'</div></div>'+
       '<div><div class="mono" style="font:700 10px monospace;letter-spacing:.15em;color:var(--tx3);margin-bottom:6px">EMISSION MAP</div>'+opaque+em+'<div class="mono" style="font-size:11px;color:var(--tx2);margin-top:8px">'+esc(s.away_line)+'</div></div>'+
       team+
@@ -539,17 +520,13 @@ def _bar(pct: Optional[int], color: str) -> str:
 
 def _head_row(rank: int, item: Dict[str, Any]) -> str:
     row, sc = item["row"], item["sc"]
-    cue_color = "var(--%s)" % sc["cue_kind"]
+    cue_color, mark = _mark(sc)
     act_p, mom_p = _pct(row.get("activity_pct")), _pct(row.get("momentum_pct"))
     b7 = None  # px bar color: red if negative momentum else green
     mom7 = row.get("momentum_7d")
     px_color = ("var(--up)" if (mom7 is not None and mom7 >= 0)
                 else "var(--dn)" if mom7 is not None else "var(--track)")
     tags = ["|all|"]
-    if sc["cue_kind"] == "up":
-        tags.append("|promising|")
-    if sc["cue_kind"] == "dn":
-        tags.append("|dangerous|")
     if sc["div_signed"] is not None and abs(sc["div_signed"]) >= 40:
         tags.append("|diverged|")
     if (row.get("redirect_fraction_upper_bound") or 0) >= 0.1 or row.get(
@@ -588,7 +565,7 @@ def _head_row(rank: int, item: Dict[str, Any]) -> str:
         'style="font-size:9px;color:var(--tx3);width:24px">PX</span>%s</div>'
         '</div></div>'
         % (row["netuid"], "".join(tags), cue_color, rank, sc["score"],
-           _esc(sc["why"]), cue_color, _esc(sc["cue"]), row["netuid"],
+           _esc(sc["why"]), cue_color, _esc(mark), row["netuid"],
            _esc(row.get("org") or ""), _esc(item["thesis"]), badges,
            _esc(item["evid"]), _bar(act_p, "var(--up)"),
            _bar(mom_p, px_color)))
@@ -602,12 +579,12 @@ def _mid_row(item: Dict[str, Any]) -> str:
     return (
         '<div class="mrow mono" data-uid="%d" style="display:flex;align-items:'
         'baseline;gap:7px;font-size:11px;color:var(--tx2);cursor:pointer;'
-        'padding:2px 0;min-width:0"><span style="color:var(--%s);font-weight:'
+        'padding:2px 0;min-width:0"><span style="color:%s;font-weight:'
         '700">%s</span><span style="font-weight:700;color:var(--tx)">SN%d'
         '</span><span style="font:700 8.5px monospace;color:%s;white-space:'
         'nowrap">%s</span><span style="overflow:hidden;text-overflow:ellipsis;'
         'white-space:nowrap">%s</span></div>'
-        % (row["netuid"], sc["cue_kind"], _esc(sc["cue"]), row["netuid"],
+        % (row["netuid"], _mark(sc)[0], _esc(_mark(sc)[1]), row["netuid"],
            badge_color, _esc(badge), _esc(thesis)))
 
 
@@ -619,9 +596,8 @@ def render_html(board: Dict[str, Any], theme: str = "dark") -> str:
                   counts["quiet"], counts["invisible"]))
     generated = _esc(board["generated_at"][:16].replace("T", " ") + " UTC")
 
-    filters = [("all", "ALL"), ("promising", "▲ PROMISING"),
-               ("dangerous", "▼ DANGEROUS"), ("diverged", "⚖ "
-               "DIVERGED"), ("emission", "⚑ EMISSION")]
+    filters = [("all", "ALL"), ("diverged", "⚖ DIVERGED"),
+               ("emission", "⚑ EMISSION")]
     fbtns = "".join(
         '<button class="mono" data-fb="%s" style="font:500 10px monospace;'
         'padding:4px 9px;border-radius:99px;border:1px solid var(--line);'

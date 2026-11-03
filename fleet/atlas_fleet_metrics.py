@@ -17,9 +17,11 @@ guessing:
   ranking so upstream fork history cannot inflate a subnet), plus a branch
   pulse — `git ls-remote` tip churn between passes — so a live subnet whose
   work happens off the default branch is not mistaken for abandoned.
-- Momentum + quadrant: alpha-price momentum reused from the signals
-  module's accumulating `signal_prices` vectors (no new API call, no
-  backfill; missing history renders n/a), and a percentile-rank quadrant.
+- Momentum and percentile ranks: alpha-price momentum reused from the
+  signals module's accumulating `signal_prices` vectors (no new API call,
+  no backfill; missing history or a re-registered netuid renders n/a), and
+  activity/momentum percentile ranks with averaged ties. The
+  accumulate/fade quadrant was dropped (change: signal-statistics-ties).
 
 Invariants inherited from the fleet: read-only over clones, never builds
 or executes subnet code, additive tables in the shared fleet store (the
@@ -676,7 +678,7 @@ def record_branch_tips(connection: sqlite3.Connection, config: Dict[str, Any],
 
 
 # ---------------------------------------------------------------------------
-# Momentum (from signal_prices) + quadrant percentiles — read-time, no writes
+# Momentum (from signal_prices) + percentile ranks, read-time, no writes
 # ---------------------------------------------------------------------------
 
 
@@ -764,21 +766,6 @@ def _percentile_ranks(values: Dict[int, float]) -> Dict[int, float]:
         last[value] = index
     return {netuid: ((first[value] + last[value]) / 2.0 + 0.5) / n
             for netuid, value in values.items()}
-
-
-def _quadrant_region(activity_pct: Optional[float],
-                     momentum_pct: Optional[float]) -> Optional[str]:
-    if activity_pct is None or momentum_pct is None:
-        return None
-    high_act = activity_pct >= 0.5
-    high_mom = momentum_pct >= 0.5
-    if high_act and high_mom:
-        return "ride"
-    if high_act and not high_mom:
-        return "accumulate"
-    if not high_act and high_mom:
-        return "fade"
-    return "ignore"
 
 
 def compute_momentum(connection: sqlite3.Connection, cfg: Dict[str, Any],
@@ -887,7 +874,7 @@ def _classify_activity(act: Optional[Dict[str, Any]],
 def report(connection: sqlite3.Connection, config: Dict[str, Any],
            now: Optional[datetime.datetime] = None) -> Dict[str, Any]:
     """Combined ranked rotation view: per-subnet activity, branch pulse,
-    momentum, emission summary, org; plus quadrant placement, the
+    momentum, emission summary, org; plus percentile ranks, the
     team-concentration groups, and the invisible-fleet tier. Read-only —
     ranks evidence, recommends nothing."""
     cfg = metrics_cfg(config)
@@ -942,8 +929,6 @@ def report(connection: sqlite3.Connection, config: Dict[str, Any],
                             else None,
             "momentum_pct": round(mom_ranks[nid], 4) if nid in mom_ranks
                             else None,
-            "quadrant": _quadrant_region(act_ranks.get(nid),
-                                         mom_ranks.get(nid)),
             "emission_opaque": emap.get("opaque", False),
             "emission_routes": len(emap.get("routes", [])),
             "redirect_fraction_upper_bound": emap.get(

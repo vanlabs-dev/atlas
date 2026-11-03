@@ -30,8 +30,8 @@
 
 ## 6. Cue removal (fleet-rotation-metrics)
 
-- [ ] 6.1 Remove `quadrant` from report rows, `cue`/`cue_kind`/`dir_label` and promising/dangerous filters and tags from the board; neutral "points apart" thesis. Verify: dashboard tests assert no ▲/▼, no "PROMISING"/"DANGEROUS", no "hasn't priced" in the rendered page; subnt tests still pass.
-- [ ] 6.2 Update `fleet/README.md` board section and the metrics docstrings. Verify: grep finds no `accumulate`/`promising` in `fleet/` outside tests and history notes.
+- [x] 6.1 Remove `quadrant` from report rows, `cue`/`cue_kind`/`dir_label` and promising/dangerous filters and tags from the board; neutral "points apart" thesis. Verify: dashboard tests assert no ▲/▼, no "PROMISING"/"DANGEROUS", no "hasn't priced" in the rendered page; subnt tests still pass.
+- [x] 6.2 Update `fleet/README.md` board section and the metrics docstrings. Verify: grep finds no `accumulate`/`promising` in `fleet/` outside tests and history notes.
 
 ## 7. Full verification and deploy prep
 

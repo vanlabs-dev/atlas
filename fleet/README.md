@@ -12,8 +12,8 @@ The self-healing, change-tracked fleet is the substrate; three downstream
 changes build on it (all below): **fleet-search** (a read-only code-search
 surface + `atlas-fleet` MCP server), **fleet-signals** (narrative / watchlist /
 econ-code alerts + an effectiveness ledger), and **fleet-rotation-metrics**
-(emission-redirect map, epoch-scoped activity + branch pulse, momentum /
-quadrant, and a ranked LAN-only "attention board" dashboard).
+(emission-redirect map, epoch-scoped activity + branch pulse, momentum and
+percentile ranks, and a ranked LAN-only "attention board" dashboard).
 
 ## Identity source (the "on chain detail") — discovery-gated
 
@@ -297,10 +297,18 @@ executing subnet code, per-slot fail-closed:
   (no fetch, no dating); `changed_tips` between passes is the branch-pulse
   metric, so a live subnet working off its default branch is not mistaken
   for abandoned.
-- **Momentum + quadrant.** Alpha-price momentum reused from the signals
-  `signal_prices` panel (no new API call, no backfill; missing history →
-  `n/a`), and a percentile-rank quadrant. Ranks evidence; recommends
-  nothing.
+- **Momentum and ranks.** Alpha-price momentum reused from the signals
+  `signal_prices` panel (no new API call, no backfill; missing history is
+  `n/a`). A window whose two vectors carry different registration blocks
+  for the netuid is a new subnet in a reused slot: `n/a`, and left out of
+  the fleet median. Activity and momentum percentiles give tied values the
+  average rank, so ties never follow netuid order. Activity skips commits
+  by bot and CI author addresses (`metrics.bot_author_patterns`); all-time
+  totals stay unfiltered context. Ranks evidence; recommends nothing.
+- **No direction cue** (change: signal-statistics-ties). The
+  accumulate/ride/ignore/fade quadrant and the board's ▲ promising /
+  ▼ dangerous cue were trading cues never measured against outcomes, so
+  they are gone. Divergence still scores, stated as "N points apart".
 
 The **dashboard** (`atlas_fleet_dashboard.py`) assembles one explicitly-
 scored "attention board" — subnets ordered from look-here to safely-ignore
