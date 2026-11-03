@@ -1399,7 +1399,8 @@ class TestRender(MiningBase):
         page = self.page()
         self.assertIn("ASSUMPTION", page)
         self.assertIn("independent earners + 1", page)
-        self.assertIn("incumbent", page)
+        self.assertIn("25th percentile earner", page)
+        self.assertIn("LOWER of two", page)
 
     def test_board_names_the_ranking_mechanism(self):
         self.seed([subnet(1, {0: [10, 9, 8], 1: [10, 9, 8]}, count=2,

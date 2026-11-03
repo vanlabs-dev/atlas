@@ -95,7 +95,7 @@
 
 ## 6. Surfaces (D9, D10, labels)
 
-- [ ] 6.1 Board HTML:
+- [x] 6.1 Board HTML:
   - "entrant TAO/mo at spot (model)"
   - alpha/day columns for entrant, parity, p25 and median
   - "N earning of M slots"
@@ -107,11 +107,11 @@
   - no use of "active" or "idle" anywhere on the page
 
   Verify with render tests that assert those strings and their absence.
-- [ ] 6.2 Add `compact_view` and use it for MCP `mining_board`, with cut and unrated rows as netuid, name and reason. Update the tool descriptions with the at-spot label and model. Verify with server tests:
+- [x] 6.2 Add `compact_view` and use it for MCP `mining_board`, with cut and unrated rows as netuid, name and reason. Update the tool descriptions with the at-spot label and model. Verify with server tests:
   - each row's key set equals the compact set
   - a store with no new columns returns nulls without an error
   - `mining_subnet` still returns every column
-- [ ] 6.3 Add `triage/README.md`, which marks the folder as an August 2026 snapshot that nothing reads. Run `python3 tools/readme_sync.py` and confirm it has no diff, or commit its output.
+- [x] 6.3 Add `triage/README.md`, which marks the folder as an August 2026 snapshot that nothing reads. Run `python3 tools/readme_sync.py` and confirm it has no diff, or commit its output.
 
 ## 7. Consumers and full suite
 

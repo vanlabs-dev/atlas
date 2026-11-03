@@ -350,7 +350,7 @@ token-safe, per-slot fail-closed all verified against real data).
   6h. At block 8823306: 128 observed / 36 ranked / 92 cut. `budget_band`
   is still null; the hardware rung is inert until the operator picks one.
 
-## Mining triage: ranking subnets by what an entrant could earn (changes: mining-triage, mining-board-accuracy)
+## Mining triage: ranking subnets by what an entrant could earn (changes: mining-triage, mining-board-accuracy, mining-economics-model)
 
 Runs inline after metrics in each pass (`atlas_fleet_mining.run_pass`), in
 the order economics, feasibility, classify, render. Read-only, additive
@@ -395,15 +395,39 @@ The model, grounded at subtensor `c004ceb` (spec 471) and Finney blocks
   `MinerBurned` within `owner_reconcile_tolerance` (0.01), or the subnet is
   unrated `owner-reconcile-failed`. No `(1 - burn)` factor is applied on
   top.
-- **Price and haircut from the Balancer pool.** Price is
+- **Price and haircut from the Balancer pool, at spot.** Price is
   (1 - q) / q x `SubnetTAO` / `SubnetAlphaIn`, q the `SwapBalancer` quote
-  weight (about 0.5 on all 128 today). The haircut uses the weighted sell
-  formula, which is x*y=k at q = 0.5. A missing reserve or weight blocks
+  weight (about 0.5 on all 128 today). The haircut is the weighted-sell
+  slippage of the WHOLE subnet's daily participant emission
+  (`alpha_out_day` x `subnet_sale_fraction`, default 1.0) into the read
+  block's pool, not only the entrant's own sale; the day's TAO injection is
+  ignored. `pool_days` is pool alpha over daily emission. Every TAO figure
+  is labelled "at today's spot price". A missing reserve or weight blocks
   the figure; it is never read as zero.
-- **Entrant figure (a stated model).** A new miner joins one mechanism and
-  matches its independent earners: the independent pool shared among
-  independent earners + 1. Undefined with no independent earner. A subnet
-  ranks on its best surviving mechanism, and the board names it.
+- **Entrant figure (a stated model).** The LOWER of the parity share (the
+  independent pool shared among independent earners + 1) and the
+  25th-percentile independent earner (`percentile_of`, interpolated). The
+  parity, p25 and median earner figures are stored per mechanism and shown
+  beside it. Undefined with no independent earner. Registered UIDs that
+  earn nothing are never a divisor and never cut, and no surface says
+  whether they are active or idle. A subnet ranks on its best surviving
+  mechanism's NET figure, and the board names the mechanism.
+- **Hardware is costed per subnet.** `required_band`: no GPU evidence is
+  `cpu`; a declared VRAM floor is the smallest band covering it; GPU
+  evidence without a floor is the smallest GPU band (assumed); unknown or
+  unscanned is the budget band (assumed). Net = gross - that band's
+  hand-set rent (`rent_bands`, dated in `rent_source`). With
+  `budget_band` null nothing ranks (`no-budget-band`). `payback_days` is
+  the registration burn over net per day. The staking baseline is retired.
+- **Miner-activity facts and consensus mode (context, never a ranking
+  input).** From the same snapshot block: `registered_7d`,
+  `weighted_uids` (UIDs a fresh permit-holding validator weights),
+  `widest_weight_row`, `axons_served_7d` (validators included; only the
+  serving block is decoded), `consensus_mode` (Yuma or Null) and
+  `null_pruning_target`. A context read that fails leaves its counts null
+  and never fails the economics. The Yuma/Null tracker lives in
+  `mine_consensus_state` and `mine_consensus_events`: the first pass
+  seeds, a change stores one switch with its block, and nothing alerts.
 
 The ladder runs **once per pass**, after feasibility, and its result is
 stored on each `mine_econ` row: exactly one of a cut rung and detail, a
@@ -419,14 +443,18 @@ rank and `rank_mecid`, or an `unrated_reason`. Rungs, in order:
 5. `winner-take-all`: every mechanism with a nonzero split has an
    independent top-1 share at or above 95%, or no independent earner. An
    unread vector does not cut.
-6. `not-minable`: positive cited evidence only. No scanner rule produces
+6. `prune-risk`: the subnet is full and its immunity period is below
+   `min_immunity_blocks` (720, two default tempos). Unread fullness or
+   immunity does not cut.
+7. `not-minable`: positive cited evidence only. No scanner rule produces
    it yet.
-7. `above-budget-band`: inert while `budget_band` is null.
+8. `above-budget-band`: the required band is above `budget_band`
+   (`consumer-gpu` since 2026-11-03), or no band covers a declared floor.
 
 Unrated subnets are listed apart and never ranked last. The board, the MCP
 tools, the Telegram pulse and subnt all read this stored result; none
 re-derives it. Consumers suppress top-ten deltas once when
-`model_version` changes (now 2).
+`model_version` changes (now 3).
 
 **Feasibility never cuts on absence.** Entrypoints are recognised across
 layouts (`neurons/miner*.py`, `miner/{__main__,main,cli,run*}.py`,
@@ -436,7 +464,14 @@ validator, api, routes, migrations, test, scripts, docs, examples or
 vendored paths. No entrypoint gives `unknown`, shown as unverified. The
 unedited subnet-template `min_compute.yml` (fingerprinted from upstream,
 SN60 ships it verbatim) is recorded as `template` evidence and declares
-nothing. VRAM is read from the miner section only. Scans are keyed on the
+nothing. VRAM is read from the miner section only. GPU evidence (scanner
+v4) is read from every file of the miner subtree (a `miner*` or `neurons`
+directory outside validator, test, docs, example and vendored paths,
+bounded by `max_subtree_files`): a code or dependency token (`torch.cuda`,
+`"cuda"`, `vllm`, `flash_attn`, ...) gives `needs-gpu`, even with no
+recognised entrypoint; a bare mention (`gpu`, `nvidia`, `h100`, ...) is
+`gpu-mention` evidence and sets nothing. `possible` is shown as "no GPU
+evidence found", never as "runs on a CPU". Scans are keyed on the
 index's `indexed_sha`; a slot whose index is behind its clone waits, and a
 verdict applies only while it matches the slot's current epoch, indexed
 commit and active status. A superseded verdict is deleted.
@@ -461,9 +496,12 @@ python3 fleet/atlas_fleet_mining.py pass         # all four (inline on reconcile
 Board at `http://<pi-lan-ip>:8480/mining.html`, linked from the attention
 board and served by the existing `atlas-dashboard.service`. Query surface:
 `mining_board`, `mining_subnet`, `mining_history` on the existing
-`atlas-fleet` MCP server, read-only, `mode=ro`. Every response carries the
-economics time and block of the rows it returns, the scan time of the
-verdicts it joins, the stored outcome, and the parity model.
+`atlas-fleet` MCP server, read-only, `mode=ro`. `mining_board` returns a
+fixed compact row per ranked subnet (`compact_row`) plus the model, units,
+definitions and the consensus tracker; `mining_subnet` returns every stored
+field. Every response carries the economics time and block of the rows it
+returns, the scan time of the verdicts it joins, the stored outcome, and
+the model.
 
 Ranks evidence, recommends nothing. Holds no keys, submits no transaction,
 registers on nothing, runs no miner.

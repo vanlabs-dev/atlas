@@ -2002,6 +2002,13 @@ def report(connection: sqlite3.Connection, config: Dict[str, Any],
         netuid = int(row["netuid"])
         entry = dict(row)
         entry["mechanisms"] = mechanisms.get(netuid, [])
+        # The per-earner figures live on the mechanism the subnet is shown
+        # on (its ranked mechanism, else the largest split).
+        shown = next((m for m in entry["mechanisms"]
+                      if m.get("mecid") == row.get("rank_mecid")),
+                     _headline_mechanism(entry["mechanisms"]))
+        for column in _EARNER_COLUMNS:
+            entry[column] = (shown or {}).get(column)
         feature = feasibility.get(netuid)
         if feature and feature.get("scanned_at"):
             joined_scans.append(feature["scanned_at"])
@@ -2031,6 +2038,8 @@ def report(connection: sqlite3.Connection, config: Dict[str, Any],
         "owner_cut": state_get(connection, "owner_cut"),
         "parity_model": PARITY_MODEL,
         "budget_band": cfg.get("budget_band"),
+        "rent_source": cfg.get("rent_source"),
+        "consensus": consensus_view(connection),
         "counts": {"observed": len(rows), "ranked": len(ranked),
                    "cut": len(cut), "unrated": len(unrated)},
         "cut_summary": _cut_summary(cut),
@@ -2042,6 +2051,92 @@ def report(connection: sqlite3.Connection, config: Dict[str, Any],
         result["cut"] = cut[:cut_limit]
         result["cut_omitted"] = max(0, len(cut) - cut_limit)
     return result
+
+
+_EARNER_COLUMNS = ("parity_alpha_day", "indep_p25_alpha_day",
+                   "indep_median_alpha_day")
+
+
+def _split_pct(entry: Dict[str, Any]) -> Optional[float]:
+    split = next((m.get("split") for m in entry.get("mechanisms") or []
+                  if m.get("mecid") == entry.get("rank_mecid")), None)
+    return None if split is None else 100.0 * split
+
+
+def compact_row(entry: Dict[str, Any]) -> Dict[str, Any]:
+    """One ranked subnet as the board tool returns it: a fixed set of
+    fields, no raw reserves, issuance or mechanism dump (audit D10)."""
+    feature = entry.get("feasibility") or {}
+    evidence = (feature.get("evidence") or {}).get("evidence") or []
+    gpu = next((e for e in evidence if e.get("kind") == "gpu"), None)
+    return {
+        "rank": entry.get("rank"),
+        "netuid": entry.get("netuid"),
+        "name": entry.get("subnet_name"),
+        "mechanism": {"mecid": entry.get("rank_mecid"),
+                      "of": entry.get("mechanism_count"),
+                      "split_pct": _split_pct(entry)},
+        "entrant_alpha_day": entry.get("entrant_alpha_day"),
+        "entrant_net_tao_month_at_spot": entry.get("net_tao_month"),
+        "parity_alpha_day": entry.get("parity_alpha_day"),
+        "p25_earner_alpha_day": entry.get("indep_p25_alpha_day"),
+        "median_earner_alpha_day": entry.get("indep_median_alpha_day"),
+        "earning_uids": entry.get("earner_count"),
+        "registered_uids": entry.get("subnetwork_n"),
+        "registered_7d": entry.get("registered_7d"),
+        "weighted_uids": entry.get("weighted_uids"),
+        "widest_weight_row": entry.get("widest_weight_row"),
+        "axons_served_7d": entry.get("axons_served_7d"),
+        "consensus_mode": entry.get("consensus_mode"),
+        "flags": [flag for flag in (
+            NULL_FLAG if entry.get("consensus_mode") == "Null" else None,
+            pruning_flag(entry)) if flag],
+        "top1_share_pct": entry.get("top1_share_pct"),
+        "alpha_price_tao_spot": entry.get("price_tao"),
+        "haircut_pct": entry.get("haircut_pct"),
+        "pool_days": entry.get("pool_days"),
+        "payback_days": entry.get("payback_days"),
+        "hardware_band": entry.get("required_band"),
+        "hardware_band_assumed": bool(entry.get("band_assumed")),
+        "entry": {"uids_full": entry.get("uids_full"),
+                  "immunity_blocks": entry.get("immunity_period"),
+                  "registration_burn_tao": entry.get("reg_cost_tao")},
+        "hardware_evidence": {
+            "verdict": VERDICT_LABELS.get(feature.get("verdict"),
+                                          feature.get("verdict")),
+            "path": ("%s:%s" % (gpu.get("path"), gpu.get("line")) if gpu
+                     else feature.get("min_compute_path")
+                     or feature.get("entrypoint_path"))},
+        "confidence": entry.get("confidence"),
+    }
+
+
+def compact_view(view: Dict[str, Any]) -> Dict[str, Any]:
+    """The board tool's payload: the stamps, the model and definitions,
+    counts, the consensus tracker, compact ranked rows, and netuid, name and
+    reason for unrated and cut subnets. Full detail stays on the
+    single-subnet tool."""
+    keep = ("generated_at", "econ_ts", "econ_block", "econ_age_hours",
+            "stale", "stale_after_hours", "feasibility_ts", "model_version",
+            "budget_band", "rent_source", "counts", "cut_summary",
+            "consensus", "switch_block_ref")
+    out = {key: view.get(key) for key in keep}
+    out["model"] = view.get("parity_model") or PARITY_MODEL
+    out["units"] = ("TAO figures are per 30-day month at the read block's "
+                    "spot price; alpha figures are per day")
+    out["definitions"] = dict(ACTIVITY_DEFINITIONS)
+    out["ranked"] = [compact_row(entry) for entry in view.get("ranked", [])]
+    out["unrated"] = [{"netuid": e.get("netuid"), "name": e.get(
+        "subnet_name"), "reason": e.get("unrated_reason")}
+        for e in view.get("unrated", [])]
+    if "cut" in view:
+        out["cut"] = [{"netuid": e.get("netuid"),
+                       "name": e.get("subnet_name"),
+                       "reason": e.get("cut_reason"),
+                       "detail": e.get("cut_detail")}
+                      for e in view["cut"]]
+        out["cut_omitted"] = view.get("cut_omitted")
+    return out
 
 
 def _cut_summary(cut: List[Dict[str, Any]]) -> Dict[str, int]:
@@ -2141,10 +2236,36 @@ def _entry_cell(entry: Dict[str, Any]) -> str:
         _fmt(entry.get("reg_cost_tao"), 4))
 
 
+VERDICT_LABELS = {
+    VERDICT_POSSIBLE: "no GPU evidence found",
+    VERDICT_NEEDS_GPU: "GPU evidence found",
+    VERDICT_UNKNOWN: "unverified",
+    VERDICT_CLOSED: "closed",
+    VERDICT_STUB: "stub",
+}
+
+# Exact definitions, shown with the counts (change: mining-economics-model).
+# None says whether a UID is trying, working, or abandoned.
+ACTIVITY_DEFINITIONS = (
+    ("earning", "independent UIDs with nonzero incentive in the ranked "
+     "mechanism, of all registered UIDs. Incentive is stored in steps of "
+     "1/65535 of a mechanism's pool, so a smaller share reads as zero"),
+    ("reg 7d", "UIDs whose registration block is within the last 7 days"),
+    ("weighted", "UIDs given nonzero weight by at least one validator-permit "
+     "UID that updated within the subnet's activity cutoff; where "
+     "commit-reveal is on, these are the last revealed weights"),
+    ("widest row", "the most UIDs any one such validator weights"),
+    ("axons 7d", "axon entries served within the last 7 days, validators "
+     "included; many subnets do not use axons"),
+)
+
+
 def _feasibility_cells(entry: Dict[str, Any]) -> Tuple[str, str]:
     feature = entry.get("feasibility") or {}
     floor = feature.get("gpu_floor")
     verdict = feature.get("verdict")
+    evidence = (feature.get("evidence") or {}).get("evidence") or []
+    gpu = next((e for e in evidence if e.get("kind") == "gpu"), None)
     if floor:
         floor_cell = _esc(floor)
     elif feature.get("unscanned"):
@@ -2152,9 +2273,96 @@ def _feasibility_cells(entry: Dict[str, Any]) -> Tuple[str, str]:
     elif verdict == VERDICT_UNKNOWN:
         floor_cell = '<span class="warn">unverified</span>'
     else:
-        floor_cell = '<span class="note">%s</span>' % _esc(verdict)
-    path = feature.get("min_compute_path") or feature.get("entrypoint_path")
-    return floor_cell, "<code>%s</code>" % _esc(path or "")
+        floor_cell = _esc(VERDICT_LABELS.get(verdict, verdict or ""))
+    if gpu:
+        path = "%s:%s" % (gpu.get("path"), gpu.get("line"))
+    else:
+        path = (feature.get("min_compute_path")
+                or feature.get("entrypoint_path") or "")
+    return floor_cell, "<code>%s</code>" % _esc(path)
+
+
+def _count(value: Any) -> str:
+    return '<span class="note">unknown</span>' if value is None \
+        else _esc(int(value))
+
+
+def _activity_cell(entry: Dict[str, Any]) -> str:
+    return ("%s of %s earning &middot; reg 7d %s &middot; weighted %s "
+            "&middot; widest row %s &middot; axons 7d %s"
+            % (_count(entry.get("earner_count")),
+               _count(entry.get("subnetwork_n")),
+               _count(entry.get("registered_7d")),
+               _count(entry.get("weighted_uids")),
+               _count(entry.get("widest_weight_row")),
+               _count(entry.get("axons_served_7d"))))
+
+
+NULL_FLAG = "one validator's weights set all miner pay on this subnet"
+
+
+def pruning_flag(entry: Dict[str, Any]) -> Optional[str]:
+    target = entry.get("null_pruning_target")
+    registered = entry.get("subnetwork_n")
+    if target is None or registered is None or int(target) >= int(
+            registered):
+        return None
+    return ("owner pruning pending: target %d of %d registered; pruning "
+            "removes the lowest-emission UIDs that are not immune"
+            % (int(target), int(registered)))
+
+
+def _consensus_cell(entry: Dict[str, Any]) -> str:
+    mode = entry.get("consensus_mode")
+    if mode is None:
+        cell = '<span class="note">unknown</span>'
+    elif mode == "Null":
+        cell = '<span class="warn">Null: %s</span>' % _esc(NULL_FLAG)
+    else:
+        cell = _esc(mode)
+    flag = pruning_flag(entry)
+    if flag:
+        cell += ' &middot; <span class="warn">%s</span>' % _esc(flag)
+    return cell
+
+
+def _band_cell(entry: Dict[str, Any]) -> str:
+    band = entry.get("required_band")
+    if band is None:
+        return '<span class="note">unknown</span>'
+    return "%s%s" % (_esc(band), " (assumed)" if entry.get("band_assumed")
+                     else "")
+
+
+def _consensus_section(view: Dict[str, Any]) -> str:
+    tracker = view.get("consensus") or {}
+    counts = tracker.get("counts") or {}
+    rows = []
+    for item in tracker.get("null") or []:
+        since = ("switched at block %s" % item["since_block"]
+                 if item.get("since_block") is not None else
+                 "first seen by Atlas %s (block %s)"
+                 % (item.get("first_seen_by_atlas"),
+                    item.get("first_seen_block")))
+        rows.append("<tr><td>%s</td><td>%s</td></tr>"
+                    % (_esc(item["netuid"]), _esc(since)))
+    switches = "".join(
+        "<tr><td>%s</td><td>%s to %s</td><td>block %s</td></tr>"
+        % (_esc(e["netuid"]), _esc(e["from"]), _esc(e["to"]),
+           _esc(e["block"])) for e in tracker.get("switches") or [])
+    return (
+        "<h1>Consensus mode</h1><div class=\"sub\">%s &middot; on a Null "
+        "subnet, %s. Recorded each pass; switches are stored, not "
+        "alerted.</div><table><tr><th>Null subnet</th><th>since</th></tr>"
+        "%s</table><table><tr><th>netuid</th><th>switch</th><th>block</th>"
+        "</tr>%s</table>"
+        % (" &middot; ".join("%s %d" % (_esc(mode), count)
+                             for mode, count in sorted(counts.items()))
+           or "no mode recorded yet", _esc(NULL_FLAG),
+           "".join(rows) or "<tr><td colspan=\"2\" class=\"note\">none"
+                            "</td></tr>",
+           switches or "<tr><td colspan=\"3\" class=\"note\">no switch "
+                       "recorded</td></tr>"))
 
 
 def render_html(view: Dict[str, Any]) -> str:
@@ -2163,21 +2371,27 @@ def render_html(view: Dict[str, Any]) -> str:
         floor_cell, path_cell = _feasibility_cells(entry)
         rows.append(
             "<tr><td class=\"num\">%s</td><td>%s</td><td>%s</td><td>%s</td>"
-            "<td class=\"num\">%s</td><td class=\"num warn\">%s</td>"
             "<td class=\"num\">%s</td><td class=\"num\">%s</td>"
             "<td class=\"num\">%s</td><td class=\"num\">%s</td>"
-            "<td class=\"num\">%s</td><td>%s</td><td>%s</td><td>%s</td>"
-            "<td>%s</td></tr>"
+            "<td class=\"num\">%s</td><td class=\"wrap\">%s</td>"
+            "<td class=\"wrap\">%s</td><td class=\"num\">%s</td>"
+            "<td class=\"num\">%s</td><td class=\"num\">%s</td>"
+            "<td class=\"num\">%s</td><td class=\"num\">%s</td>"
+            "<td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
             % (entry.get("rank"), entry.get("netuid"), _name_cell(entry),
                _mechanism_cell(entry),
-               _fmt(_figure(entry), 4),
-               _fmt(entry.get("incumbent_alpha_day"), 1),
-               _fmt(entry.get("displacement_rank"), 0),
-               _fmt(entry.get("price_tao"), 6),
-               _fmt(entry.get("owner_share_pct"), 2),
-               _fmt(entry.get("earner_count"), 0),
+               _fmt(_figure(entry), 2),
+               _fmt(entry.get("entrant_alpha_day"), 2),
+               _fmt(entry.get("parity_alpha_day"), 2),
+               _fmt(entry.get("indep_p25_alpha_day"), 2),
+               _fmt(entry.get("indep_median_alpha_day"), 2),
+               _activity_cell(entry), _consensus_cell(entry),
                _fmt(entry.get("top1_share_pct"), 1),
-               _entry_cell(entry), floor_cell, path_cell,
+               _fmt(entry.get("price_tao"), 6),
+               _fmt(entry.get("haircut_pct"), 2),
+               _fmt(entry.get("pool_days"), 0),
+               _fmt(entry.get("payback_days"), 1),
+               _band_cell(entry), _entry_cell(entry), floor_cell, path_cell,
                _esc(entry.get("confidence"))))
 
     unrated = "".join(
@@ -2197,9 +2411,10 @@ def render_html(view: Dict[str, Any]) -> str:
         for k, v in sorted(view.get("cut_summary", {}).items()))
 
     band = view.get("budget_band")
-    band_note = ("budget band: %s" % _esc(band) if band else
-                 "no budget band chosen yet, so rent is unknown and the "
-                 "hardware rung does not cut")
+    band_note = ("budget band: %s; rent %s" % (
+        _esc(band), _esc(view.get("rent_source") or "source not recorded"))
+                 if band else
+                 "no budget band chosen, so nothing is ranked")
     age = view.get("econ_age_hours")
     age_text = ("age %.1fh" % age) if age is not None else "age unknown"
     stale = ('<div class="bad">STALE: the last complete economics pass is '
@@ -2209,6 +2424,9 @@ def render_html(view: Dict[str, Any]) -> str:
                                            or 18))
              if view.get("stale") else "")
     counts = view.get("counts", {})
+    definitions = "<br>".join(
+        "<b>%s</b>: %s" % (_esc(name), _esc(text))
+        for name, text in ACTIVITY_DEFINITIONS)
 
     return (
         "<html><head><meta charset=\"utf-8\">"
@@ -2226,12 +2444,17 @@ def render_html(view: Dict[str, Any]) -> str:
         "reconciled against MinerBurned, Balancer pool price<br>"
         "<span class=\"warn\">ASSUMPTION:</span> %s</div>"
         "<table><tr><th>rank</th><th>netuid</th><th>on-chain name</th>"
-        "<th>ranked on mechanism</th><th>entrant TAO/mo (model)</th>"
-        "<th>incumbent &alpha;/day</th><th>enter at rank</th>"
-        "<th>alpha price</th><th>owner share %%</th>"
-        "<th>indep. earners</th><th>indep. top-1 %%</th>"
-        "<th>entry</th><th>hardware floor</th><th>evidence</th>"
-        "<th>confidence</th></tr>%s</table>"
+        "<th>ranked on mechanism</th>"
+        "<th>entrant net TAO/mo at today's spot price (model)</th>"
+        "<th>entrant &alpha;/day</th><th>parity &alpha;/day</th>"
+        "<th>p25 earner &alpha;/day</th><th>median earner &alpha;/day</th>"
+        "<th>UIDs (definitions below)</th><th>consensus</th>"
+        "<th>indep. top-1 %%</th><th>alpha price (spot)</th>"
+        "<th>haircut %%</th><th>pool days</th><th>payback days</th>"
+        "<th>hardware band</th><th>entry</th><th>hardware evidence</th>"
+        "<th>evidence path</th><th>confidence</th></tr>%s</table>"
+        "<div class=\"note\">%s</div>"
+        "%s"
         "<h1>Unrated</h1><div class=\"sub\">%d subnet(s) survive the ladder "
         "but have no figure; they are not ranked last, they are unrated"
         "</div><table><tr><th>netuid</th><th>on-chain name</th>"
@@ -2249,8 +2472,9 @@ def render_html(view: Dict[str, Any]) -> str:
            _esc(view.get("switch_block_ref") if view.get("switch_block_ref")
                 is not None else "n/a"),
            _esc(view.get("parity_model") or PARITY_MODEL),
-           "".join(rows) or "<tr><td colspan=\"15\" class=\"note\">"
+           "".join(rows) or "<tr><td colspan=\"21\" class=\"note\">"
                             "no classified pass yet</td></tr>",
+           definitions, _consensus_section(view),
            counts.get("unrated", 0),
            unrated or "<tr><td colspan=\"3\" class=\"note\">none</td></tr>",
            counts.get("observed", 0), counts.get("ranked", 0),
