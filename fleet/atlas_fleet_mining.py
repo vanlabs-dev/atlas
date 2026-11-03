@@ -792,6 +792,87 @@ def _copy_headline(row: Dict[str, Any],
         row[column] = mech.get(source) if mech else None
 
 
+# Seven days of 12 s blocks: the window for registrations and axon serves.
+ACTIVITY_WINDOW_BLOCKS = 7 * BLOCKS_PER_DAY
+
+
+def activity_facts(netuid: int, mechanism_count: int,
+                   context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Counts read at the snapshot block, each with an exact definition and
+    none a claim about whether a UID is active or idle (change:
+    mining-economics-model). An unread input makes its count None, never
+    zero.
+
+    - registered_7d: UIDs whose registration block is within 7 days
+    - weighted_uids: UIDs given nonzero weight by at least one UID holding a
+      validator permit whose last update, for that mechanism, is within the
+      subnet's activity cutoff
+    - widest_weight_row: the most UIDs one such row weights
+    - axons_served_7d: axon entries served within 7 days (validators
+      included)
+    - consensus_mode: Yuma or Null; None when unread
+    - null_pruning_target: a pending owner pruning target, if any
+    """
+    out: Dict[str, Any] = {"registered_7d": None, "weighted_uids": None,
+                           "widest_weight_row": None,
+                           "axons_served_7d": None, "consensus_mode": None,
+                           "null_pruning_target": None}
+    if not context:
+        return out
+    unread = context.get("unread") or {}
+    failures = context.get("failures") or {}
+    maps = context.get("maps") or {}
+    block = context.get("block_number")
+
+    def readable(item: str) -> bool:
+        return item not in unread and netuid not in (failures.get(item)
+                                                     or {})
+
+    if readable("SubnetEpochConsensus"):
+        out["consensus_mode"] = (maps.get("SubnetEpochConsensus") or {}).get(
+            netuid, "Yuma")
+    if readable("NullPruningTarget"):
+        out["null_pruning_target"] = (maps.get("NullPruningTarget")
+                                      or {}).get(netuid)
+    if block is None:
+        return out
+    since = int(block) - ACTIVITY_WINDOW_BLOCKS
+    registration = (context.get("registration") or {}).get(netuid)
+    if readable("BlockAtRegistration") and registration is not None:
+        out["registered_7d"] = sum(1 for b in registration
+                                   if b is not None and b >= since)
+    if readable("Axons"):
+        out["axons_served_7d"] = sum(
+            1 for b in (context.get("axons") or {}).get(netuid, [])
+            if b >= since)
+    if all(readable(item) for item in ("ValidatorPermit", "LastUpdate",
+                                       "ActivityCutoff", "Weights")):
+        cutoff = (maps.get("ActivityCutoff") or {}).get(netuid)
+        permits = (maps.get("ValidatorPermit") or {}).get(netuid, [])
+        weights = context.get("weights") or {}
+        if cutoff is not None:
+            weighted = set()
+            widest = 0
+            for mecid in range(max(1, int(mechanism_count or 1))):
+                last = (maps.get("LastUpdate") or {}).get((netuid, mecid),
+                                                          [])
+                failed = (failures.get("Weights") or {})
+                for uid, permit in enumerate(permits):
+                    if not permit or uid >= len(last):
+                        continue
+                    if int(block) - int(last[uid]) > int(cutoff):
+                        continue  # stale row: not counted
+                    if (netuid, mecid, uid) in failed:
+                        return dict(out, weighted_uids=None,
+                                    widest_weight_row=None)
+                    row = weights.get((netuid, mecid, uid), [])
+                    weighted.update(row)
+                    widest = max(widest, len(row))
+            out["weighted_uids"] = len(weighted)
+            out["widest_weight_row"] = widest
+    return out
+
+
 def subnet_economics(cfg: Dict[str, Any], netuid: int,
                      snapshot: Dict[str, Any], now: str
                      ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
@@ -968,6 +1049,7 @@ def subnet_economics(cfg: Dict[str, Any], netuid: int,
             if mech["no_figure_reason"] in (None, MECH_ZERO_SPLIT):
                 mech["no_figure_reason"] = reason
 
+    row.update(activity_facts(netuid, count, snapshot.get("context")))
     _copy_headline(row, _headline_mechanism(mechs))
     return row, mechs
 
@@ -1063,6 +1145,7 @@ def run_econ(connection: sqlite3.Connection, config: Dict[str, Any],
             _insert(connection, "mine_econ", row)
         for mech in mechanisms:
             _insert(connection, "mine_mechanism", mech)
+        record_consensus(connection, econ, snapshot.get("block_number"), now)
         prune = prune_econ(connection, cfg, now=now)
         state_set(connection, "miner_split_source", MINER_SPLIT_SOURCE)
         state_set(connection, "owner_cut", "%s (%s)" % (
@@ -1080,6 +1163,68 @@ def run_econ(connection: sqlite3.Connection, config: Dict[str, Any],
                                   if r["confidence"] != CONF_OK),
             "block_ref": snapshot.get("block_number"), "pruned": prune,
             "ts": now, "notes": notes}
+
+
+def record_consensus(connection: sqlite3.Connection,
+                     econ: List[Dict[str, Any]], block_number: Optional[int],
+                     now: str) -> int:
+    """The Yuma/Null tracker. A first observation seeds without a switch; a
+    mode that differs from the last recorded one stores one switch with its
+    block. An unknown mode records nothing. Nothing here sends an alert.
+    Returns the number of switches recorded."""
+    switches = 0
+    for row in econ:
+        mode = row.get("consensus_mode")
+        if mode is None:
+            continue
+        netuid = int(row["netuid"])
+        known = connection.execute(
+            "SELECT mode FROM mine_consensus_state WHERE netuid = ?",
+            (netuid,)).fetchone()
+        if known is None:
+            connection.execute(
+                "INSERT INTO mine_consensus_state (netuid, mode, "
+                "first_seen_ts, first_seen_block) VALUES (?, ?, ?, ?)",
+                (netuid, mode, now, block_number))
+        elif known[0] != mode:
+            connection.execute(
+                "INSERT INTO mine_consensus_events (netuid, prev_mode, "
+                "new_mode, block_number, ts) VALUES (?, ?, ?, ?, ?)",
+                (netuid, known[0], mode, block_number, now))
+            connection.execute(
+                "UPDATE mine_consensus_state SET mode = ?, since_block = ?, "
+                "since_ts = ? WHERE netuid = ?",
+                (mode, block_number, now, netuid))
+            switches += 1
+    return switches
+
+
+def consensus_view(connection: sqlite3.Connection) -> Dict[str, Any]:
+    """Counts per mode, the Null subnets with their "since", and the
+    switches recorded. Read-only; an absent table reads as empty."""
+    try:
+        states = connection.execute(
+            "SELECT netuid, mode, first_seen_ts, first_seen_block, "
+            "since_block, since_ts FROM mine_consensus_state "
+            "ORDER BY netuid").fetchall()
+        events = connection.execute(
+            "SELECT netuid, prev_mode, new_mode, block_number, ts FROM "
+            "mine_consensus_events ORDER BY id DESC LIMIT 50").fetchall()
+    except sqlite3.Error:
+        return {"counts": {}, "null": [], "switches": []}
+    counts: Dict[str, int] = {}
+    null: List[Dict[str, Any]] = []
+    for netuid, mode, first_ts, first_block, since_block, since_ts in states:
+        counts[mode] = counts.get(mode, 0) + 1
+        if mode == "Null":
+            null.append({"netuid": netuid, "since_block": since_block,
+                         "since_ts": since_ts,
+                         "first_seen_by_atlas": None if since_block
+                         is not None else first_ts,
+                         "first_seen_block": first_block})
+    return {"counts": counts, "null": null,
+            "switches": [{"netuid": e[0], "from": e[1], "to": e[2],
+                          "block": e[3], "ts": e[4]} for e in events]}
 
 
 def prune_econ(connection: sqlite3.Connection, cfg: Dict[str, Any],

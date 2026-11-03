@@ -421,3 +421,159 @@ class TestScannerV4(Base):
 
     def test_the_scanner_version_is_4(self):
         self.assertEqual(mine.SCAN_VERSION, "4")
+
+
+# ---------------------------------------------------------------------------
+# 5b. Activity facts and the consensus tracker
+# ---------------------------------------------------------------------------
+
+BLOCK = 9_000_000
+
+
+def context(**overrides):
+    """A mining context for netuid 1 at BLOCK, as live-data returns it."""
+    base = {
+        "block_number": BLOCK, "block_hash": "0xabc",
+        "maps": {
+            "SubnetEpochConsensus": {},
+            "NullPruningTarget": {},
+            # uids 0 and 1 hold permits; 0 is fresh, 1 is stale.
+            "ValidatorPermit": {1: [True, True, False, False, False]},
+            "LastUpdate": {(1, 0): [BLOCK - 10, BLOCK - 9000, 0, 0, 0]},
+            "ActivityCutoff": {1: 5000},
+        },
+        "failures": {}, "unread": {},
+        "weights": {(1, 0, 0): [2, 3, 4, 5, 6], (1, 0, 1): [2, 7]},
+        "registration": {1: [100, BLOCK - 10, BLOCK - 60_000, None, 5]},
+        "axons": {1: [BLOCK - 5, BLOCK - 100_000]},
+    }
+    base.update(overrides)
+    return base
+
+
+class TestActivityFacts(unittest.TestCase):
+
+    def facts(self, ctx, count=1):
+        return mine.activity_facts(1, count, ctx)
+
+    def test_each_count_follows_its_definition(self):
+        out = self.facts(context())
+        self.assertEqual(out["registered_7d"], 1)
+        self.assertEqual(out["axons_served_7d"], 1)
+        self.assertEqual(out["weighted_uids"], 5)
+        self.assertEqual(out["widest_weight_row"], 5)
+        self.assertEqual(out["consensus_mode"], "Yuma")  # unset is Yuma
+        self.assertIsNone(out["null_pruning_target"])
+
+    def test_a_stale_validator_row_is_not_counted(self):
+        # uid 1 weights uid 7, but it last updated 9,000 blocks ago against
+        # a 5,000-block cutoff.
+        self.assertNotIn(7, context()["weights"][(1, 0, 0)])
+        self.assertEqual(self.facts(context())["weighted_uids"], 5)
+
+    def test_a_row_without_a_permit_is_not_counted(self):
+        ctx = context()
+        ctx["weights"][(1, 0, 2)] = list(range(50, 90))
+        ctx["maps"]["LastUpdate"][(1, 0)][2] = BLOCK
+        self.assertEqual(self.facts(ctx)["weighted_uids"], 5)
+
+    def test_a_top5_weighting_pattern_reads_as_a_widest_row_of_5(self):
+        ctx = context()
+        ctx["maps"]["ValidatorPermit"][1] = [True, True, True]
+        ctx["maps"]["LastUpdate"][(1, 0)] = [BLOCK, BLOCK, BLOCK]
+        ctx["weights"] = {(1, 0, 0): [3, 4, 5, 6, 7], (1, 0, 1): [3, 4, 5],
+                          (1, 0, 2): []}
+        self.assertEqual(self.facts(ctx)["widest_weight_row"], 5)
+
+    def test_an_unread_input_is_none_not_zero(self):
+        out = self.facts(context(unread={"BlockAtRegistration": "x",
+                                         "Axons": "y", "Weights": "z",
+                                         "SubnetEpochConsensus": "w"}))
+        self.assertIsNone(out["registered_7d"])
+        self.assertIsNone(out["axons_served_7d"])
+        self.assertIsNone(out["weighted_uids"])
+        self.assertIsNone(out["widest_weight_row"])
+        self.assertIsNone(out["consensus_mode"])
+        self.assertIsNone(self.facts(None)["registered_7d"])
+
+    def test_a_per_subnet_decode_failure_is_none(self):
+        out = self.facts(context(failures={
+            "SubnetEpochConsensus": {1: "unknown index"},
+            "Weights": {(1, 0, 0): "bad row"}}))
+        self.assertIsNone(out["consensus_mode"])
+        self.assertIsNone(out["weighted_uids"])
+
+    def test_null_and_a_pending_prune_are_read(self):
+        ctx = context()
+        ctx["maps"]["SubnetEpochConsensus"] = {1: "Null"}
+        ctx["maps"]["NullPruningTarget"] = {1: 200}
+        out = self.facts(ctx)
+        self.assertEqual(out["consensus_mode"], "Null")
+        self.assertEqual(out["null_pruning_target"], 200)
+
+    def test_no_stored_fact_holds_an_address(self):
+        out = self.facts(context())
+        self.assertTrue(all(v is None or isinstance(v, (int, str))
+                            for v in out.values()))
+
+
+class TestConsensusTracker(Base):
+
+    def snapshot(self, modes, block):
+        snap = synthetic([subnet(n, [5, 5]) for n in sorted(modes)],
+                         block=block)
+        snap["context"] = {"block_number": block, "maps": {
+            "SubnetEpochConsensus": {n: m for n, m in modes.items()
+                                     if m not in (None, "Yuma")}},
+            "failures": {"SubnetEpochConsensus": {
+                n: "bad" for n, m in modes.items() if m is None}},
+            "unread": {}}
+        return snap
+
+    def econ_pass(self, modes, block, now):
+        out = mine.run_econ(self.conn, self.config, now=now,
+                            snapshot=self.snapshot(modes, block))
+        self.assertTrue(out["ok"], out)
+
+    def events(self):
+        return self.conn.execute(
+            "SELECT netuid, prev_mode, new_mode, block_number FROM "
+            "mine_consensus_events ORDER BY id").fetchall()
+
+    def test_the_first_pass_seeds_without_switches(self):
+        modes = {n: "Yuma" for n in range(1, 129)}
+        modes[24] = "Null"
+        self.econ_pass(modes, 100, "2026-11-03T00:00:00+00:00")
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM mine_consensus_state").fetchone()[0], 128)
+        self.assertEqual(self.events(), [])
+
+    def test_a_switch_is_recorded_with_its_block_and_no_alert(self):
+        self.econ_pass({1: "Yuma"}, 100, "2026-11-03T00:00:00+00:00")
+        self.econ_pass({1: "Null"}, 200, "2026-11-03T06:00:00+00:00")
+        self.assertEqual(self.events(), [(1, "Yuma", "Null", 200)])
+        view = mine.consensus_view(self.conn)
+        self.assertEqual(view["counts"], {"Null": 1})
+        self.assertEqual(view["null"][0]["since_block"], 200)
+        self.assertIsNone(view["null"][0]["first_seen_by_atlas"])
+        # The tracker owns no alert path: nothing reaches the chain
+        # parameter watch's event table, which Telegram reads.
+        tables = {r[0] for r in self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'")}
+        self.assertNotIn("chain_param_events", tables)
+
+    def test_a_null_subnet_seen_first_says_so(self):
+        self.econ_pass({24: "Null"}, 100, "2026-11-03T00:00:00+00:00")
+        entry = mine.consensus_view(self.conn)["null"][0]
+        self.assertIsNone(entry["since_block"])
+        self.assertEqual(entry["first_seen_by_atlas"],
+                         "2026-11-03T00:00:00+00:00")
+
+    def test_an_unknown_mode_records_nothing(self):
+        self.econ_pass({1: "Yuma"}, 100, "2026-11-03T00:00:00+00:00")
+        self.econ_pass({1: None}, 200, "2026-11-03T06:00:00+00:00")
+        self.assertEqual(self.events(), [])
+        latest = self.conn.execute(
+            "SELECT consensus_mode FROM mine_econ WHERE netuid = 1 "
+            "ORDER BY ts DESC LIMIT 1").fetchone()
+        self.assertIsNone(latest[0])
