@@ -577,3 +577,74 @@ class TestConsensusTracker(Base):
             "SELECT consensus_mode FROM mine_econ WHERE netuid = 1 "
             "ORDER BY ts DESC LIMIT 1").fetchone()
         self.assertIsNone(latest[0])
+
+
+# ---------------------------------------------------------------------------
+# 6. Surfaces (D9, D10, labels)
+# ---------------------------------------------------------------------------
+
+class TestBoardPage(Base):
+
+    def page(self):
+        mine.render(self.conn, self.config)
+        with open(os.path.join(self.tmp, "www", "mining.html"),
+                  encoding="utf-8") as handle:
+            return handle.read()
+
+    def seed_with_context(self, mode="Yuma", target=None):
+        snap = synthetic([subnet(1, [5, 5, 0, 0], network_n=4)],
+                         block=BLOCK)
+        snap["context"] = context(maps=dict(
+            context()["maps"],
+            SubnetEpochConsensus={1: mode} if mode != "Yuma" else {},
+            NullPruningTarget={1: target} if target is not None else {}))
+        mf.seed_board(self.conn, self.config, snap)
+
+    def test_the_page_labels_spot_payback_and_the_model(self):
+        self.seed_with_context()
+        page = self.page()
+        self.assertIn("at today's spot price", page)
+        self.assertIn("payback days", page)
+        self.assertIn("p25 earner", page)
+        self.assertIn("median earner", page)
+        self.assertIn("pool days", page)
+        self.assertIn("hardware band", page)
+        self.assertIn("consumer-gpu (assumed)", page)
+        self.assertNotIn("enter at rank", page)
+
+    def test_the_page_shows_each_count_with_its_definition(self):
+        self.seed_with_context()
+        page = self.page()
+        self.assertIn("2 of 4 earning", page)
+        self.assertIn("reg 7d 1", page)
+        self.assertIn("weighted 5", page)
+        self.assertIn("widest row 5", page)
+        self.assertIn("axons 7d 1", page)
+        for name, _text in mine.ACTIVITY_DEFINITIONS:
+            self.assertIn("<b>%s</b>" % name, page)
+        self.assertIn("1/65535", page)
+        self.assertIn("last revealed weights", page)
+        self.assertIn("validators included", page)
+
+    def test_the_page_never_calls_a_uid_active_or_idle(self):
+        self.seed_with_context(mode="Null", target=2)
+        page = self.page().lower()
+        for word in ("active", "idle", "inactive"):
+            self.assertNotRegex(page, r"\b%s\b" % word)
+
+    def test_a_null_subnet_and_a_pending_prune_are_flagged(self):
+        self.seed_with_context(mode="Null", target=2)
+        page = self.page()
+        self.assertIn("Consensus mode", page)
+        self.assertIn(mine.NULL_FLAG, page)
+        self.assertIn("owner pruning pending: target 2 of 4 registered",
+                      page)
+        self.assertIn("first seen by Atlas", page)
+
+    def test_possible_reads_as_no_gpu_evidence_found(self):
+        self.assertEqual(mine.VERDICT_LABELS[mine.VERDICT_POSSIBLE],
+                         "no GPU evidence found")
+        cell, _ = mine._feasibility_cells(
+            {"feasibility": {"verdict": mine.VERDICT_POSSIBLE}})
+        self.assertEqual(cell, "no GPU evidence found")
+        self.assertNotIn("CPU", cell)

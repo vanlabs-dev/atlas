@@ -15,8 +15,6 @@ acting on it.
 
 ## Before the next proposal
 
-- **`mining.budget_band`.** It is `null` in `fleet/config.json` while
-  `mining.enabled` is `true`. Pick a band, or set `enabled` to false.
 - **Voice calibration.** Run one week of real Telegram traffic against
   [`telegram/docs/voice.md`](../telegram/docs/voice.md). Acceptance ran
   through the CLI only.

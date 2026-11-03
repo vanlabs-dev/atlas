@@ -138,20 +138,25 @@ TOOLS: List[Dict[str, Any]] = [
         "name": "mining_board",
         "description": (
             "Ranked mining triage: which subnets a NEW INDEPENDENT MINER "
-            "could earn on, exactly as the last complete pass stored it. "
-            "Every figure is chain state at one block: the alpha a subnet "
-            "distributes (it halves per subnet), the miner share after the "
-            "owner cut, each mechanism's emission split, owner-coldkey UIDs "
-            "removed from the field and reconciled against MinerBurned, and "
-            "the Balancer pool price. Each ranked row names the mechanism "
-            "it is ranked on and carries the entrant TAO per month (a "
-            "PARITY MODEL, stated in the response), independent earner "
-            "count and top-1 share, owner share, entry context, and the "
-            "declared hardware floor with its file. Unrated subnets (no "
-            "figure) are listed apart, never ranked last. With include_cut, "
-            "a bounded list of excluded subnets with the stored rung and "
-            "reason. Always report the economics time and block and the "
-            "feasibility scan time."),
+            "could earn on, exactly as the last complete pass stored it, as "
+            "compact rows. Every figure is chain state at one block. The "
+            "entrant figure is a MODEL (stated in `model`): the lower of "
+            "the parity share and the 25th-percentile earner, in alpha per "
+            "day and as net TAO per month AT TODAY'S SPOT PRICE after a "
+            "subnet-wide sale haircut and the hardware band's rent. Each "
+            "row also carries the parity, p25 and median earner figures, "
+            "earning and total UID counts, UIDs that joined and axons "
+            "served in the last 7 days, validator-weighted UIDs and the "
+            "widest "
+            "weight row (each defined in `definitions`; none says a UID is "
+            "active or idle), consensus mode (Yuma or Null) with flags, "
+            "top-1 share, pool depth in days, payback days, hardware band, "
+            "entry context and the hardware evidence path. `consensus` "
+            "lists the Null subnets and the switches Atlas recorded. "
+            "Unrated subnets are listed apart, never ranked last. With "
+            "include_cut, excluded subnets with the stored rung and reason. "
+            "Use mining_subnet for every stored field. Always report the "
+            "economics time and block and the feasibility scan time."),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -350,9 +355,11 @@ class FleetStore:
                                     retry_safe=True)
         finally:
             connection.close()
-        view.update(self._stamps(view.get("econ_ts"), view.get("econ_block"),
-                                 view.get("feasibility_ts")))
-        return view
+        compact = _mining().compact_view(view)
+        compact.update(self._stamps(view.get("econ_ts"),
+                                    view.get("econ_block"),
+                                    view.get("feasibility_ts")))
+        return compact
 
     def mining_subnet(self, netuid: int) -> Dict[str, Any]:
         context = self._mining_guarded()

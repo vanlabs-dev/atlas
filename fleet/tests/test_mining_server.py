@@ -9,6 +9,7 @@ import datetime
 import json
 import os
 import shutil
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -95,7 +96,7 @@ class TestBoard(MiningServerBase):
     def test_include_cut_returns_reasons(self):
         self.seed()
         out = self.store.mining_board(10, True)
-        self.assertTrue(any("99.90" in (r.get("cut_detail") or "")
+        self.assertTrue(any("99.90" in (r.get("detail") or "")
                             for r in out["cut"]))
         self.assertEqual(out["cut_omitted"], 0)
 
@@ -108,13 +109,14 @@ class TestBoard(MiningServerBase):
     def test_board_states_the_parity_model(self):
         self.seed()
         out = self.store.mining_board(10, False)
-        self.assertIn("MODEL", out["parity_model"])
+        self.assertIn("MODEL", out["model"])
 
     def test_board_names_the_ranking_mechanism(self):
         self.seed()
         out = self.store.mining_board(10, False)
-        self.assertEqual(out["ranked"][0]["rank_mecid"], 0)
-        self.assertTrue(out["ranked"][0]["mechanisms"])
+        self.assertEqual(out["ranked"][0]["mechanism"]["mecid"], 0)
+        # The compact row carries no per-mechanism dump (audit D10).
+        self.assertNotIn("mechanisms", out["ranked"][0])
 
     def test_limit_bounds_the_payload(self):
         self.seed()
@@ -163,8 +165,8 @@ class TestSubnetDetail(MiningServerBase):
                  self.store.mining_board(10, True)["cut"]}
         out = self.store.mining_subnet(4)
         self.assertEqual(out["outcome"],
-                         {"cut_reason": board[4]["cut_reason"],
-                          "cut_detail": board[4]["cut_detail"]})
+                         {"cut_reason": board[4]["reason"],
+                          "cut_detail": board[4]["detail"]})
 
     def test_detail_carries_rank_and_mechanism(self):
         self.seed()
@@ -272,6 +274,52 @@ class TestToolContract(unittest.TestCase):
         out = srv.handle_tool_call(srv.FleetStore("nope.json"), _NullAudit(),
                                    "mining_delete", {})
         self.assertEqual(out["error"]["category"], "invalid")
+
+
+class TestCompactBoard(MiningServerBase):
+    """Regression (audit D10): the board returned about 45 raw columns per
+    row plus every mechanism row."""
+
+    def test_each_row_carries_only_the_compact_fields(self):
+        self.seed()
+        out = self.store.mining_board(10, False)
+        expected = set(mine.compact_row({}).keys())
+        for row in out["ranked"]:
+            self.assertEqual(set(row), expected)
+        for raw in ("alpha_in_pool", "root_in_pool", "alpha_issuance",
+                    "displacement_rank", "mechanisms"):
+            self.assertNotIn(raw, out["ranked"][0])
+
+    def test_the_payload_states_units_and_definitions(self):
+        self.seed()
+        out = self.store.mining_board(10, False)
+        self.assertIn("spot price", out["units"])
+        self.assertIn("weighted", out["definitions"])
+        self.assertIn("consensus", out)
+
+    def test_an_unmigrated_store_returns_nulls_not_an_error(self):
+        self.seed()
+        conn = sqlite3.connect(self.db)
+        for column in ("pool_days", "payback_days", "registered_7d",
+                       "consensus_mode"):
+            conn.execute("ALTER TABLE mine_econ DROP COLUMN %s" % column)
+        conn.execute("ALTER TABLE mine_mechanism DROP COLUMN "
+                     "indep_p25_alpha_day")
+        conn.execute("DROP TABLE mine_consensus_state")
+        conn.commit()
+        conn.close()
+        out = self.store.mining_board(10, False)
+        self.assertNotIn("error", out)
+        self.assertIsNone(out["ranked"][0]["pool_days"])
+        self.assertIsNone(out["ranked"][0]["p25_earner_alpha_day"])
+
+    def test_detail_still_returns_every_stored_column(self):
+        self.seed()
+        out = self.store.mining_subnet(1)
+        for column in ("alpha_in_pool", "pool_days", "registered_7d",
+                       "consensus_mode", "payback_days"):
+            self.assertIn(column, out["economics"])
+        self.assertIn("indep_p25_alpha_day", out["mechanisms"][0])
 
 
 class _NullAudit:
