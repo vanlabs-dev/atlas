@@ -38,4 +38,4 @@
 
 - [x] 6.1 Rehearsal export to the session scratchpad with `--out` (approved 2026-11-04); verify scrub, allowlist and diff review
 - [x] 6.2 Regenerate committed fixtures (needs a yes); every Python suite and `npm --prefix web test` and the build-output test pass; commit
-- [ ] 6.3 Push (needs a yes); check the deployed pages for the banned fields and labels
+- [x] 6.3 Push (needs a yes); check the deployed pages for the banned fields and labels
