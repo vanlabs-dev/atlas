@@ -1102,3 +1102,38 @@ plain-English design.
 - Not done here: `hermes/modelval` still runs `-t todo`, so the battery
   gets the same merged surface. It runs operator-started questions only.
 - Rollback: `rewrite.enabled` and `signals.judge.enabled` false.
+
+## Upgrade sandbox and scope (2026-11-03, change: upgrade-sandbox-scope)
+
+Audit WP5 (B2, A4, A17, C17). Operator decisions 2026-11-03:
+
+- The upgrade job may edit only `knowledge/corpus/**`,
+  `knowledge/supersession-markers.json` and `docs/decisions.md`. It may
+  not add, rename or delete files. `livedata/` left the scope: none of the
+  12 upgrades from spec 470 to 486 touched it, and a data-only scope keeps
+  code changes with the operator. A probe failure on the live tree now
+  waits for the operator (`readers`).
+  This reverses the 2026-11-02 note that the job can fix a reader rename.
+- The test and probe gates run in bubblewrap with no home, `/run`,
+  secrets or sudo; tests get no network. A canary proves this from inside
+  on every attempt and fails closed.
+- The edit session reads only the worktree, the source export and
+  `var/upgrade` (checked on Claude Code 2.1.316, workstation).
+- The spec diff and the source the model reads end at the `v<live>`
+  release tag (fallback: the commit that introduced the spec). The 482 run
+  read the clone at HEAD and stated unshipped 483 mechanics as live.
+- Added corpus lines may cite only the two blocks the run read, or blocks
+  the base corpus cites, and no spec above live. Replayed on the 12
+  historical upgrades: each cited exactly its two reads; the 472 run named
+  its clone at 473 and would now fail.
+- The KB battery gate before activation is deferred to WP13 (A6: its
+  refusal scoring cannot fail).
+- Runtime defaults: the probe compares the metadata default of every item
+  whose unset value Atlas substitutes with `EXPECTED_DEFAULTS` (read at
+  spec 486, block 9421838). One drift found: `SubnetEmissionEnabled`
+  defaults to true on chain; Atlas assumed false. Fixed to true. Only
+  netuid 0 (root) has no entry on the Pi today; a change between two
+  assumed defaults records no transition, so it pages nothing.
+- Clone updates take `var/repotrack/subtensor.lock`; both timers fired at
+  13:01:20 on 2026-11-03. Each run has a 50 min deadline with a 15 min
+  push reserve; `TimeoutStartSec` is 60 min.

@@ -1,7 +1,9 @@
 # Runtime upgrades
 
 Atlas updates itself on the Pi when the live chain moves to a new runtime
-spec. Code enforces every gate. The model only edits files.
+spec. Code enforces every gate. The model only edits data files: the
+corpus, the supersession markers and the decision log. The job never runs
+model-written code (change `upgrade-sandbox-scope`, 2026-11-03).
 
 ## Parts
 
@@ -20,8 +22,10 @@ All three are user units under `~/.config/systemd/user/` (linger is on).
 - **Probe.** Checks every storage item in `CHAIN_READS`
   (`livedata/atlas_live.py`) against live runtime metadata at one
   finalized block: the item exists, with the declared hashers and value
-  type. `watch` pages `probe-drift` once per new failing set and once when
-  it clears. `check` is the upgrade merge gate.
+  type. For each item whose unset value Atlas substitutes, the runtime
+  default must equal `EXPECTED_DEFAULTS` in `livedata/atlas_live.py`
+  (exact SCALE bytes). `watch` pages `probe-drift` once per new failing
+  set and once when it clears. `check` is the upgrade preflight and gate.
 
 ## The upgrade job
 
@@ -33,9 +37,19 @@ code) and never edits that tree.
 1. **Detect.** Read the live spec through keyless RPC. Stop silently when
    it equals `grounded_spec` in `knowledge/corpus/hashes.json`. The repo
    spec never starts a run.
-2. **Clone lag.** Run `repotrack/atlas_repo.py update`. If the subtensor
-   clone is still below the live spec, the state is `waiting`: no attempt
-   is used, one `waiting` report is sent, and each run checks again.
+2. **Clone and source.** Under the clone lock
+   (`var/repotrack/subtensor.lock`, shared with the repotrack timer, wait
+   up to 15 min), run `repotrack/atlas_repo.py update`. If the clone is
+   still below the live spec, the state is `waiting`. Otherwise resolve
+   the release anchor of the live spec and of the corpus spec: the
+   `v<spec>` tag, else the commit that introduced `spec_version: <spec>,`.
+   The runtime at the anchor must state that spec, and the anchor must be
+   on HEAD. Without one, the state is `waiting` (`anchor`); the diff never
+   runs to HEAD. The job writes the diff and log between the two anchors
+   to `var/upgrade/spec-<n>.diff` and exports the source at the live
+   anchor to `var/upgrade/source-<n>/` (`git archive`, reused while the
+   anchor is unchanged). The model reads only that export, never the
+   clone, so it never sees code that has not shipped.
 3. **Preflight.** These checks run before an attempt is counted:
    - The repo's own author identity is `vaNlabs <vanlabs@pm.me>`. It is
      read without the job's `GIT_AUTHOR_*` overrides.
@@ -43,31 +57,48 @@ code) and never edits that tree.
    - After a fetch, `~/atlas` HEAD is an ancestor of `origin/main`, so it
      holds no local commits.
    - A trivial `claude -p` call works.
+   - `livedata/atlas_probe.py check` passes on `~/atlas`. Chain readers
+     are out of the model's scope, so drift is an operator fix.
 
    A failed check sets `waiting` with a reason (`identity`, `dirty`,
-   `diverged`, `auth`). It uses no attempt and sends one fixed-wording
-   report per reason, and each run checks again.
+   `diverged`, `auth`, `readers`, `probe`; `anchor` comes from step 2). It
+   uses no attempt and sends one fixed-wording report per reason, and each
+   run checks again.
 4. **Prepare.** Worktree `~/atlas-upgrade` on a new branch
    `upgrade/spec-<n>-a<k>` from `origin/main`.
 5. **Edit.** One `claude -p --restricted` session in the worktree, with no
    Bash and no web tools. Its prompt (`upgrade/prompt.md`) carries the
-   `read-knobs` output at one finalized block, the probe result, and the
-   spec-bump log. The full diff is in `var/upgrade/spec-<n>.diff`. The
-   subtensor clone is readable through `--add-dir`. The model follows
-   `knowledge/corpus/SOURCES.md` and updates the live-chain entry in
-   `docs/decisions.md`.
+   `read-knobs` output at one finalized block, the preflight probe result,
+   the anchor and the log between the two releases. Read, Grep and Glob
+   are path rules over the worktree, the source export and `var/upgrade`
+   only; `~/.ssh`, `~/.hermes`, `~/.claude` and every `.env` are denied.
+   The model follows `knowledge/corpus/SOURCES.md` and updates the
+   live-chain entry in `docs/decisions.md`.
 6. **Goal.** The diff must not be empty, and `SOURCES.md` must ground the
    live spec. The job then regenerates `hashes.json` itself.
 7. **Scope.** Every changed path must be in `upgrade/allowed_paths.py`:
    `knowledge/corpus/**`, `knowledge/supersession-markers.json`,
-   `docs/decisions.md`, `livedata/*.py`, `livedata/config.json`. The probe,
-   its metadata decoder (`livedata/scale_meta.py`), and every `tests/`
-   path are denied. HEAD must not move, and `~/atlas` must stay clean.
-8. **Test.** Every `*/tests` suite with system `python3`.
-9. **Probe.** `livedata/atlas_probe.py check` from the worktree.
-10. **Ingest.** Stage the corpus into `~/atlas/var/knowledge/knowledge.db`.
+   `docs/decisions.md`. All of `livedata/` and every `tests/` path are
+   denied. Only modifications of existing files pass: an added, renamed,
+   copied or deleted file fails. HEAD must not move, and `~/atlas` must
+   stay clean.
+8. **Citation.** Corpus lines the edit adds may cite only the two blocks
+   this run read (knobs and probe) or blocks the base corpus already
+   cites, and may name no spec above live.
+9. **Sandbox.** A canary (`upgrade/sandbox_canary.py`) runs through the
+   gate sandbox (`upgrade/sandbox.py`, bubblewrap) with and without
+   network. It must find no secret path, no bus or docker socket, no
+   working `sudo`, `NoNewPrivs` set, a read-only worktree, a clean
+   environment, and no network when none was asked for. Any miss, or no
+   `bwrap`, fails the attempt.
+10. **Test.** Every `*/tests` suite with system `python3`, inside the
+    sandbox without network.
+11. **Probe.** `livedata/atlas_probe.py check` from the worktree, inside
+    the sandbox with network.
+12. **Ingest.** Stage the corpus into `~/atlas/var/knowledge/knowledge.db`.
     A duplicate unit id or a secret-scan finding fails the attempt.
-11. **Push.** Commit as vaNlabs. Check again that `~/atlas` is clean and
+13. **Push.** The scope check runs again on the exact tree, and the staged
+    paths must equal the checked ones. Commit as vaNlabs. Check again that `~/atlas` is clean and
     has no local commits. Save the commit and run id to state, then
     `git push origin HEAD:main` (never forced). Read back the remote
     `main`, then `git -C ~/atlas pull --ff-only`.
@@ -76,13 +107,19 @@ code) and never edits that tree.
     `core.sshCommand`, so no other push from the Pi can use it. The Pi's
     `core.hooksPath` points at `tools/git-hooks`, whose `pre-commit`
     rejects any author or committer other than `vaNlabs <vanlabs@pm.me>`.
-12. **Activate.** `knowledge/atlas_kb.py activate --actor atlas-upgrade`,
+14. **Activate.** `knowledge/atlas_kb.py activate --actor atlas-upgrade`,
     only after the read-back matches.
-13. **Report.** One Telegram outcome per run. `updated` lists the commits
+15. **Report.** One Telegram outcome per run. `updated` lists the commits
     the pull brought in that touch code, not only the corpus, the
     supersession markers or `docs/` (up to 10).
-14. **Restart.** When the pull brought in code, restart `hermes-gateway`
+16. **Restart.** When the pull brought in code, restart `hermes-gateway`
     so its MCP servers load it (see Gateway restart below).
+
+Every run has one deadline, 50 minutes from its start (`RUN_BUDGET`).
+Each step before the push runs under the smaller of its own timeout and
+the time left less a 15-minute push reserve. The push does not start
+without that reserve; the attempt then fails at the `deadline` gate. The
+unit's `TimeoutStartSec` (60 min) is a backstop above the deadline.
 
 ## Recovery
 
@@ -138,7 +175,7 @@ hand after one.
 | `retrying` | Failing gate and next attempt time (1 h, then 4 h) |
 | `blocked` | Failing gate and kept branch. The third failure blocks. A failure after the push landed blocks at once and gives the pull and activate commands |
 | `stalled` | A run that was killed or interrupted, found by the next run. Replaces `retrying` or `blocked` for that attempt |
-| `waiting` | Clone spec and live spec, or a failed preflight check (`identity`, `dirty`, `diverged`, `auth`). Uses no attempt |
+| `waiting` | Clone spec and live spec, or a failed preflight check (`identity`, `dirty`, `diverged`, `auth`, `readers`, `probe`, `anchor`). Uses no attempt |
 | knowledge | A self-activated run, or a stale-corpus notice with commands |
 | restart needed | The gateway could not be restarted safely after a code pull |
 | `probe-drift` | From the hourly probe, not the job |
@@ -173,7 +210,13 @@ hand after one.
 
 Only the live spec drives an update. The repo spec moves ahead when a
 release merges before enactment. Never force-push. A fix that needs a path
-outside the scope blocks the attempt and waits for the operator.
+outside the scope blocks the attempt and waits for the operator. That
+includes every chain reader fix: since 2026-11-03 the job may not edit
+`livedata/` (none of the 12 upgrades from spec 470 to 486 needed to).
+
+After a Claude Code update on the Pi, re-run the edit-session read check
+(one `claude -p` call with the job's own rules) to confirm the read
+denials still hold.
 
 Rollback: disable `atlas-upgrade.timer`. Hermes cron job `fb98152a3fa1`
 was removed on 2026-09-24, so no fallback job exists: upgrades are then

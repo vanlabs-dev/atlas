@@ -29,9 +29,11 @@ atlas_live.py          store, quota ledger, HTTP, pinned-schema validation,
                        the `poll-gate` / `status` CLIs (emission-gate
                        state + crossing events, change: gate-crossing-signal)
 atlas_live_server.py   `atlas-live` stdio MCP server (twelve tools)
-atlas_probe.py         chain-read probe: `check` (upgrade merge gate) and
-                       `watch` (hourly, pages probe-drift) against live
-                       runtime metadata
+atlas_probe.py         chain-read probe: `check` (upgrade preflight and
+                       gate) and `watch` (hourly, pages probe-drift)
+                       against live runtime metadata: names, key hashers,
+                       value types, and the runtime defaults in
+                       `EXPECTED_DEFAULTS` (change: upgrade-sandbox-scope)
 scale_meta.py          stdlib SCALE decoder for runtime metadata V14/V15
 systemd/               atlas-poll-chain-head and atlas-probe user units
 schemas/               pinned per-endpoint schemas (drift = missing or
@@ -176,7 +178,9 @@ root-weight-drift). `SubnetEmissionEnabled` is a netuid-keyed map on the same wa
 live off set is 29, 35, 36. Each
 pass persists one observation per item with `explicit` or
 `assumed-default` provenance; a differing value records a durable
-transition. No hysteresis (these do not flap), a first observation seeds
+transition, except between two assumed defaults (only Atlas's documented
+default moved). An absent `SubnetEmissionEnabled` entry is on: the
+runtime default is true (Atlas assumed false until 2026-11-03). No hysteresis (these do not flap), a first observation seeds
 without emitting one, and a provenance-only change at an unchanged value
 is recorded but never paged. Independent items fail in isolation — one
 unreadable knob does not blind the rest. The watch is deliberately **not**
