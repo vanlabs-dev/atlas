@@ -15,21 +15,25 @@ export interface Board<T> {
 export interface MiningRow {
   netuid: number;
   name: string | null;
+  /** Atlas rank on the stored board; null when cut or unrated. */
   rank: number | null;
-  gateState: string | null;
   verdict: "possible" | "needs-gpu" | "unknown" | null;
   gpuFloor: string | null;
   vramGb: number | null;
+  /** Files in the miner code that mention a GPU, for a `possible` scan. */
+  gpuMentionFiles: number | null;
   cutReason: string | null;
-  confidence: string | null;
+  unratedReason: string | null;
   minerBurnPct: number | null;
   earnerCount: number | null;
   top1SharePct: number | null;
   top10SharePct: number | null;
   regCostTao: number | null;
+  /** Model estimate for one new miner, TAO a month at spot, before hardware cost. */
   grossTaoMonth: number | null;
-  netTaoMonth: number | null;
   priceTao: number | null;
+  /** The chain block the prices were read at. */
+  blockRef: number | null;
 }
 
 // Fleet attention: the ranked rotation board built from repository activity.
@@ -41,7 +45,7 @@ export interface FleetRow {
   tier: FleetTier;
   score: number;
   why: string | null;
-  cueKind: string | null;
+  /** Code-activity rank minus 7-day price rank, in places. Rendered unsigned. */
   divergence: number | null;
   cold: boolean;
   commits7: number | null;

@@ -8,20 +8,20 @@ export const ALLOWLIST = {
     netuid: "netuid",
     name: "subnet_name",
     rank: "rank",
-    gateState: "gate_state",
     verdict: "verdict",
     gpuFloor: "gpu_floor",
     vramGb: "vram_gb",
+    gpuMentionFiles: "gpu_mention_files",
     cutReason: "cut_reason",
-    confidence: "confidence",
+    unratedReason: "unrated_reason",
     minerBurnPct: "miner_burn_pct",
     earnerCount: "earner_count",
     top1SharePct: "top1_share_pct",
     top10SharePct: "top10_share_pct",
     regCostTao: "reg_cost_tao",
     grossTaoMonth: "gross_tao_month",
-    netTaoMonth: "net_tao_month",
     priceTao: "price_tao",
+    blockRef: "block_ref",
   },
   fleet: {
     netuid: "netuid",
@@ -29,7 +29,6 @@ export const ALLOWLIST = {
     tier: "tier",
     score: "score",
     why: "why",
-    cueKind: "cue_kind",
     divergence: "div_signed",
     cold: "cold",
     commits7: "c7",
@@ -103,6 +102,21 @@ export const ALLOWLIST = {
 } as const satisfies Record<string, Record<string, string>>;
 
 export type Kind = keyof typeof ALLOWLIST;
+
+/**
+ * Source fields that must never be listed. Net income, rent and payback let
+ * a reader derive rent; the required band and its assumed flag are the
+ * hardware rung; cut detail names the band; the cue, confidence and gate
+ * state were dropped from the site (change: subnt-site-honesty).
+ */
+export const BANNED_SOURCE = /^(net_|rent_|payback|required_band|band_assumed|cut_detail|cue|confidence|gate_state|baseline_)/;
+
+/** Source fields in the allowlist that match the banned pattern. */
+export function bannedFields(list: Record<string, Record<string, string>> = ALLOWLIST): string[] {
+  return Object.entries(list).flatMap(([kind, map]) =>
+    Object.values(map).filter((from) => BANNED_SOURCE.test(from)).map((from) => `${kind}.${from}`),
+  );
+}
 
 type Value = string | number | boolean | null | number[];
 

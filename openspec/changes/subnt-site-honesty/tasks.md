@@ -2,8 +2,8 @@
 
 ## 1. Payload and allowlist
 
-- [ ] 1.1 Add per-type field lists and project every fixture record in `web/src/data/*.ts`; drop `cueKind`, `confidence`, `gateState`, `netTaoMonth` from `types.ts`; verify `npm run typecheck` passes
-- [ ] 1.2 Update `scripts/allowlist.ts` (drop the four fields, add `blockRef`, `unratedReason`, `gpuMentionFiles`) and add the banned-source-field test; verify `npm --prefix web test` fails with a planted `net_tao_month` entry and passes without it
+- [x] 1.1 Add per-type field lists and project every fixture record in `web/src/data/*.ts`; drop `cueKind`, `confidence`, `gateState`, `netTaoMonth` from `types.ts`; verify `npm run typecheck` passes
+- [x] 1.2 Update `scripts/allowlist.ts` (drop the four fields, add `blockRef`, `unratedReason`, `gpuMentionFiles`) and add the banned-source-field test; verify `npm --prefix web test` fails with a planted `net_tao_month` entry and passes without it
 - [ ] 1.3 Add a build-output test that greps `.next` HTML and RSC files for `cueKind|netTaoMonth|confidence|gateState` and the cue values; verify it fails on the pre-change build and passes after `npm run build`
 
 ## 2. Export
