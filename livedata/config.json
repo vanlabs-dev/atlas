@@ -123,7 +123,7 @@
         "item": "SubnetEmissionEnabled",
         "source": "subnet-map",
         "codec": "bool",
-        "default": false,
+        "default": true,
         "governs": "per-subnet root switch over TAO injection, not the emission-gate bar: off zeroes the TAO-side share and redistributes it across enabled subnets; alpha distribution continues"
       },
       {

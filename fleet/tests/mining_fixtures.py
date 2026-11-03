@@ -242,8 +242,10 @@ def synthetic(subnets, block=8789861, owner_cut=OWNER_CUT_DEFAULT,
         values["Burn"][n] = int(spec["reg_burn"] * 1e9)
         if identity and spec["name"] is not False:
             values["SubnetIdentitiesV3"][n] = spec["name"]
-        if spec["enabled"]:
-            values["SubnetEmissionEnabled"][n] = True
+        if spec["enabled"] is not None:
+            # Chain writes an explicit 0x00 for a switched-off subnet; an
+            # absent entry is the runtime default, on (enabled=None).
+            values["SubnetEmissionEnabled"][n] = bool(spec["enabled"])
         if spec["alpha_out"]:
             values["SubnetAlphaOutEmission"][n] = int(spec["alpha_out"] * 1e9)
         if spec["tao_pool"] is not None:

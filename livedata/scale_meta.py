@@ -3,8 +3,9 @@
 runtime-upgrade-pipeline).
 
 Decodes only what the chain-read probe needs: the type registry and each
-pallet's storage entries (name, key hashers, key type, value type). It stops
-after the pallet list, so the extrinsic and API sections are never read.
+pallet's storage entries (name, modifier, key hashers, key type, value type,
+default bytes). It stops after the pallet list, so the extrinsic and API
+sections are never read.
 Every malformed input raises ValueError; the probe turns that into a fail,
 never a pass.
 """
@@ -124,7 +125,7 @@ def _registry(r: _Reader) -> Dict[int, Dict[str, Any]]:
 
 def _storage_entry(r: _Reader) -> Dict[str, Any]:
     name = r.text()
-    r.u8()  # modifier
+    modifier = r.u8()  # 0 Optional, 1 Default
     kind = r.u8()
     if kind == 0:
         hashers: List[str] = []
@@ -140,9 +141,11 @@ def _storage_entry(r: _Reader) -> Dict[str, Any]:
         value = r.compact()
     else:
         raise ValueError("unknown storage entry type %d in %s" % (kind, name))
-    r.vec(r.u8)  # default bytes
+    default = bytes(r.vec(r.u8))
     r.vec(r.text)  # docs
-    return {"name": name, "hashers": hashers, "key": key, "value": value}
+    return {"name": name, "hashers": hashers, "key": key, "value": value,
+            "modifier": "default" if modifier == 1 else "optional",
+            "default": default}
 
 
 def _pallet(r: _Reader, version: int) -> Dict[str, Any]:

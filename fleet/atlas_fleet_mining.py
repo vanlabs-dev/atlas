@@ -680,12 +680,13 @@ def subnet_economics(cfg: Dict[str, Any], netuid: int,
         "rank_mecid": None, "unrated_reason": None,
     }
 
-    # Pool-side emission switch. Absent is the runtime default (off); an
-    # unreadable item or entry is unknown and never cuts.
+    # Pool-side emission switch. Absent is the runtime default (on, see
+    # atlas_live.EXPECTED_DEFAULTS); an unreadable item or entry is unknown
+    # and never cuts.
     if unread("SubnetEmissionEnabled"):
         row["gate_state"] = None
     else:
-        row["gate_state"] = ("enabled" if get("SubnetEmissionEnabled")
+        row["gate_state"] = ("enabled" if get("SubnetEmissionEnabled", True)
                              else "disabled")
 
     identities = values.get("SubnetIdentitiesV3") or {}

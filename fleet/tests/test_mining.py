@@ -681,6 +681,14 @@ class TestEcon(MiningBase):
         self.assertEqual(rows[2]["gate_state"], "disabled")
         self.assertEqual(rows[2]["cut_reason"], mine.CUT_GATE)
 
+    def test_absent_switch_is_the_runtime_default_on(self):
+        # The runtime default is true (upgrade-sandbox-scope): a subnet with
+        # no entry emits, it is not cut.
+        self.seed([subnet(1, [10, 9], enabled=None)])
+        row = self.rows()[1]
+        self.assertEqual(row["gate_state"], "enabled")
+        self.assertNotEqual(row["cut_reason"], mine.CUT_GATE)
+
     def test_an_unread_switch_does_not_cut(self):
         self.seed([subnet(1, [10, 9], enabled=False)],
                   failed_items={"SubnetEmissionEnabled": "empty batch"})

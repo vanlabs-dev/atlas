@@ -3,8 +3,10 @@
 
 Checks every storage item in atlas_live.CHAIN_READS against live runtime
 metadata at one finalized block: the item exists in its pallet, with the
-declared key hashers and value type. A renamed or removed item then fails
-here instead of reading silently as its default.
+declared key hashers and value type, and, where Atlas substitutes a default
+for an unset value, the runtime default is the one declared in
+atlas_live.EXPECTED_DEFAULTS. A renamed or removed item, or a moved
+default, then fails here instead of reading silently as a wrong value.
 
     check   one probe; exit 0 on pass, 1 on any failure (the merge gate)
     watch   one probe; page `probe-drift` once per new failing set (hourly)
@@ -32,10 +34,27 @@ import scale_meta as sm  # noqa: E402
 WATCH_STATE = "probe-watch.json"
 
 
+def show_default(type_name: str, raw: bytes) -> str:
+    """A metadata default in plain form for a report: an integer, a bool,
+    a U64F64 fraction to 6 places, or hex for anything else."""
+    if type_name == "bool" and len(raw) == 1:
+        return "true" if raw[0] else "false"
+    if type_name == "FixedU128<U64>" and len(raw) == 16:
+        return "%.6f" % (int.from_bytes(raw, "little") / 2 ** 64)
+    if len(raw) in (1, 2, 4, 8) and type_name != "AccountId32":
+        return str(int.from_bytes(raw, "little"))
+    return "0x" + raw.hex()
+
+
 def probe(config: Dict[str, Any],
           reads: Iterable[al.ChainRead] = al.CHAIN_READS,
-          rpc: Optional[Any] = None) -> Dict[str, Any]:
-    """Returns {ok, spec, block, block_hash, failures[, error]}."""
+          rpc: Optional[Any] = None,
+          defaults: Optional[Dict[Any, str]] = None) -> Dict[str, Any]:
+    """Returns {ok, spec, block, block_hash, failures[, error]}. A declared
+    read with an expected default (atlas_live.EXPECTED_DEFAULTS) also fails
+    when the metadata default is not exactly those bytes (change:
+    upgrade-sandbox-scope)."""
+    defaults = al.EXPECTED_DEFAULTS if defaults is None else defaults
     rpc = rpc or (lambda method, params: al._rpc_call(config, method,
                                                       params))
     live = al.read_live_spec(config, rpc)
@@ -77,6 +96,12 @@ def probe(config: Dict[str, Any],
             reason = ("" if actual == read.value_type else
                       "value type %s, declared %s" % (actual,
                                                       read.value_type))
+            want = defaults.get((read.pallet, read.item))
+            if not reason and want is not None and entry.get(
+                    "default") != bytes.fromhex(want):
+                reason = "default %s, expected %s" % (
+                    show_default(actual, entry.get("default") or b""),
+                    show_default(actual, bytes.fromhex(want)))
         if reason:
             failures.append({"pallet": read.pallet, "item": read.item,
                              "reason": reason})
@@ -102,6 +127,9 @@ _REASON_RE = (
      lambda m: "removed from the chain metadata"),
     (re.compile(r"^hashers (.+), declared (.+)$"),
      lambda m: "key layout changed (chain %s, Atlas expects %s)"
+     % (m.group(1), m.group(2))),
+    (re.compile(r"^default (.+), expected (.+)$"),
+     lambda m: "default changed (chain %s, Atlas assumes %s)"
      % (m.group(1), m.group(2))),
     (re.compile(r"^value type (.+), declared (.+)$"),
      lambda m: "type changed (chain %s, Atlas expects %s)"
