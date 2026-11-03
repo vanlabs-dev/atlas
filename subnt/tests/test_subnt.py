@@ -142,7 +142,9 @@ def build_fleet(path, verdict_text="reward split moved to the owner",
     # Mining rows come from the real writer: SN12 heads, SN44 second, SN67
     # is cut winner-take-all.
     import mining_fixtures as mf
-    mf.seed_board(conn, {"mining": {"enabled": True}}, mf.synthetic([
+    mf.seed_board(conn, {"mining": {"enabled": True,
+                                    "budget_band": "consumer-gpu"}},
+                  mf.synthetic([
         mf.subnet(12, [10, 9, 8], tao_pool=60_000.0),
         mf.subnet(44, [10, 9, 8], tao_pool=40_000.0),
         mf.subnet(67, [10, 0, 0])]), now=pass_ts)
