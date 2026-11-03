@@ -14,12 +14,12 @@
 
 ## 3. Effectiveness statistics and gate (fleet-signals, signal-effectiveness-gate)
 
-- [ ] 3.1 Report distinct event moments, median paired excess, moment-clustered bootstrap 95% interval (2,000 draws, fixed seed, none below 10 moments), `unavailable`/`unverified`/unscored tallies, `beats_baseline`. Verify: tests: 87 rows from 8 moments counts 8 and fails the floor; repeat run gives the same interval; interval touching zero is `beats_baseline: false`; report changes no state.
-- [ ] 3.2 Update `fleet/README.md` and the CLI help for the new report fields and rules. Verify: `python3 tools/readme_sync.py` reports no drift.
+- [x] 3.1 Report distinct event moments, median paired excess, moment-clustered bootstrap 95% interval (2,000 draws, fixed seed, none below 10 moments), `unavailable`/`unverified`/unscored tallies, `beats_baseline`. Verify: tests: 87 rows from 8 moments counts 8 and fails the floor; repeat run gives the same interval; interval touching zero is `beats_baseline: false`; report changes no state.
+- [x] 3.2 Update `fleet/README.md` and the CLI help for the new report fields and rules. Verify: `python3 tools/readme_sync.py` reports no drift.
 
 ## 4. Rescore
 
-- [ ] 4.1 `rescore` subcommand: recompute every non-pending outcome into `v2_*` with the current registration map and gate anchors (livedata opened read-only); idempotent; original columns untouched. Verify: tests for idempotence, untouched originals, stretched gate-crossing 7-day row recomputed or `no-vector`.
+- [x] 4.1 `rescore` subcommand: recompute every non-pending outcome into `v2_*` with the current registration map and gate anchors (livedata opened read-only); idempotent; original columns untouched. Verify: tests for idempotence, untouched originals, stretched gate-crossing 7-day row recomputed or `no-vector`.
 - [ ] 4.2 Dry run on a copy of the Pi `fleet.db` (read-only snapshot into the session scratchpad) and record before/after effectiveness figures per class in this change's notes. Verify: figures written; no Pi write.
 
 ## 5. Metrics: ties, momentum, bot filter (fleet-rotation-metrics)

@@ -194,15 +194,38 @@ audited (`signals-failed`) and never counts as a reconcile process error.
   cached; budget/timeout ship `unjudged` rather than block. Off = the legacy
   behaviour above (every candidate pages). See `signals status` →
   `econ_gate` for candidate/alert/digest/drop/unjudged counters.
-- **Effectiveness ledger.** Instant events snapshot alpha price in TAO at
-  event creation (clusters: per member) via the KEYLESS TaoSwap subnets
-  operation through the live-data layer — at most one fetch per pass,
-  only when something needs it, zero TaoStats quota; the full fleet
-  price vector is stored so horizon outcomes (default 1/7/30d) compare
-  against the fleet-median baseline over the identical window. States
-  are honest: `pending` / `recorded` / `late` / `unavailable` — a failed
-  fetch never delays an alert. `effectiveness` reports per class ×
-  horizon medians vs baseline; it ranks nothing and recommends nothing.
+- **Effectiveness ledger.** Instant events snapshot alpha price in TAO
+  (clusters: per member) via the KEYLESS TaoSwap subnets operation through
+  the live-data layer, at most one fetch per pass and only when something
+  needs it, zero TaoStats quota. Each stored vector also carries every
+  netuid's `NetworkRegisteredAt` block (change: signal-statistics-ties), and
+  a fetch whose registration read fails stores nothing.
+  - **One outcome rule.** Entry and exit come from the first stored vector
+    at or after the anchor and the due time, within 6 h. No vector there
+    means `unavailable` (`no-vector`), never a stretched or shortened
+    window. A netuid whose registration block differs between the two
+    vectors is a different subnet: `unavailable` (`re-registered`), and it
+    is left out of the fleet-median baseline for that window. Vectors
+    stored before occupant keys existed are judged from a later
+    registration block through block anchors (`panel_snapshot`, own
+    vectors); a window wholly before the netuid's current registration is
+    `unverified`, because an earlier re-registration cannot be ruled out.
+  - **Anchors.** Fleet events start at creation. Gate crossings start at
+    `eligibility_at`, the moment they can page, and their horizons fall due
+    from there.
+  - **Report.** `effectiveness` gives per class x horizon the filled count,
+    distinct event moments (one per entry vector), the median paired
+    excess return over the baseline, a 95% interval from a bootstrap that
+    resamples whole moments (2,000 draws, fixed seed, none below 10
+    moments), the class and baseline medians, and `unavailable` (by
+    reason), `unverified` and `unscored` tallies. It ranks nothing and
+    recommends nothing.
+  - **Rescore.** `rescore` recomputes every settled outcome under the
+    current rules into the `v2_*` columns, re-anchors old gate-crossing
+    entries, and never writes the original return, baseline or status
+    columns. Idempotent; needs a live registration read. Each pass also
+    scores rows that have no `v2_*` score yet, once a vector with
+    registration blocks exists.
 - **The ledger measures ANY netuid-scoped class** (change:
   rotation-signal-gate). Entries are keyed by a source triple
   (source store, source row id, netuid), so livedata's gate
@@ -214,9 +237,11 @@ audited (`signals-failed`) and never counts as a reconcile process error.
   demotion can ever be reversed on evidence. `effectiveness` names
   each class's current tier beside its figures, marks a horizon
   unreadable when pending outcomes outnumber filled ones, and says
-  whether the 7-day sample meets `min_filled_for_promotion`
-  (default 30). A class reaches a paging tier only by an operator
-  decision recorded in `docs/decisions.md` against such a read. The
+  whether the 7-day sample meets `min_filled_for_promotion` (default
+  30, counted in distinct event moments) and whether it beats the
+  baseline (interval lower bound above zero). A class reaches a paging
+  tier only by an operator decision recorded in `docs/decisions.md`
+  against such a read. The
   ingest SEEDS SILENTLY on first sight of a class: history is never
   backfilled, because an event entered long after it happened takes
   today's price as its entry and every horizon it already passed
@@ -233,6 +258,7 @@ python3 fleet/atlas_fleet_signals.py backfill        # SILENT historical manifes
 python3 fleet/atlas_fleet_signals.py seed-modelids   # SILENT model-id prevalence seed (from the FTS index)
 python3 fleet/atlas_fleet_signals.py calibrate       # replay ledger over a (k, window, novelty) grid — read-only
 python3 fleet/atlas_fleet_signals.py effectiveness   # per-class × horizon report — read-only
+python3 fleet/atlas_fleet_signals.py rescore         # current-rules scores into v2 columns (writes; back up first)
 ```
 
 **Deploy order on the Pi**: `git pull` → `backfill` → `seed-modelids` →

@@ -1978,6 +1978,12 @@ def run_measurement(connection: sqlite3.Connection, config: Dict[str, Any],
         else:
             summary["unavailable"] += 1
 
+    # Rows settled under the old rules get their current-rules score once a
+    # vector with registration blocks exists to judge them by. Only the
+    # v2 columns are written; `rescore` does the same on demand.
+    if panel.registered_now:
+        summary["scored"] = _score_unscored(connection, panel, now_dt)
+
     # Retention: never below the longest horizon plus a week of slack.
     horizon_floor = max([int(h) for h in cfg["outcome_horizons_days"]]
                         or [30]) + 7
@@ -1987,6 +1993,111 @@ def run_measurement(connection: sqlite3.Connection, config: Dict[str, Any],
     connection.execute("DELETE FROM signal_vectors WHERE ts < ?", (cutoff,))
     connection.commit()
     return summary
+
+
+def _score_unscored(connection: sqlite3.Connection, panel: PricePanel,
+                    now: datetime.datetime, everything: bool = False) -> int:
+    """Write current-rules scores (v2 columns only) for settled outcomes.
+    `everything` rescores rows that already have a score too."""
+    where = "o.status != ?" + ("" if everything else " AND o.v2_rules IS NULL")
+    rows = connection.execute(
+        "SELECT o.id, o.netuid, o.horizon_days, "
+        "COALESCE(en.anchor_at, en.created_at) FROM signal_outcomes o "
+        "JOIN signal_entries en ON en.source_store = o.source_store "
+        "AND en.event_id = o.event_id AND en.netuid = o.netuid WHERE "
+        + where, (ST_PENDING,)).fetchall()
+    scored = 0
+    for outcome_id, netuid, horizon, anchor_at in rows:
+        if not anchor_at:
+            continue
+        result = evaluate_outcome(panel, netuid, anchor_at, horizon, now)
+        if result is None:
+            continue  # its re-anchored window has not closed yet
+        _write_v2(connection, outcome_id, result)
+        scored += 1
+    return scored
+
+
+def _reanchor_gate_crossings(connection: sqlite3.Connection,
+                             cfg: Dict[str, Any],
+                             db_path: Optional[str] = None) -> int:
+    """Move gate-crossing entries entered before this change onto their
+    eligibility anchor, and the due times of their still-pending horizons
+    with them. Settled rows keep their stored values; their current-rules
+    score reads the anchor. The livedata store is read-only."""
+    source = _open_livedata_ro(db_path)
+    if source is None:
+        return 0
+    try:
+        anchors = dict(source.execute(
+            "SELECT id, %s FROM gate_events" % _gate_anchor_expr(source)))
+    except sqlite3.Error:
+        anchors = {}
+    finally:
+        source.close()
+    moved = 0
+    rows = connection.execute(
+        "SELECT event_id, netuid, anchor_at FROM signal_entries WHERE "
+        "source_store = ? AND source_class = 'gate-crossing'",
+        (SOURCE_LIVEDATA,)).fetchall()
+    for event_id, netuid, anchor_at in rows:
+        target = anchors.get(event_id)
+        if not target or anchor_at == target:
+            continue
+        connection.execute(
+            "UPDATE signal_entries SET anchor_at = ? WHERE source_store = ? "
+            "AND event_id = ? AND netuid = ?",
+            (target, SOURCE_LIVEDATA, event_id, netuid))
+        for horizon in cfg["outcome_horizons_days"]:
+            due = (_parse_iso(target)
+                   + datetime.timedelta(days=int(horizon))).isoformat()
+            connection.execute(
+                "UPDATE signal_outcomes SET due_at = ? WHERE source_store = ? "
+                "AND event_id = ? AND netuid = ? AND horizon_days = ? "
+                "AND status = ?", (due, SOURCE_LIVEDATA, event_id, netuid,
+                                   int(horizon), ST_PENDING))
+        moved += 1
+    return moved
+
+
+def _registration_now(config: Dict[str, Any]) -> Dict[int, int]:
+    """Today's registration block per netuid, read from chain."""
+    sys.path.insert(0, os.path.join(_REPO_ROOT, "livedata"))
+    import atlas_live as al  # noqa: E402
+    read = al.read_registration_blocks(al.load_config())
+    if not read.get("ok"):
+        raise RuntimeError("registration read failed: %s"
+                           % read.get("error"))
+    return read["values"]
+
+
+def rescore(connection: sqlite3.Connection, config: Dict[str, Any],
+            now: Optional[str] = None,
+            registered_now: Optional[Dict[int, int]] = None,
+            livedata_path: Optional[str] = None,
+            anchors: Any = None) -> Dict[str, Any]:
+    """Recompute every settled outcome under the current rules into the v2
+    columns (change: signal-statistics-ties). The original return,
+    baseline and status columns are never written. Idempotent: the same
+    vectors and registration map give the same scores. Needs today's
+    registration map from chain to judge vectors stored before occupant
+    keys existed; fails rather than guessing when that read fails."""
+    cfg = signals_cfg(config)
+    now_dt = _parse_iso(now or _utc_now())
+    registered_now = (registered_now if registered_now is not None
+                      else _registration_now(config))
+    moved = _reanchor_gate_crossings(connection, cfg, livedata_path)
+    panel = PricePanel(
+        connection, registered_now=registered_now,
+        anchors=(anchors if anchors is not None
+                 else (lambda: _livedata_block_anchors(livedata_path))))
+    scored = _score_unscored(connection, panel, now_dt, everything=True)
+    connection.commit()
+    states = {row[0] or "unscored": row[1] for row in connection.execute(
+        "SELECT v2_status, COUNT(*) FROM signal_outcomes WHERE status != ? "
+        "GROUP BY v2_status", (ST_PENDING,))}
+    return {"reanchored_gate_entries": moved, "scored": scored,
+            "v2_states": states, "rules_version": RULES_VERSION}
 
 
 # ---------------------------------------------------------------------------
@@ -2235,67 +2346,136 @@ def delivery_tiers() -> Dict[str, str]:
             if isinstance(spec, dict) and spec.get("tier")}
 
 
+def _percentile(ordered: Sequence[float], q: float) -> float:
+    """Nearest-rank percentile of an ascending list."""
+    index = min(len(ordered) - 1, max(0, int(round(q * (len(ordered) - 1)))))
+    return ordered[index]
+
+
+def clustered_median_interval(clusters: Dict[str, List[float]],
+                              draws: int = BOOTSTRAP_DRAWS,
+                              seed: int = BOOTSTRAP_SEED
+                              ) -> Optional[Tuple[float, float]]:
+    """95% interval for the median of the pooled values, resampling whole
+    clusters (event moments) with replacement. Outcomes entered against one
+    price vector share one market window, so they are not independent
+    draws. Deterministic for a given seed. None below the minimum cluster
+    count."""
+    keys = sorted(clusters)
+    if len(keys) < BOOTSTRAP_MIN_MOMENTS:
+        return None
+    import random
+    rng = random.Random(seed)
+    medians = []
+    for _ in range(draws):
+        pooled: List[float] = []
+        for _k in keys:
+            pooled.extend(clusters[keys[rng.randrange(len(keys))]])
+        medians.append(statistics.median(pooled))
+    medians.sort()
+    return _percentile(medians, 0.025), _percentile(medians, 0.975)
+
+
 def effectiveness(connection: sqlite3.Connection,
                   config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Per alert class × horizon: alerted-subnet median return vs the
-    fleet-median baseline, with counts and pending/unavailable tallies.
-    Read-only measurement — ranks nothing, recommends nothing.
+    """Per alert class x horizon (change: signal-statistics-ties): the
+    median paired excess return over the fleet baseline, its interval from a
+    bootstrap over event moments, the class and baseline medians, and the
+    counts behind them. Read-only measurement: ranks nothing, recommends
+    nothing.
 
-    Covers every measured class whatever its delivery tier, names that tier
-    next to the figures, and marks a horizon unreadable when pending
-    outcomes outnumber filled ones, so a tier can never be argued for
-    without the evidence being visible beside it."""
+    Reads only outcomes settled under the current rules (`v2_*`). A settled
+    row without them is counted as unscored until `rescore` runs. The floor
+    counts distinct event moments, not rows: every outcome entered against
+    one price vector shares one market window. A horizon whose pending
+    outcomes outnumber its filled ones is marked unreadable."""
     cfg = signals_cfg(config or {})
     tiers = delivery_tiers()
-    min_filled = int(cfg["min_filled_for_promotion"])
+    min_events = int(cfg["min_filled_for_promotion"])
     promo_horizon = int(cfg["promotion_horizon_days"])
     rows = connection.execute(
         "SELECT COALESCE(o.source_class, ev.class, 'unknown'), "
-        "o.horizon_days, o.status, o.return_pct, o.baseline_return_pct "
+        "o.horizon_days, o.status, o.v2_rules, o.v2_status, o.v2_reason, "
+        "o.v2_entry_ts, o.v2_return_pct, o.v2_baseline_pct, o.v2_excess_pct "
         "FROM signal_outcomes o "
         "LEFT JOIN signal_events ev "
         "ON ev.id = o.event_id AND o.source_store = 'fleet'").fetchall()
     buckets: Dict[Tuple[str, int], Dict[str, Any]] = {}
-    for event_class, horizon, status, return_pct, baseline in rows:
+    for (event_class, horizon, status, rules, v2_status, reason, moment,
+         ret, base, excess) in rows:
         bucket = buckets.setdefault((event_class, horizon), {
-            "returns": [], "baselines": [], "pending": 0, "unavailable": 0,
-            "filled": 0})
-        if status in (ST_RECORDED, ST_LATE):
-            bucket["filled"] += 1
-            if return_pct is not None:
-                bucket["returns"].append(return_pct)
-            if baseline is not None:
-                bucket["baselines"].append(baseline)
-        elif status == ST_UNAVAILABLE:
-            bucket["unavailable"] += 1
-        else:
+            "returns": [], "baselines": [], "clusters": {}, "pending": 0,
+            "unavailable": 0, "reasons": {}, "unverified": 0,
+            "unscored": 0, "filled": 0})
+        if status == ST_PENDING:
             bucket["pending"] += 1
+        elif rules != RULES_VERSION:
+            bucket["unscored"] += 1
+        elif v2_status == ST_RECORDED:
+            bucket["filled"] += 1
+            if ret is not None:
+                bucket["returns"].append(ret)
+            if base is not None:
+                bucket["baselines"].append(base)
+            if excess is not None:
+                bucket["clusters"].setdefault(moment or "", []).append(
+                    excess)
+        elif v2_status == ST_UNVERIFIED:
+            bucket["unverified"] += 1
+        else:
+            bucket["unavailable"] += 1
+            key = reason or "unknown"
+            bucket["reasons"][key] = bucket["reasons"].get(key, 0) + 1
+
+    def r3(value: Optional[float]) -> Optional[float]:
+        return None if value is None else round(value, 3)
+
     report = []
     for (event_class, horizon), bucket in sorted(buckets.items()):
         readable = bucket["filled"] >= bucket["pending"]
+        excess = [v for vals in bucket["clusters"].values() for v in vals]
+        interval = clustered_median_interval(bucket["clusters"])
         entry = {
             "class": event_class, "horizon_days": horizon,
             "tier": tiers.get(event_class, "unregistered"),
-            "filled": bucket["filled"], "pending": bucket["pending"],
+            "filled": bucket["filled"],
+            "events": len(bucket["clusters"]),
+            "pending": bucket["pending"],
             "unavailable": bucket["unavailable"],
+            "unavailable_reasons": bucket["reasons"],
+            "unverified": bucket["unverified"],
+            "unscored": bucket["unscored"],
             "readable": readable,
-            "median_return_pct": (round(statistics.median(bucket["returns"]),
-                                        3) if bucket["returns"] else None),
-            "median_baseline_pct": (round(statistics.median(
-                bucket["baselines"]), 3) if bucket["baselines"] else None),
+            "median_return_pct": r3(statistics.median(bucket["returns"])
+                                    if bucket["returns"] else None),
+            "median_baseline_pct": r3(statistics.median(bucket["baselines"])
+                                      if bucket["baselines"] else None),
+            "median_excess_pct": r3(statistics.median(excess)
+                                    if excess else None),
+            "excess_ci95": ([r3(interval[0]), r3(interval[1])]
+                            if interval else None),
         }
         if horizon == promo_horizon:
-            entry["meets_promotion_sample"] = (
-                bucket["filled"] >= min_filled and readable)
-            entry["min_filled_for_promotion"] = min_filled
+            meets = entry["events"] >= min_events and readable
+            entry["meets_promotion_sample"] = meets
+            entry["min_events_for_promotion"] = min_events
+            entry["beats_baseline"] = bool(
+                meets and interval is not None and interval[0] > 0)
         report.append(entry)
     return {"report": report,
-            "min_filled_for_promotion": min_filled,
+            "min_events_for_promotion": min_events,
             "promotion_horizon_days": promo_horizon,
-            "note": "measurement only — medians vs fleet baseline over "
-                    "identical windows; no recommendation derived. A horizon "
-                    "with readable false has more pending than filled "
-                    "outcomes and cannot justify a tier change."}
+            "bootstrap": {"draws": BOOTSTRAP_DRAWS, "seed": BOOTSTRAP_SEED,
+                          "min_events": BOOTSTRAP_MIN_MOMENTS,
+                          "cluster": "entry price vector"},
+            "note": "measurement only: median paired excess return over the "
+                    "fleet baseline across identical windows, with a 95% "
+                    "interval from a bootstrap over event moments; no "
+                    "recommendation derived. beats_baseline needs the "
+                    "promotion floor in distinct events and an interval "
+                    "lower bound above zero. A horizon with readable false "
+                    "has more pending than filled outcomes and cannot "
+                    "justify a tier change."}
 
 
 # ---------------------------------------------------------------------------
@@ -2357,8 +2537,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     cal.add_argument("--k", type=int, nargs="*", default=[2, 3, 4])
     cal.add_argument("--window", type=int, nargs="*", default=[7, 14, 30])
     cal.add_argument("--novelty", type=int, nargs="*", default=[5, 10, 20])
-    sub.add_parser("effectiveness", help="per-class × horizon report "
+    sub.add_parser("effectiveness", help="per-class x horizon report: "
+                                         "median excess over the fleet "
+                                         "baseline with a 95%% interval "
                                          "(read-only)")
+    sub.add_parser("rescore", help="recompute settled outcomes under the "
+                                   "current rules into the v2 columns "
+                                   "(writes the fleet store; back it up "
+                                   "first)")
     args = parser.parse_args(argv)
 
     fleet = _fleet()
@@ -2381,6 +2567,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                                    novelty_values=args.novelty)
             elif args.command == "effectiveness":
                 result = effectiveness(connection, config)
+            elif args.command == "rescore":
+                try:
+                    result = rescore(connection, config)
+                except RuntimeError as exc:
+                    print("fatal: %s" % exc, file=sys.stderr)
+                    return 2
             else:
                 return 2
             print(json.dumps(result, indent=2, sort_keys=True))
