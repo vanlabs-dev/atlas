@@ -373,13 +373,17 @@ class EditReadsTest(Base):
         allowed = option(cmd, "--allowedTools")
         for bare in ("Read", "Grep", "Glob"):
             self.assertNotIn(bare, allowed)
+        # Claude Code ignores Grep(path) and Glob(path) rules; Read(path)
+        # rules cover every file-reading tool.
+        self.assertFalse([r for r in allowed + option(cmd, "--disallowedTools")
+                          if r.startswith(("Grep(", "Glob("))])
         reads = [rule for rule in allowed if rule.startswith("Read(")]
         self.assertEqual(sorted(reads), sorted(
             "Read(/%s/**)" % os.path.abspath(d) for d in (
                 job.worktree, os.path.join(job.var, "source-470"), job.var)))
         denied = option(cmd, "--disallowedTools")
         for rule in ("Read(~/.hermes/**)", "Read(~/.ssh/**)",
-                     "Read(~/.claude/**)", "Grep(~/.hermes/**)", "Bash",
+                     "Read(~/.claude/**)", "Read(**/.env*)", "Bash",
                      "WebFetch"):
             self.assertIn(rule, denied)
 

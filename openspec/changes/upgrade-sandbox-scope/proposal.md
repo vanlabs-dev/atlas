@@ -28,7 +28,7 @@ None of the 12 upgrade commits (spec 470 to 486) touched `livedata/` or added a 
   - It runs with a cleared environment and a PID namespace. Tests get no network.
   - The probe gets network but no secrets.
   - Before the gates, a canary runs in the same sandbox. The attempt fails closed if the canary sees any secret path, socket or sudo, or if it can write the worktree.
-- The edit session's Read, Grep and Glob are scoped to the worktree, the live-spec source export and `var/upgrade`. Explicit denies cover `~/.ssh`, `~/.hermes`, `~/.claude` and `**/.env*`.
+- The edit session's file reads (Read, Grep, Glob) are scoped by `Read(path)` rules to the worktree, the live-spec source export and `var/upgrade`. Explicit denies cover `~/.ssh`, `~/.hermes`, `~/.claude` and `**/.env*`.
 - The spec diff ends at the release tag `v<live>`.
   - Fallback: the commit that introduced `spec_version: <live>,`.
   - The spec at the anchor must equal live. If no anchor qualifies, the run waits ("no release anchor"), uses no attempt and never falls back to HEAD.
