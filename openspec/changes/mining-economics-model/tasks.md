@@ -91,7 +91,7 @@
   - Yuma to Null records 1 event with its block
   - unknown records 0 events
   - no row reaches `chain_param_events`
-- [ ] 5b.3 Null rounding check (design 14) on the real SN120 data from a fresh snapshot. Record the result in design.md. If needed, switch Null earner figures to `Emission`, with a test.
+- [x] 5b.3 Null rounding check (design 14) on the real SN120 data from a fresh snapshot. Record the result in design.md. If needed, switch Null earner figures to `Emission`, with a test.
 
 ## 6. Surfaces (D9, D10, labels)
 
