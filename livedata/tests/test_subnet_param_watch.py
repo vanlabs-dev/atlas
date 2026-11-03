@@ -151,15 +151,41 @@ class EmissionSwitchWatch(unittest.TestCase):
         self.assertEqual(len(out["observed"]), len(UNIVERSE))
         self.assertEqual(out["transitions"], [])
 
-    def test_absent_entry_seeds_as_off_not_as_a_failed_read(self):
+    def test_absent_entry_seeds_as_on_not_as_a_failed_read(self):
+        # The runtime default is true (upgrade-sandbox-scope): an absent
+        # entry is enabled, recorded as an assumed default.
         out = self.watch({1: True, 4: True, 8: True})
         self.assertEqual(out["transitions"], [])
         name = al.netuid_item(SWITCH, 19)
         row = self.conn.execute(
             "SELECT value, provenance FROM chain_params WHERE item = ?",
             (name,)).fetchone()
-        self.assertEqual(row, ("false", "assumed-default"))
+        self.assertEqual(row, ("true", "assumed-default"))
         self.assertNotIn(name, out["skipped"])
+
+    def test_a_corrected_assumed_default_is_not_a_transition(self):
+        # The Pi store held root as false/assumed-default under the old
+        # default. The corrected default must not page a fake switch-on.
+        name = al.netuid_item(SWITCH, 0)
+        self.conn.execute(
+            "INSERT INTO chain_params (item, value, provenance, observed_at,"
+            " block_number, block_hash) VALUES (?, 'false', "
+            "'assumed-default', 't', 1, '0x')", (name,))
+        self.conn.commit()
+        out = al.run_subnet_param_watch(
+            self.conn, CONFIG, SWITCH, [0] + UNIVERSE,
+            {1: True, 4: True, 8: True, 19: True}, block_hash="0x64",
+            block_number=100)
+        self.assertIn(name, out["observed"])
+        row = self.conn.execute(
+            "SELECT value FROM chain_params WHERE item = ? ORDER BY id DESC",
+            (name,)).fetchone()
+        self.assertEqual(row[0], "true")
+        self.assertEqual([t for t in out["transitions"]
+                          if t["netuid"] == 0], [])
+        events = self.conn.execute(
+            "SELECT count(*) FROM chain_param_events").fetchone()[0]
+        self.assertEqual(events, 0)
 
     def test_seed_then_transition_carries_netuid_values_and_block(self):
         self.watch({n: True for n in UNIVERSE})

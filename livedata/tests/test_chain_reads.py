@@ -241,6 +241,33 @@ class ProbeTest(unittest.TestCase):
         self.assertEqual(result["failures"], [])
         self.assertTrue(result["ok"])
 
+    def test_changed_default_fails_naming_both_values(self):
+        # SubnetOwnerCut's runtime default is 11796 (0x2e14). A table that
+        # expects 11797 stands in for a runtime that moved the default.
+        key = ("SubtensorModule", "SubnetOwnerCut")
+        result = ap.probe({}, reads=[read(key[0], key[1], [], "u16")],
+                          rpc=fake_rpc(self.raw),
+                          defaults={key: (11797).to_bytes(2, "little").hex()})
+        self.assertFalse(result["ok"])
+        reason = result["failures"][0]["reason"]
+        self.assertEqual(reason, "default 11796, expected 11797")
+        self.assertEqual(ap._plain_reason(reason),
+                         "default changed (chain 11796, Atlas assumes 11797)")
+
+    def test_fixed_point_default_shown_as_a_fraction(self):
+        key = ("SubtensorModule", "EmissionBarQuantile")
+        result = ap.probe({}, reads=[read(key[0], key[1], [],
+                                          "FixedU128<U64>")],
+                          rpc=fake_rpc(self.raw), defaults={key: "00" * 16})
+        self.assertEqual(result["failures"][0]["reason"],
+                         "default 0.610000, expected 0.000000")
+
+    def test_declared_defaults_match_the_fixture(self):
+        result = ap.probe({}, reads=[r for r in al.CHAIN_READS if (
+            r.pallet, r.item) in al.EXPECTED_DEFAULTS],
+            rpc=fake_rpc(self.raw))
+        self.assertTrue(result["ok"], result["failures"])
+
     def test_check_exit_code(self):
         with redirect_stdout(io.StringIO()) as out:
             code = ap.cmd_check({}, rpc=fake_rpc(self.raw),
@@ -371,7 +398,9 @@ class ReadKnobsTest(unittest.TestCase):
         self.assertEqual(result["knobs"]["EmissionBarRank"]["value"], 32)
         self.assertEqual(result["knobs"]["BasketTradingEnabled"],
                          {"value": None, "raw": None, "state": "unset"})
-        self.assertEqual(result["SubnetEmissionEnabled"]["off"], [2])
+        # Subnet 2 has no entry: the runtime default is on, so it is not
+        # listed off (upgrade-sandbox-scope).
+        self.assertEqual(result["SubnetEmissionEnabled"]["off"], [])
 
 
 class WatchExitTest(unittest.TestCase):
@@ -387,6 +416,80 @@ class WatchExitTest(unittest.TestCase):
                                       return_value=True), \
                     mock.patch.object(ap.al, "resolve", side_effect=str):
                 self.assertEqual(ap.cmd_watch(config), 0)
+
+
+
+def encode_default(codec, value):
+    """SCALE bytes of a configured default, by its declared codec.
+    Fixed point uses the runtime's own conversion, never a float compare."""
+    if codec == "bool":
+        return bytes([1 if value else 0])
+    if codec == "u16":
+        return int(value).to_bytes(2, "little")
+    if codec == "u64":
+        return int(value).to_bytes(8, "little")
+    if codec == "u64f64":
+        return round(value * 2 ** 64).to_bytes(16, "little")
+    raise AssertionError("no encoder for codec %r" % codec)
+
+
+class ExpectedDefaultsTest(unittest.TestCase):
+    """Every default Atlas substitutes for an unset chain read equals the
+    declared EXPECTED_DEFAULTS table (change: upgrade-sandbox-scope)."""
+
+    def setUp(self):
+        with open(os.path.join(os.path.dirname(_HERE), "config.json"),
+                  "r", encoding="utf-8") as handle:
+            self.config = json.load(handle)
+
+    def assert_matches(self, item, codec, value):
+        self.assertIn((al.SUBTENSOR_PALLET, item), al.EXPECTED_DEFAULTS,
+                      "%s has a default but no EXPECTED_DEFAULTS entry"
+                      % item)
+        self.assertEqual(encode_default(codec, value).hex(),
+                         al.expected_default(item).hex(), item)
+
+    def test_table_only_names_declared_reads(self):
+        for key in al.EXPECTED_DEFAULTS:
+            self.assertIn(key, al._DECLARED_READS, key)
+
+    def test_gate_assumed_defaults(self):
+        codecs = {"EmissionBarRank": "u16"}
+        for item, value in self.config["gate_signal"][
+                "assumed_defaults"].items():
+            self.assert_matches(item, codecs.get(item, "u64f64"), value)
+
+    def test_chain_param_watch_defaults(self):
+        for entry in self.config["chain_params"]["items"]:
+            if "default" in entry:
+                self.assert_matches(entry["item"], entry["codec"],
+                                    entry["default"])
+
+    def test_subnet_param_defaults(self):
+        for item, value in al.SUBNET_PARAM_DEFAULTS.items():
+            self.assert_matches(item, al.SUBNET_MAP_ITEMS[item], value)
+
+    def test_code_constants(self):
+        self.assert_matches("SubnetOwnerCut", "u16",
+                            al.SUBNET_OWNER_CUT_DEFAULT)
+        self.assertEqual(al.SUBNET_OWNER_CUT_DEFAULT, 11796)
+        self.assertEqual(bytes.fromhex(al.ZERO_ACCOUNT[2:]),
+                         al.expected_default("SubnetOwner"))
+
+    def test_a_drifted_config_default_fails(self):
+        with self.assertRaises(AssertionError):
+            self.assert_matches("EmissionBarRank", "u16", 64)
+
+    def test_emission_switch_default_is_on(self):
+        # Atlas assumed false until 2026-11-03; live metadata at spec 486
+        # (and the spec 469 fixture) say true.
+        self.assertEqual(al.SUBNET_PARAM_DEFAULTS["SubnetEmissionEnabled"],
+                         True)
+        meta = sm.decode_metadata(fixture_bytes())
+        entry = meta["pallets"]["SubtensorModule"]["storage"][
+            "SubnetEmissionEnabled"]
+        self.assertEqual(entry["default"], b"\x01")
+        self.assertEqual(entry["modifier"], "default")
 
 
 if __name__ == "__main__":

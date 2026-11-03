@@ -2021,6 +2021,36 @@ CHAIN_READS: Tuple[ChainRead, ...] = tuple(
         ChainRead("Swap", "SwapBalancer", ("twox64concat",), "Balancer"),
     )
 
+# The runtime default of every chain read whose unset value Atlas
+# substitutes (change: upgrade-sandbox-scope), as SCALE bytes in hex, read
+# from live metadata at spec 486, finalized block 9421838. The probe checks
+# each against the live metadata default, so a runtime that moves a default
+# fails loudly. Every code constant and configured default for these items
+# must equal this table (livedata/tests/test_chain_reads.py).
+EXPECTED_DEFAULTS: Dict[Tuple[str, str], str] = {
+    (SUBTENSOR_PALLET, "EmissionBarQuantile"):
+        "00285c8fc2f5289c0000000000000000",  # 0.61, U64F64
+    (SUBTENSOR_PALLET, "EmissionGateExponent"):
+        "00000000000000000300000000000000",  # 3.0, U64F64
+    (SUBTENSOR_PALLET, "EmissionBarRank"): "2000",  # 32
+    (SUBTENSOR_PALLET, "BasketConcentrationCap"): "0010",  # 4096
+    (SUBTENSOR_PALLET, "BasketTradingEnabled"): "00",  # false
+    (SUBTENSOR_PALLET, "NetworkImmunityPeriod"): "80c6130000000000",
+    (SUBTENSOR_PALLET, "NetworkLockReductionInterval"): "c089010000000000",
+    (SUBTENSOR_PALLET, "NetworkRateLimit"): "201c000000000000",  # 7200
+    (SUBTENSOR_PALLET, "CollateralLockShare"): "0000",  # 0
+    (SUBTENSOR_PALLET, "SubnetEmissionEnabled"): "01",  # true
+    (SUBTENSOR_PALLET, "SubnetOwnerCut"): "142e",  # 11796
+    (SUBTENSOR_PALLET, "SubnetOwner"): "00" * 32,  # the all-zero account
+}
+
+
+def expected_default(item: str, pallet: str = "") -> bytes:
+    """The declared runtime default of one chain read, as SCALE bytes."""
+    return bytes.fromhex(EXPECTED_DEFAULTS[(pallet or SUBTENSOR_PALLET,
+                                            item)])
+
+
 _DECLARED_READS = {(read.pallet, read.item) for read in CHAIN_READS}
 _READ_BY_ITEM = {(read.pallet, read.item): read for read in CHAIN_READS}
 # Item names are unique across the declared pallets, so the map reader can
@@ -2262,8 +2292,9 @@ SUBNET_MAP_ITEMS: Dict[str, str] = {
     # subnets, so an absent entry is a real state and not a read fault.
     "SubnetIdentitiesV3": "identity_name",
     # Pool-side emission switch (change: network-drift-455). A root-settable
-    # bool: present entries are 0x01/0x00; an absent entry is off, because
-    # the runtime ValueQuery default is false. Empty or short batches of
+    # bool: present entries are 0x01/0x00; an absent entry is ON, because
+    # the runtime ValueQuery default is true (EXPECTED_DEFAULTS; Atlas
+    # assumed false until 2026-11-03). Empty or short batches of
     # THIS item fail the item closed (see SUBNET_MAP_FAIL_EMPTY).
     "SubnetEmissionEnabled": "bool",
     # Mining chain snapshot (change: mining-board-accuracy). Every figure
@@ -2605,7 +2636,7 @@ def read_point_values(config: Dict[str, Any], item: str, codec: str,
 # Runtime default for an unset `SubnetOwner` (`DefaultSubnetOwner`,
 # `ps/lib.rs:1038-1042`): the all-zero account. The runtime resolves owner
 # hotkeys from it like any other coldkey, so this does too.
-ZERO_ACCOUNT = "0x" + "00" * 32
+ZERO_ACCOUNT = "0x" + expected_default("SubnetOwner").hex()
 # Per-coldkey cap on owned hotkeys. Observed maximum 25 at block 9142723.
 OWNED_HOTKEYS_CAP = 256
 
@@ -2691,7 +2722,8 @@ def resolve_owner_uids(config: Dict[str, Any], values: Dict[str, Any],
 # Default of the global `SubnetOwnerCut` when unset (`DefaultSubnetOwnerCut`,
 # `ps/lib.rs:980`, the runtime's `InitialSubnetOwnerCut`), as a u16 fraction
 # of 65535. The chain leaves it unset on Finney, so this value is live.
-SUBNET_OWNER_CUT_DEFAULT = 11796
+SUBNET_OWNER_CUT_DEFAULT = int.from_bytes(
+    expected_default("SubnetOwnerCut"), "little")  # 11796
 
 
 def read_mining_snapshot(config: Dict[str, Any], rpc: Optional[Any] = None,
@@ -2952,7 +2984,10 @@ def _record_param(connection: sqlite3.Connection, item: str, value: Any,
     changed against the last persisted observation. A first-ever observation
     seeds without a transition (nothing to differ from); a provenance-only
     change is recorded but is not a transition — governance pinning a knob
-    to the value it already had by default changes nothing economically."""
+    to the value it already had by default changes nothing economically.
+    Nor is a change between two assumed defaults: the chain wrote nothing on
+    either side, so only Atlas's documented default moved (change:
+    upgrade-sandbox-scope, when SubnetEmissionEnabled's became true)."""
     text = param_value_text(value)
     previous = connection.execute(
         "SELECT value, provenance FROM chain_params WHERE item = ? "
@@ -2963,7 +2998,9 @@ def _record_param(connection: sqlite3.Connection, item: str, value: Any,
         "block_number, block_hash) VALUES (?, ?, ?, ?, ?, ?)",
         (item, text, provenance, now, block_number, block_hash))
     transition: Optional[Dict[str, Any]] = None
-    if previous is not None and previous[0] != text:
+    assumed_both = (previous is not None and provenance == "assumed-default"
+                    and previous[1] == "assumed-default")
+    if previous is not None and previous[0] != text and not assumed_both:
         cursor = connection.execute(
             "INSERT INTO chain_param_events (item, prev_value, new_value, "
             "prev_provenance, new_provenance, observed_at, block_number) "
@@ -3111,10 +3148,10 @@ _NETUID_ITEM_RE = re.compile(r"^(?P<item>[A-Za-z0-9_]+)\[(?P<netuid>\d+)\]$")
 # the whole registration price is burned and nothing is locked.
 SUBNET_PARAM_DEFAULTS: Dict[str, Any] = {
     "CollateralLockShare": 0,
-    # Runtime ValueQuery default is false: an absent entry is disabled,
-    # and that state is recorded as assumed-default, distinct from a
-    # failed read (which skips the subnet).
-    "SubnetEmissionEnabled": False,
+    # Runtime ValueQuery default is true (EXPECTED_DEFAULTS): an absent
+    # entry is enabled, and that state is recorded as assumed-default,
+    # distinct from a failed read (which skips the subnet).
+    "SubnetEmissionEnabled": True,
 }
 
 
@@ -3956,7 +3993,7 @@ def read_knobs(config: Dict[str, Any],
             "knobs": knobs,
             "SubnetEmissionEnabled": {
                 "keys": len(enabled), "subnets": len(subnets),
-                "off": [n for n in subnets if not enabled.get(n, False)]}}
+                "off": [n for n in subnets if not enabled.get(n, True)]}}
 
 
 # ---------------------------------------------------------------------------
