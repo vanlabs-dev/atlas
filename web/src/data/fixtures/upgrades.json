@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T23:43:28.321789+00:00",
+  "generatedAt": "2026-11-03T22:53:55.311008+00:00",
   "data": {
     "events": [
       {
@@ -245,6 +245,27 @@
         "prevSpec": 481,
         "newSpec": 482,
         "block": 9334410,
+        "source": "rpc"
+      },
+      {
+        "observedAt": "2026-10-23T00:03:23.656906+00:00",
+        "prevSpec": 482,
+        "newSpec": 483,
+        "block": 9342515,
+        "source": "rpc"
+      },
+      {
+        "observedAt": "2026-10-23T20:02:31.511427+00:00",
+        "prevSpec": 483,
+        "newSpec": 484,
+        "block": 9348511,
+        "source": "rpc"
+      },
+      {
+        "observedAt": "2026-10-26T18:00:18.919374+00:00",
+        "prevSpec": 484,
+        "newSpec": 486,
+        "block": 9369500,
         "source": "rpc"
       }
     ],
