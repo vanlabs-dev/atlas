@@ -34,19 +34,28 @@ CFG = dash.DEFAULT_DASHBOARD_CFG
 # ---------------------------------------------------------------------------
 
 class TestScoring(unittest.TestCase):
-    def test_divergence_direction_promising(self):
-        row = {"netuid": 1, "activity_pct": 0.95, "momentum_pct": 0.05,
-               "activity_class": "active"}
-        sc = dash.score_subnet(row, fresh=False, cfg=CFG)
-        self.assertEqual(sc["why"], "divergence")
-        self.assertEqual(sc["cue_kind"], "up")          # substance before hype
-        self.assertGreater(sc["score"], 30)
+    def test_divergence_scores_without_a_direction_cue(self):
+        # Regression (audit D8): the board tagged divergence promising or
+        # dangerous, a trading cue never measured against outcomes.
+        for act, mom in ((0.95, 0.05), (0.05, 0.95)):
+            row = {"netuid": 1, "activity_pct": act, "momentum_pct": mom,
+                   "activity_class": "active"}
+            sc = dash.score_subnet(row, fresh=False, cfg=CFG)
+            self.assertEqual(sc["why"], "divergence")
+            self.assertGreater(sc["score"], 30)
+            self.assertNotIn("cue", sc)
+            self.assertNotIn("cue_kind", sc)
 
-    def test_divergence_direction_dangerous(self):
-        row = {"netuid": 2, "activity_pct": 0.05, "momentum_pct": 0.95,
-               "activity_class": "fade-eligible", "days_since": 120}
+    def test_divergence_thesis_is_a_neutral_fact(self):
+        row = {"netuid": 1, "activity_pct": 0.9, "momentum_pct": 0.2,
+               "activity_class": "active", "c30": 40, "a30": 3,
+               "momentum_7d": -4.0}
         sc = dash.score_subnet(row, fresh=False, cfg=CFG)
-        self.assertEqual(sc["cue_kind"], "dn")          # price ahead of code
+        thesis = dash.build_thesis(row, sc, {}, None)
+        self.assertIn("70 points apart", thesis)
+        for banned in ("hasn't priced", "nothing behind", "promising",
+                       "dangerous"):
+            self.assertNotIn(banned, thesis.lower())
 
     def test_fresh_event_floats_to_top(self):
         quiet = {"netuid": 3, "activity_pct": 0.5, "momentum_pct": 0.5,
@@ -164,6 +173,20 @@ class TestRender(DashboardBase):
         # Self-contained: exactly one inline style + the data + script tags.
         self.assertIn("<style>", page)
         self.assertIn("application/json", page)
+
+    def test_render_has_no_direction_cue(self):
+        self.slot(1, {"scoring/reward.py": "OWNER_TAKE = 0.35\n"})
+        self.slot(2, {"README.md": "# quiet\n"})
+        self.price(1, 3, 1.0)
+        self.price(1, 0, 2.0)
+        self.price(2, 3, 1.0)
+        self.price(2, 0, 0.5)
+        met.run_pass(self.conn, self.config, now=_iso())
+        page = open(dash.render(self.conn, self.config)["path"],
+                    encoding="utf-8").read()
+        for banned in ("▲", "▼", "PROMISING", "DANGEROUS", "hasn't priced",
+                       "dir_label", "cue_kind"):
+            self.assertNotIn(banned, page)
 
     def test_render_empty_store_is_honest_not_faked(self):
         # No slots at all -> a real empty board, never invented rows.

@@ -332,15 +332,15 @@ class TestMomentum(MetricsBase):
         self.assertAlmostEqual(mom["per_subnet"][1][7], 20.0, places=3)
         self.assertAlmostEqual(mom["baseline"][7], 10.0, places=3)  # median
 
-    def test_percentile_and_quadrant(self):
+    def test_percentile_order(self):
         ranks = met._percentile_ranks({1: 5.0, 2: 1.0, 3: 9.0})
         self.assertLess(ranks[2], ranks[1])
         self.assertLess(ranks[1], ranks[3])
-        self.assertEqual(met._quadrant_region(0.9, 0.9), "ride")
-        self.assertEqual(met._quadrant_region(0.9, 0.1), "accumulate")
-        self.assertEqual(met._quadrant_region(0.1, 0.9), "fade")
-        self.assertEqual(met._quadrant_region(0.1, 0.1), "ignore")
-        self.assertIsNone(met._quadrant_region(0.5, None))
+
+    def test_report_rows_carry_no_quadrant(self):
+        # Regression (audit D8): accumulate/ride/ignore/fade were trading
+        # cues placed by percentile, never measured. Dropped 2026-11-03.
+        self.assertFalse(hasattr(met, "_quadrant_region"))
 
 
 # ---------------------------------------------------------------------------
