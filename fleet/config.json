@@ -206,7 +206,7 @@
     "fresh_hours": 2
   },
   "mining": {
-    "_comment": "Mining triage (changes: mining-triage, mining-board-accuracy). Ranks subnets by what a NEW INDEPENDENT MINER could earn. DEFAULTS OFF in code; this block is the opt-in and flipping `enabled` back to false is the whole rollback. Every economics input is chain state read at ONE finalized block through livedata (batched keyless finney storage reads, each audited; zero TaoStats quota, no provider panel). Alpha distributed per block is SubnetAlphaOutEmission, which halves per subnet on its own issuance. The miner share is 0.5 x (1 - SubnetOwnerCut/65535), the cut applying only where OwnerCutEnabled; the 0.5 carries its subtensor citation in code, so there is no hand-set share here. Each mechanism gets its MechanismEmissionSplit of the pool; owner-coldkey UIDs are removed from each field and the removed share must match chain MinerBurned within `owner_reconcile_tolerance` (0-1 fraction) or the subnet is unrated. `budget_band` is null until the operator picks one (D2), which leaves rent unknown and the hardware rung inert rather than assuming a free box. `top1_ceiling_pct` drives the winner-take-all rung on the INDEPENDENT field of each mechanism. `identity_placeholders` drives the identity rung against the on-chain SubnetIdentitiesV3 name's first token; an unreadable identity map leaves the rung inert. `stale_after_hours` is when the board warns that its last complete pass is old.",
+    "_comment": "Mining triage (changes: mining-triage, mining-board-accuracy). Ranks subnets by what a NEW INDEPENDENT MINER could earn. DEFAULTS OFF in code; this block is the opt-in and flipping `enabled` back to false is the whole rollback. Every economics input is chain state read at ONE finalized block through livedata (batched keyless finney storage reads, each audited; zero TaoStats quota, no provider panel). Alpha distributed per block is SubnetAlphaOutEmission, which halves per subnet on its own issuance. The miner share is 0.5 x (1 - SubnetOwnerCut/65535), the cut applying only where OwnerCutEnabled; the 0.5 carries its subtensor citation in code, so there is no hand-set share here. Each mechanism gets its MechanismEmissionSplit of the pool; owner-coldkey UIDs are removed from each field and the removed share must match chain MinerBurned within `owner_reconcile_tolerance` (0-1 fraction) or the subnet is unrated. `budget_band` is the hardware ceiling (operator decision 2026-11-03: consumer-gpu); each subnet is costed at the band its evidence needs (GPU with no declared VRAM: smallest GPU band, assumed; unknown: the budget band, assumed) and cut when that band is above the budget. A null `budget_band` leaves every survivor unrated. `rent_bands` are hand-set from `rent_source`; refresh them by hand when GPU or TAO prices move. `subnet_sale_fraction` is the share of the whole subnet's daily emission assumed sold the same day for the haircut. `min_immunity_blocks` drives the prune-risk rung for full subnets (change: mining-economics-model). `top1_ceiling_pct` drives the winner-take-all rung on the INDEPENDENT field of each mechanism. `identity_placeholders` drives the identity rung against the on-chain SubnetIdentitiesV3 name's first token; an unreadable identity map leaves the rung inert. `stale_after_hours` is when the board warns that its last complete pass is old.",
     "enabled": true,
     "burn_ceiling_pct": 99.0,
     "top1_ceiling_pct": 95.0,
@@ -222,7 +222,24 @@
       "test",
       "placeholder"
     ],
-    "budget_band": null,
+    "budget_band": "consumer-gpu",
+    "rent_bands": {
+      "cpu": {
+        "vram_gb": 0,
+        "rent_tao_month": 0.0
+      },
+      "consumer-gpu": {
+        "vram_gb": 24,
+        "rent_tao_month": 1.5
+      },
+      "datacenter-gpu": {
+        "vram_gb": 80,
+        "rent_tao_month": 6.3
+      }
+    },
+    "rent_source": "lium ls 2026-11-03: RTX 4090 secure $0.45/h, H100 spot $1.95/h, x 720 h; TAO $222.13 (Taostats 2026-11-03)",
+    "subnet_sale_fraction": 1.0,
+    "min_immunity_blocks": 720,
     "retention_days": 90,
     "board_limit": 10,
     "stale_after_hours": 18

@@ -62,15 +62,15 @@ from typing import Any, Dict, List, Optional, Tuple
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_MODULE_DIR)
 
-MINING_VERSION = "0.2.0"
+MINING_VERSION = "0.3.0"
 # Version of the economics model the stored rows describe. Consumers compare
 # it across editions and suppress top-ten deltas when it changes.
-MODEL_VERSION = 2
+MODEL_VERSION = 3
 
 # Bump when the feasibility scanner's LOGIC changes, not when the code moves.
 # Feasibility is sha-gated on the scanned commit, so a scanner fix would
 # otherwise never re-run against clones that have not moved.
-SCAN_VERSION = "3"
+SCAN_VERSION = "4"
 
 BLOCKS_PER_DAY = 7200  # 12s blocks
 DAYS_PER_MONTH = 30.0
@@ -88,12 +88,16 @@ MINER_SPLIT_SOURCE = (
     "lib.rs:2254-2265)")
 
 PARITY_MODEL = (
-    "MODEL, not an observation: the entrant figure assumes a new miner joins "
-    "one mechanism and matches its independent earners, so that mechanism's "
-    "independent pool (its miner pool minus the owner share) is shared among "
-    "the independent earners + 1. The incumbent figure is what a current "
-    "independent earner receives; where it is far larger, entry means "
-    "displacing someone, not joining them.")
+    "MODEL, not an observation: the entrant figure is the LOWER of two "
+    "figures for one mechanism. The parity share assumes a new miner matches "
+    "the independent earners, so the independent pool (the miner pool minus "
+    "the owner share) is shared among the independent earners + 1. The 25th "
+    "percentile earner is what the lower quarter of today's independent "
+    "earners receives. TAO figures are valued at the read block's spot "
+    "price, after the slippage of selling the whole subnet's daily emission "
+    "(times the configured sale fraction) into today's pool; the day's TAO "
+    "injection is ignored. Net is gross minus the hand-set rent of the "
+    "hardware band the subnet's evidence requires.")
 
 # Confidence markers. `ok` is the only value that permits a figure.
 CONF_OK = "ok"
@@ -104,6 +108,7 @@ CONF_RECONCILE = "owner-reconcile-failed"
 # Unrated reasons that are not confidence markers.
 UNRATED_NOT_EMITTING = "not-emitting"
 UNRATED_NO_FIGURE = "no-mechanism-figure"
+UNRATED_NO_BAND = "no-budget-band"
 
 # Cut ladder rungs, in application order.
 CUT_GATE = "pool-side-switch-off"
@@ -111,6 +116,7 @@ CUT_IDENTITY = "identity-placeholder"
 CUT_BURN = "owner-capture"
 CUT_NO_EARNER = "no-independent-earner"
 CUT_CONCENTRATION = "winner-take-all"
+CUT_PRUNE = "prune-risk"
 CUT_FEASIBILITY = "not-minable"
 CUT_HARDWARE = "above-budget-band"
 
@@ -199,6 +205,16 @@ CREATE TABLE IF NOT EXISTS mine_econ (
     uids_full INTEGER,
     alpha_issuance REAL,
     miner_share REAL,
+    pool_days REAL,
+    payback_days REAL,
+    required_band TEXT,
+    band_assumed INTEGER,
+    registered_7d INTEGER,
+    weighted_uids INTEGER,
+    widest_weight_row INTEGER,
+    axons_served_7d INTEGER,
+    consensus_mode TEXT,
+    null_pruning_target INTEGER,
     PRIMARY KEY (ts, netuid)
 );
 CREATE INDEX IF NOT EXISTS mine_econ_netuid_ts
@@ -224,7 +240,26 @@ CREATE TABLE IF NOT EXISTS mine_mechanism (
     net_tao_month REAL,
     no_figure_reason TEXT,
     rung TEXT,
+    parity_alpha_day REAL,
+    indep_p25_alpha_day REAL,
+    indep_median_alpha_day REAL,
     PRIMARY KEY (ts, netuid, mecid)
+);
+CREATE TABLE IF NOT EXISTS mine_consensus_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    netuid INTEGER NOT NULL,
+    prev_mode TEXT NOT NULL,
+    new_mode TEXT NOT NULL,
+    block_number INTEGER,
+    ts TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS mine_consensus_state (
+    netuid INTEGER PRIMARY KEY,
+    mode TEXT NOT NULL,
+    first_seen_ts TEXT NOT NULL,
+    first_seen_block INTEGER,
+    since_block INTEGER,
+    since_ts TEXT
 );
 CREATE TABLE IF NOT EXISTS mine_feasibility (
     netuid INTEGER NOT NULL,
@@ -264,20 +299,27 @@ DEFAULT_MINING_CFG: Dict[str, Any] = {
     # Largest accepted gap, as a 0-1 fraction, between the owner share
     # removed from the field (weighted by split) and chain MinerBurned.
     "owner_reconcile_tolerance": 0.01,
-    # Assumed daily sale of earned alpha, as a fraction of the day's earnings,
-    # for the exit haircut.
-    "daily_sale_fraction": 1.0,
-    # Do-nothing baseline: staking the same capital rather than mining it.
-    "staking_apy_pct": 0.0,
-    # Hardware bands. `rent_tao_month` is hand-set, never scraped.
+    # Fraction of the subnet's whole daily participant emission
+    # (alpha_out_day) assumed sold into the pool the same day, for the exit
+    # haircut. 1.0 is the conservative case; the day's TAO injection is
+    # ignored (change: mining-economics-model).
+    "subnet_sale_fraction": 1.0,
+    # Hardware bands. `rent_tao_month` is hand-set, never scraped; the
+    # source and date travel in `rent_source`.
     "rent_bands": {
         "cpu": {"vram_gb": 0, "rent_tao_month": 0.0},
-        "consumer-gpu": {"vram_gb": 24, "rent_tao_month": 2.0},
-        "datacenter-gpu": {"vram_gb": 80, "rent_tao_month": 6.0},
+        "consumer-gpu": {"vram_gb": 24, "rent_tao_month": 1.5},
+        "datacenter-gpu": {"vram_gb": 80, "rent_tao_month": 6.3},
     },
-    # None means no band chosen yet (D2 deferred): the hardware rung does not
-    # cut, and rent is reported as unknown rather than assumed zero.
+    "rent_source": None,
+    # None means no band chosen: no subnet is ranked, every survivor is
+    # unrated `no-budget-band`.
     "budget_band": None,
+    # A full subnet whose immunity period is below this many blocks is cut
+    # at the prune-risk rung: about two default tempos of 360 blocks.
+    "min_immunity_blocks": 720,
+    # Bound on the miner-subtree files the feasibility scanner reads.
+    "max_subtree_files": 400,
     # On-chain SubnetIdentitiesV3 names that mean the slot is not a going
     # concern, matched against the name's normalised FIRST TOKEN. Data to
     # match against, never anything that is executed or followed.
@@ -304,7 +346,8 @@ DEFAULT_MINING_CFG: Dict[str, Any] = {
 
 # Keys the screen used before the chain-sourced miner share. A leftover is
 # ignored with a note, never used.
-RETIRED_CFG_KEYS = ("miner_share", "miner_share_source", "entrypoint_tokens")
+RETIRED_CFG_KEYS = ("miner_share", "miner_share_source", "entrypoint_tokens",
+                    "staking_apy_pct", "daily_sale_fraction")
 
 
 def mining_cfg(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -322,8 +365,10 @@ def retired_cfg_notes(config: Dict[str, Any]) -> List[str]:
     if not present:
         return []
     return ["mining.%s is ignored: the miner share comes from chain "
-            "SubnetOwnerCut and OwnerCutEnabled, and entrypoints from the "
-            "scanner's pattern set" % ", mining.".join(present)]
+            "SubnetOwnerCut and OwnerCutEnabled, entrypoints from the "
+            "scanner's pattern set, the exit haircut from "
+            "subnet_sale_fraction, and the staking baseline is retired"
+            % ", mining.".join(present)]
 
 
 def _utc_now() -> str:
@@ -355,6 +400,24 @@ _MINE_ECON_ADDED: Tuple[Tuple[str, str], ...] = (
     ("uids_full", "INTEGER"),
     ("alpha_issuance", "REAL"),
     ("miner_share", "REAL"),
+    # change: mining-economics-model
+    ("pool_days", "REAL"),
+    ("payback_days", "REAL"),
+    ("required_band", "TEXT"),
+    ("band_assumed", "INTEGER"),
+    ("registered_7d", "INTEGER"),
+    ("weighted_uids", "INTEGER"),
+    ("widest_weight_row", "INTEGER"),
+    ("axons_served_7d", "INTEGER"),
+    ("consensus_mode", "TEXT"),
+    ("null_pruning_target", "INTEGER"),
+)
+# Columns added to mine_mechanism after it first shipped (change:
+# mining-economics-model).
+_MINE_MECHANISM_ADDED: Tuple[Tuple[str, str], ...] = (
+    ("parity_alpha_day", "REAL"),
+    ("indep_p25_alpha_day", "REAL"),
+    ("indep_median_alpha_day", "REAL"),
 )
 
 
@@ -362,12 +425,14 @@ def ensure_schema(connection: sqlite3.Connection) -> None:
     """Create the mining tables if absent, and add columns a deployed store
     predates. Owns only its own tables; additive only, never destructive."""
     connection.executescript(SCHEMA_SQL)
-    have = {row[1] for row in connection.execute(
-        "PRAGMA table_info(mine_econ)")}
-    for column, decl in _MINE_ECON_ADDED:
-        if column not in have:
-            connection.execute(
-                "ALTER TABLE mine_econ ADD COLUMN %s %s" % (column, decl))
+    for table, added in (("mine_econ", _MINE_ECON_ADDED),
+                         ("mine_mechanism", _MINE_MECHANISM_ADDED)):
+        have = {row[1] for row in connection.execute(
+            "PRAGMA table_info(%s)" % table)}
+        for column, decl in added:
+            if column not in have:
+                connection.execute("ALTER TABLE %s ADD COLUMN %s %s"
+                                   % (table, column, decl))
 
 
 def state_get(connection: sqlite3.Connection, key: str) -> Optional[str]:
@@ -496,6 +561,27 @@ def entrant_alpha_per_day(indep_alpha_day: Optional[float],
     return float(indep_alpha_day) / (int(indep_earners) + 1)
 
 
+def percentile_of(values: List[float], pct: float) -> Optional[float]:
+    """Linear-interpolated percentile (0-100) of `values`, None when empty.
+    The same method as numpy's default, without numpy."""
+    ordered = sorted(v for v in values if v is not None)
+    if not ordered:
+        return None
+    rank = (len(ordered) - 1) * float(pct) / 100.0
+    low = int(rank)
+    high = min(low + 1, len(ordered) - 1)
+    return ordered[low] + (ordered[high] - ordered[low]) * (rank - low)
+
+
+def entrant_figure(parity: Optional[float],
+                   p25: Optional[float]) -> Optional[float]:
+    """The headline: the lower of the parity share and the 25th-percentile
+    independent earner. Undefined when either is."""
+    if parity is None or p25 is None:
+        return None
+    return min(float(parity), float(p25))
+
+
 def median_of(values: List[float]) -> Optional[float]:
     ordered = sorted(v for v in values if v is not None)
     if not ordered:
@@ -506,15 +592,69 @@ def median_of(values: List[float]) -> Optional[float]:
     return (ordered[mid - 1] + ordered[mid]) / 2.0
 
 
-def _rent_for_band(cfg: Dict[str, Any]) -> Tuple[Optional[str],
-                                                 Optional[float]]:
-    band = cfg.get("budget_band")
-    if not band:
-        return None, None
-    spec = (cfg.get("rent_bands") or {}).get(band)
-    if not spec:
-        return band, None
-    return band, float(spec.get("rent_tao_month") or 0.0)
+def _bands(cfg: Dict[str, Any]) -> List[Tuple[str, float, float]]:
+    """Configured bands as (name, vram_gb, rent_tao_month), smallest first."""
+    out = []
+    for name, spec in (cfg.get("rent_bands") or {}).items():
+        out.append((name, float((spec or {}).get("vram_gb") or 0.0),
+                    float((spec or {}).get("rent_tao_month") or 0.0)))
+    return sorted(out, key=lambda band: (band[1], band[0]))
+
+
+def band_rent(cfg: Dict[str, Any], band: Optional[str]) -> Optional[float]:
+    for name, _vram, rent in _bands(cfg):
+        if name == band:
+            return rent
+    return None
+
+
+def required_band(cfg: Dict[str, Any],
+                  feasibility: Optional[Dict[str, Any]]
+                  ) -> Tuple[Optional[str], bool, str]:
+    """The hardware band a subnet's evidence requires. Returns (band,
+    assumed, basis). Band None with a basis means no configured band covers
+    the declared floor.
+
+    - no GPU evidence (`possible`): the smallest band
+    - a declared VRAM floor: the smallest band that covers it
+    - GPU evidence without a declared floor: the smallest GPU band, assumed
+    - unknown or unscanned: the budget band, assumed
+    """
+    bands = _bands(cfg)
+    budget = cfg.get("budget_band")
+    verdict = (feasibility or {}).get("verdict")
+    vram = (feasibility or {}).get("vram_gb")
+    if not bands:
+        return None, True, "no hardware bands configured"
+    if verdict == VERDICT_NEEDS_GPU or (vram or 0) > 0:
+        if vram:
+            for name, band_vram, _rent in bands:
+                if band_vram >= float(vram):
+                    return name, False, "declared %.0f GB VRAM" % float(vram)
+            return None, False, "declared %.0f GB VRAM" % float(vram)
+        gpu = [band for band in bands if band[1] > 0]
+        if not gpu:
+            return None, True, "GPU evidence but no GPU band configured"
+        return gpu[0][0], True, "GPU evidence, VRAM undeclared"
+    if verdict == VERDICT_POSSIBLE:
+        return bands[0][0], False, "no GPU evidence found"
+    return budget, True, "hardware unknown"
+
+
+def _band_order(cfg: Dict[str, Any], band: Optional[str]) -> Optional[int]:
+    for index, (name, _vram, _rent) in enumerate(_bands(cfg)):
+        if name == band:
+            return index
+    return None
+
+
+def payback_days(reg_cost_tao: Optional[float],
+                 net_tao_month: Optional[float]) -> Optional[float]:
+    """Days of net income that repay the registration burn. Absent when net
+    is unknown or not positive, never zero or negative."""
+    if reg_cost_tao is None or net_tao_month is None or net_tao_month <= 0:
+        return None
+    return float(reg_cost_tao) / (float(net_tao_month) / DAYS_PER_MONTH)
 
 
 def _first_token(name: str) -> str:
@@ -553,8 +693,11 @@ def mechanism_economics(cfg: Dict[str, Any], mecid: int, split: float,
                         alpha_in_pool: Optional[float],
                         root_in_pool: Optional[float],
                         quote: Optional[float],
-                        rent: Optional[float]) -> Dict[str, Any]:
+                        sale_alpha: Optional[float]) -> Dict[str, Any]:
     """One mechanism's field and entrant figure with the owner removed.
+    Gross only: rent and net depend on feasibility and are set when the
+    ladder runs. `sale_alpha` is the subnet-wide daily sale the haircut
+    prices.
 
     `vector` None means the mechanism's incentive was not read.
     `owner_uids` None means the owner set was not read; an all-zero vector
@@ -571,6 +714,8 @@ def mechanism_economics(cfg: Dict[str, Any], mecid: int, split: float,
         "incumbent_alpha_day": None, "displacement_rank": None,
         "haircut_pct": None, "gross_tao_month": None,
         "net_tao_month": None, "no_figure_reason": None, "rung": None,
+        "parity_alpha_day": None, "indep_p25_alpha_day": None,
+        "indep_median_alpha_day": None,
     }
     if vector is None:
         mech["incentive_read"] = 0
@@ -606,29 +751,30 @@ def mechanism_economics(cfg: Dict[str, Any], mecid: int, split: float,
         mech["no_figure_reason"] = "emission-unread"
         return mech
     indep_total = sum(indep)
-    mech["incumbent_alpha_day"] = median_of(
-        [mech["indep_alpha_day"] * v / indep_total for v in indep])
+    earned = [mech["indep_alpha_day"] * v / indep_total for v in indep]
+    mech["indep_median_alpha_day"] = median_of(earned)
+    mech["incumbent_alpha_day"] = mech["indep_median_alpha_day"]
+    mech["indep_p25_alpha_day"] = percentile_of(earned, 25)
     mech["displacement_rank"] = len(indep) + 1
-    mech["entrant_alpha_day"] = entrant_alpha_per_day(
+    mech["parity_alpha_day"] = entrant_alpha_per_day(
         mech["indep_alpha_day"], len(indep))
+    mech["entrant_alpha_day"] = entrant_figure(
+        mech["parity_alpha_day"], mech["indep_p25_alpha_day"])
     if split <= 0:
         mech["no_figure_reason"] = MECH_ZERO_SPLIT
         return mech
     if price is None:
         mech["no_figure_reason"] = "price-unknown"
         return mech
-    mech["haircut_pct"] = exit_haircut_pct(
-        mech["entrant_alpha_day"] * float(cfg.get("daily_sale_fraction",
-                                                  1.0)),
-        alpha_in_pool, root_in_pool, quote)
+    mech["haircut_pct"] = (None if sale_alpha is None else
+                           exit_haircut_pct(sale_alpha, alpha_in_pool,
+                                            root_in_pool, quote))
     if mech["haircut_pct"] is None:
         mech["no_figure_reason"] = "haircut-unknown"
         return mech
-    gross = (mech["entrant_alpha_day"] * price
-             * (1.0 - mech["haircut_pct"] / 100.0) * DAYS_PER_MONTH)
-    mech["gross_tao_month"] = gross
-    if rent is not None:
-        mech["net_tao_month"] = gross - rent
+    mech["gross_tao_month"] = (mech["entrant_alpha_day"] * price
+                               * (1.0 - mech["haircut_pct"] / 100.0)
+                               * DAYS_PER_MONTH)
     return mech
 
 
@@ -670,11 +816,10 @@ def subnet_economics(cfg: Dict[str, Any], netuid: int,
         if unread(item):
             missing.append(item)
 
-    band, rent = _rent_for_band(cfg)
     row: Dict[str, Any] = {
         "ts": now, "netuid": netuid, "confidence": CONF_OK,
         "block_ref": snapshot.get("block_number"), "source_ts": now,
-        "rent_band": band, "rent_tao_month": rent,
+        "rent_band": None, "rent_tao_month": None,
         "alpha_in_day": None, "baseline_tao_month": None,
         "cut_reason": None, "cut_detail": None, "rank": None,
         "rank_mecid": None, "unrated_reason": None,
@@ -727,6 +872,14 @@ def subnet_economics(cfg: Dict[str, Any], netuid: int,
     row["root_in_pool"], row["alpha_in_pool"] = root_pool, alpha_pool
     row["balancer_quote"] = quote
     row["price_tao"] = pool_price(root_pool, alpha_pool, quote)
+    # Pool depth in days of the subnet's whole participant emission, and
+    # the daily sale the haircut prices: everyone who receives alpha sells
+    # the configured fraction of it the same day.
+    row["pool_days"] = (None if not alpha_pool or not row["alpha_out_day"]
+                        else alpha_pool / row["alpha_out_day"])
+    sale_alpha = (None if row["alpha_out_day"] is None else
+                  row["alpha_out_day"]
+                  * float(cfg.get("subnet_sale_fraction", 1.0)))
 
     burn_rao = get("Burn")
     row["reg_cost_tao"] = None if burn_rao is None or unread("Burn") \
@@ -778,7 +931,7 @@ def subnet_economics(cfg: Dict[str, Any], netuid: int,
             cfg, mecid, splits[mecid], vector, owner_uids,
             None if blocked else row["miner_alpha_day"],
             None if blocked else row["price_tao"],
-            alpha_pool, root_pool, quote, rent))
+            alpha_pool, root_pool, quote, sale_alpha))
 
     # Reconciliation: the owner share removed from the field, weighted by
     # split, against the chain's own record of withheld incentive.
@@ -816,9 +969,6 @@ def subnet_economics(cfg: Dict[str, Any], netuid: int,
                 mech["entrant_alpha_day"] = None
             if mech["no_figure_reason"] in (None, MECH_ZERO_SPLIT):
                 mech["no_figure_reason"] = reason
-    if rent is not None and row["confidence"] == CONF_OK and emitting:
-        row["baseline_tao_month"] = (
-            float(cfg.get("staking_apy_pct", 0.0)) / 100.0 / 12.0 * rent)
 
     _copy_headline(row, _headline_mechanism(mechs))
     return row, mechs
@@ -1406,25 +1556,38 @@ def classify_cut(cfg: Dict[str, Any], row: Dict[str, Any],
                 "not joining a field, and the parity model behind the "
                 "headline figure does not describe it"
                 % ("; ".join(parts), float(ceiling_top1)), mech_rungs)
+    # Prune risk: a full subnet deregisters a UID for every registration,
+    # and an immunity period shorter than the floor can expire before a new
+    # UID is ever scored. Unread fullness or immunity never cuts.
+    floor = cfg.get("min_immunity_blocks")
+    immunity = row.get("immunity_period")
+    if row.get("uids_full") == 1 and immunity is not None and floor \
+            and int(immunity) < int(floor):
+        return (CUT_PRUNE,
+                "full subnet with an immunity period of %d block(s), below "
+                "the %d-block floor: a new UID can be deregistered before "
+                "it is ever scored" % (int(immunity), int(floor)),
+                mech_rungs)
     if feasibility and feasibility.get("verdict") in INFEASIBLE_VERDICTS:
         return (CUT_FEASIBILITY,
                 "feasibility verdict %s" % feasibility["verdict"],
                 mech_rungs)
-    band, _ = _rent_for_band(cfg)
-    if band and feasibility and feasibility.get("vram_gb"):
-        band_vram = float(((cfg.get("rent_bands") or {})
-                           .get(band) or {}).get("vram_gb") or 0)
-        if float(feasibility["vram_gb"]) > band_vram:
+    budget = cfg.get("budget_band")
+    if budget and _band_order(cfg, budget) is not None:
+        band, _assumed, basis = required_band(cfg, feasibility)
+        need = _band_order(cfg, band)
+        if need is None or need > _band_order(cfg, budget):
+            budget_vram = next(v for n, v, _r in _bands(cfg) if n == budget)
             return (CUT_HARDWARE,
-                    "declared floor %.0f GB VRAM exceeds band %s (%.0f GB)"
-                    % (float(feasibility["vram_gb"]), band, band_vram),
-                    mech_rungs)
+                    "%s needs %s, above the budget band %s (%.0f GB)"
+                    % (basis, band or "more than any configured band",
+                       budget, budget_vram), mech_rungs)
     return None, None, mech_rungs
 
 
 def _figure(entry: Dict[str, Any]) -> Optional[float]:
-    value = entry.get("net_tao_month")
-    return entry.get("gross_tao_month") if value is None else value
+    """The ranked figure: net TAO per month. Gross is never ranked."""
+    return entry.get("net_tao_month")
 
 
 def decide(cfg: Dict[str, Any], rows: List[Dict[str, Any]],
@@ -1447,15 +1610,32 @@ def decide(cfg: Dict[str, Any], rows: List[Dict[str, Any]],
             mech_rungs[(netuid, mech["mecid"])] = rungs.get(mech["mecid"])
         result: Dict[str, Any] = {"cut_reason": rung, "cut_detail": detail,
                                   "rank": None, "rank_mecid": None,
-                                  "unrated_reason": None, "headline": None}
+                                  "unrated_reason": None, "headline": None,
+                                  "required_band": None, "band_assumed": None,
+                                  "rent_tao_month": None,
+                                  "payback_days": None}
         surviving = [m for m in mechs if m["mecid"] not in rungs]
-        if rung is None:
+        band, assumed, _basis = required_band(cfg, feasibility.get(netuid))
+        rent = band_rent(cfg, band)
+        result["required_band"] = band
+        result["band_assumed"] = None if band is None else int(assumed)
+        result["rent_tao_month"] = rent
+        for mech in mechs:
+            gross = mech.get("gross_tao_month")
+            mech["net_tao_month"] = (None if gross is None or rent is None
+                                     or not cfg.get("budget_band")
+                                     else gross - rent)
+        if rung is None and not cfg.get("budget_band"):
+            result["unrated_reason"] = UNRATED_NO_BAND
+        elif rung is None:
             figured = [m for m in surviving if _figure(m) is not None]
             if figured:
                 best = sorted(figured, key=lambda m: (-_figure(m),
                                                       m["mecid"]))[0]
                 result["rank_mecid"] = best["mecid"]
                 result["headline"] = best
+                result["payback_days"] = payback_days(
+                    row.get("reg_cost_tao"), _figure(best))
                 rated.append((_figure(best), netuid))
             else:
                 result["unrated_reason"] = (
@@ -1526,15 +1706,25 @@ def run_classify(connection: sqlite3.Connection, config: Dict[str, Any],
                 "cut_reason": result["cut_reason"],
                 "cut_detail": result["cut_detail"],
                 "rank": result["rank"], "rank_mecid": result["rank_mecid"],
-                "unrated_reason": result["unrated_reason"]})
+                "unrated_reason": result["unrated_reason"],
+                "required_band": result["required_band"],
+                "band_assumed": result["band_assumed"],
+                "rent_band": result["required_band"],
+                "rent_tao_month": result["rent_tao_month"],
+                "payback_days": result["payback_days"],
+                "baseline_tao_month": None})
             connection.execute(
                 "UPDATE mine_econ SET %s WHERE ts = ? AND netuid = ?"
                 % ", ".join("%s = ?" % column for column in assignments),
                 tuple(assignments.values()) + (ts, netuid))
         for (netuid, mecid), rung in mech_rungs.items():
+            net = next((m.get("net_tao_month")
+                        for m in mechanisms.get(netuid, [])
+                        if m["mecid"] == mecid), None)
             connection.execute(
-                "UPDATE mine_mechanism SET rung = ? WHERE ts = ? AND "
-                "netuid = ? AND mecid = ?", (rung, ts, netuid, mecid))
+                "UPDATE mine_mechanism SET rung = ?, net_tao_month = ? "
+                "WHERE ts = ? AND netuid = ? AND mecid = ?",
+                (rung, net, ts, netuid, mecid))
         state_set(connection, "last_classified_ts", ts)
         state_set(connection, "model_version", str(MODEL_VERSION))
         connection.commit()

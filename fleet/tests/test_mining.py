@@ -39,7 +39,10 @@ class MiningBase(unittest.TestCase):
         self.config = {"db": self.db,
                        "clone_root": os.path.join(self.tmp, "clones"),
                        "dashboard": {"www_dir": os.path.join(self.tmp, "www")},
-                       "mining": {"enabled": True}}
+                       # The production band (operator decision 2026-11-03);
+                       # a test that needs no band says so.
+                       "mining": {"enabled": True,
+                                  "budget_band": "consumer-gpu"}}
 
     def seed(self, subnets, now=None, config=None, **kwargs):
         return mf.seed_board(self.conn, config or self.config,
@@ -234,9 +237,16 @@ class TestMechanismEconomics(unittest.TestCase):
         self.assertAlmostEqual(out["indep_top1_share_pct"],
                                100.0 * 5001 / 5023)
         self.assertAlmostEqual(out["indep_alpha_day"], 1000.0 * 0.5023)
-        # Divisor is independent earners + 1, not all earners + 1.
-        self.assertAlmostEqual(out["entrant_alpha_day"],
+        # Parity divisor is independent earners + 1, not all earners + 1.
+        self.assertAlmostEqual(out["parity_alpha_day"],
                                out["indep_alpha_day"] / 3)
+        # The owner UID is not in the percentile set: p25 of the two
+        # independent earners (22 and 5001 of 5023), interpolated.
+        low, high = 1000.0 * 22 / 10000, 1000.0 * 5001 / 10000
+        self.assertAlmostEqual(out["indep_p25_alpha_day"],
+                               low + 0.25 * (high - low))
+        self.assertAlmostEqual(out["entrant_alpha_day"],
+                               out["indep_p25_alpha_day"])
 
     def test_owner_uid_does_not_inflate_the_parity_divisor(self):
         """4 earning UIDs, one of them the owner's: divide by 4, not 5."""
@@ -519,9 +529,12 @@ class TestMeasured(MiningBase):
         mechs = {m["mecid"]: m for m in self.mechs[93]}
         self.assertAlmostEqual(mechs[0]["split"], 1311 / 65535.0)
         self.assertAlmostEqual(mechs[1]["split"], 64224 / 65535.0)
-        # Its real entrant figure is about 8 TAO/mo, not the 410.92 the
-        # whole-pool model credited it with.
-        self.assertTrue(7.0 < mechs[0]["gross_tao_month"] < 9.5,
+        # Its entrant figure is the p25 earner (11.15 alpha/day, below the
+        # 14.63 parity share), about 6.2 TAO/mo after the subnet-wide
+        # haircut; the whole-pool model once credited it with 410.92.
+        self.assertAlmostEqual(mechs[0]["parity_alpha_day"], 14.627, 2)
+        self.assertAlmostEqual(mechs[0]["indep_p25_alpha_day"], 11.146, 2)
+        self.assertTrue(5.5 < mechs[0]["gross_tao_month"] < 7.0,
                         mechs[0]["gross_tao_month"])
 
     def test_sn44_mechanism_0_gets_nothing(self):
@@ -557,10 +570,19 @@ class TestMeasured(MiningBase):
         for row in self.rows().values():
             self.assertAlmostEqual(row["miner_share"], SHARE)
 
-    def test_sn4_is_ranked_first(self):
-        row = self.rows()[4]
-        self.assertEqual(row["rank"], 1)
-        self.assertEqual(row["subnet_name"], "Targon")
+    def test_a_dust_earner_caps_sn4_below_sn80(self):
+        # Regression (audit D2): SN4's independent earners include a UID
+        # with weight 1, so its p25 earner, not the parity mean, sets the
+        # entrant figure, and SN80 ranks above it.
+        rows = self.rows()
+        mech = {m["mecid"]: m for m in self.mechs[4]}[0]
+        self.assertLess(mech["indep_p25_alpha_day"],
+                        mech["parity_alpha_day"])
+        self.assertAlmostEqual(rows[4]["entrant_alpha_day"],
+                               mech["indep_p25_alpha_day"])
+        self.assertEqual(rows[80]["rank"], 1)
+        self.assertEqual(rows[4]["rank"], 2)
+        self.assertEqual(rows[4]["subnet_name"], "Targon")
 
 
 # ---------------------------------------------------------------------------
@@ -770,22 +792,29 @@ class TestEcon(MiningBase):
             [subnet(0, [1]), subnet(1, [1, 1])]))
         self.assertEqual(out["observations"], 1)
 
-    def test_no_net_figure_without_a_budget_band(self):
-        self.seed([subnet(1, [5, 5])])
-        row = self.rows()[1]
-        self.assertIsNone(row["net_tao_month"])
-        self.assertIsNotNone(row["gross_tao_month"])
-        # No rent, so no fabricated zero baseline either.
-        self.assertIsNone(row["baseline_tao_month"])
-
-    def test_net_figure_appears_once_a_band_is_chosen(self):
-        config = dict(self.config,
-                      mining={"enabled": True, "budget_band": "consumer-gpu"})
+    def test_no_budget_band_ranks_nothing(self):
+        # Regression (audit D3): with no band the board was a gross list.
+        config = dict(self.config, mining={"enabled": True,
+                                           "budget_band": None})
         self.seed([subnet(1, [5, 5])], config=config)
         row = self.rows()[1]
+        self.assertIsNone(row["rank"])
+        self.assertEqual(row["unrated_reason"], mine.UNRATED_NO_BAND)
+        self.assertIsNone(row["net_tao_month"])
+        self.assertIsNotNone(row["gross_tao_month"])
+        self.assertIsNone(row["baseline_tao_month"])
+
+    def test_net_is_gross_minus_the_required_band_rent(self):
+        # Unscanned hardware is costed at the budget band, marked assumed.
+        self.seed([subnet(1, [5, 5])])
+        row = self.rows()[1]
+        self.assertEqual(row["required_band"], "consumer-gpu")
+        self.assertEqual(row["band_assumed"], 1)
+        self.assertAlmostEqual(row["rent_tao_month"], 1.5)
         self.assertAlmostEqual(row["net_tao_month"],
-                               row["gross_tao_month"] - 2.0, places=6)
-        self.assertIsNotNone(row["baseline_tao_month"])
+                               row["gross_tao_month"] - 1.5, places=6)
+        # The staking baseline is retired (it applied an APY to rent).
+        self.assertIsNone(row["baseline_tao_month"])
 
     def test_missing_split_citation_refuses_to_compute(self):
         original = mine.MINER_SPLIT_SOURCE
@@ -1167,7 +1196,7 @@ class TestFeasibility(MiningBase):
         third = mine.run_feasibility(self.conn, self.config)
         self.assertEqual(third["invalidated_by_scanner_change"], 1)
         self.assertEqual(third["scanned"], 1)
-        self.assertEqual(mine.state_get(self.conn, "scan_version"), "3")
+        self.assertEqual(mine.state_get(self.conn, "scan_version"), "4")
 
 
 # ---------------------------------------------------------------------------
@@ -1209,7 +1238,7 @@ class TestClassify(MiningBase):
 
     def test_classify_records_the_model_version(self):
         self.seed(BOARD)
-        self.assertEqual(mine.state_get(self.conn, "model_version"), "2")
+        self.assertEqual(mine.state_get(self.conn, "model_version"), "3")
 
     def test_classify_does_not_run_after_a_failed_econ(self):
         self.seed(BOARD, now="2026-09-25T00:00:00+00:00")
@@ -1432,7 +1461,8 @@ class TestRender(MiningBase):
         self.assertGreater(mine.render(self.conn, self.config)["bytes"], 0)
 
     def test_no_budget_band_is_stated_on_the_page(self):
-        mine.render(self.conn, self.config)
+        mine.render(self.conn, dict(self.config, mining={
+            "enabled": True, "budget_band": None}))
         self.assertIn("no budget band chosen", self.page())
 
 

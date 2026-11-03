@@ -2,8 +2,8 @@
 
 ## 1. Schema and config
 
-- [ ] 1.1 Add the `mine_econ` columns `pool_days`, `payback_days` and `required_band`, and the `mine_mechanism` columns `parity_alpha_day`, `indep_p25_alpha_day` and `indep_median_alpha_day`. Add an additive `ALTER` path for `mine_mechanism` in `ensure_schema`. Verify: a test opens an old-shape store, runs `ensure_schema` twice, and finds every column.
-- [ ] 1.2 Update the `mining` block in `fleet/config.json`:
+- [x] 1.1 Add the `mine_econ` columns `pool_days`, `payback_days` and `required_band`, and the `mine_mechanism` columns `parity_alpha_day`, `indep_p25_alpha_day` and `indep_median_alpha_day`. Add an additive `ALTER` path for `mine_mechanism` in `ensure_schema`. Verify: a test opens an old-shape store, runs `ensure_schema` twice, and finds every column.
+- [x] 1.2 Update the `mining` block in `fleet/config.json`:
   - `budget_band` set to `consumer-gpu`
   - `rent_bands` set to 1.5 and 6.3, with `rent_source`
   - `min_immunity_blocks` 720
@@ -30,24 +30,24 @@
 
 ## 2. Entrant figure (D1, D2)
 
-- [ ] 2.1 In `mechanism_economics`, compute the parity share, the p25 and median earners (interpolated), and entrant = min(parity, p25). Verify with regression tests:
+- [x] 2.1 In `mechanism_economics`, compute the parity share, the p25 and median earners (interpolated), and entrant = min(parity, p25). Verify with regression tests:
   - long tail: parity 147.6, p25 0.07, so entrant 0.07
   - few strong earners: entrant = parity
   - the owner UID is excluded from the percentile set
   - 3 earners of 255 slots: no scaling and no cut
-- [ ] 2.2 Update `PARITY_MODEL` to state the min rule, the at-spot valuation and the haircut assumption. Verify: the tests that assert the model text is present still pass, with the new wording.
+- [x] 2.2 Update `PARITY_MODEL` to state the min rule, the at-spot valuation and the haircut assumption. Verify: the tests that assert the model text is present still pass, with the new wording.
 
 ## 3. Haircut and pool depth (D5)
 
-- [ ] 3.1 Compute the haircut from `alpha_out_day * subnet_sale_fraction`, and store `pool_days`. Verify with a regression test: 7,200/day into a pool of 89,898 alpha matches `exit_haircut_pct` for 7,200 alpha, and `pool_days` is about 12.5. An unknown pool gives no haircut and no figure.
+- [x] 3.1 Compute the haircut from `alpha_out_day * subnet_sale_fraction`, and store `pool_days`. Verify with a regression test: 7,200/day into a pool of 89,898 alpha matches `exit_haircut_pct` for 7,200 alpha, and `pool_days` is about 12.5. An unknown pool gives no haircut and no figure.
 
 ## 4. Ladder: prune risk and hardware (D3, D6)
 
-- [ ] 4.1 Add the `prune-risk` rung after winner-take-all. Verify with regression tests:
+- [x] 4.1 Add the `prune-risk` rung after winner-take-all. Verify with regression tests:
   - full with immunity 1 against 720 is cut, and the detail carries both numbers
   - open with immunity 1 survives
   - unknown immunity or fullness survives
-- [ ] 4.2 Move rent and net into Stage C:
+- [x] 4.2 Move rent and net into Stage C:
   - `required_band` from feasibility
   - hardware cut when required > budget
   - net = gross minus required-band rent, on the row and on each mechanism
@@ -61,7 +61,7 @@
   - 16 GB declared survives and is netted at 1.5
   - unknown is costed at the budget band and marked assumed
   - a null band ranks nothing
-- [ ] 4.3 Store `payback_days` = `reg_cost_tao` / (net / 30) when net > 0, else null. Verify: 0.5 TAO at 15 TAO/month gives 1.0, and net ≤ 0 gives null.
+- [x] 4.3 Store `payback_days` = `reg_cost_tao` / (net / 30) when net > 0, else null. Verify: 0.5 TAO at 15 TAO/month gives 1.0, and net ≤ 0 gives null.
 
 ## 5. Feasibility scanner v4 (D4)
 

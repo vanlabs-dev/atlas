@@ -47,7 +47,8 @@ class MiningServerBase(unittest.TestCase):
         conn = fleet.open_store(self.db)
         try:
             config = {"db": self.db, "clone_root": self.clone_root,
-                      "mining": {"enabled": True}}
+                      "mining": {"enabled": True,
+                                  "budget_band": "consumer-gpu"}}
             mf.seed_board(conn, config, synthetic(subnets or BOARD),
                           now=when)
         finally:

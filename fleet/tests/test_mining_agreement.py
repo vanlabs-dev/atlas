@@ -52,7 +52,8 @@ class TestAgreement(unittest.TestCase):
                        "clone_root": os.path.join(self.tmp, "clones"),
                        "dashboard": {"www_dir": os.path.join(self.tmp,
                                                              "www")},
-                       "mining": {"enabled": True}}
+                       "mining": {"enabled": True,
+                                  "budget_band": "consumer-gpu"}}
         mf.seed_board(conn, self.config, mf.synthetic(BOARD))
         self.board = mine.report(conn, self.config, include_cut=True)
         mine.render(conn, self.config)

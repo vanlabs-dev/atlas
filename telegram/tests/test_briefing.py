@@ -111,7 +111,9 @@ def seed_fleet(path):
         (_iso(4),))
     conn.commit()
     # Mining rows come from the real writer (econ, then classify).
-    mf.seed_board(conn, {"mining": {"enabled": True}}, BOARD_SNAPSHOT())
+    mf.seed_board(conn, {"mining": {"enabled": True,
+                                    "budget_band": "consumer-gpu"}},
+                  BOARD_SNAPSHOT())
     conn.close()
 
 
