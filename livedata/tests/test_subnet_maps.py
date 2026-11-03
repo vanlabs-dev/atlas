@@ -456,3 +456,42 @@ class ReadSubnetMaps(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReadRegistrationBlocks(unittest.TestCase):
+    """`NetworkRegisteredAt` per netuid (change: signal-statistics-ties): the
+    occupant key that keeps a reused netuid from joining two subnets'
+    prices into one series."""
+
+    def reg_tables(self, rows):
+        return {"NetworkRegisteredAt": {n: u64_hex(b) for n, b in
+                                        rows.items()}}
+
+    def test_decodes_every_netuid_at_one_block(self):
+        rpc = FakeChain(self.reg_tables({82: 9155260, 4: 1411451}))
+        out = al.read_registration_blocks(CONFIG, rpc=rpc)
+        self.assertTrue(out["ok"], out)
+        self.assertEqual(out["values"], {82: 9155260, 4: 1411451})
+        self.assertEqual(out["block_number"], 8789861)
+        self.assertEqual(out["default_block"], 0)
+
+    def test_empty_map_fails_closed(self):
+        out = al.read_registration_blocks(
+            CONFIG, rpc=FakeChain({"NetworkRegisteredAt": {}}))
+        self.assertFalse(out["ok"])
+        self.assertIn("NetworkRegisteredAt", out["error"])
+
+    def test_short_batch_fails_closed(self):
+        rpc = FakeChain(self.reg_tables({82: 1, 4: 2}),
+                        drop_query_item="NetworkRegisteredAt")
+        out = al.read_registration_blocks(CONFIG, rpc=rpc)
+        self.assertFalse(out["ok"])
+
+    def test_rpc_failure_fails_closed(self):
+        rpc = FakeChain(self.reg_tables({82: 1}),
+                        fail_method="state_queryStorageAt")
+        self.assertFalse(al.read_registration_blocks(CONFIG, rpc=rpc)["ok"])
+
+    def test_undecodable_value_fails_closed(self):
+        rpc = FakeChain({"NetworkRegisteredAt": {82: "0x0102"}})
+        self.assertFalse(al.read_registration_blocks(CONFIG, rpc=rpc)["ok"])
