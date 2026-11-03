@@ -32,6 +32,15 @@ def _iso(days_ago=0, hours_ago=0):
 CFG = dict(sig.DEFAULT_SIGNALS_CFG)
 
 
+def snap(prices, registered=None, block=None):
+    """A price snapshot as the fetcher returns it (change:
+    signal-statistics-ties): every priced netuid carries a registration
+    block, block 1 unless given."""
+    reg = {n: 1 for n in prices}
+    reg.update(registered or {})
+    return {"prices": dict(prices), "registered": reg, "block_number": block}
+
+
 def _insert_range(conn, netuid, epoch, prev, new, files, commits=1,
                   files_truncated=False, commits_truncated=False,
                   non_ff=False):
@@ -645,7 +654,7 @@ class TestMeasurement(SignalsBase):
 
         def fetcher():
             calls.append(1)
-            return {50: 0.01, 51: 0.002, 52: 0.5}
+            return snap({50: 0.01, 51: 0.002, 52: 0.5})
 
         summary = sig.run_measurement(self.conn, self.config,
                                       price_fetcher=fetcher)
@@ -665,55 +674,128 @@ class TestMeasurement(SignalsBase):
             "SELECT COUNT(*) FROM signal_prices").fetchone()[0], 3)
 
     def test_failed_fetch_leaves_pending_never_blocks(self):
-        self._instant_event()
+        t0 = datetime.datetime(2026, 11, 3, 0, 0, tzinfo=datetime.timezone.utc)
+        self._instant_event(created_at=t0.isoformat())
         summary = sig.run_measurement(self.conn, self.config,
+                                      now=t0.isoformat(),
                                       price_fetcher=lambda: None)
         self.assertTrue(summary.get("fetch_failed"))
         status = self.conn.execute(
             "SELECT status FROM signal_entries").fetchone()[0]
         self.assertEqual(status, "pending")
-        # retry succeeds later, marked late (event is old). The ledger row
-        # carries its own created_at since the source-triple change, so the
-        # entry is aged there as well as on the source event.
-        old = (datetime.datetime.now(tz=datetime.timezone.utc)
-               - datetime.timedelta(hours=12)).isoformat()
-        self.conn.execute("UPDATE signal_events SET created_at = ?", (old,))
-        self.conn.execute("UPDATE signal_entries SET created_at = ?", (old,))
-        self.conn.commit()
+        # A retry inside the late grace fills from that vector.
+        later = (t0 + datetime.timedelta(hours=5)).isoformat()
+        sig.run_measurement(self.conn, self.config, now=later,
+                            price_fetcher=lambda: snap({50: 0.01}))
+        status, as_of = self.conn.execute(
+            "SELECT status, as_of FROM signal_entries").fetchone()
+        self.assertEqual((status, as_of), ("recorded", later))
+
+    def test_entry_past_the_grace_is_unavailable(self):
+        # Regression (audit C13): an entry filled 12 h late used to be
+        # `late` and still measured, so its horizons ran short.
+        t0 = datetime.datetime(2026, 11, 3, 0, 0, tzinfo=datetime.timezone.utc)
+        self._instant_event(created_at=t0.isoformat())
         sig.run_measurement(self.conn, self.config,
-                            price_fetcher=lambda: {50: 0.01})
-        status = self.conn.execute(
-            "SELECT status FROM signal_entries").fetchone()[0]
-        self.assertEqual(status, "late")
+                            now=(t0 + datetime.timedelta(hours=12)).isoformat(),
+                            price_fetcher=lambda: snap({50: 0.01}))
+        status, reason = self.conn.execute(
+            "SELECT status, reason FROM signal_entries").fetchone()
+        self.assertEqual((status, reason), ("unavailable", "no-vector"))
+
+    def _pass(self, when, prices, registered=None):
+        return sig.run_measurement(
+            self.conn, self.config, now=when.isoformat(),
+            price_fetcher=lambda: snap(prices, registered))
+
+    def _outcome_row(self, event_id, horizon):
+        return self.conn.execute(
+            "SELECT return_pct, baseline_return_pct, status, v2_status, "
+            "v2_reason, v2_excess_pct FROM signal_outcomes WHERE "
+            "event_id = ? AND horizon_days = ?",
+            (event_id, horizon)).fetchone()
 
     def test_outcome_fill_with_baseline_window_alignment(self):
-        event_id = self._instant_event(netuid=50)
-        sig.run_measurement(self.conn, self.config,
-                            price_fetcher=lambda: {50: 0.01, 51: 1.0,
-                                                   52: 2.0})
-        # force the 1d horizon due and refetch at doubled prices
-        past = (datetime.datetime.now(tz=datetime.timezone.utc)
-                - datetime.timedelta(hours=1)).isoformat()
-        self.conn.execute(
-            "UPDATE signal_outcomes SET due_at = ? WHERE horizon_days = 1",
-            (past,))
-        self.conn.commit()
-        sig.run_measurement(self.conn, self.config,
-                            price_fetcher=lambda: {50: 0.02, 51: 1.5,
-                                                   52: 2.0})
-        row = self.conn.execute(
-            "SELECT return_pct, baseline_return_pct, status FROM "
-            "signal_outcomes WHERE event_id = ? AND horizon_days = 1",
-            (event_id,)).fetchone()
-        self.assertAlmostEqual(row[0], 100.0, places=3)
+        t0 = datetime.datetime(2026, 11, 3, 0, 0, tzinfo=datetime.timezone.utc)
+        event_id = self._instant_event(netuid=50, created_at=t0.isoformat())
+        self._pass(t0, {50: 0.01, 51: 1.0, 52: 2.0})
+        self._pass(t0 + datetime.timedelta(days=1, hours=2),
+                   {50: 0.02, 51: 1.5, 52: 2.0})
+        ret, base, status, v2, _reason, excess = self._outcome_row(event_id, 1)
+        self.assertAlmostEqual(ret, 100.0, places=3)
         # fleet median over {50: +100%, 51: +50%, 52: 0%} = +50%
-        self.assertAlmostEqual(row[1], 50.0, places=3)
-        self.assertEqual(row[2], "recorded")
+        self.assertAlmostEqual(base, 50.0, places=3)
+        self.assertEqual((status, v2), ("recorded", "recorded"))
+        self.assertAlmostEqual(excess, 50.0, places=3)
+
+    def test_late_exit_is_unavailable_not_stretched(self):
+        # Regression (audit C13): a horizon filled at the first pass after
+        # it fell due, however late, so "7 days" could span 5 or 9.
+        t0 = datetime.datetime(2026, 11, 3, 0, 0, tzinfo=datetime.timezone.utc)
+        event_id = self._instant_event(netuid=50, created_at=t0.isoformat())
+        self._pass(t0, {50: 0.01})
+        self._pass(t0 + datetime.timedelta(days=1, hours=9), {50: 0.02})
+        _ret, _base, status, v2, reason, _excess = self._outcome_row(event_id, 1)
+        self.assertEqual((status, v2, reason),
+                         ("unavailable", "unavailable", "no-vector"))
+
+    def test_reregistered_netuid_is_not_one_subnet(self):
+        # Regression (audit C13): SN82 read +2533% over 30 days because a
+        # new subnet took the netuid inside the window.
+        t0 = datetime.datetime(2026, 9, 17, 12, tzinfo=datetime.timezone.utc)
+        event_id = self._instant_event(netuid=82, created_at=t0.isoformat())
+        self._pass(t0, {82: 0.001, 51: 1.0, 52: 2.0},
+                   {82: 8000000, 51: 5, 52: 6})
+        self._pass(t0 + datetime.timedelta(days=1, hours=1),
+                   {82: 0.0263, 51: 1.0, 52: 2.0},
+                   {82: 9155260, 51: 5, 52: 6})
+        ret, _base, status, v2, reason, _excess = self._outcome_row(event_id, 1)
+        self.assertIsNone(ret)
+        self.assertEqual((status, v2, reason),
+                         ("unavailable", "unavailable", "re-registered"))
+
+    def test_baseline_excludes_a_reregistered_netuid(self):
+        t0 = datetime.datetime(2026, 11, 3, 0, 0, tzinfo=datetime.timezone.utc)
+        event_id = self._instant_event(netuid=50, created_at=t0.isoformat())
+        self._pass(t0, {50: 1.0, 51: 1.0, 52: 1.0, 53: 0.001},
+                   {53: 100})
+        self._pass(t0 + datetime.timedelta(days=1, hours=1),
+                   {50: 1.1, 51: 0.9, 52: 1.0, 53: 1.0}, {53: 200})
+        _ret, base, _status, v2, _reason, _excess = self._outcome_row(event_id, 1)
+        # median of {+10%, -10%, 0%}; SN53's +99900% is left out
+        self.assertEqual(v2, "recorded")
+        self.assertAlmostEqual(base, 0.0, places=6)
+
+    def test_legacy_entry_vector_judged_from_exit_registration(self):
+        # A vector stored before this change has no occupant key. The exit
+        # vector's registration block decides, through block anchors.
+        t0 = datetime.datetime(2026, 10, 1, tzinfo=datetime.timezone.utc)
+        event_id = self._instant_event(netuid=50, created_at=t0.isoformat())
+        self.conn.executemany(
+            "INSERT INTO signal_prices (ts, netuid, price_tao) "
+            "VALUES (?, ?, ?)", [(t0.isoformat(), 50, 1.0),
+                                 (t0.isoformat(), 51, 1.0)])
+        self.conn.commit()
+        anchors = [(1000, t0 - datetime.timedelta(days=30)),
+                   (1000 + 7200 * 40, t0 + datetime.timedelta(days=10))]
+        exit_time = t0 + datetime.timedelta(days=1, hours=1)
+        # SN50 registered at block 1000 (30 days before entry): clean.
+        # SN51 registered 12 h after entry: re-registered inside the window.
+        reg51 = 1000 + int((30 * 86400 + 12 * 3600) / 12.0)
+        sig.run_measurement(
+            self.conn, self.config, now=exit_time.isoformat(),
+            anchors=anchors,
+            price_fetcher=lambda: snap({50: 1.2, 51: 9.0},
+                                       {50: 1000, 51: reg51}))
+        ret, base, _status, v2, _reason, _excess = self._outcome_row(event_id, 1)
+        self.assertEqual(v2, "recorded")
+        self.assertAlmostEqual(ret, 20.0, places=6)
+        self.assertAlmostEqual(base, 20.0, places=6)  # SN51 excluded
 
     def test_deregistered_subnet_marked_unavailable(self):
         self._instant_event(netuid=77)
         sig.run_measurement(self.conn, self.config,
-                            price_fetcher=lambda: {50: 0.01})
+                            price_fetcher=lambda: snap({50: 0.01}))
         status = self.conn.execute(
             "SELECT status FROM signal_entries WHERE netuid=77"
         ).fetchone()[0]
@@ -723,7 +805,7 @@ class TestMeasurement(SignalsBase):
         self.conn.execute("UPDATE signal_outcomes SET due_at = ?", (past,))
         self.conn.commit()
         sig.run_measurement(self.conn, self.config,
-                            price_fetcher=lambda: {50: 0.01})
+                            price_fetcher=lambda: snap({50: 0.01}))
         states = {row[0] for row in self.conn.execute(
             "SELECT status FROM signal_outcomes")}
         self.assertEqual(states, {"unavailable"})
@@ -739,7 +821,7 @@ class TestMeasurement(SignalsBase):
             "(?, 50, 0.5)", (stale,))
         self.conn.commit()
         sig.run_measurement(self.conn, self.config,
-                            price_fetcher=lambda: {50: 0.01})
+                            price_fetcher=lambda: snap({50: 0.01}))
         # 20-day-old vector survives: floor is max horizon (30) + 7
         self.assertEqual(self.conn.execute(
             "SELECT COUNT(*) FROM signal_prices WHERE ts = ?",
@@ -1093,7 +1175,7 @@ class TestLedgerSourceTriple(SignalsBase):
     def test_same_row_id_in_two_stores_does_not_collide(self):
         event_id = self._fleet_event(netuid=50)
         sig.run_measurement(self.conn, self.config,
-                            price_fetcher=lambda: {50: 0.01})
+                            price_fetcher=lambda: snap({50: 0.01}))
         sig.enter_measured_event(self.conn, CFG, sig.SOURCE_LIVEDATA,
                                  event_id, 50, "gate-crossing", _iso())
         self.conn.commit()
@@ -1200,7 +1282,7 @@ class TestLedgerSourceTriple(SignalsBase):
         # A demoted class keeps filling: measurement never reads the tier.
         self._fleet_event(netuid=50, event_class="econ-code")
         sig.run_measurement(self.conn, self.config,
-                            price_fetcher=lambda: {50: 0.01})
+                            price_fetcher=lambda: snap({50: 0.01}))
         self.assertEqual(self.conn.execute(
             "SELECT status FROM signal_entries").fetchone()[0], "recorded")
 
@@ -1227,3 +1309,168 @@ class TestLedgerSourceTriple(SignalsBase):
         classes = {row["class"] for row
                    in sig.effectiveness(self.conn, self.config)["report"]}
         self.assertIn("gate-crossing", classes)
+
+
+class TestRegistrationKeyedLedger(SignalsBase):
+    """Change signal-statistics-ties: vectors carry occupant keys, a
+    snapshot without them is refused, and gate crossings anchor at
+    eligibility."""
+
+    T0 = datetime.datetime(2026, 9, 9, 16, 0, tzinfo=datetime.timezone.utc)
+
+    def _event(self, netuid=50):
+        cursor = self.conn.execute(
+            "INSERT INTO signal_events (class, tier, netuid, term, "
+            "dedup_key, payload_json, created_at) VALUES ('econ-code', "
+            "'instant', ?, NULL, 'e:1', '{}', ?)",
+            (netuid, self.T0.isoformat()))
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def test_snapshot_without_registration_is_not_stored(self):
+        self._event()
+        summary = sig.run_measurement(
+            self.conn, self.config, now=self.T0.isoformat(),
+            price_fetcher=lambda: {"prices": {50: 0.01, 51: 1.0},
+                                   "registered": {50: 1}})
+        self.assertTrue(summary.get("fetch_failed"))
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM signal_prices").fetchone()[0], 0)
+        self.assertEqual(self.conn.execute(
+            "SELECT status FROM signal_entries").fetchone()[0], "pending")
+
+    def test_plain_price_dict_is_refused(self):
+        self.assertIsNone(sig._normalize_snapshot({50: 0.01}))
+
+    def test_default_fetcher_fails_when_registration_read_fails(self):
+        import types
+        fake = types.SimpleNamespace(
+            load_config=lambda: {"db": "x"}, load_env=lambda: {},
+            resolve=lambda p: os.path.join(self.tmp, "live.db"),
+            open_store=lambda p: sqlite3.connect(p),
+            QuotaLedger=lambda conn, cfg: None,
+            run_operation=lambda *a, **k: {
+                "status": "ok",
+                "values": {"subnets": [{"netuid": 50,
+                                        "alpha_price_tao": 0.01}]}},
+            read_registration_blocks=lambda cfg, connection=None: {
+                "ok": False, "error": "rpc down"})
+        saved = sys.modules.get("atlas_live")
+        sys.modules["atlas_live"] = fake
+        try:
+            self.assertIsNone(sig.default_price_fetcher())
+            fake.read_registration_blocks = lambda cfg, connection=None: {
+                "ok": True, "values": {50: 9155260}, "default_block": 0,
+                "block_number": 9423800}
+            got = sig.default_price_fetcher()
+        finally:
+            if saved is None:
+                sys.modules.pop("atlas_live", None)
+            else:
+                sys.modules["atlas_live"] = saved
+        self.assertEqual(got, {"prices": {50: 0.01},
+                               "registered": {50: 9155260},
+                               "block_number": 9423800})
+
+    def test_vector_stores_registration_and_block(self):
+        self._event()
+        sig.run_measurement(
+            self.conn, self.config, now=self.T0.isoformat(),
+            price_fetcher=lambda: snap({50: 0.01}, {50: 77}, block=9000))
+        self.assertEqual(self.conn.execute(
+            "SELECT reg_block FROM signal_prices").fetchone()[0], 77)
+        self.assertEqual(self.conn.execute(
+            "SELECT block_number FROM signal_vectors").fetchone()[0], 9000)
+
+    def _livedata(self, rows):
+        path = os.path.join(self.tmp, "livedata.db")
+        conn = sqlite3.connect(path)
+        conn.execute(
+            "CREATE TABLE gate_events (id INTEGER PRIMARY KEY, netuid "
+            "INTEGER, observed_at TEXT, eligibility TEXT, eligibility_at "
+            "TEXT)")
+        conn.executemany("INSERT INTO gate_events VALUES (?, ?, ?, ?, ?)",
+                         rows)
+        conn.commit()
+        conn.close()
+        return path
+
+    def test_gate_crossing_anchors_at_eligibility(self):
+        # Regression (audit C13): every gate-crossing 1-day outcome on the
+        # Pi read 0.000%, because entry filled at eligibility (about 48 h
+        # after the crossing) while the 1-day horizon fell due from the
+        # crossing, so entry and exit were the same vector.
+        crossed = self.T0
+        eligible = crossed + datetime.timedelta(hours=48)
+        path = self._livedata([])
+        sig.ingest_livedata_events(self.conn, CFG, db_path=path)  # seed
+        conn = sqlite3.connect(path)
+        conn.execute("INSERT INTO gate_events VALUES (1, 34, ?, "
+                     "'eligible', ?)", (crossed.isoformat(),
+                                        eligible.isoformat()))
+        conn.commit()
+        conn.close()
+        sig.ingest_livedata_events(self.conn, CFG, db_path=path)
+        self.conn.commit()
+        created, anchor, due = self.conn.execute(
+            "SELECT en.created_at, en.anchor_at, o.due_at FROM "
+            "signal_entries en JOIN signal_outcomes o USING (source_store, "
+            "event_id, netuid) WHERE o.horizon_days = 1").fetchone()
+        self.assertEqual(created, crossed.isoformat())
+        self.assertEqual(anchor, eligible.isoformat())
+        self.assertEqual(due, (eligible + datetime.timedelta(days=1))
+                         .isoformat())
+        # Entry at eligibility, exit one real day later: a real return.
+        for when, price in ((eligible + datetime.timedelta(hours=1), 1.0),
+                            (eligible + datetime.timedelta(days=1, hours=2),
+                             0.9)):
+            sig.run_measurement(self.conn, self.config,
+                                now=when.isoformat(),
+                                price_fetcher=lambda p=price: snap({34: p}))
+        entry_ts, exit_ts, ret = self.conn.execute(
+            "SELECT v2_entry_ts, v2_exit_ts, v2_return_pct FROM "
+            "signal_outcomes WHERE horizon_days = 1").fetchone()
+        self.assertNotEqual(entry_ts, exit_ts)
+        self.assertAlmostEqual(ret, -10.0, places=6)
+
+
+class TestRegistrationMigration(unittest.TestCase):
+    def test_pre_change_store_migrates_and_keeps_rows(self):
+        conn = sqlite3.connect(":memory:")
+        conn.executescript("""
+            CREATE TABLE signal_prices (ts TEXT NOT NULL, netuid INTEGER
+                NOT NULL, price_tao REAL, PRIMARY KEY (ts, netuid));
+            CREATE TABLE signal_entries (source_store TEXT NOT NULL DEFAULT
+                'fleet', event_id INTEGER NOT NULL, netuid INTEGER NOT NULL,
+                source_class TEXT, created_at TEXT, price_tao REAL,
+                as_of TEXT, status TEXT NOT NULL DEFAULT 'pending',
+                PRIMARY KEY (source_store, event_id, netuid));
+            CREATE TABLE signal_outcomes (id INTEGER PRIMARY KEY,
+                source_store TEXT NOT NULL DEFAULT 'fleet', event_id INTEGER
+                NOT NULL, netuid INTEGER NOT NULL, source_class TEXT,
+                horizon_days INTEGER NOT NULL, due_at TEXT NOT NULL,
+                exit_price_tao REAL, return_pct REAL, baseline_return_pct
+                REAL, status TEXT NOT NULL DEFAULT 'pending', filled_at TEXT,
+                UNIQUE (source_store, event_id, netuid, horizon_days));
+            INSERT INTO signal_prices VALUES ('2026-09-17T12:00:00+00:00',
+                82, 0.001);
+            INSERT INTO signal_entries VALUES ('livedata', 68, 82,
+                'root-rotation', '2026-09-17T12:04:17+00:00', 0.001,
+                '2026-09-17T12:29:47+00:00', 'recorded');
+            INSERT INTO signal_outcomes VALUES (1, 'livedata', 68, 82,
+                'root-rotation', 30, '2026-10-17T12:04:17+00:00', 0.0263,
+                2533.185, -9.324, 'recorded', '2026-10-17T17:28:21+00:00');
+        """)
+        sig.ensure_schema(conn)
+        sig.ensure_schema(conn)
+        self.assertEqual(conn.execute(
+            "SELECT return_pct, baseline_return_pct, status, v2_status "
+            "FROM signal_outcomes").fetchone(),
+            (2533.185, -9.324, "recorded", None))
+        self.assertEqual(conn.execute(
+            "SELECT price_tao, reg_block FROM signal_prices").fetchone(),
+            (0.001, None))
+        self.assertEqual(conn.execute(
+            "SELECT status, anchor_at FROM signal_entries").fetchone(),
+            ("recorded", None))
+        conn.close()
