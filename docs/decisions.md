@@ -1065,3 +1065,40 @@ Not done here: the `atlas-repo` force-kill on a gateway restart. It is
 cosmetic: no orphaned servers, only stale child records left by the
 out-of-repo `readers.py` wrapper. It moves to WP14 with F3. G7's
 briefing partial-resend case stays open while the briefing is off.
+
+## Rewrite and judge lockdown (2026-11-03, change: rewrite-judge-lockdown)
+
+Audit items C4, C5, B6 and B7. The operator approved the change, the
+first deploy, a disable when B7 proved worse than recorded, and the
+second route, all on 2026-11-03. This reverses part of the 2026-10-22
+plain-English design.
+
+- The model writes the headline and meaning only. Facts, body lines and
+  the `Next:` line always come from the template, so upgrade alerts show
+  the template body again and chain-parameter alerts lose the model-written
+  `Next:` line.
+- The check refuses a reply whose number differs in value, sign or unit,
+  whose from/to order is swapped, that states a direction the input does
+  not, that drops or adds a negation, or that adds an assurance, advice
+  phrase or gloss. A replay of 31 past rewrites rejected 3 (one false
+  reject). Every reject sends the template.
+- Both prompts fence untrusted data with a random tag per call and escape
+  `<`.
+- Both calls left Hermes. Every `hermes -z` call runs through the Hermes
+  gateway, which merges every enabled MCP server and `x_search` into an
+  explicit `-t` pick. So the calls could reach 26 tools, under `todo`
+  since 2026-10-22 and under `bot_room` in the first deploy. No rewrite or
+  judge session ever called one. Both calls were disabled (`7a9f412`)
+  until the new route shipped.
+- Both calls now run `claude -p` with no tools, no MCP servers, no
+  settings, no skills, one turn, no saved session, the prompt on stdin and
+  a new private directory per call. Code reads each call's `init` event
+  and discards the reply unless it lists no tools and no MCP servers
+  (`tools-exposed` for the rewrite, `unjudged` for the judge). Auth is the
+  `claude` login the upgrade job uses. No model id is set: the CLI default
+  was `claude-opus-5-5` on 2026-11-03.
+- Trade-off: the two calls no longer follow Hermes's model setting. The
+  Telegram agent, the gateway and the model battery stay on Hermes.
+- Not done here: `hermes/modelval` still runs `-t todo`, so the battery
+  gets the same merged surface. It runs operator-started questions only.
+- Rollback: `rewrite.enabled` and `signals.judge.enabled` false.
