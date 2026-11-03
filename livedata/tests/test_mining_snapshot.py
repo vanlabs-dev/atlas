@@ -228,8 +228,11 @@ class OwnerResolution(StoreCase):
         out, _ = self.snapshot()
         self.assertTrue(out["ok"])
         rows = self.audits()
-        # Maps, SubnetOwnerCut, OwnedHotkeys, Uids.
-        self.assertEqual(len(rows), 4)
+        # Maps, SubnetOwnerCut, OwnedHotkeys, Uids, then the context: its
+        # maps, Weights, BlockAtRegistration, Axons.
+        self.assertEqual(len(rows), 8)
+        self.assertEqual([json.loads(r["params"])["items"] for r in rows[5:]],
+                         [["Weights"], ["BlockAtRegistration"], ["Axons"]])
         for row in rows:
             self.assertEqual(row["provider"], "finney-rpc")
             self.assertEqual(row["operation"], "chain_storage")
@@ -271,3 +274,265 @@ class OwnerResolution(StoreCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# Mining context (change: mining-economics-model)
+# ---------------------------------------------------------------------------
+
+def vec_bool_hex(flags):
+    return "0x" + bytes([len(flags) << 2] + [1 if f else 0
+                                             for f in flags]).hex()
+
+
+def vec_u64_hex(values):
+    return "0x" + (bytes([len(values) << 2]) + b"".join(
+        int(v).to_bytes(8, "little") for v in values)).hex()
+
+
+def pairs_hex(pairs):
+    return "0x" + (bytes([len(pairs) << 2]) + b"".join(
+        int(u).to_bytes(2, "little") + int(w).to_bytes(2, "little")
+        for u, w in pairs)).hex()
+
+
+def axon_hex(block, ip=0x7F000001, port=8091):
+    return "0x" + (int(block).to_bytes(8, "little") + (1).to_bytes(4, "little")
+                   + int(ip).to_bytes(16, "little")
+                   + int(port).to_bytes(2, "little") + bytes([4, 0, 0, 0])
+                   ).hex()
+
+
+def weight_key(index, uid):
+    return al._uid_key("Weights", index, uid)
+
+
+def reg_key(netuid, uid):
+    return al._uid_key("BlockAtRegistration", netuid, uid)
+
+
+def axon_key(netuid, hotkey, bad_hash=False):
+    account = bytes.fromhex(hotkey[2:])
+    digest = (b"\x00" * 16 if bad_hash
+              else al.hashlib.blake2b(account, digest_size=16).digest())
+    return (al.storage_prefix(al.SUBTENSOR_PALLET, "Axons")
+            + int(netuid).to_bytes(2, "little").hex() + digest.hex()
+            + account.hex())
+
+
+class AxonChain(FakeChain):
+    """FakeChain plus `Axons`, a (netuid, hotkey) double map the table
+    helper cannot express."""
+
+    def __init__(self, tables, axons=(), **kwargs):
+        super().__init__(tables, **kwargs)
+        self.axon_rows = dict(axons)
+
+    def __call__(self, method, params):
+        if method == "state_getKeysPaged" and params[0] == al.storage_prefix(
+                al.SUBTENSOR_PALLET, "Axons"):
+            self.calls.append(method)
+            return {"ok": True, "result": sorted(self.axon_rows)}
+        if method == "state_queryStorageAt":
+            out = super().__call__(method, params)
+            if out.get("ok"):
+                extra = [[k, v] for k, v in self.axon_rows.items()
+                         if k in set(params[0])]
+                out["result"][0]["changes"].extend(extra)
+            return out
+        return super().__call__(method, params)
+
+
+def context_tables(consensus=None, **extra):
+    return snapshot_tables(
+        SubnetEpochConsensus=consensus if consensus is not None
+        else {1: "0x01"},
+        NullPruningTarget={1: u16_hex(200)},
+        ValidatorPermit={1: vec_bool_hex([True, False, True, False]),
+                         8: vec_bool_hex([False, True])},
+        LastUpdate={1: vec_u64_hex([8789000, 0, 8780000, 0]),
+                    4097: vec_u64_hex([8789500, 0, 0, 0]),
+                    8: vec_u64_hex([0, 8789800])},
+        ActivityCutoff={1: u16_hex(5000), 8: u16_hex(5000)},
+        **extra)
+
+
+def context_points():
+    points = dict(snapshot_points())
+    points.update({
+        weight_key(1, 0): pairs_hex([(1, 100), (3, 0)]),
+        weight_key(1, 2): pairs_hex([(1, 5), (2, 9)]),
+        weight_key(4097, 0): pairs_hex([(3, 10)]),
+        weight_key(8, 1): pairs_hex([(0, 1)]),
+        reg_key(1, 0): u64_hex(100),
+        reg_key(1, 3): u64_hex(8780000),
+    })
+    return points
+
+
+HK_A = "0x" + "44" * 32
+HK_B = "0x" + "55" * 32
+
+
+class ContextCodecs(unittest.TestCase):
+
+    def test_epoch_consensus_variants_and_unknown_index(self):
+        self.assertEqual(al.decode_by_codec("epoch_consensus", "0x00"),
+                         "Yuma")
+        self.assertEqual(al.decode_by_codec("epoch_consensus", "0x01"),
+                         "Null")
+        with self.assertRaises(ValueError):
+            al.decode_by_codec("epoch_consensus", "0x02")
+        with self.assertRaises(ValueError):
+            al.decode_by_codec("epoch_consensus", "0x0000")
+
+    def test_vec_bool_round_trips_and_refuses_bad_input(self):
+        self.assertEqual(al.decode_by_codec(
+            "vec_bool", vec_bool_hex([True, False])), [True, False])
+        with self.assertRaises(ValueError):
+            al.decode_by_codec("vec_bool", "0x0801")  # says 2, holds 1
+        with self.assertRaises(ValueError):
+            al.decode_by_codec("vec_bool", "0x0402")  # byte 2 is no bool
+
+    def test_vec_u64_round_trips_and_refuses_truncation(self):
+        payload = vec_u64_hex([1, 2 ** 40])
+        self.assertEqual(al.decode_by_codec("vec_u64", payload),
+                         [1, 2 ** 40])
+        with self.assertRaises(ValueError):
+            al.decode_by_codec("vec_u64", payload[:-2])
+
+    def test_weight_pairs_round_trip_and_refuse_truncation(self):
+        payload = pairs_hex([(7, 65535), (300, 1)])
+        self.assertEqual(al.decode_by_codec("vec_u16_pairs", payload),
+                         [(7, 65535), (300, 1)])
+        with self.assertRaises(ValueError):
+            al.decode_by_codec("vec_u16_pairs", payload[:-2])
+
+    def test_axon_decoder_returns_the_block_only(self):
+        self.assertEqual(al.decode_by_codec("axon_block", axon_hex(9_000_123)),
+                         9_000_123)
+        with self.assertRaises(ValueError):
+            al.decode_by_codec("axon_block", "0x" + "00" * 7)
+
+    def test_mechanism_one_last_update_maps_to_netuid_and_mecid(self):
+        out = al.read_subnet_maps(CONFIG, items=al.MINING_CONTEXT_MAP_ITEMS,
+                                  rpc=FakeChain(context_tables()))
+        self.assertTrue(out["ok"], out.get("error"))
+        self.assertEqual(out["values"]["LastUpdate"][(1, 1)],
+                         [8789500, 0, 0, 0])
+        self.assertNotIn(4097, out["values"]["LastUpdate"])
+
+
+class MiningContext(StoreCase):
+
+    def snapshot(self, tables=None, points=None, axons=None, **kwargs):
+        rpc = AxonChain(tables or context_tables(),
+                        axons=axons if axons is not None else {
+                            axon_key(1, HK_A): axon_hex(8789000),
+                            axon_key(1, HK_B): axon_hex(100)},
+                        points=points or context_points(), **kwargs)
+        return al.read_mining_snapshot(CONFIG, rpc=rpc,
+                                       connection=self.store), rpc
+
+    def test_context_shares_the_snapshot_block(self):
+        out, _ = self.snapshot()
+        self.assertTrue(out["ok"], out.get("error"))
+        context = out["context"]
+        self.assertEqual(context["block_number"], out["block_number"])
+        self.assertEqual(context["block_hash"], out["block_hash"])
+        self.assertEqual(context["unread"], {})
+        self.assertEqual(context["maps"]["SubnetEpochConsensus"], {1: "Null"})
+        self.assertEqual(context["maps"]["NullPruningTarget"], {1: 200})
+
+    def test_weights_are_read_for_permit_holders_per_mechanism(self):
+        out, _ = self.snapshot()
+        weights = out["context"]["weights"]
+        # SN1 permits uids 0 and 2 and runs 2 mechanisms; SN8 permits uid 1.
+        self.assertEqual(sorted(weights), [(1, 0, 0), (1, 0, 2), (1, 1, 0),
+                                           (1, 1, 2), (8, 0, 1)])
+        self.assertEqual(weights[(1, 0, 0)], [1])  # zero weight dropped
+        self.assertEqual(weights[(1, 0, 2)], [1, 2])
+        self.assertEqual(weights[(1, 1, 0)], [3])
+        self.assertEqual(weights[(1, 1, 2)], [])  # absent row is empty
+
+    def test_registration_blocks_cover_registered_uids_only(self):
+        out, _ = self.snapshot()
+        reg = out["context"]["registration"]
+        self.assertEqual(len(reg[1]), 256)
+        self.assertEqual(reg[1][0], 100)
+        self.assertEqual(reg[1][3], 8780000)
+        self.assertIsNone(reg[1][1])  # unset is unknown, not block 0
+
+    def test_axons_return_serving_blocks_only(self):
+        out, _ = self.snapshot()
+        self.assertEqual(sorted(out["context"]["axons"][1]), [100, 8789000])
+        text = repr(out["context"])
+        self.assertNotIn("7f000001", text)
+        self.assertNotIn(HK_A[2:], text)
+
+    def test_root_weights_are_never_read(self):
+        tables = context_tables()
+        tables["ValidatorPermit"][0] = vec_bool_hex([True])
+        tables["SubnetworkN"][0] = u16_hex(1)
+        rpc = AxonChain(tables, points=context_points())
+        requested = []
+        original = rpc.__call__
+
+        def spy(method, params):
+            if method == "state_queryStorageAt":
+                requested.extend(params[0])
+            return original(method, params)
+        out = al.read_mining_snapshot(CONFIG, rpc=spy)
+        self.assertTrue(out["ok"], out.get("error"))
+        self.assertNotIn(weight_key(0, 0), requested)
+        self.assertNotIn(0, {label[0] for label in out["context"]["weights"]})
+
+    def queries_before_context(self):
+        """How many storage queries the snapshot makes before its first
+        context read, measured on a clean run rather than assumed."""
+        rpc = AxonChain(context_tables(), points=context_points())
+        consensus = al.storage_prefix(al.SUBTENSOR_PALLET,
+                                      "SubnetEpochConsensus")
+        seen = []
+        original = rpc.__call__
+
+        def spy(method, params):
+            if method == "state_queryStorageAt":
+                seen.append(any(k.startswith(consensus) for k in params[0]))
+            return original(method, params)
+        al.read_mining_snapshot(CONFIG, rpc=spy)
+        return seen.index(True)
+
+    def test_failed_context_read_leaves_the_snapshot_ok(self):
+        # Every storage query from the first context read on fails.
+        out, _ = self.snapshot(fail_method="state_queryStorageAt",
+                               fail_after=self.queries_before_context())
+        self.assertTrue(out["ok"], out.get("error"))
+        self.assertIn("SubnetEpochConsensus", out["context"]["unread"])
+        self.assertIn("Weights", out["context"]["unread"])
+        self.assertIn("BlockAtRegistration", out["context"]["unread"])
+        self.assertIn("Axons", out["context"]["unread"])
+        self.assertTrue(out["owners"])
+
+    def test_unknown_consensus_index_fails_that_subnet_only(self):
+        out, _ = self.snapshot(tables=context_tables(
+            consensus={1: "0x02", 8: "0x00"}))
+        self.assertTrue(out["ok"])
+        context = out["context"]
+        self.assertIn(1, context["failures"]["SubnetEpochConsensus"])
+        self.assertEqual(context["maps"]["SubnetEpochConsensus"], {8: "Yuma"})
+
+    def test_bad_axon_key_layout_marks_axons_unread(self):
+        out, _ = self.snapshot(axons={axon_key(1, HK_A, bad_hash=True):
+                                      axon_hex(5)})
+        self.assertTrue(out["ok"])
+        self.assertIn("Axons", out["context"]["unread"])
+        self.assertEqual(out["context"]["axons"], {})
+
+    def test_registered_count_above_the_cap_is_refused_for_that_subnet(self):
+        tables = context_tables()
+        tables["SubnetworkN"][8] = u16_hex(al.CONTEXT_UID_CAP + 1)
+        out, _ = self.snapshot(tables=tables)
+        self.assertNotIn(8, out["context"]["registration"])
+        self.assertIn(8, out["context"]["failures"]["BlockAtRegistration"])
+        self.assertIn(1, out["context"]["registration"])

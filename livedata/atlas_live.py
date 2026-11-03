@@ -2016,6 +2016,16 @@ CHAIN_READS: Tuple[ChainRead, ...] = tuple(
         ("TransferToggle", ("identity",), "bool"),
         ("AlphaSigmoidSteepness", ("identity",), "i16"),
         ("MinAllowedUids", ("identity",), "u16"),
+        # Miner-activity and consensus context for the mining screen
+        # (change: mining-economics-model). Hashers, value types and
+        # defaults read from live metadata at spec 486, block 9423151.
+        ("SubnetEpochConsensus", ("identity",), "EpochConsensus"),
+        ("NullPruningTarget", ("identity",), "u16"),
+        ("ValidatorPermit", ("identity",), "Vec<bool>"),
+        ("LastUpdate", ("identity",), "Vec<u64>"),
+        ("Weights", ("identity", "identity"), "Vec<(u16, u16)>"),
+        ("BlockAtRegistration", ("identity", "identity"), "u64"),
+        ("Axons", ("identity", "blake2_128concat"), "AxonInfo"),
     )) + (
         # Balancer is a struct with one Perquintill field, the quote weight.
         ChainRead("Swap", "SwapBalancer", ("twox64concat",), "Balancer"),
@@ -2042,6 +2052,12 @@ EXPECTED_DEFAULTS: Dict[Tuple[str, str], str] = {
     (SUBTENSOR_PALLET, "SubnetEmissionEnabled"): "01",  # true
     (SUBTENSOR_PALLET, "SubnetOwnerCut"): "142e",  # 11796
     (SUBTENSOR_PALLET, "SubnetOwner"): "00" * 32,  # the all-zero account
+    # Mining context (change: mining-economics-model), spec 486, block
+    # 9423151. An unset consensus entry is Yuma; an unset vector is empty.
+    (SUBTENSOR_PALLET, "SubnetEpochConsensus"): "00",  # Yuma
+    (SUBTENSOR_PALLET, "ValidatorPermit"): "00",  # empty Vec<bool>
+    (SUBTENSOR_PALLET, "LastUpdate"): "00",  # empty Vec<u64>
+    (SUBTENSOR_PALLET, "Weights"): "00",  # empty Vec<(u16, u16)>
 }
 
 
@@ -2280,6 +2296,77 @@ _CODECS["vec_account_id"] = decode_vec_account_id
 _CODECS["perquintill"] = decode_perquintill
 
 
+# Epoch consensus variants by SCALE index (`EpochConsensus`, ps/lib.rs:559,
+# spec 486). Any other index is refused, never read as Yuma.
+EPOCH_CONSENSUS = {0: "Yuma", 1: "Null"}
+
+
+def decode_epoch_consensus(hex_payload: str) -> str:
+    """Decode the `EpochConsensus` enum to its variant name."""
+    data = _payload_bytes(hex_payload)
+    if len(data) != 1:
+        raise ValueError("expected 1 byte, got %d" % len(data))
+    if data[0] not in EPOCH_CONSENSUS:
+        raise ValueError("unknown EpochConsensus index %d" % data[0])
+    return EPOCH_CONSENSUS[data[0]]
+
+
+def decode_vec_bool(hex_payload: str) -> List[bool]:
+    """Decode a SCALE Vec<bool>. A byte other than 0 or 1 is refused."""
+    data = _payload_bytes(hex_payload)
+    count, offset = _decode_compact(data, 0)
+    if len(data) != offset + count:
+        raise ValueError("Vec<bool> length mismatch: prefix says %d, "
+                         "payload holds %d" % (count, len(data) - offset))
+    body = data[offset:]
+    if any(b > 1 for b in body):
+        raise ValueError("Vec<bool> holds a byte other than 0 or 1")
+    return [b == 1 for b in body]
+
+
+def decode_vec_u64(hex_payload: str) -> List[int]:
+    """Decode a SCALE Vec<u64>."""
+    data = _payload_bytes(hex_payload)
+    count, offset = _decode_compact(data, 0)
+    if len(data) != offset + 8 * count:
+        raise ValueError("Vec<u64> length mismatch: prefix says %d values "
+                         "but payload is %d bytes" % (count, len(data)))
+    return [int.from_bytes(data[offset + 8 * i:offset + 8 * i + 8], "little")
+            for i in range(count)]
+
+
+def decode_vec_u16_pairs(hex_payload: str) -> List[Tuple[int, int]]:
+    """Decode a SCALE Vec<(u16, u16)> (a weight row: target uid, weight)."""
+    data = _payload_bytes(hex_payload)
+    count, offset = _decode_compact(data, 0)
+    if len(data) != offset + 4 * count:
+        raise ValueError("Vec<(u16, u16)> length mismatch: prefix says %d "
+                         "pairs but payload is %d bytes" % (count, len(data)))
+    out = []
+    for i in range(count):
+        at = offset + 4 * i
+        out.append((int.from_bytes(data[at:at + 2], "little"),
+                    int.from_bytes(data[at + 2:at + 4], "little")))
+    return out
+
+
+def decode_axon_block(hex_payload: str) -> int:
+    """The serving block of an `AxonInfo`, its leading u64, and nothing
+    else. The address, port and protocol that follow are never decoded,
+    so they cannot be stored or returned."""
+    data = _payload_bytes(hex_payload)
+    if len(data) < 8:
+        raise ValueError("AxonInfo shorter than its block field")
+    return int.from_bytes(data[:8], "little")
+
+
+_CODECS["epoch_consensus"] = decode_epoch_consensus
+_CODECS["vec_bool"] = decode_vec_bool
+_CODECS["vec_u64"] = decode_vec_u64
+_CODECS["vec_u16_pairs"] = decode_vec_u16_pairs
+_CODECS["axon_block"] = decode_axon_block
+
+
 # Netuid-keyed maps the mining screen reads. Codec is a property of the item
 # and is never inferred from payload length.
 SUBNET_MAP_ITEMS: Dict[str, str] = {
@@ -2334,7 +2421,7 @@ SUBNET_MAP_FAIL_EMPTY = frozenset({"SubnetEmissionEnabled",
 # Maps keyed by NetUidStorageIndex = mecid * 4096 + netuid
 # (`subnets/mechanism.rs:21-40`). Their values are returned keyed by
 # (netuid, mecid), so a mechanism-1 vector is never mistaken for a netuid.
-MECHANISM_INDEXED_ITEMS = frozenset({"Incentive"})
+MECHANISM_INDEXED_ITEMS = frozenset({"Incentive", "LastUpdate"})
 GLOBAL_MAX_SUBNET_COUNT = 4096
 
 _KEYS_PAGE = 400
@@ -2773,11 +2860,228 @@ def read_mining_snapshot(config: Dict[str, Any], rpc: Optional[Any] = None,
     if not owners["ok"]:
         return {"ok": False, "error": owners["error"]}
 
+    # Context, not economics: a failure here marks the context unread and
+    # never fails the snapshot.
+    context = read_mining_context(config, maps["values"], netuids, block,
+                                  rpc=rpc, connection=connection)
+
     return dict(maps,
                 owner_cut=cut["values"].get("cut", SUBNET_OWNER_CUT_DEFAULT),
                 owner_cut_state="set" if "cut" in cut["values"]
                 else "runtime-default",
-                owners=owners["owners"])
+                owners=owners["owners"], context=context)
+
+
+# ---------------------------------------------------------------------------
+# Mining context (change: mining-economics-model): consensus mode, pending
+# pruning, validator permits and fresh weight rows, registration blocks and
+# axon serving blocks, all at the snapshot block. Counts are derived by the
+# mining screen; nothing here claims a UID is active or idle.
+# ---------------------------------------------------------------------------
+
+MINING_CONTEXT_MAP_ITEMS: Dict[str, str] = {
+    "SubnetEpochConsensus": "epoch_consensus",
+    "NullPruningTarget": "u16",
+    "ValidatorPermit": "vec_bool",
+    "LastUpdate": "vec_u64",
+    "ActivityCutoff": "u16",
+}
+# Per-subnet bound on the UID-keyed point reads. Null capacity is 2500
+# shared across mechanisms (spec 486); a larger registered count is refused
+# for that subnet rather than read partially.
+CONTEXT_UID_CAP = 4096
+
+
+def _uid_key(item: str, index: int, uid: int) -> str:
+    return storage_key(SUBTENSOR_PALLET, item,
+                       int(index).to_bytes(2, "little"),
+                       int(uid).to_bytes(2, "little"))
+
+
+def _axon_netuid(tail: bytes) -> int:
+    """Netuid of an `Axons` key tail: Identity u16, then Blake2_128Concat of
+    a 32-byte hotkey. The hash is recomputed so a tail of the right length
+    with the wrong layout cannot pass. The hotkey is not returned."""
+    if len(tail) != 2 + 16 + 32:
+        raise FatalLiveError("unexpected Axons key tail of %d bytes"
+                             % len(tail))
+    account = tail[18:]
+    if hashlib.blake2b(account, digest_size=16).digest() != tail[2:18]:
+        raise FatalLiveError("Axons key tail hash does not match its "
+                             "account; refusing to guess at the layout")
+    return int.from_bytes(tail[:2], "little")
+
+
+def _read_axon_blocks(config: Dict[str, Any], rpc: Any,
+                      block: Tuple[str, Optional[int]],
+                      connection: Optional[sqlite3.Connection]
+                      ) -> Dict[str, Any]:
+    """Every axon's serving block, grouped by netuid. Enumerated once over
+    the whole map; only the block field is decoded."""
+    started = _utc_now()
+    block_hash, block_number = block
+    prefix = storage_prefix(SUBTENSOR_PALLET, "Axons")
+    prefix_len = len(bytes.fromhex(prefix[2:]))
+    keys: List[str] = []
+    try:
+        start = prefix
+        while True:
+            page = rpc("state_getKeysPaged", [prefix, _KEYS_PAGE, start,
+                                              block_hash])
+            if not page.get("ok"):
+                raise FatalLiveError(page.get("error")
+                                     or "key enumeration failed")
+            batch = page.get("result") or []
+            keys.extend(batch)
+            if len(batch) < _KEYS_PAGE:
+                break
+            start = batch[-1]
+        netuid_of = {key: _axon_netuid(bytes.fromhex(key[2:])[prefix_len:])
+                     for key in keys}
+    except FatalLiveError as exc:
+        error = redact(str(exc))
+        audit_chain_read(connection, rpc, ["Axons"], {"Axons": len(keys)},
+                         {"Axons": 0}, block_number, block_hash, started,
+                         error, "key-layout")
+        return {"ok": False, "error": error}
+    blocks: Dict[int, List[int]] = {}
+    failures: Dict[int, int] = {}
+    returned = 0
+    for at in range(0, len(keys), _QUERY_CHUNK):
+        chunk = keys[at:at + _QUERY_CHUNK]
+        read = rpc("state_queryStorageAt", [chunk, block_hash])
+        if not read.get("ok"):
+            error = read.get("error") or "batched read failed"
+            audit_chain_read(connection, rpc, ["Axons"],
+                             {"Axons": len(keys)}, {"Axons": returned},
+                             block_number, block_hash, started, error,
+                             "transport")
+            return {"ok": False, "error": error}
+        for changes in read.get("result") or []:
+            for key, raw in changes.get("changes") or []:
+                netuid = netuid_of.get(key)
+                if netuid is None:
+                    continue
+                returned += 1
+                if raw is None:
+                    continue
+                try:
+                    blocks.setdefault(netuid, []).append(
+                        decode_axon_block(raw))
+                except ValueError:
+                    failures[netuid] = failures.get(netuid, 0) + 1
+    audit_chain_read(connection, rpc, ["Axons"], {"Axons": len(keys)},
+                     {"Axons": returned}, block_number, block_hash, started)
+    return {"ok": True, "blocks": blocks, "failures": failures}
+
+
+def read_mining_context(config: Dict[str, Any], values: Dict[str, Any],
+                        netuids: List[int], block: Tuple[str, Optional[int]],
+                        rpc: Optional[Any] = None,
+                        connection: Optional[sqlite3.Connection] = None
+                        ) -> Dict[str, Any]:
+    """The mining screen's context at the snapshot block. Never raises and
+    never fails the snapshot: each item that cannot be read is listed in
+    `unread`, and a per-subnet decode failure is listed in `failures`.
+
+    Returns {block_number, block_hash, maps, failures, unread, weights,
+    registration, axons}. `weights` maps (netuid, mecid, uid) to the
+    target UIDs that row weights above zero, for permit-holding UIDs only;
+    `registration` maps netuid to the registration block of each UID below
+    the registered count (None where unset or undecodable); `axons` maps
+    netuid to the serving blocks of its axon entries."""
+    rpc = _recorder(config, rpc)
+    block_hash, block_number = block
+    out: Dict[str, Any] = {"block_hash": block_hash,
+                           "block_number": block_number, "maps": {},
+                           "failures": {}, "unread": {}, "weights": {},
+                           "registration": {}, "axons": {}}
+    try:
+        maps = read_subnet_maps(config, items=MINING_CONTEXT_MAP_ITEMS,
+                                rpc=rpc, block=block, connection=connection)
+    except FatalLiveError as exc:
+        maps = {"ok": False, "error": redact(str(exc))}
+    if not maps.get("ok"):
+        for item in list(MINING_CONTEXT_MAP_ITEMS) + ["Weights"]:
+            out["unread"][item] = maps.get("error") or "read failed"
+    else:
+        out["maps"] = maps["values"]
+        out["failures"] = dict(maps.get("failures") or {})
+        permits = maps["values"].get("ValidatorPermit") or {}
+        permit_failures = (maps.get("failures") or {}).get(
+            "ValidatorPermit") or {}
+        counts = values.get("MechanismCountCurrent") or {}
+        keys: Dict[Any, str] = {}
+        for netuid in netuids:
+            if netuid in permit_failures:
+                continue
+            holders = [uid for uid, ok in enumerate(permits.get(netuid, []))
+                       if ok]
+            for mecid in range(int(counts.get(netuid, 1) or 1)):
+                index = mecid * GLOBAL_MAX_SUBNET_COUNT + netuid
+                for uid in holders:
+                    keys[(netuid, mecid, uid)] = _uid_key("Weights", index,
+                                                          uid)
+        try:
+            rows = read_point_values(config, "Weights", "vec_u16_pairs",
+                                     keys, block, rpc=rpc,
+                                     connection=connection)
+        except FatalLiveError as exc:
+            rows = {"ok": False, "error": redact(str(exc))}
+        if rows.get("ok"):
+            for label, row in rows["values"].items():
+                out["weights"][label] = sorted(uid for uid, w in row if w)
+            for label in rows.get("absent") or []:
+                out["weights"][label] = []
+            out["failures"]["Weights"] = dict(rows.get("failures") or {})
+        else:
+            out["unread"]["Weights"] = rows.get("error") or "read failed"
+
+    sizes = values.get("SubnetworkN") or {}
+    keys = {}
+    oversized = []
+    for netuid in netuids:
+        n = int(sizes.get(netuid) or 0)
+        if n > CONTEXT_UID_CAP:
+            oversized.append(netuid)
+            continue
+        for uid in range(n):
+            keys[(netuid, uid)] = _uid_key("BlockAtRegistration", netuid,
+                                           uid)
+    try:
+        reg = read_point_values(config, "BlockAtRegistration", "u64", keys,
+                                block, rpc=rpc, connection=connection)
+    except FatalLiveError as exc:
+        reg = {"ok": False, "error": redact(str(exc))}
+    if reg.get("ok"):
+        bad = {label[0] for label in reg.get("failures") or {}}
+        for netuid in netuids:
+            if netuid in oversized:
+                continue
+            n = int(sizes.get(netuid) or 0)
+            out["registration"][netuid] = [
+                reg["values"].get((netuid, uid)) for uid in range(n)]
+        out["failures"]["BlockAtRegistration"] = {
+            netuid: "undecodable entry" for netuid in bad}
+        for netuid in oversized:
+            out["failures"]["BlockAtRegistration"][netuid] = (
+                "registered count above the %d cap" % CONTEXT_UID_CAP)
+    else:
+        out["unread"]["BlockAtRegistration"] = (reg.get("error")
+                                                or "read failed")
+
+    try:
+        axons = _read_axon_blocks(config, rpc, block, connection)
+    except FatalLiveError as exc:
+        axons = {"ok": False, "error": redact(str(exc))}
+    if axons.get("ok"):
+        out["axons"] = axons["blocks"]
+        out["failures"]["Axons"] = {netuid: "%d undecodable" % count
+                                    for netuid, count
+                                    in axons["failures"].items()}
+    else:
+        out["unread"]["Axons"] = axons.get("error") or "read failed"
+    return out
 
 
 # The root netuid. Spec 469 retired `set_root_weights` and cleared

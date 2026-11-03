@@ -1,6 +1,7 @@
 """CHAIN_READS coverage and the metadata probe (change:
 runtime-upgrade-pipeline). The decoder runs against a recorded live
-metadata fixture: Finney spec 469, finalized block 9133662."""
+metadata fixture: Finney spec 486, finalized block 9423151 (refreshed by
+change mining-economics-model; was spec 469, block 9133662)."""
 
 import ast
 import gzip
@@ -21,7 +22,7 @@ import scale_meta as sm  # noqa: E402
 
 PINNED = {item: al.storage_prefix(al.SUBTENSOR_PALLET, item)
           for item in al._GATE_ITEMS}
-FIXTURE = os.path.join(_HERE, "fixtures", "metadata-469-9133662.scale.gz")
+FIXTURE = os.path.join(_HERE, "fixtures", "metadata-486-9423151.scale.gz")
 KEY_BUILDERS = {"storage_prefix", "storage_key_identity_u16",
                 "storage_key_blake2_concat_u16", "storage_key"}
 
@@ -72,9 +73,12 @@ class ChainReadCoverageTest(unittest.TestCase):
         self.assertEqual(sorted(sites - {"<dynamic>"} - self.declared), [])
 
     def test_retired_root_items_are_not_declared(self):
-        # Spec 469 retired these (change: root-weight-drift).
+        # Spec 469 retired these (change: root-weight-drift). `Weights` is
+        # declared again for subnet weight rows (change:
+        # mining-economics-model); the root row is never read, which
+        # test_mining_snapshot.MiningContext checks.
         for item in ("RootWeightSettingEnabled", "RootWeightsCap",
-                     "Weights", "Keys", "TotalHotkeyAlpha"):
+                     "Keys", "TotalHotkeyAlpha"):
             self.assertNotIn(item, self.declared)
 
     def test_basket_cap_pinned_key_is_the_plain_derivation(self):
@@ -236,7 +240,7 @@ class ProbeTest(unittest.TestCase):
     def test_live_fixture_passes_every_declared_read(self):
         # The first drift the probe found (2026-09-24) was the two root
         # weight items spec 469 retired. With them gone, every declared
-        # read matches the recorded spec 469 metadata.
+        # read matches the recorded spec 486 metadata.
         result = self.check(al.CHAIN_READS)
         self.assertEqual(result["failures"], [])
         self.assertTrue(result["ok"])
@@ -482,7 +486,7 @@ class ExpectedDefaultsTest(unittest.TestCase):
 
     def test_emission_switch_default_is_on(self):
         # Atlas assumed false until 2026-11-03; live metadata at spec 486
-        # (and the spec 469 fixture) say true.
+        # (the test fixture) says true.
         self.assertEqual(al.SUBNET_PARAM_DEFAULTS["SubnetEmissionEnabled"],
                          True)
         meta = sm.decode_metadata(fixture_bytes())
