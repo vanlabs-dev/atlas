@@ -143,6 +143,10 @@ CREATE TABLE IF NOT EXISTS signal_prices (
     price_tao REAL,
     PRIMARY KEY (ts, netuid)
 );
+CREATE TABLE IF NOT EXISTS signal_vectors (
+    ts TEXT PRIMARY KEY,
+    block_number INTEGER
+);
 CREATE TABLE IF NOT EXISTS signal_entries (
     source_store TEXT NOT NULL DEFAULT 'fleet',
     event_id INTEGER NOT NULL,
@@ -310,6 +314,39 @@ def ensure_schema(connection: sqlite3.Connection) -> None:
     the reconcile store's schema is never touched (fleet-search pattern)."""
     connection.executescript(SCHEMA_SQL)
     _migrate_ledger_source(connection)
+    _migrate_registration_columns(connection)
+
+
+# Columns added by change signal-statistics-ties. Additive only: every
+# reader of the older columns keeps working, and old rows keep their values.
+_ADDED_COLUMNS = (
+    ("signal_prices", "reg_block", "INTEGER"),
+    ("signal_entries", "anchor_at", "TEXT"),
+    ("signal_entries", "entry_ts", "TEXT"),
+    ("signal_entries", "reg_block", "INTEGER"),
+    ("signal_entries", "reason", "TEXT"),
+    ("signal_outcomes", "v2_status", "TEXT"),
+    ("signal_outcomes", "v2_reason", "TEXT"),
+    ("signal_outcomes", "v2_entry_ts", "TEXT"),
+    ("signal_outcomes", "v2_exit_ts", "TEXT"),
+    ("signal_outcomes", "v2_return_pct", "REAL"),
+    ("signal_outcomes", "v2_baseline_pct", "REAL"),
+    ("signal_outcomes", "v2_excess_pct", "REAL"),
+    ("signal_outcomes", "v2_rules", "INTEGER"),
+)
+
+
+def _migrate_registration_columns(connection: sqlite3.Connection) -> None:
+    """Add the occupant and rescore columns (change:
+    signal-statistics-ties). Idempotent."""
+    changed = False
+    for table, column, kind in _ADDED_COLUMNS:
+        if not _has_column(connection, table, column):
+            connection.execute("ALTER TABLE %s ADD COLUMN %s %s"
+                               % (table, column, kind))
+            changed = True
+    if changed:
+        connection.commit()
 
 
 def _has_column(connection: sqlite3.Connection, table: str,
@@ -1334,11 +1371,15 @@ def seed_epochs(connection: sqlite3.Connection, config: Dict[str, Any],
 # ---------------------------------------------------------------------------
 
 
-def default_price_fetcher() -> Optional[Dict[int, Optional[float]]]:
+def default_price_fetcher() -> Optional[Dict[str, Any]]:
     """Fleet-wide alpha prices in TAO from the keyless TaoSwap subnets
     operation, THROUGH the live-data layer (contract validation, health
-    recording, fail-closed) — never a raw HTTP call. None on any failure
-    (fail-soft: measurement never blocks alerting)."""
+    recording, fail-closed), never a raw HTTP call, plus every netuid's
+    `NetworkRegisteredAt` block read from chain in the same pass (change:
+    signal-statistics-ties). Returns a snapshot
+    {prices, registered, block_number}. None when either read fails
+    (fail-soft: measurement never blocks alerting), because a vector without
+    its occupant key cannot tell two subnets in one netuid apart."""
     sys.path.insert(0, os.path.join(_REPO_ROOT, "livedata"))
     try:
         import atlas_live as al  # noqa: E402
@@ -1350,15 +1391,39 @@ def default_price_fetcher() -> Optional[Dict[int, Optional[float]]]:
             result = al.run_operation(conn, live_config, ledger,
                                       "subnets_taoswap", interactive=False,
                                       env=env)
+            if result.get("status") != "ok":
+                return None
+            registration = al.read_registration_blocks(live_config,
+                                                       connection=conn)
         finally:
             conn.close()
-        if result.get("status") != "ok":
+        if not registration.get("ok"):
             return None
         subnets = (result.get("values") or {}).get("subnets") or []
-        return {row["netuid"]: row.get("alpha_price_tao")
-                for row in subnets if row.get("netuid") is not None}
-    except Exception:  # noqa: BLE001 — fail-soft by contract
+        prices = {row["netuid"]: row.get("alpha_price_tao")
+                  for row in subnets if row.get("netuid") is not None}
+        default = int(registration.get("default_block") or 0)
+        registered = {netuid: registration["values"].get(netuid, default)
+                      for netuid in prices}
+        return {"prices": prices, "registered": registered,
+                "block_number": registration.get("block_number")}
+    except Exception:  # noqa: BLE001 - fail-soft by contract
         return None
+
+
+def _normalize_snapshot(fetched: Any) -> Optional[Dict[str, Any]]:
+    """A fetcher result as {prices, registered, block_number}. A snapshot
+    must carry a registration block for every priced netuid; one that does
+    not is refused, never stored without its occupant key."""
+    if not isinstance(fetched, dict) or "prices" not in fetched:
+        return None
+    prices = {int(n): p for n, p in (fetched.get("prices") or {}).items()}
+    registered = {int(n): b for n, b in
+                  (fetched.get("registered") or {}).items()}
+    if any(netuid not in registered for netuid in prices):
+        return None
+    return {"prices": prices, "registered": registered,
+            "block_number": fetched.get("block_number")}
 
 
 def _instant_members(connection: sqlite3.Connection,
@@ -1377,22 +1442,32 @@ def _instant_members(connection: sqlite3.Connection,
 
 def enter_measured_event(connection: sqlite3.Connection, cfg: Dict[str, Any],
                          source_store: str, event_id: int, netuid: int,
-                         event_class: str, created_at: str) -> None:
+                         event_class: str, created_at: str,
+                         anchor_at: Optional[str] = None) -> None:
     """Enter one netuid-scoped event into the effectiveness ledger by its
     source triple (change: rotation-signal-gate). Idempotent on re-entry:
     a second call for the same (store, row id, netuid) changes nothing, so
     a store re-read cannot duplicate or reset a filled row.
 
+    `anchor_at` is the moment measurement starts from: the time the event
+    could page. It defaults to `created_at`; a gate crossing passes its
+    eligibility time (change: signal-statistics-ties). Horizons fall due
+    from the anchor, so a crossing entered two days late never fills a
+    1-day outcome from its own entry price.
+
     Measurement is deliberately NOT conditioned on the delivery tier: a
     demoted class keeps filling, which is the only way a demotion can ever
     be reversed on evidence (design D5)."""
+    anchor_at = anchor_at or created_at
     connection.execute(
         "INSERT OR IGNORE INTO signal_entries (source_store, event_id, "
-        "netuid, source_class, created_at, status) VALUES (?, ?, ?, ?, ?, ?)",
-        (source_store, event_id, netuid, event_class, created_at, ST_PENDING))
-    created = _parse_iso(created_at)
+        "netuid, source_class, created_at, anchor_at, status) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (source_store, event_id, netuid, event_class, created_at, anchor_at,
+         ST_PENDING))
+    anchor = _parse_iso(anchor_at)
     for horizon in cfg["outcome_horizons_days"]:
-        due = (created + datetime.timedelta(days=int(horizon))).isoformat()
+        due = (anchor + datetime.timedelta(days=int(horizon))).isoformat()
         connection.execute(
             "INSERT OR IGNORE INTO signal_outcomes (source_store, event_id, "
             "netuid, source_class, horizon_days, due_at, status) "
@@ -1417,14 +1492,35 @@ def _ensure_measurement_rows(connection: sqlite3.Connection,
 
 
 def _livedata_db_path() -> Optional[str]:
-    """Resolved path to the livedata store, via livedata's own config —
+    """Resolved path to the livedata store, via livedata's own config,
     never a hardcoded path. None if livedata is not importable."""
     sys.path.insert(0, os.path.join(_REPO_ROOT, "livedata"))
     try:
         import atlas_live as al  # noqa: E402
         return al.resolve(al.load_config()["db"])
-    except Exception:  # noqa: BLE001 — fail-soft by contract
+    except Exception:  # noqa: BLE001 - fail-soft by contract
         return None
+
+
+def _open_livedata_ro(db_path: Optional[str]
+                      ) -> Optional[sqlite3.Connection]:
+    path = db_path if db_path is not None else _livedata_db_path()
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        return sqlite3.connect("file:%s?mode=ro" % path, uri=True)
+    except sqlite3.Error:
+        return None
+
+
+def _gate_anchor_expr(source: sqlite3.Connection) -> str:
+    """SQL for a gate crossing's anchor: the time it became eligible to
+    page, or its observation time on a store written before eligibility
+    was recorded (change: signal-statistics-ties)."""
+    columns = {r[1] for r in source.execute("PRAGMA table_info(gate_events)")}
+    if "eligibility_at" in columns:
+        return "COALESCE(eligibility_at, observed_at)"
+    return "observed_at"
 
 
 def ingest_livedata_events(connection: sqlite3.Connection,
@@ -1436,9 +1532,10 @@ def ingest_livedata_events(connection: sqlite3.Connection,
 
     Gate crossings are entered only once livedata has marked them eligible
     for delivery, so the ledger measures what would actually page and not
-    the reversals that never will. Rotation events are entered on sight.
-    Fail-soft: a missing store, a missing table, or an unreadable row leaves
-    the ledger untouched and never blocks the pass.
+    the reversals that never will. They are anchored at their eligibility
+    time, the moment the alert could reach the operator. Fail-soft: a
+    missing store, a missing table, or an unreadable row leaves the ledger
+    untouched and never blocks the pass.
 
     SEEDS SILENTLY, like every other watermark here. The first sight of a
     class records the store's current high-water row id and enters nothing.
@@ -1448,12 +1545,8 @@ def ingest_livedata_events(connection: sqlite3.Connection,
     with fabricated near-zero returns for exactly the class the promotion
     decision rests on."""
     entered: Dict[str, int] = {}
-    path = db_path if db_path is not None else _livedata_db_path()
-    if not path or not os.path.exists(path):
-        return entered
-    try:
-        source = sqlite3.connect("file:%s?mode=ro" % path, uri=True)
-    except sqlite3.Error:
+    source = _open_livedata_ro(db_path)
+    if source is None:
         return entered
     try:
         tables = {row[0] for row in source.execute(
@@ -1473,23 +1566,26 @@ def ingest_livedata_events(connection: sqlite3.Connection,
                 last_id = int(mark)
                 where = " WHERE id > ?"
                 params: List[Any] = [last_id]
-                if table == "gate_events" and any(
-                        r[1] == "eligibility" for r in
-                        source.execute("PRAGMA table_info(gate_events)")):
-                    where += " AND eligibility = 'eligible'"
+                anchor_expr = ts_col
+                if table == "gate_events":
+                    if any(r[1] == "eligibility" for r in source.execute(
+                            "PRAGMA table_info(gate_events)")):
+                        where += " AND eligibility = 'eligible'"
+                    anchor_expr = _gate_anchor_expr(source)
                 rows = source.execute(
-                    "SELECT id, %s, %s FROM %s%s ORDER BY id"
-                    % (nid_col, ts_col, table, where), params).fetchall()
+                    "SELECT id, %s, %s, %s FROM %s%s ORDER BY id"
+                    % (nid_col, ts_col, anchor_expr, table, where),
+                    params).fetchall()
             except (sqlite3.Error, ValueError):
                 continue
             count = 0
-            for row_id, netuid, observed_at in rows:
+            for row_id, netuid, observed_at, anchor_at in rows:
                 if netuid is None or not observed_at:
                     continue
                 before = connection.total_changes
                 enter_measured_event(connection, cfg, SOURCE_LIVEDATA,
                                      int(row_id), int(netuid), event_class,
-                                     observed_at)
+                                     observed_at, anchor_at or observed_at)
                 if connection.total_changes > before:
                     count += 1  # a re-scanned row is not a new entry
             # The watermark follows the store's high-water mark, not the
@@ -1535,32 +1631,277 @@ def _measurement_needed(connection: sqlite3.Connection, now: str) -> bool:
     return due is not None
 
 
-def _price_vector(connection: sqlite3.Connection,
-                  ts: str) -> Dict[int, Optional[float]]:
-    return {netuid: price for netuid, price in connection.execute(
-        "SELECT netuid, price_tao FROM signal_prices WHERE ts = ?", (ts,))}
+# ---------------------------------------------------------------------------
+# The price panel and the one outcome rule (change: signal-statistics-ties)
+#
+# Every return is read off stored vectors. An entry or exit takes the first
+# vector at or after its time, within the late grace; with none there, the
+# horizon is unavailable rather than stretched or shortened. Two vectors
+# hold one subnet's prices only when they carry the same registration block
+# for the netuid: a reused netuid is a different subnet.
+# ---------------------------------------------------------------------------
+
+RULES_VERSION = 2
+GRACE = datetime.timedelta(hours=LATE_GRACE_HOURS)
+# Margin around a registration time read off block anchors.
+REG_MARGIN = datetime.timedelta(hours=1)
+# Seconds per block, used only to extrapolate past the recorded anchors.
+# Measured at 12.015 s over 1,496 panel_snapshot anchors (2026-08-31 to
+# 2026-11-03). An assumption outside that range, not a chain fact.
+BLOCK_SECONDS_ASSUMED = 12.015
+
+R_NO_VECTOR = "no-vector"
+R_NO_PRICE = "no-price"
+R_REREGISTERED = "re-registered"
+R_UNVERIFIED = "unverified"
+ST_UNVERIFIED = "unverified"
+
+# Bootstrap of the median excess return, clustered on event moments.
+BOOTSTRAP_DRAWS = 2000
+BOOTSTRAP_SEED = 20261103
+BOOTSTRAP_MIN_MOMENTS = 10
 
 
-def _fleet_median_return(entry_vector: Dict[int, Optional[float]],
-                         exit_vector: Dict[int, Optional[float]]
-                         ) -> Optional[float]:
-    returns = []
-    for netuid, entry in entry_vector.items():
-        exit_price = exit_vector.get(netuid)
-        if entry and exit_price:
-            returns.append((exit_price / entry - 1.0) * 100.0)
-    return statistics.median(returns) if returns else None
+def _livedata_block_anchors(db_path: Optional[str] = None
+                            ) -> List[Tuple[int, datetime.datetime]]:
+    """(block, time) pairs from livedata's panel snapshots, read-only.
+    Empty on any failure."""
+    source = _open_livedata_ro(db_path)
+    if source is None:
+        return []
+    try:
+        rows = source.execute(
+            "SELECT block_number, MIN(observed_at) FROM panel_snapshot "
+            "WHERE block_number IS NOT NULL GROUP BY block_number").fetchall()
+    except sqlite3.Error:
+        rows = []
+    finally:
+        source.close()
+    out = []
+    for block, observed in rows:
+        try:
+            out.append((int(block), _parse_iso(observed)))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+class PricePanel:
+    """Stored price vectors with their occupant keys, loaded once."""
+
+    def __init__(self, connection: sqlite3.Connection,
+                 registered_now: Optional[Dict[int, int]] = None,
+                 anchors: Any = None) -> None:
+        self.rows: Dict[str, Dict[int, Tuple[Optional[float],
+                                             Optional[int]]]] = {}
+        for ts, netuid, price, reg in connection.execute(
+                "SELECT ts, netuid, price_tao, reg_block FROM signal_prices"):
+            self.rows.setdefault(ts, {})[int(netuid)] = (price, reg)
+        self.times = sorted(self.rows, key=_parse_iso)
+        self.parsed = [_parse_iso(ts) for ts in self.times]
+        # Block anchors load on first use: a panel whose vectors all carry
+        # registration blocks never needs livedata's store.
+        self._anchor_source = anchors
+        self._own_anchors = [(int(block), _parse_iso(ts)) for ts, block in
+                             connection.execute(
+                                 "SELECT ts, block_number FROM signal_vectors "
+                                 "WHERE block_number IS NOT NULL")]
+        self._anchors: Optional[List[Tuple[int, datetime.datetime]]] = None
+        self.registered_now = dict(registered_now or {})
+        self._baseline_cache: Dict[Tuple[str, str], Optional[float]] = {}
+
+    def vector_at_or_after(self, when: datetime.datetime
+                           ) -> Optional[str]:
+        import bisect
+        index = bisect.bisect_left(self.parsed, when)
+        if index < len(self.parsed) and self.parsed[index] <= when + GRACE:
+            return self.times[index]
+        return None
+
+    def latest_time(self) -> Optional[datetime.datetime]:
+        return self.parsed[-1] if self.parsed else None
+
+    def price(self, ts: str, netuid: int) -> Optional[float]:
+        return (self.rows.get(ts, {}).get(netuid) or (None, None))[0]
+
+    def reg(self, ts: str, netuid: int) -> Optional[int]:
+        return (self.rows.get(ts, {}).get(netuid) or (None, None))[1]
+
+    @property
+    def anchors(self) -> List[Tuple[int, datetime.datetime]]:
+        if self._anchors is None:
+            source = self._anchor_source
+            extra = list(source() if callable(source) else (source or []))
+            self._anchors = sorted(set(extra + self._own_anchors))
+        return self._anchors
+
+    def block_time(self, block: int) -> Optional[datetime.datetime]:
+        """Time of a block, interpolated between recorded anchors and
+        extrapolated at BLOCK_SECONDS_ASSUMED beyond them."""
+        if not self.anchors:
+            return None
+        import bisect
+        blocks = [b for b, _t in self.anchors]
+        index = bisect.bisect_left(blocks, block)
+        if index < len(blocks) and blocks[index] == block:
+            return self.anchors[index][1]
+        if 0 < index < len(blocks):
+            (b0, t0), (b1, t1) = self.anchors[index - 1], self.anchors[index]
+            fraction = (block - b0) / float(b1 - b0)
+            return t0 + (t1 - t0) * fraction
+        ref_block, ref_time = (self.anchors[0] if index == 0
+                               else self.anchors[-1])
+        return ref_time + datetime.timedelta(
+            seconds=(block - ref_block) * BLOCK_SECONDS_ASSUMED)
+
+    def same_subnet(self, netuid: int, entry_ts: str, exit_ts: str
+                    ) -> Optional[str]:
+        """None when both vectors hold one subnet's price for the netuid,
+        else the reason they may not."""
+        reg0, reg1 = self.reg(entry_ts, netuid), self.reg(exit_ts, netuid)
+        if reg0 is not None and reg1 is not None:
+            return None if reg0 == reg1 else R_REREGISTERED
+        # An older vector carries no occupant key: judge it from a later
+        # registration block, at the exit or, failing that, today's.
+        reference = reg1 if reg1 is not None else self.registered_now.get(
+            netuid)
+        if reference is None:
+            return R_UNVERIFIED
+        if reference == 0:
+            return None  # registered at genesis: never re-registered
+        registered_at = self.block_time(reference)
+        if registered_at is None:
+            return R_UNVERIFIED
+        start, end = _parse_iso(entry_ts), _parse_iso(exit_ts)
+        if registered_at <= start - REG_MARGIN:
+            return None
+        if registered_at <= end + REG_MARGIN:
+            return R_REREGISTERED
+        return R_UNVERIFIED
+
+    def baseline(self, entry_ts: str, exit_ts: str) -> Optional[float]:
+        """Fleet-median return over the window, counting only netuids that
+        hold one subnet across it."""
+        key = (entry_ts, exit_ts)
+        if key not in self._baseline_cache:
+            returns = []
+            exit_row = self.rows.get(exit_ts, {})
+            for netuid, (entry, _reg) in self.rows.get(entry_ts, {}).items():
+                exit_price = (exit_row.get(netuid) or (None, None))[0]
+                if not entry or not exit_price:
+                    continue
+                if self.same_subnet(netuid, entry_ts, exit_ts) is not None:
+                    continue
+                returns.append((exit_price / entry - 1.0) * 100.0)
+            self._baseline_cache[key] = (statistics.median(returns)
+                                         if returns else None)
+        return self._baseline_cache[key]
+
+
+def evaluate_entry(panel: PricePanel, netuid: int, anchor_at: str,
+                   now: datetime.datetime) -> Optional[Dict[str, Any]]:
+    """The entry for one netuid, or None while it can still fill."""
+    anchor = _parse_iso(anchor_at)
+    entry_ts = panel.vector_at_or_after(anchor)
+    if entry_ts is None:
+        if now <= anchor + GRACE:
+            return None
+        return {"status": ST_UNAVAILABLE, "reason": R_NO_VECTOR}
+    price = panel.price(entry_ts, netuid)
+    if not price:
+        return {"status": ST_UNAVAILABLE, "reason": R_NO_PRICE,
+                "entry_ts": entry_ts}
+    return {"status": ST_RECORDED, "reason": None, "entry_ts": entry_ts,
+            "price": price, "reg_block": panel.reg(entry_ts, netuid)}
+
+
+def evaluate_outcome(panel: PricePanel, netuid: int, anchor_at: str,
+                     horizon_days: int, now: datetime.datetime
+                     ) -> Optional[Dict[str, Any]]:
+    """One outcome under the current rules, or None while it can still
+    fill. Used by the live fill and by `rescore`, so both read the same
+    way."""
+    entry = evaluate_entry(panel, netuid, anchor_at, now)
+    if entry is None:
+        return None
+    if entry["status"] != ST_RECORDED:
+        return {"status": entry["status"], "reason": entry["reason"],
+                "entry_ts": entry.get("entry_ts")}
+    due = _parse_iso(anchor_at) + datetime.timedelta(days=int(horizon_days))
+    if now < due:
+        return None
+    exit_ts = panel.vector_at_or_after(due)
+    if exit_ts is None:
+        if now <= due + GRACE:
+            return None
+        return {"status": ST_UNAVAILABLE, "reason": R_NO_VECTOR,
+                "entry_ts": entry["entry_ts"]}
+    exit_price = panel.price(exit_ts, netuid)
+    base = {"entry_ts": entry["entry_ts"], "exit_ts": exit_ts}
+    if not exit_price:
+        return dict(base, status=ST_UNAVAILABLE, reason=R_NO_PRICE)
+    reason = panel.same_subnet(netuid, entry["entry_ts"], exit_ts)
+    if reason is not None:
+        return dict(base, reason=reason,
+                    status=(ST_UNVERIFIED if reason == R_UNVERIFIED
+                            else ST_UNAVAILABLE))
+    return_pct = (exit_price / entry["price"] - 1.0) * 100.0
+    baseline = panel.baseline(entry["entry_ts"], exit_ts)
+    return dict(base, status=ST_RECORDED, reason=None,
+                exit_price=exit_price, return_pct=return_pct,
+                baseline_pct=baseline,
+                excess_pct=(None if baseline is None
+                            else return_pct - baseline))
+
+
+def _write_v2(connection: sqlite3.Connection, outcome_id: int,
+              result: Dict[str, Any]) -> None:
+    connection.execute(
+        "UPDATE signal_outcomes SET v2_status = ?, v2_reason = ?, "
+        "v2_entry_ts = ?, v2_exit_ts = ?, v2_return_pct = ?, "
+        "v2_baseline_pct = ?, v2_excess_pct = ?, v2_rules = ? WHERE id = ?",
+        (result["status"], result.get("reason"), result.get("entry_ts"),
+         result.get("exit_ts"), result.get("return_pct"),
+         result.get("baseline_pct"), result.get("excess_pct"),
+         RULES_VERSION, outcome_id))
+
+
+def _store_snapshot(connection: sqlite3.Connection, now: str,
+                    snapshot: Dict[str, Any]) -> None:
+    registered = snapshot["registered"]
+    connection.executemany(
+        "INSERT OR IGNORE INTO signal_prices (ts, netuid, price_tao, "
+        "reg_block) VALUES (?, ?, ?, ?)",
+        [(now, netuid, price, registered.get(netuid))
+         for netuid, price in snapshot["prices"].items()])
+    connection.execute(
+        "INSERT OR IGNORE INTO signal_vectors (ts, block_number) "
+        "VALUES (?, ?)", (now, snapshot.get("block_number")))
+
+
+def _latest_registration(connection: sqlite3.Connection
+                         ) -> Dict[int, int]:
+    """The newest stored vector's registration blocks."""
+    row = connection.execute(
+        "SELECT MAX(ts) FROM signal_prices WHERE reg_block IS NOT NULL"
+    ).fetchone()
+    if not row or row[0] is None:
+        return {}
+    return {int(n): int(b) for n, b in connection.execute(
+        "SELECT netuid, reg_block FROM signal_prices WHERE ts = ? AND "
+        "reg_block IS NOT NULL", (row[0],))}
 
 
 def run_measurement(connection: sqlite3.Connection, config: Dict[str, Any],
                     now: Optional[str] = None,
-                    price_fetcher: Optional[Callable[
-                        [], Optional[Dict[int, Optional[float]]]]] = None
-                    ) -> Dict[str, Any]:
+                    price_fetcher: Optional[Callable[[], Any]] = None,
+                    anchors: Any = None) -> Dict[str, Any]:
     """One measurement step: ensure entry/outcome rows exist, fetch the
-    fleet price vector AT MOST ONCE (and only when something needs it),
-    fill pending entries and due outcomes, prune old vectors. A failed
-    fetch leaves everything pending — retried next pass, never blocking."""
+    fleet price snapshot AT MOST ONCE (and only when something needs it),
+    then settle every pending entry and due outcome from the stored vectors
+    under the one outcome rule, and prune old vectors. A failed fetch stores
+    nothing; rows still inside their grace wait for a later pass, and rows
+    past it are marked unavailable. Measurement never blocks alerting."""
     cfg = signals_cfg(config)
     now = now or _utc_now()
     _ensure_measurement_rows(connection, cfg)
@@ -1574,81 +1915,76 @@ def run_measurement(connection: sqlite3.Connection, config: Dict[str, Any],
         return summary
 
     fetcher = price_fetcher or default_price_fetcher
-    vector = fetcher()
-    if vector is None:
-        connection.commit()
+    snapshot = _normalize_snapshot(fetcher())
+    if snapshot is None:
         summary["fetch_failed"] = True
-        return summary
-    summary["fetched"] = True
-    connection.executemany(
-        "INSERT OR IGNORE INTO signal_prices (ts, netuid, price_tao) "
-        "VALUES (?, ?, ?)",
-        [(now, netuid, price) for netuid, price in vector.items()])
+    else:
+        summary["fetched"] = True
+        _store_snapshot(connection, now, snapshot)
 
-    late_cutoff = (_parse_iso(now) - datetime.timedelta(
-        hours=LATE_GRACE_HOURS)).isoformat()
+    now_dt = _parse_iso(now)
+    panel = PricePanel(connection,
+                       registered_now=_latest_registration(connection),
+                       anchors=(anchors if anchors is not None
+                                else _livedata_block_anchors))
 
-    # Entries: price at (or nearest after) event creation.
+    # Entries: the first vector at or after the anchor, within the grace.
     entry_rows = connection.execute(
-        "SELECT source_store, event_id, netuid, created_at "
-        "FROM signal_entries WHERE status = ?",
-        (ST_PENDING,)).fetchall()
-    for source_store, event_id, netuid, created_at in entry_rows:
-        if netuid not in vector:
-            status = ST_UNAVAILABLE  # deregistered before entry could fill
-            price = None
-        else:
-            price = vector[netuid]
-            status = ST_LATE if created_at < late_cutoff else ST_RECORDED
+        "SELECT source_store, event_id, netuid, "
+        "COALESCE(anchor_at, created_at) FROM signal_entries "
+        "WHERE status = ?", (ST_PENDING,)).fetchall()
+    for source_store, event_id, netuid, anchor_at in entry_rows:
+        if not anchor_at:
+            continue
+        entry = evaluate_entry(panel, netuid, anchor_at, now_dt)
+        if entry is None:
+            continue
         connection.execute(
-            "UPDATE signal_entries SET price_tao = ?, as_of = ?, status = ? "
-            "WHERE source_store = ? AND event_id = ? AND netuid = ?",
-            (price, now, status, source_store, event_id, netuid))
-        if status == ST_UNAVAILABLE:
-            summary["unavailable"] += 1
-        else:
+            "UPDATE signal_entries SET price_tao = ?, as_of = ?, status = ?, "
+            "entry_ts = ?, reg_block = ?, reason = ? WHERE source_store = ? "
+            "AND event_id = ? AND netuid = ?",
+            (entry.get("price"), entry.get("entry_ts"), entry["status"],
+             entry.get("entry_ts"), entry.get("reg_block"),
+             entry.get("reason"), source_store, event_id, netuid))
+        if entry["status"] == ST_RECORDED:
             summary["entries_filled"] += 1
+        else:
+            summary["unavailable"] += 1
 
-    # Outcomes: due rows whose entry has a usable price.
+    # Outcomes: due rows, settled by the same rule rescore applies.
     due_rows = connection.execute(
-        "SELECT o.id, o.event_id, o.netuid, o.due_at, en.price_tao, en.as_of, "
-        "en.status FROM signal_outcomes o JOIN signal_entries en "
-        "ON en.source_store = o.source_store AND en.event_id = o.event_id "
-        "AND en.netuid = o.netuid "
+        "SELECT o.id, o.netuid, o.horizon_days, "
+        "COALESCE(en.anchor_at, en.created_at) FROM signal_outcomes o "
+        "JOIN signal_entries en ON en.source_store = o.source_store "
+        "AND en.event_id = o.event_id AND en.netuid = o.netuid "
         "WHERE o.status = ? AND o.due_at <= ?",
         (ST_PENDING, now)).fetchall()
-    for (outcome_id, _event_id, netuid, due_at, entry_price, entry_ts,
-         entry_status) in due_rows:
-        if entry_status == ST_UNAVAILABLE or not entry_price:
-            connection.execute(
-                "UPDATE signal_outcomes SET status = ?, filled_at = ? "
-                "WHERE id = ?", (ST_UNAVAILABLE, now, outcome_id))
-            summary["unavailable"] += 1
+    for outcome_id, netuid, horizon, anchor_at in due_rows:
+        if not anchor_at:
             continue
-        exit_price = vector.get(netuid)
-        if not exit_price:
-            connection.execute(
-                "UPDATE signal_outcomes SET status = ?, filled_at = ? "
-                "WHERE id = ?", (ST_UNAVAILABLE, now, outcome_id))
-            summary["unavailable"] += 1
+        result = evaluate_outcome(panel, netuid, anchor_at, horizon, now_dt)
+        if result is None:
             continue
-        return_pct = (exit_price / entry_price - 1.0) * 100.0
-        baseline = _fleet_median_return(
-            _price_vector(connection, entry_ts), vector)
-        status = ST_LATE if due_at < late_cutoff else ST_RECORDED
         connection.execute(
             "UPDATE signal_outcomes SET exit_price_tao = ?, return_pct = ?, "
             "baseline_return_pct = ?, status = ?, filled_at = ? WHERE id = ?",
-            (exit_price, return_pct, baseline, status, now, outcome_id))
-        summary["outcomes_filled"] += 1
+            (result.get("exit_price"), result.get("return_pct"),
+             result.get("baseline_pct"),
+             (ST_UNAVAILABLE if result["status"] == ST_UNVERIFIED
+              else result["status"]), now, outcome_id))
+        _write_v2(connection, outcome_id, result)
+        if result["status"] == ST_RECORDED:
+            summary["outcomes_filled"] += 1
+        else:
+            summary["unavailable"] += 1
 
     # Retention: never below the longest horizon plus a week of slack.
     horizon_floor = max([int(h) for h in cfg["outcome_horizons_days"]]
                         or [30]) + 7
     keep_days = max(int(cfg["price_retention_days"]), horizon_floor)
-    cutoff = (_parse_iso(now)
-              - datetime.timedelta(days=keep_days)).isoformat()
+    cutoff = (now_dt - datetime.timedelta(days=keep_days)).isoformat()
     connection.execute("DELETE FROM signal_prices WHERE ts < ?", (cutoff,))
+    connection.execute("DELETE FROM signal_vectors WHERE ts < ?", (cutoff,))
     connection.commit()
     return summary
 
