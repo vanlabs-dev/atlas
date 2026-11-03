@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T23:43:28.321789+00:00",
+  "generatedAt": "2026-11-03T22:16:49.999239+00:00",
   "data": {
     "vitals": [
       {
@@ -451,12 +451,92 @@
         "totalAccounts": 600390,
         "newAccountsToday": 1352,
         "taoUsd": 257.2
+      },
+      {
+        "date": "2026-10-23",
+        "totalStakedTao": 7450000,
+        "rootStakeTao": 5460000,
+        "subnetsSharePct": 26.71,
+        "regCostTao": 444.9,
+        "totalAccounts": 601784,
+        "newAccountsToday": 1353,
+        "taoUsd": 251
+      },
+      {
+        "date": "2026-10-25",
+        "totalStakedTao": 7456000,
+        "rootStakeTao": 5461000,
+        "subnetsSharePct": 26.76,
+        "regCostTao": 227.5,
+        "totalAccounts": 602737,
+        "newAccountsToday": 870,
+        "taoUsd": 251.7
+      },
+      {
+        "date": "2026-10-26",
+        "totalStakedTao": 7458000,
+        "rootStakeTao": 5462000,
+        "subnetsSharePct": 26.77,
+        "regCostTao": 394.6,
+        "totalAccounts": 603335,
+        "newAccountsToday": 1158,
+        "taoUsd": 255.5
+      },
+      {
+        "date": "2026-10-28",
+        "totalStakedTao": 7466000,
+        "rootStakeTao": 5465000,
+        "subnetsSharePct": 26.81,
+        "regCostTao": 282.3,
+        "totalAccounts": 604432,
+        "newAccountsToday": 1140,
+        "taoUsd": 257.2
+      },
+      {
+        "date": "2026-10-29",
+        "totalStakedTao": 7463000,
+        "rootStakeTao": 5465000,
+        "subnetsSharePct": 26.77,
+        "regCostTao": 452.7,
+        "totalAccounts": 604928,
+        "newAccountsToday": 1172,
+        "taoUsd": 238.9
+      },
+      {
+        "date": "2026-10-30",
+        "totalStakedTao": 7468000,
+        "rootStakeTao": 5473000,
+        "subnetsSharePct": 26.72,
+        "regCostTao": 396,
+        "totalAccounts": 605562,
+        "newAccountsToday": 1155,
+        "taoUsd": 236.9
+      },
+      {
+        "date": "2026-11-01",
+        "totalStakedTao": 7471000,
+        "rootStakeTao": 5475000,
+        "subnetsSharePct": 26.72,
+        "regCostTao": 282.8,
+        "totalAccounts": 606581,
+        "newAccountsToday": 787,
+        "taoUsd": 233.5
+      },
+      {
+        "date": "2026-11-02",
+        "totalStakedTao": 7461000,
+        "rootStakeTao": 5477000,
+        "subnetsSharePct": 26.6,
+        "regCostTao": 461,
+        "totalAccounts": 607053,
+        "newAccountsToday": 905,
+        "taoUsd": 223.5
       }
     ],
     "gate": {
-      "observedAt": "2026-10-22T23:09:27.893899+00:00",
+      "observedAt": "2026-11-03T22:16:49.999239+00:00",
       "active": true,
-      "theta": 0.007635,
+      "theta": 0.008363,
       "aboveCount": 32,
       "barMode": "rank"
     },
@@ -673,6 +753,34 @@
       }
     ],
     "params": [
+      {
+        "item": "SubnetEmissionEnabled[82]",
+        "prevValue": "true",
+        "newValue": "false",
+        "observedAt": "2026-10-30T17:05:19.584990+00:00",
+        "block": 9398024
+      },
+      {
+        "item": "CollateralLockShare[24]",
+        "prevValue": "0",
+        "newValue": "32768",
+        "observedAt": "2026-10-30T05:29:01.509765+00:00",
+        "block": 9394539
+      },
+      {
+        "item": "SubnetEmissionEnabled[103]",
+        "prevValue": "false",
+        "newValue": "true",
+        "observedAt": "2026-10-29T17:03:41.054773+00:00",
+        "block": 9390816
+      },
+      {
+        "item": "SubnetEmissionEnabled[82]",
+        "prevValue": "false",
+        "newValue": "true",
+        "observedAt": "2026-10-29T17:03:40.993491+00:00",
+        "block": 9390816
+      },
       {
         "item": "SubnetEmissionEnabled[103]",
         "prevValue": "true",

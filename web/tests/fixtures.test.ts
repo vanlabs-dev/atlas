@@ -82,9 +82,24 @@ test("daily series cover 128 subnets and match the board counts", () => {
   for (const row of fleet.rows) {
     const d = daily.get(row.netuid) as number[] | null;
     assert.ok(d, `SN${row.netuid} is on the board but has no series`);
-    // The activity metric counts age <= window, the bins age < window: a
-    // commit at exactly the edge may land on either side.
-    assert.ok(Math.abs(sum(d.slice(-7)) - row.commits7) <= 1, `SN${row.netuid} 7 d`);
-    assert.ok(Math.abs(sum(d.slice(-30)) - row.commits30) <= 1, `SN${row.netuid} 30 d`);
+    // Same reader, bot filter and window rule as the metric: exact.
+    assert.equal(sum(d.slice(-7)), row.commits7, `SN${row.netuid} 7 d`);
+    assert.equal(sum(d.slice(-30)), row.commits30, `SN${row.netuid} 30 d`);
   }
+});
+
+test("mining rows come from a model-3 export", () => {
+  // Only the subnt-site-honesty export writes the read block, so the
+  // model-3 labels can never sit on an older fixture.
+  const mining = JSON.parse(readFileSync(join(DIR, "mining.json"), "utf8")).data;
+  assert.ok(mining.length > 0);
+  for (const row of mining) assert.equal(typeof row.blockRef, "number", `SN${row.netuid} has no read block`);
+  for (const row of mining.filter((r: { verdict: string }) => r.verdict === "possible")) {
+    assert.equal(row.vramGb, null, `SN${row.netuid} shows VRAM on a no-GPU-code scan`);
+  }
+});
+
+test("fixtures carry no dropped or rent-bounding field", () => {
+  const text = files.map((n) => readFileSync(join(DIR, n), "utf8")).join("\n");
+  assert.doesNotMatch(text, /cueKind|netTaoMonth|gateState|confidence|grossTaoMonth|priceTao|payback|requiredBand|rent/i);
 });
