@@ -35,8 +35,8 @@
 
 ## 7. Full verification and deploy prep
 
-- [ ] 7.1 Run every Python suite and `npm --prefix web test`. Verify: all pass.
-- [ ] 7.2 End to end on the workstation: one `run_measurement` against live TaoSwap and RPC on a scratch store copy, showing a vector with `reg_block` for every netuid. Verify: output recorded.
+- [x] 7.1 Run every Python suite and `npm --prefix web test`. Verify: all pass.
+- [x] 7.2 End to end on the workstation: one `run_measurement` against live TaoSwap and RPC on a scratch store copy, showing a vector with `reg_block` for every netuid. Verify: output recorded.
 - [ ] 7.3 Read-only Pi snapshot of the board and effectiveness before deploy, saved for the WP6 diff. Verify: files in the session scratchpad.
 - [ ] 7.4 Deploy (each step operator-approved): push; stop `atlas-fleet.timer`; Pi pull; Pi fleet and livedata suites; `fleet.db` backup; `rescore`; one reconcile via `systemd-run`; board diff; start timer; operator `/restart`. Verify: newest vector has `reg_block` for all netuids; probe `ok`; board diff recorded for WP6.
 - [ ] 7.5 `docs/decisions.md` entry (cue dropped, bot filter, eligibility anchor, CI rule, rescore) and handover tracker/session log. Verify: entries committed.

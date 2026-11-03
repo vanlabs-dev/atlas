@@ -1702,3 +1702,32 @@ class TestRescore(SignalsBase):
                 sig.rescore(self.conn, self.config)
         finally:
             sig._registration_now = saved
+
+
+class TestLivePassReanchors(TestRescore):
+    def test_live_pass_reanchors_before_scoring(self):
+        # Without this, the first pass after deploy scored old gate rows
+        # from the crossing time before `rescore` ran.
+        crossed, eligible = self._old_gate_row()
+        self._vector(eligible + datetime.timedelta(hours=1), {34: 1.0},
+                     {34: 0})
+        self._vector(eligible + datetime.timedelta(days=1, hours=2),
+                     {34: 0.95}, {34: 0})
+        self.conn.commit()
+        path = self._livedata([(1, 34, crossed.isoformat(), "eligible",
+                                eligible.isoformat())])
+        saved = sig._livedata_db_path
+        sig._livedata_db_path = lambda: path
+        try:
+            sig.state_set(self.conn, "ingest:gate-crossing", "1")
+            out = sig.run_measurement(
+                self.conn, self.config,
+                now=(crossed + datetime.timedelta(days=40)).isoformat(),
+                price_fetcher=lambda: None, anchors=[])
+        finally:
+            sig._livedata_db_path = saved
+        self.assertEqual(out.get("reanchored"), 1)
+        ret = self.conn.execute(
+            "SELECT v2_return_pct FROM signal_outcomes WHERE "
+            "horizon_days = 1").fetchone()[0]
+        self.assertAlmostEqual(ret, -5.0, places=6)
