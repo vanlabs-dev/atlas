@@ -29,10 +29,7 @@ export interface MiningRow {
   top1SharePct: number | null;
   top10SharePct: number | null;
   regCostTao: number | null;
-  /** Model estimate for one new miner, TAO a month at spot, before hardware cost. */
-  grossTaoMonth: number | null;
-  priceTao: number | null;
-  /** The chain block the prices were read at. */
+  /** The chain block the ranking's prices were read at. */
   blockRef: number | null;
 }
 

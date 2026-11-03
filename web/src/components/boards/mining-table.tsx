@@ -42,7 +42,6 @@ export function MiningTable({ rows }: { rows: MiningRow[] }) {
               <th scope="col" className={`${th} text-right`}>Earners</th>
               <th scope="col" className={`${th} text-right`}>Top earner, excl. owner</th>
               <th scope="col" className={`${th} text-right`}>Register, TAO</th>
-              <th scope="col" className={`${th} text-right`}>Model estimate, TAO/mo at spot</th>
               <th scope="col" className={th}>Not ranked because</th>
             </tr>
           </thead>
@@ -59,7 +58,6 @@ export function MiningTable({ rows }: { rows: MiningRow[] }) {
                 <td className={`${td} num text-right`}>{num(r.earnerCount)}</td>
                 <td className={`${td} num text-right`}>{pct(r.top1SharePct)}</td>
                 <td className={`${td} num text-right`}>{num(r.regCostTao, 4)}</td>
-                <td className={`${td} num text-right`}>{num(r.grossTaoMonth, 1)}</td>
                 <td className={`${td} text-ink-2`}>{reason(r) ?? "-"}</td>
               </tr>
             ))}

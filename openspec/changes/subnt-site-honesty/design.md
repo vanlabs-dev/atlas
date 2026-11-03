@@ -102,8 +102,12 @@ the built page, subnt publisher fixed in place.
   the operator approves each export before commit.
 - [Band inferable from which VRAM figures get cut] → accepted by the
   operator (decision 3A).
-- [Rank itself reflects rent ordering] → rank is ordinal; no figure lets a
-  reader recover rent. Payback and net stay off.
+- [Rank plus an income figure bounds rent] → found on the rehearsal
+  (2026-11-04): rank order, gross figures and `possible` verdicts bounded
+  rent to 1.435..1.520 TAO a month. Operator decision 1: the site shows
+  the order, never an income or price figure (allowlist bans `gross_`,
+  `entrant_`, `parity_`, `indep_`, `price_tao`, `haircut`). The rank alone
+  gives no bound.
 - [Projection hides a fixture field silently] → intended; the build-output
   test names the banned fields so a re-add is caught.
 - [Plain names drift from chain item names] → a map with a fallback that

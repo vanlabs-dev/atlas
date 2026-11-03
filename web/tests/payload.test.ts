@@ -8,7 +8,7 @@ test("allowlist maps no banned source field", () => {
 });
 
 test("banned-field guard catches a planted rent field", () => {
-  for (const from of ["net_tao_month", "rent_band", "payback_days", "required_band", "band_assumed", "cut_detail", "cue_kind", "confidence", "gate_state"]) {
+  for (const from of ["net_tao_month", "rent_band", "payback_days", "required_band", "band_assumed", "cut_detail", "cue_kind", "confidence", "gate_state", "gross_tao_month", "entrant_alpha_day", "indep_p25_alpha_day", "price_tao"]) {
     const planted = { ...ALLOWLIST, mining: { ...ALLOWLIST.mining, leak: from } };
     assert.deepEqual(bannedFields(planted), [`mining.${from}`], from);
   }

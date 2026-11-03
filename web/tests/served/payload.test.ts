@@ -7,7 +7,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const NEXT = join(import.meta.dirname, "../../.next");
-const BANNED = /cueKind|cue_kind|netTaoMonth|net_tao_month|gateState|gate_state|"confidence"|paybackDays|requiredBand|rent_tao|ranks ahead of/;
+const BANNED = /cueKind|cue_kind|netTaoMonth|net_tao_month|gateState|gate_state|"confidence"|paybackDays|requiredBand|rent_tao|ranks ahead of|grossTaoMonth|gross_tao_month|priceTao|TAO\/mo/;
 
 function walk(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out;

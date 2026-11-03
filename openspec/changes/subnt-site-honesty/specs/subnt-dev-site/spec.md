@@ -50,11 +50,15 @@ The data layer SHALL pass each page only the fields its type declares. A field p
 - **THEN** the built pages and their client payloads do not contain that field name or its values
 
 ### Requirement: Rent and hardware rung stay off the site
-Site data SHALL NOT include rent, net income, payback, the required hardware band, whether that band was assumed, or cut detail text, since each lets a reader derive rent or the budget band. A hardware cut SHALL render as a fixed public reason.
+Site data SHALL NOT include rent, any income or price figure for a mining slot, payback, the required hardware band, whether that band was assumed, or cut detail text. Atlas ranks by net income, so an income figure beside the rank bounds the rent. A hardware cut SHALL render as a fixed public reason.
 
 #### Scenario: Banned field in the allowlist
 - **WHEN** the export allowlist maps any of those source fields
 - **THEN** the allowlist test fails
+
+#### Scenario: Income figure beside the rank
+- **WHEN** the export allowlist maps a gross income, entrant figure or alpha price field
+- **THEN** the allowlist test fails, and the built site carries no such field
 
 #### Scenario: Hardware cut
 - **WHEN** a subnet is cut because its declared GPU need exceeds the budget band
@@ -63,8 +67,8 @@ Site data SHALL NOT include rent, net income, payback, the required hardware ban
 ### Requirement: Mining view follows the stored ranking
 The mining page SHALL order ranked subnets by the stored Atlas rank, then cut subnets with their public reason, then subnets with neither. No cut subnet SHALL be named as the head. An unmapped cut or unrated code SHALL render as a named gap, never as a raw token.
 
-#### Scenario: Cut subnet has the largest figure
-- **WHEN** the largest income figure belongs to a cut subnet
+#### Scenario: Cut subnet has the largest raw figure
+- **WHEN** the largest raw income figure belongs to a cut subnet
 - **THEN** it is listed after every ranked subnet and the headline names the rank-1 subnet
 
 #### Scenario: Unknown cut code
@@ -72,15 +76,15 @@ The mining page SHALL order ranked subnets by the stored Atlas rank, then cut su
 - **THEN** the row reads as an unnamed cut reason, not the code
 
 ### Requirement: Mining figures are labelled as a model
-Every income figure on the site SHALL be labelled as a model estimate before hardware cost, valued at the spot price of the stated read block. A `possible` scan verdict SHALL render as "No GPU code found", with the count of files that mention a GPU where any do, and never as running on a CPU or with a VRAM figure. The top-earner share SHALL state that it excludes the owner.
+The Atlas rank SHALL be described as the order of a model estimate after hardware cost, valued at the spot price of the stated read block, and the site SHALL say it publishes the order, not the figures. A `possible` scan verdict SHALL render as "No GPU code found", with the count of files that mention a GPU where any do, and never as running on a CPU or with a VRAM figure. The top-earner share SHALL state that it excludes the owner.
 
 #### Scenario: No GPU code
 - **WHEN** a row's verdict is `possible` and 3 files mention a GPU
 - **THEN** it reads "No GPU code found; GPU mentioned in 3 files" and shows no VRAM figure
 
-#### Scenario: Figure label
-- **WHEN** the mining page shows an income figure
-- **THEN** the same view names it a model estimate at spot and states the read block
+#### Scenario: Rank label
+- **WHEN** the mining page shows the Atlas rank
+- **THEN** the same view names it the order of a model estimate at spot, states the read block, and shows no income figure
 
 ### Requirement: No direction cue
 The site SHALL NOT state which way a price should move or which of code and price leads, in words, glyphs or a signed gap. The code-against-price gap SHALL render as an unsigned distance in places.
