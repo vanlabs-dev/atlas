@@ -165,9 +165,10 @@ vector for that mechanism, after owner UIDs are removed. It SHALL record the
 independent earner count, the independent top-1 share and the independent
 top-10 share for each mechanism. It SHALL NOT derive per-miner income by
 dividing emission by the registered UID count or by a provider's
-active-miner headcount. Registered UIDs that earn nothing SHALL be treated
-as idle slots: they SHALL NOT be a divisor, SHALL NOT cut, and SHALL be
-shown only as context ("N earning of M slots").
+active-miner headcount. Registered UIDs that earn nothing SHALL NOT be a
+divisor and SHALL NOT cut. The screen SHALL NOT claim whether such a UID is
+active or idle, and SHALL show them only as context ("N earning of M
+registered").
 
 The headline income figure SHALL be an ENTRANT figure: the LOWER of two
 figures for one mechanism.
@@ -192,6 +193,7 @@ The screen SHALL carry, as context and not as a ranking input:
 - whether the subnet's UIDs are full, so that entry means deregistering an
   existing UID
 - the number of registered UIDs and how many of them earn
+- the miner-activity facts and the consensus mode
 
 #### Scenario: Registered count is not used as a divisor
 
@@ -199,12 +201,13 @@ The screen SHALL carry, as context and not as a ranking input:
 - **THEN** the screen records 4 earners and reports no
   average-per-registered-UID figure
 
-#### Scenario: Idle slots are context, not competition
+#### Scenario: Zero-earning UIDs are context, not a divisor
 
 - **WHEN** a full subnet has 3 independent earners among 255 non-owner UIDs
 - **THEN** the entrant figure is computed from the 3 earners alone, the
-  subnet is not cut or scaled for the 252 idle slots, and the view shows "3
-  earning of 255 slots"
+  subnet is not cut or scaled for the other 252 UIDs, the view shows "3
+  earning of 255 registered", and no view calls those 252 UIDs idle or
+  active
 
 #### Scenario: A long tail of tiny earners caps the headline
 
@@ -448,9 +451,10 @@ or not positive, never zero or negative.
 
 The board tool SHALL return each ranked subnet as a fixed compact row: rank,
 netuid, name, ranked mechanism, entrant figure in alpha per day and TAO per
-month at spot, parity share, 25th-percentile and median earner, earning
-slots, top-1 share, price, haircut, pool depth, payback, required band, entry
-context, feasibility verdict with its evidence path, and confidence. Cut and
+month at spot, parity share, 25th-percentile and median earner, earning and
+registered UIDs, the miner-activity facts, consensus mode, top-1 share,
+price, haircut, pool depth, payback, required band, entry context,
+feasibility verdict with its evidence path, and confidence. Cut and
 unrated subnets SHALL carry netuid, name and reason. Full detail SHALL stay
 on the single-subnet tool.
 
@@ -464,3 +468,95 @@ on the single-subnet tool.
 
 - **WHEN** a reader asks the single-subnet tool for a ranked subnet
 - **THEN** every stored economics field and mechanism row is returned
+
+### Requirement: Miner-activity facts are stated as observations
+
+For each subnet the screen SHALL report, as context and not as a ranking
+input, these counts read at the snapshot block:
+- UIDs with nonzero incentive
+- UIDs registered in the last 7 days
+- UIDs given nonzero weight by at least one permit-holding validator whose
+  last update is within the subnet's activity cutoff
+- the most UIDs any one such validator weights
+- hotkeys that served an axon in the last 7 days
+
+Each count SHALL carry its exact definition. No count SHALL be labelled as
+active or idle miners. An unread input SHALL make its count unknown, never
+zero.
+
+#### Scenario: A top-k weighting pattern is shown as a fact
+
+- **WHEN** every fresh validator row on a subnet weights at most 5 UIDs
+- **THEN** the view reports the widest row as 5 and makes no claim about the
+  subnet's payout design or how many miners are trying
+
+#### Scenario: A stale validator row is not counted
+
+- **WHEN** a permit-holding validator last updated outside the activity
+  cutoff
+- **THEN** the UIDs only it weights are not in the weighted count
+
+#### Scenario: Weights label carries the reveal lag
+
+- **WHEN** a subnet runs commit-reveal weights
+- **THEN** the weighted count is labelled as reflecting the last revealed
+  weights
+
+#### Scenario: Rounding is disclosed
+
+- **WHEN** the earning count is shown
+- **THEN** the view states that a share below 1/65535 of a mechanism's pool
+  reads as zero
+
+#### Scenario: Axon count stores no address
+
+- **WHEN** axon entries are read for a subnet
+- **THEN** only the count of entries served in the last 7 days is stored,
+  the label says validators are included and that many subnets do not use
+  axons, and no address or port is stored or returned
+
+#### Scenario: Unread input is unknown, not zero
+
+- **WHEN** the registration blocks of a subnet were not read
+- **THEN** its 7-day registration count is unknown
+
+### Requirement: Consensus mode is tracked per subnet
+
+Each pass SHALL record every subnet's epoch consensus mode, Yuma or Null,
+read from chain with the runtime default (Yuma) applied only to a readable
+unset entry. A change from the previous recorded mode SHALL be stored with
+its block. A first observation SHALL be stored without a change. Mode
+changes SHALL NOT send alerts. The board and the query surface SHALL show
+the count per mode, the Null subnets, and for each the block of the
+recorded switch or "first seen by Atlas" with its date.
+
+#### Scenario: First pass seeds without switches
+
+- **WHEN** the tracker runs for the first time over 128 subnets
+- **THEN** 128 observations are stored and no switch is recorded
+
+#### Scenario: A switch is recorded, not paged
+
+- **WHEN** a subnet recorded as Yuma is read as Null
+- **THEN** one switch is stored with both modes and the block, and no
+  Telegram alert is sent
+
+#### Scenario: A Null subnet is flagged
+
+- **WHEN** a ranked subnet runs Null
+- **THEN** its view says one validator's weights set all miner pay on that
+  subnet
+
+#### Scenario: Pending owner pruning is flagged
+
+- **WHEN** a Null subnet has a pending pruning target below its registered
+  count
+- **THEN** the view shows the target and the registered count and says that
+  pruning removes the lowest-emission UIDs that are not immune
+
+#### Scenario: Unread mode is unknown
+
+- **WHEN** a subnet's consensus entry fails to decode or holds an unknown
+  value
+- **THEN** its mode is recorded as unknown, never as Yuma, and no switch is
+  recorded from it

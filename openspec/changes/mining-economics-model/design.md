@@ -32,8 +32,8 @@ Today's runtime:
 - The MCP board is compact.
 
 **Non-Goals:**
-- No new chain reads. `Tempo`, `ValidatorPermit` and `Dividends` stay
-  unread, and `livedata/` is untouched.
+- No read of `Tempo` or `Dividends`. Prune risk uses a configured floor.
+- No Telegram class for consensus switches.
 - No price-decay forecast over time.
 - No change to the web export or subnt payload (WP6).
 - No change to the cut order before winner-take-all.
@@ -134,7 +134,81 @@ Today's runtime:
     - `rent_source` records "lium ls 2026-11-03; TAO $222.13 Taostats".
     - Rent stays hand-set. Atlas makes no network calls of its own.
 
+11. **Context reads (measured on the Pi, 2026-11-03, finney entrypoint).**
+
+    | Item | Keys | Time |
+    |---|---|---|
+    | current mining snapshot | | 48 s |
+    | `BlockAtRegistration` (enumerated) | 38,868 | 351 s |
+    | `Axons` | 6,623 | 83 s |
+    | `Weights` | 1,527 | 17 s |
+    | `ValidatorPermit`, `LastUpdate`, `Emission` | about 130 each | 3 to 4 s each |
+
+    - The node keeps state for 256 blocks (refused at 260 blocks back), about
+      51 minutes. The new reads add about 7.5 minutes, so everything is read
+      at one pinned block.
+    - `BlockAtRegistration` uses point reads for `(netuid, uid)` with uid
+      below `SubnetworkN`. That is about 30,200 keys, with no enumeration
+      and no stale entries (38,868 enumerated against 30,207 registered).
+    - `Weights` and `LastUpdate` are keyed by `NetUidStorageIndex`. The key
+      reader gains a two-part identity tail `(index u16, uid u16)`.
+    - Codecs: `Vec<bool>`, `Vec<u64>`, `Vec<(u16,u16)>`, `EpochConsensus`
+      (u8 index, 0 Yuma, 1 Null, anything else fails closed), and an
+      `AxonInfo` prefix decoder that reads the first 8 bytes (`block: u64`)
+      and nothing else. Each codec gets a regression test.
+    - A context failure is per item and per subnet. It marks the context
+      unread and leaves the economics read intact.
+
+12. **Activity facts.**
+    - Registrations in 7 days: registration block ≥ snapshot block − 50,400.
+    - Weighted UIDs: the union of nonzero targets over rows whose source UID
+      holds `ValidatorPermit` and whose `LastUpdate` for that mechanism is
+      within `ActivityCutoff` (already read for `live_hyperparams`).
+    - Widest row: the maximum count of nonzero targets in those rows.
+    - Axons: entries with block ≥ snapshot block − 50,400.
+    - v486 removes an axon on UID replacement and trimming
+      (`subnets/uids.rs:126`, `:364`), so the count holds no deregistered
+      hotkeys.
+    - These facts are stored in the `mine_econ` columns `registered_7d`,
+      `weighted_uids`, `widest_weight_row`, `axons_served_7d` and
+      `consensus_mode`.
+
+13. **Consensus tracker lives in the fleet store, not the parameter watch.**
+    - Every `chain_param_events` row becomes an instant
+      `chain-parameter-change` alert.
+    - Under the operator's "record, no alert" decision, a mining-owned
+      table `mine_consensus_events (netuid, prev_mode, new_mode,
+      block_number, ts)` and the per-pass `consensus_mode` column hold the
+      history.
+    - The first pass seeds without events. Events are never pruned (small).
+    - "Since" is the switch block or "first seen by Atlas" with its date.
+    - SN82 holds an explicit Yuma entry. That does not show it ever ran
+      Null.
+    - Promoting this to an alert later is a separate change.
+
+14. **Null rounding check.**
+    - The Null guide says the reported u16 incentive is quantized and does
+      not drive payouts.
+    - During apply, compare the incentive-derived p25 on SN120 (694 UIDs)
+      with the per-UID `Emission` (exact alpha) for UIDs without a validator
+      permit.
+    - If they differ by more than one rounding step, Null subnets take
+      their earner figures from `Emission`, and the board labels which
+      source was used. The result is recorded here.
+
+15. **Owner pruning flag.** A pending `NullPruningTarget` below `SubnetworkN`
+    is shown with both numbers. v486 trimming spares owner and immune UIDs
+    and removes the lowest-emission UIDs first. It is a flag, not a cut.
+
 ## Risks / Trade-offs
+
+- **Seven more probed items.** A runtime rename of any of them fails the
+  hourly probe and the upgrade job's gate. The reader fix is the
+  operator's.
+- **The pass grows to about 8.5 minutes of chain reads.** Load on the public
+  endpoint rises every 6 hours. If the node's state window shrinks below
+  the read time, the pinned read fails. The context then goes unread and
+  the economics still stand.
 
 - **p25 on 2 or 3 earners is coarse.** The parity cap bounds it. The view
   shows both figures.
