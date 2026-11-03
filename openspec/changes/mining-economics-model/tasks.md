@@ -115,9 +115,9 @@
 
 ## 7. Consumers and full suite
 
-- [ ] 7.1 Update the fixtures in `fleet/tests/mining_fixtures.py`, `subnt/tests` and `telegram/tests` for the new columns and `MODEL_VERSION` 3. Verify: the agreement tests (board, briefing, subnt head and counts) pass.
-- [ ] 7.2 Run every Python suite with the handover loop, plus `npm --prefix web test`. Verify: all pass.
-- [ ] 7.3 Rehearsal on the workstation (not the proof; 8.2 and 8.3 are):
+- [x] 7.1 Update the fixtures in `fleet/tests/mining_fixtures.py`, `subnt/tests` and `telegram/tests` for the new columns and `MODEL_VERSION` 3. Verify: the agreement tests (board, briefing, subnt head and counts) pass.
+- [x] 7.2 Run every Python suite with the handover loop, plus `npm --prefix web test`. Verify: all pass.
+- [x] 7.3 Rehearsal on the workstation (not the proof; 8.2 and 8.3 are):
   - stream the tables the screen reads (`slots`, `index_state`, `fleet_files`, the needed `fleet_files_fts` rows, `mine_*`) from the Pi over ssh with a `mode=ro` reader into a scratch store; no file is written on the Pi
   - run `run_econ`, `run_feasibility` and `run_classify` on it with a fresh `read_mining_snapshot` (watches not run)
   - read `report()` and `compact_view` from it

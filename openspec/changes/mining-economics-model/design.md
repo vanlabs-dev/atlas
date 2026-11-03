@@ -224,8 +224,48 @@ Today's runtime:
     is shown with both numbers. v486 trimming spares owner and immune UIDs
     and removes the lowest-emission UIDs first. It is a flag, not a cut.
 
+16. **Rehearsal (task 7.3, 2026-11-03).**
+    - Setup:
+      - `slots`, `index_state`, `fleet_files` and the content of the 3,596
+        miner-path files were streamed read-only from the Pi into a scratch
+        store.
+      - A fresh `read_mining_snapshot` (block 9423301) took 444 s, with no
+        context item unread.
+      - Econ, feasibility and classify then ran on the scratch store.
+    - Board: 128 observed, 70 ranked, 58 cut.
+
+      | Cut rung | Subnets |
+      |---|---|
+      | owner-capture | 23 |
+      | winner-take-all | 23 |
+      | identity-placeholder | 9 |
+      | prune-risk (SN53, SN118) | 2 |
+      | pool-side-switch-off | 1 |
+
+    - Scanner v4 over 104 slots:
+
+      | Verdict | Slots |
+      |---|---|
+      | needs-gpu | 21 (6 before) |
+      | possible | 46 |
+      | unknown | 37 |
+
+    - The hardware rung cuts nothing (no repo declares more than 24 GB).
+    - Consensus: Yuma 125, Null 3 (SN24, SN37, SN120).
+    - Head: SN4 (cpu band, 931.8 net TAO/mo), SN9, SN90, SN120 (Null),
+      SN3.
+    - SN8 moves from 13 to 52, lium.io from 12 to 55, SOMA from 34 to 53.
+    - Payback rounds to under a day for most subnets: the burn is 0.0005
+      TAO.
+    - The compact `mining_board` payload for 10 rows is 12.0 KB with 27
+      keys a row. Before, it was 24.7 KB with 45 keys a row plus every
+      mechanism row.
+
 ## Risks / Trade-offs
 
+- **SN120 ranks 4th on a Null subnet.** On Null, `Incentive` is a reported
+  share and the payout is computed at wider precision (design 14). The row
+  carries the Null flag.
 - **Seven more probed items.** A runtime rename of any of them fails the
   hourly probe and the upgrade job's gate. The reader fix is the
   operator's.
