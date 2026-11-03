@@ -210,7 +210,7 @@ export default async function Home() {
             </div>
             <div>
               <dd><b><BandBlock anchor={anchor} /></b></dd>
-              <dt className="lab2">est. block</dt>
+              <dt className="lab2">est. block now</dt>
             </div>
           </dl>
         </div>
