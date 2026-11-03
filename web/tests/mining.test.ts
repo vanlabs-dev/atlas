@@ -8,15 +8,16 @@ import { CUT, UNNAMED_CUT, UNRATED, VERDICT, codeText, headline, order, readBloc
 const base: MiningRow = {
   netuid: 0, name: null, rank: null, verdict: null, gpuFloor: null, vramGb: null, gpuMentionFiles: null,
   cutReason: null, unratedReason: null, minerBurnPct: null, earnerCount: null, top1SharePct: null,
-  top10SharePct: null, regCostTao: null, grossTaoMonth: null, priceTao: null, blockRef: null,
+  top10SharePct: null, regCostTao: null, blockRef: null,
 };
 const r = (o: Partial<MiningRow>): MiningRow => ({ ...base, ...o });
 
-test("a cut subnet with the largest figure comes after every ranked one", () => {
+test("a cut subnet comes after every ranked one", () => {
+  // SN110 had the largest raw figure in the audit and was listed first.
   const rows = order([
-    r({ netuid: 110, name: "Green", cutReason: "winner-take-all", grossTaoMonth: 1094 }),
-    r({ netuid: 9, name: "iota", rank: 2, grossTaoMonth: 703 }),
-    r({ netuid: 4, name: "Targon", rank: 1, grossTaoMonth: 935 }),
+    r({ netuid: 110, name: "Green", cutReason: "winner-take-all" }),
+    r({ netuid: 9, name: "iota", rank: 2 }),
+    r({ netuid: 4, name: "Targon", rank: 1 }),
     r({ netuid: 5, name: "x" }),
   ]);
   assert.deepEqual(rows.map((x) => x.netuid), [4, 9, 110, 5]);

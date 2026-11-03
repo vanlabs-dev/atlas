@@ -29,7 +29,7 @@ export const FIELDS = {
   mining: keys<MiningRow>()([
     "netuid", "name", "rank", "verdict", "gpuFloor", "vramGb", "gpuMentionFiles", "cutReason",
     "unratedReason", "minerBurnPct", "earnerCount", "top1SharePct", "top10SharePct", "regCostTao",
-    "grossTaoMonth", "priceTao", "blockRef",
+    "blockRef",
   ]),
   fleet: keys<FleetRow>()([
     "netuid", "name", "tier", "score", "why", "divergence", "cold", "commits7", "commits30",

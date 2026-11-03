@@ -30,7 +30,9 @@ E10 (2026-11-02).
 - Mining page: sort by stored Atlas rank, then cut subnets with a public
   reason, then the rest. The gross column is labelled as a model estimate
   at spot with its block. `possible` renders "No GPU code found", plus the
-  GPU-mention file count. No "0 GB VRAM" beside it. "Top earner" says it
+  GPU-mention file count. No "0 GB VRAM" beside it. No income or price
+  figure: the rank order with one would bound the rent (operator decision,
+  2026-11-04). "Top earner" says it
   excludes the owner. `above-budget-band` renders "Needs a larger GPU".
   `prune-risk` gets a public reason.
 - Fleet and home: no direction cue in words or sign. The gap renders as

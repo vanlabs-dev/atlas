@@ -19,8 +19,6 @@ export const ALLOWLIST = {
     top1SharePct: "top1_share_pct",
     top10SharePct: "top10_share_pct",
     regCostTao: "reg_cost_tao",
-    grossTaoMonth: "gross_tao_month",
-    priceTao: "price_tao",
     blockRef: "block_ref",
   },
   fleet: {
@@ -107,9 +105,12 @@ export type Kind = keyof typeof ALLOWLIST;
  * Source fields that must never be listed. Net income, rent and payback let
  * a reader derive rent; the required band and its assumed flag are the
  * hardware rung; cut detail names the band; the cue, confidence and gate
- * state were dropped from the site (change: subnt-site-honesty).
+ * state were dropped from the site (change: subnt-site-honesty). Income
+ * and price figures are banned too: Atlas ranks by net income, so an
+ * income figure beside the rank bounds the rent (rehearsal 2026-11-04:
+ * 1.435 to 1.520 TAO a month).
  */
-export const BANNED_SOURCE = /^(net_|rent_|payback|required_band|band_assumed|cut_detail|cue|confidence|gate_state|baseline_)/;
+export const BANNED_SOURCE = /^(net_|rent_|payback|required_band|band_assumed|cut_detail|cue|confidence|gate_state|baseline_|gross_|entrant_|parity_|indep_|incumbent_|miner_alpha|price_tao|haircut)/;
 
 /** Source fields in the allowlist that match the banned pattern. */
 export function bannedFields(list: Record<string, Record<string, string>> = ALLOWLIST): string[] {
