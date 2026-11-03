@@ -1155,11 +1155,12 @@ class Job:
         return target
 
     def read_rules(self, ctx: Dict[str, Any]) -> List[str]:
-        """Read, Grep and Glob limited to the worktree, the source export
-        and the job's directory. Absolute paths use the `//` rule form."""
+        """File reads limited to the worktree, the source export and the
+        job's directory. Absolute paths use the `//` rule form. Claude Code
+        applies `Read(path)` rules to every file-reading tool (Read, Grep,
+        Glob) and ignores path rules written for Grep or Glob."""
         dirs = [self.worktree, ctx["source_dir"], self.var]
-        return ["%s(/%s/**)" % (tool, os.path.abspath(d))
-                for d in dirs for tool in ("Read", "Grep", "Glob")]
+        return ["Read(/%s/**)" % os.path.abspath(d) for d in dirs]
 
     def read_denials(self) -> List[str]:
         patterns = ["//%s/**" % os.path.abspath(p).lstrip("/") for p in (
@@ -1167,8 +1168,7 @@ class Job:
             os.path.expanduser("~/.claude"), self.hermes_home)]
         patterns += ["~/.ssh/**", "~/.hermes/**", "~/.claude/**",
                      "//**/.env", "//**/.env.*", "**/.env*"]
-        return ["%s(%s)" % (tool, p) for p in patterns
-                for tool in ("Read", "Grep", "Glob")]
+        return ["Read(%s)" % p for p in patterns]
 
     def step_edit(self, state: Dict[str, Any], ctx: Dict[str, Any]) -> None:
         live_py = os.path.join(self.root, "livedata", "atlas_live.py")

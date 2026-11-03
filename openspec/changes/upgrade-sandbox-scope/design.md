@@ -117,11 +117,12 @@ The source export:
 
 ### D5. Edit-session read scope
 
-`--allowedTools` keeps `Read`, `Grep` and `Glob` only as path rules over the worktree, the export and `var/upgrade`, for example `Read(//home/pi/atlas-upgrade/**)`. Absolute paths come from the job at run time.
+`--allowedTools` keeps file reads only as `Read(path)` rules over the worktree, the export and `var/upgrade`, for example `Read(//home/pi/atlas-upgrade/**)`. Absolute paths come from the job at run time.
 
 `--disallowedTools` adds:
 - `Read(~/.ssh/**)`, `Read(~/.hermes/**)`, `Read(~/.claude/**)` and `Read(**/.env*)`
-- the same patterns for `Grep` and `Glob`
+
+Claude Code applies `Read(path)` rules to every file-reading tool (Read, Grep, Glob) and ignores path rules written for `Grep` or `Glob` (it warns on stderr). The deploy check on 2.1.280 showed a Grep in `~/.ssh` denied by the `Read` rule.
 
 The session already has `--tools Read,Grep,Glob,Edit,Write`, so no Bash and no web tools.
 
