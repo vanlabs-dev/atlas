@@ -8,7 +8,7 @@
 
 ## 2. Export
 
-- [ ] 2.1 Remove the seven-day age cut; read the latest mining pass, current scans, live board and network rows; verify by a rehearsal run (task 6.1)
+- [x] 2.1 Remove the seven-day age cut; read the latest mining pass, current scans, live board and network rows; verify by a rehearsal run (task 6.1)
 - [x] 2.2 Add `--out <dir>` and refuse to write into `src/data/fixtures` when it is given; verify with a unit test on the path guard
 - [x] 2.3 Daily bins through the metric's commit reader and bot patterns with `c7` window semantics, binning in `scripts/bins.ts`; verify TS tests for a 7.0-day commit and a bot commit, plus a Python cross-check against `compute_activity`
 - [x] 2.4 Export `gpuMentionFiles`, `block_ref`, `unrated_reason`; signals limited to named classes and non-shadow tiers; verify with the allowlist and signals-filter tests
@@ -36,6 +36,6 @@
 
 ## 6. Integration (operator approvals)
 
-- [ ] 6.1 Rehearsal export to the session scratchpad with `--out` (approved 2026-11-04); verify scrub, allowlist and diff review
+- [x] 6.1 Rehearsal export to the session scratchpad with `--out` (approved 2026-11-04); verify scrub, allowlist and diff review
 - [ ] 6.2 Regenerate committed fixtures (needs a yes); every Python suite and `npm --prefix web test` and the build-output test pass; commit
 - [ ] 6.3 Push (needs a yes); check the deployed pages for the banned fields and labels
