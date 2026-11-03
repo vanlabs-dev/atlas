@@ -770,7 +770,8 @@ reads 31 or 32. Tolerance is now 1. See the chain-evidence entry above.
   leaves rent unknown and the hardware cut rung inert. Pick a band within
   two weeks of the first board render. If it has not been picked by then,
   the honest conclusion is that mining is not being pursued and the screen
-  should be disabled rather than maintained.
+  should be disabled rather than maintained. **Closed 2026-11-03:**
+  `consumer-gpu`, see "Mining economics model" below.
 - **The parity assumption is a model.** The headline entrant figure shares
   the miner pool among earners + 1. It is labelled as a model on the board
   and in the spec. It still flatters a one-earner subnet, where one earner
@@ -1137,3 +1138,45 @@ Audit WP5 (B2, A4, A17, C17). Operator decisions 2026-11-03:
 - Clone updates take `var/repotrack/subtensor.lock`; both timers fired at
   13:01:20 on 2026-11-03. Each run has a 50 min deadline with a 15 min
   push reserve; `TimeoutStartSec` is 60 min.
+
+## Mining economics model (2026-11-03, change: mining-economics-model)
+
+Audit WP4 (D1 to D6, D9, D10). Operator decisions 2026-11-03:
+
+- `mining.budget_band` is `consumer-gpu`, one rented 24 GB card.
+- Rent is hand-set from `lium ls` on 2026-11-03 at TAO $222.13
+  (Taostats): consumer-gpu 1.5 TAO/month (RTX 4090 secure, $0.45/h),
+  datacenter-gpu 6.3 TAO/month (H100 spot, $1.95/h). The source and date
+  are in `mining.rent_source`; refresh by hand when GPU or TAO prices
+  move. Lium use is approved for this project in `CLAUDE.local.md`; the
+  key is not wired into Atlas.
+- A subnet with GPU code but no declared VRAM is costed at the smallest
+  GPU band and marked assumed. Assuming 80 GB would have cut 13 subnets
+  on a guess. No GPU code found is costed as CPU, also marked assumed.
+- Zero-earning registered UIDs are not a divisor and not a cut. No surface
+  says whether they are active or idle: the chain cannot tell. The entrant
+  figure is the lower of the parity share and the 25th-percentile earner.
+- Miner-activity counts (registrations and axons in 7 days, UIDs a fresh
+  validator weights, the widest weight row) are shown with their exact
+  definitions. Only axon serving blocks are decoded, never addresses.
+- Yuma/Null consensus is tracked per subnet in the fleet store. Switches
+  are recorded with their block and do not alert.
+- Hold every web fixture export until WP6. It would publish rent through
+  `net_tao_month` and the band name through `cut_reason`.
+
+Findings:
+
+- On Null subnets the stored per-UID `Emission` is miner pay plus stake
+  dividends to every staked UID (v486 `epoch/run_epoch.rs:160-183`), so
+  it is not miner pay. `Incentive` stays the source. Null today: SN24,
+  SN37, SN120.
+- Null capacity of 2500 UIDs (subtensor `8fc43030a`) shipped in v475. It
+  applies only to subnets whose owner selects Null.
+- The public node keeps state for 256 blocks. The mining read now takes
+  about 7 minutes, so it still reads at one block.
+- Every successful `mining_board` call since August was logged as
+  `error` in `var/fleet/tool-audit.jsonl`: the payload had no `status`.
+  Fixed in `cd5cbe0`.
+
+First model-3 pass on the Pi, block 9423447: 128 observed, 70 ranked, 58
+cut (prune-risk SN53 and SN118), 21 `needs-gpu` (6 before).
