@@ -192,6 +192,11 @@
       "example",
       "your-org",
       "owner"
+    ],
+    "bot_author_patterns": [
+      "\\[bot\\]@",
+      "^(github-)?actions?@github\\.com$",
+      "^(dependabot|renovate)"
     ]
   },
   "dashboard": {
