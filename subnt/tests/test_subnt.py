@@ -1257,17 +1257,33 @@ class WhyPhraseTests(unittest.TestCase):
     """The reason token alone is not publishable: on the real fleet 93 of
     106 public rows score `divergence`, so the phrase must be derived."""
 
-    def test_divergence_states_direction_in_words(self):
-        cold = {"why": "divergence", "div_signed": -71, "cold": True}
-        warm = {"why": "divergence", "div_signed": -71, "cold": False}
-        ahead = {"why": "divergence", "div_signed": 55, "cold": False}
-        self.assertEqual(sh.why_phrase(cold),
-                         "priced ahead of a repository that has gone quiet")
-        self.assertEqual(sh.why_phrase(warm),
-                         "priced ahead of its code activity")
-        self.assertEqual(sh.why_phrase(ahead),
-                         "building faster than the price reflects")
-        self.assertNotEqual(sh.why_phrase(cold), sh.why_phrase(ahead))
+    def test_divergence_differs_by_gap_size_and_quiet(self):
+        far = {"why": "divergence", "div_signed": 60, "cold": False}
+        near = {"why": "divergence", "div_signed": 15, "cold": False}
+        quiet = {"why": "divergence", "div_signed": -60, "cold": True}
+        self.assertEqual(sh.why_phrase(far),
+                         "code activity and price ranks far apart")
+        self.assertEqual(sh.why_phrase(near),
+                         "code activity and price ranks differ")
+        self.assertEqual(sh.why_phrase(quiet),
+                         "repository has gone quiet; code activity and "
+                         "price ranks far apart")
+        self.assertNotEqual(sh.why_phrase(far), sh.why_phrase(near))
+
+    def test_one_category_two_directions_read_the_same(self):
+        # Regression (subnt-site-honesty): the phrase used to say "priced
+        # ahead" or "building faster", the public form of the dropped cue.
+        for cold in (False, True):
+            up = {"why": "divergence", "div_signed": 50, "cold": cold}
+            down = {"why": "divergence", "div_signed": -50, "cold": cold}
+            self.assertEqual(sh.why_phrase(up), sh.why_phrase(down))
+        words = " ".join(sh.why_phrase({"why": w, "div_signed": d,
+                                        "cold": c, "econ_fresh": True})
+                         or "" for w in sh.WHY_PHRASE
+                         for d in (-60, -10, 10, 60) for c in (False, True))
+        for banned in ("ahead", "behind", "faster", "slower",
+                       "price holds up", "reflects"):
+            self.assertNotIn(banned, words)
 
     def test_fresh_distinguishes_its_two_causes(self):
         self.assertEqual(
@@ -1372,19 +1388,25 @@ class MoverNotesTests(unittest.TestCase):
 
 
 class MiningWordingTests(unittest.TestCase):
-    def test_head_is_the_largest_pool_and_hardware_is_named(self):
+    def test_head_is_ranked_first_and_model_3_is_described(self):
+        # Regression (subnt-site-honesty): model 3 nets hardware cost, so
+        # "not counted" and "largest earnable pool" were false.
         with tempfile.TemporaryDirectory() as tmp:
             _e, files, problems = sh.build(full(tmp), None)
             self.assertEqual(problems, [])
             mining = docs(files)["mining.json"]
         self.assertTrue(mining["lead"].startswith(
-            "SN12 Subnet 12 has the largest earnable pool for a new "
+            "SN12 Subnet 12 is ranked first by Atlas for one new "
             "independent miner; "), mining["lead"])
         self.assertEqual(fact(mining, "head")["label"],
-                         "Largest earnable pool")
-        self.assertIn("Ranked by estimated earnings for a new independent "
-                      "miner. Hardware cost and hardware requirements are "
-                      "not counted.", texts(mining, "notes"))
+                         "Ranked first by Atlas")
+        self.assertIn("Ranked by a model estimate for one new independent "
+                      "miner at spot price, after hardware cost at a band "
+                      "Atlas does not publish.", texts(mining, "notes"))
+        text = json.dumps(mining)
+        for banned in ("not counted", "earnable pool", "consumer-gpu",
+                       "rent", "TAO/month"):
+            self.assertNotIn(banned, text)
 
 
 class OwnerBurnTests(unittest.TestCase):
