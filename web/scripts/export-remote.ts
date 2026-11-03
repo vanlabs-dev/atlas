@@ -103,8 +103,12 @@ upgrades = rows(live, "SELECT * FROM spec_upgrades ORDER BY id")
 with open("var/upgrade/state.json") as handle:
     job = json.load(handle)
 
+# The board is composed now, but its activity comes from the last pass:
+# stamp it with that pass, so its age is never understated.
+fleet_at = max(passes.values()) if passes else board["generated_at"]
+
 print(json.dumps({
-    "now": now, "mining_at": ts, "fleet_at": board["generated_at"],
+    "now": now, "mining_at": ts, "fleet_at": fleet_at,
     "network_at": gate[0]["observed_at"] if gate else now,
     "mining": econ, "fleet": fleet_rows, "counts": board["counts"],
     "activity": activity, "signals": signals, "vitals": vitals,

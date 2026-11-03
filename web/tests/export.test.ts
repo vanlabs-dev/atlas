@@ -50,6 +50,11 @@ test("export leaves out bot authors and post-pass commits", () => {
   assert.doesNotMatch(REMOTE, /--format=%cI"/);
 });
 
+test("fleet board is stamped with its activity pass, not compose time", () => {
+  assert.match(REMOTE, /fleet_at = max\(passes\.values\(\)\)/);
+  assert.match(REMOTE, /"fleet_at": fleet_at/);
+});
+
 test("export has no age cutoff", () => {
   assert.doesNotMatch(REMOTE, /cutoff|AGE_DAYS|<= \?/);
   assert.match(REMOTE, /latest_feasibility/);
