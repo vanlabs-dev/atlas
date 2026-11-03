@@ -201,7 +201,8 @@ audited (`signals-failed`) and never counts as a reconcile process error.
   netuid's `NetworkRegisteredAt` block (change: signal-statistics-ties), and
   a fetch whose registration read fails stores nothing.
   - **One outcome rule.** Entry and exit come from the first stored vector
-    at or after the anchor and the due time, within 6 h. No vector there
+    at or after the anchor and the due time, within 7 h (one 6 h timer
+    interval plus its observed jitter). No vector there
     means `unavailable` (`no-vector`), never a stretched or shortened
     window. A netuid whose registration block differs between the two
     vectors is a different subnet: `unavailable` (`re-registered`), and it

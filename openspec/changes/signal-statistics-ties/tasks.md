@@ -9,7 +9,7 @@
 
 - [x] 2.1 Additive migration in `ensure_schema`: `signal_prices.reg_block`, `signal_vectors`, entry columns `anchor_at`/`entry_ts`/`reg_block`/`reason`, outcome `v2_*` columns. Verify: test opens a pre-change store fixture, migrates twice, old rows intact.
 - [x] 2.2 `default_price_fetcher` stores each vector with `reg_block` and the head block; a failed registration read stores nothing. Verify: test with injected fetchers (price ok + reg fail leaves no vector, entries pending).
-- [x] 2.3 One outcome evaluator: entry and exit from the earliest vector within 6 h at or after the anchor/due time; `no-vector`, `re-registered`, `unverified` reasons; baseline over netuids passing the same test. Live fill writes old and `v2_*` columns. Verify: regression tests for each defect: re-registered exit (SN82-shaped), late exit not stretched, no-vector entry unavailable, legacy-entry vs new-exit rule, baseline excludes a re-registered netuid.
+- [x] 2.3 One outcome evaluator: entry and exit from the earliest vector within 7 h at or after the anchor/due time; `no-vector`, `re-registered`, `unverified` reasons; baseline over netuids passing the same test. Live fill writes old and `v2_*` columns. Verify: regression tests for each defect: re-registered exit (SN82-shaped), late exit not stretched, no-vector entry unavailable, legacy-entry vs new-exit rule, baseline excludes a re-registered netuid.
 - [x] 2.4 Gate-crossing ingest anchors at `COALESCE(eligibility_at, observed_at)`; horizons due from the anchor. Verify: regression test reproducing the Pi shape (eligible 48 h after crossing) shows a 1-day outcome over a real 1-day window, not 0.000%.
 
 ## 3. Effectiveness statistics and gate (fleet-signals, signal-effectiveness-gate)

@@ -77,7 +77,7 @@ and shape the approach.
 
 3. **Choosing a vector.**
    - `vector_at_or_after(t, grace)` returns the earliest vector with
-     `t <= ts <= t + 6 h`. Entry uses the anchor time, exit uses the due
+     `t <= ts <= t + 7 h`. Entry uses the anchor time, exit uses the due
      time.
    - No vector after the window has passed: the row is unavailable
      (`no-vector`).
@@ -145,7 +145,9 @@ and shape the approach.
 - [`NetworkRegisteredAt` is renamed by a runtime] → The probe fails hourly
   and pages. Price vectors stop until it is fixed: measurement stalls, and
   alerts do not.
-- [The 6 h grace and a 6 h timer leave some horizons unavailable] → Measured
+- [A 6 h timer whose gaps run 6 to 7 h] → Grace set to 7 h (operator
+  decision 2026-11-04, option B): on the Pi copy it cut `no-vector` losses
+  from 272 to 46 with the same readings. Measured
   in `rescore` output before deploy. The figure is reported, not hidden. The
   grace is a code constant, so changing it is a code change.
 - [Fewer filled rows after the rescore] → Intended. The report shows
