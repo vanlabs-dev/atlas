@@ -30,9 +30,9 @@
 
 ## 5. subnt publisher (retired, latent)
 
-- [ ] 5.1 `why_phrase` without direction per the spec delta; verify updated `subnt/tests` cases (two gap sizes differ, +50 and -50 equal)
-- [ ] 5.2 Mining lead and notes for model 3; verify a test asserting no "not counted" or "largest earnable pool" and no band or rent text
-- [ ] 5.3 Update `subnt/README.md`; run `python3 tools/readme_sync.py`; verify `tools/tests` pass
+- [x] 5.1 `why_phrase` without direction per the spec delta; verify updated `subnt/tests` cases (two gap sizes differ, +50 and -50 equal)
+- [x] 5.2 Mining lead and notes for model 3; verify a test asserting no "not counted" or "largest earnable pool" and no band or rent text
+- [x] 5.3 Update `subnt/README.md`; run `python3 tools/readme_sync.py`; verify `tools/tests` pass
 
 ## 6. Integration (operator approvals)
 

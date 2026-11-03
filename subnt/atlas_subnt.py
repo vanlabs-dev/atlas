@@ -73,11 +73,15 @@ _VOLATILE = ("composed_at", "block", "previous_composed_at")
 # The reason token alone is not enough to publish. On the real fleet 93 of
 # 106 public rows score `divergence`, so mapping the six tokens to six
 # fixed phrases produces a list of near-identical lines that says nothing.
-# `score_subnet` also returns div_signed, cold, econ_fresh and pulse_spike;
-# the contract bans direction-cue *glyphs*, the numeric score and the board
-# thesis, not direction stated in words. So the phrase is derived.
+# `score_subnet` also returns div_signed, cold, econ_fresh and pulse_spike.
+# The phrase is derived from the gap's size and the quiet state. It never
+# says which of code and price leads, in words or by sign (change:
+# subnt-site-honesty, after the WP8 cue drop).
+# Gap at which the board counts code and price as apart (dashboard).
+APART_PLACES = 40
+
 WHY_PHRASE = {
-    "divergence": "code activity and price are moving apart",
+    "divergence": "code activity and price ranks differ",
     "emission": "miner emission burned through owner UIDs",
     "abandon": "repository has gone quiet",
     "fresh": "something changed this pass",
@@ -93,12 +97,11 @@ def why_phrase(sc: Dict[str, Any]) -> Optional[str]:
     why = sc.get("why")
     if why == "divergence":
         signed = sc.get("div_signed")
-        if signed is None:
-            return WHY_PHRASE["divergence"]
-        if signed < 0:
-            return ("priced ahead of a repository that has gone quiet"
-                    if sc.get("cold") else "priced ahead of its code activity")
-        return "building faster than the price reflects"
+        far = signed is not None and abs(signed) >= APART_PLACES
+        phrase = ("code activity and price ranks far apart" if far
+                  else WHY_PHRASE["divergence"])
+        return ("repository has gone quiet; " + phrase) if sc.get("cold") \
+            else phrase
     if why == "fresh":
         if sc.get("econ_fresh"):
             return "reward or emission code changed this pass"
@@ -108,8 +111,8 @@ def why_phrase(sc: Dict[str, Any]) -> Optional[str]:
             return None
         return WHY_PHRASE["fresh"]
     if why == "abandon":
-        return ("repository has gone quiet while the price holds up"
-                if sc.get("cold") else WHY_PHRASE["abandon"])
+        # The score's elevated-price flag is not in `sc`, so no price claim.
+        return WHY_PHRASE["abandon"]
     return WHY_PHRASE.get(why)
 
 
@@ -717,14 +720,14 @@ def mining_facts(src: Any, cfg: Dict[str, Any], prev: Dict[str, Any]
         head_name = _clean(name)
         figures["mining_head"] = netuid
         figures["mining_head_name"] = head_name
-        facts.append(_fact("head", "Largest earnable pool", "SN%d" % netuid,
+        facts.append(_fact("head", "Ranked first by Atlas", "SN%d" % netuid,
                            value=netuid, headline=True,
                            freshness=head_name or "name not recorded"))
-    # The ranking is earnings for a new independent miner. What it takes to
-    # enter is not in the figure, and the reader must not assume it is.
-    notes.append("Ranked by estimated earnings for a new independent "
-                 "miner. Hardware cost and hardware requirements are not "
-                 "counted.")
+    # Model 3 nets hardware cost at a band Atlas does not publish; the note
+    # says so without naming the band or the rent.
+    notes.append("Ranked by a model estimate for one new independent "
+                 "miner at spot price, after hardware cost at a band "
+                 "Atlas does not publish.")
     if board["unrated"]:
         gaps.append("Unrated, no figure: %s."
                     % _sn_list([n for n, _ in board["unrated"]]))
@@ -747,7 +750,7 @@ def mining_facts(src: Any, cfg: Dict[str, Any], prev: Dict[str, Any]
              for i, (n, nm) in enumerate(ranked[:10])]
     if ranked:
         netuid = ranked[0][0]
-        lead = ("SN%d%s has the largest earnable pool for a new "
+        lead = ("SN%d%s is ranked first by Atlas for one new "
                 "independent miner; %d of %d observed subnets rank."
                 % (netuid, " %s" % head_name if head_name else "",
                    len(ranked), board["observed"]))
@@ -755,7 +758,7 @@ def mining_facts(src: Any, cfg: Dict[str, Any], prev: Dict[str, Any]
         lead = "No observed subnet ranks on the mining board."
     return _section(lead, [_block(
         "board", facts=facts, notes=notes, gaps=gaps,
-        rows={"label": "Top ten by earnable pool", "sortable": False,
+        rows={"label": "Top ten by Atlas rank", "sortable": False,
               "items": items} if items else None)]), figures
 
 
