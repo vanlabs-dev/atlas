@@ -2026,6 +2026,11 @@ CHAIN_READS: Tuple[ChainRead, ...] = tuple(
         ("Weights", ("identity", "identity"), "Vec<(u16, u16)>"),
         ("BlockAtRegistration", ("identity", "identity"), "u64"),
         ("Axons", ("identity", "blake2_128concat"), "AxonInfo"),
+        # Registration block per netuid, the occupant key for signal price
+        # vectors (change: signal-statistics-ties). Identity hasher, u64,
+        # ValueQuery default 0; read from live metadata at spec 486, block
+        # 9423920. Netuid 0 (root) has no entry and reads as block 0.
+        ("NetworkRegisteredAt", ("identity",), "u64"),
     )) + (
         # Balancer is a struct with one Perquintill field, the quote weight.
         ChainRead("Swap", "SwapBalancer", ("twox64concat",), "Balancer"),
@@ -2058,6 +2063,9 @@ EXPECTED_DEFAULTS: Dict[Tuple[str, str], str] = {
     (SUBTENSOR_PALLET, "ValidatorPermit"): "00",  # empty Vec<bool>
     (SUBTENSOR_PALLET, "LastUpdate"): "00",  # empty Vec<u64>
     (SUBTENSOR_PALLET, "Weights"): "00",  # empty Vec<(u16, u16)>
+    # Signal registration key (change: signal-statistics-ties), spec 486,
+    # block 9423920. An unset entry is block 0.
+    (SUBTENSOR_PALLET, "NetworkRegisteredAt"): "00" * 8,
 }
 
 
@@ -2416,7 +2424,7 @@ SUBNET_MAP_CONTROL = "MinerBurned"
 # those would read as 128 subnets not emitting and unpriced.
 SUBNET_MAP_FAIL_EMPTY = frozenset({"SubnetEmissionEnabled",
                                    "SubnetAlphaOutEmission", "SubnetTAO",
-                                   "SubnetAlphaIn"})
+                                   "SubnetAlphaIn", "NetworkRegisteredAt"})
 
 # Maps keyed by NetUidStorageIndex = mecid * 4096 + netuid
 # (`subnets/mechanism.rs:21-40`). Their values are returned keyed by
@@ -2670,6 +2678,41 @@ def read_subnet_maps(config: Dict[str, Any],
                          for item, fails in failures.items() if fails},
             "empty_items": empty_items,
             "failed_items": failed_items}
+
+
+REGISTRATION_ITEM = "NetworkRegisteredAt"
+
+
+def read_registration_blocks(config: Dict[str, Any],
+                             rpc: Optional[Any] = None,
+                             connection: Optional[sqlite3.Connection] = None
+                             ) -> Dict[str, Any]:
+    """`NetworkRegisteredAt` for every netuid at one finalized block (change:
+    signal-statistics-ties). Returns {ok, values: {netuid: block},
+    block_number, block_hash} or {ok: False, error}.
+
+    The block a netuid was last registered at is the occupant key: two price
+    readings belong to one subnet only when they carry the same block. An
+    absent entry is the runtime default, block 0 (the root network). An
+    empty or short batch, or any decode failure, fails the whole read: a
+    partial map would mark live subnets as never registered."""
+    result = read_subnet_maps(config, {REGISTRATION_ITEM: "u64"}, rpc=rpc,
+                              connection=connection)
+    if not result.get("ok"):
+        return {"ok": False, "error": result.get("error") or "read failed"}
+    if REGISTRATION_ITEM in result.get("failed_items", {}):
+        return {"ok": False, "error": "%s %s" % (
+            REGISTRATION_ITEM, result["failed_items"][REGISTRATION_ITEM])}
+    if result.get("failures"):
+        return {"ok": False, "error": "%s decode failed for %d netuid(s)"
+                % (REGISTRATION_ITEM,
+                   len(result["failures"].get(REGISTRATION_ITEM, {})))}
+    values = result["values"].get(REGISTRATION_ITEM) or {}
+    return {"ok": True, "values": {int(n): int(b) for n, b in values.items()},
+            "default_block": int.from_bytes(
+                expected_default(REGISTRATION_ITEM), "little"),
+            "block_number": result.get("block_number"),
+            "block_hash": result.get("block_hash")}
 
 
 def read_point_values(config: Dict[str, Any], item: str, codec: str,

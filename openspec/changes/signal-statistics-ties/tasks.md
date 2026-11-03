@@ -2,8 +2,8 @@
 
 ## 1. Registration read (livedata)
 
-- [ ] 1.1 Confirm `NetworkRegisteredAt` hasher, value type and default against live metadata at the finalized head; record spec and block in the `CHAIN_READS` comment. Verify: `livedata/atlas_probe.py` passes locally against live RPC.
-- [ ] 1.2 Add `NetworkRegisteredAt` to `CHAIN_READS` and `read_registration_blocks(config, rpc)` returning `{netuid: block}`, head block and hash, fail-closed on RPC error. Verify: new tests in `livedata/tests/` (fake RPC: decode, absent key, RPC failure) and `test_chain_reads.py` pass.
+- [x] 1.1 Confirm `NetworkRegisteredAt` hasher, value type and default against live metadata at the finalized head; record spec and block in the `CHAIN_READS` comment. Verify: `livedata/atlas_probe.py` passes locally against live RPC.
+- [x] 1.2 Add `NetworkRegisteredAt` to `CHAIN_READS` and `read_registration_blocks(config, rpc)` returning `{netuid: block}`, head block and hash, fail-closed on RPC error. Verify: new tests in `livedata/tests/` (fake RPC: decode, absent key, RPC failure) and `test_chain_reads.py` pass.
 
 ## 2. Ledger schema and vector choice (fleet-signals)
 
