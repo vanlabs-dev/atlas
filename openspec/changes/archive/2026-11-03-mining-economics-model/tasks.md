@@ -135,6 +135,6 @@
   - run one `python3 fleet/atlas_fleet_mining.py pass`; it migrates, rescans 107 slots, writes a model-3 pass and runs the two parameter watches, as a timer pass would
 
   Verify: `status` shows `model_version` 3, and `mining.html` shows the new labels.
-- [ ] 8.3 Operator `/restart` in Telegram (it reloads the `atlas-fleet` and `atlas-live` MCP servers), then an operator ask in Telegram that makes the running `atlas-fleet` MCP child call `mining_board`. Verify: the MCP audit log shows the call, and the reply carries the compact rows and the at-spot label.
+- [x] 8.3 Operator `/restart` in Telegram (it reloads the `atlas-fleet` and `atlas-live` MCP servers), then an operator ask in Telegram that makes the running `atlas-fleet` MCP child call `mining_board`. Verify: the MCP audit log shows the call, and the reply carries the compact rows and the at-spot label.
 - [x] 8.4 Start `atlas-fleet.timer`. Verify: `list-timers` shows the next run.
-- [ ] 8.5 Update the tracker and session log in the handover: the WP6 notes and the fixture-export hold. Then archive the change.
+- [x] 8.5 Update the tracker and session log in the handover: the WP6 notes and the fixture-export hold. Then archive the change.
