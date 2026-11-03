@@ -138,7 +138,10 @@ or unavailable outcome from the stored vectors under the current entry, exit,
 anchor and registration rules. It SHALL write the results to separate columns
 and SHALL leave the original return, baseline and status values unchanged. The
 command SHALL be idempotent. The effectiveness report SHALL read the rescored
-values where they exist.
+values where they exist. Each measurement pass SHALL also move gate crossings
+onto their eligibility anchor and score settled outcomes that carry no
+current-rules score, once a stored vector carries registration blocks, with
+the same rule and the same columns as `rescore`.
 
 #### Scenario: Rescore keeps the original values
 - **WHEN** `rescore` runs over outcomes filled before this change
@@ -147,6 +150,10 @@ values where they exist.
 #### Scenario: Rescore is idempotent
 - **WHEN** `rescore` runs twice over the same store
 - **THEN** the second run changes no value
+
+#### Scenario: A pass scores old rows without waiting for rescore
+- **WHEN** the first pass after this change stores a vector with registration blocks and settled outcomes have no current-rules score
+- **THEN** that pass re-anchors old gate crossings first and then writes current-rules scores for those rows, leaving their original values unchanged
 
 #### Scenario: Stretched historical window is unavailable
 - **WHEN** a historical gate-crossing 7-day outcome spans about 5 days because its due time was taken from the crossing
