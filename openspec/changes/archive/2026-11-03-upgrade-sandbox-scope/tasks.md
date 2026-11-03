@@ -54,8 +54,8 @@
 
 ## 10. Deploy (each step needs operator approval)
 
-- [ ] 10.1 Push. Stop `atlas-upgrade.timer` and confirm no `atlas-*` service is active. Run `git pull --ff-only` on the Pi. Copy `atlas-upgrade.service` and run `daemon-reload`. The operator runs `/restart` in Telegram. Verify: Pi HEAD equals origin, and `systemctl --user show atlas-upgrade.service -p TimeoutStartUSec` reads 1h.
-- [ ] 10.2 On the Pi, run the canary through the deployed `sandbox_cmd` in both modes, and every suite through the sandbox. Verify: all canary checks pass and every suite passes.
-- [ ] 10.3 Run one edit-session read canary with the deployed command builder (one claude call). Verify: the stream-json shows the `~/.hermes` read denied and the export read allowed.
-- [ ] 10.4 Run one `python3 upgrade/atlas_upgrade.py run --dry-run` on the Pi. Start `atlas-upgrade.timer`. Verify: the dry run report passes, and the next timer run exits idle.
-- [ ] 10.5 Archive the change and update the handover tracker and session log.
+- [x] 10.1 Push. Stop `atlas-upgrade.timer` and confirm no `atlas-*` service is active. Run `git pull --ff-only` on the Pi. Copy `atlas-upgrade.service` and run `daemon-reload`. The operator runs `/restart` in Telegram. Verify: Pi HEAD equals origin, and `systemctl --user show atlas-upgrade.service -p TimeoutStartUSec` reads 1h.
+- [x] 10.2 On the Pi, run the canary through the deployed `sandbox_cmd` in both modes, and every suite through the sandbox. Verify: all canary checks pass and every suite passes.
+- [x] 10.3 Run one edit-session read canary with the deployed command builder (one claude call). Verify: the stream-json shows the `~/.hermes` read denied and the export read allowed.
+- [x] 10.4 Run one `python3 upgrade/atlas_upgrade.py run --dry-run` on the Pi. Start `atlas-upgrade.timer`. Verify: the dry run report passes, and the next timer run exits idle.
+- [x] 10.5 Archive the change and update the handover tracker and session log.
