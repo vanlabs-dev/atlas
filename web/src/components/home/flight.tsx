@@ -419,7 +419,7 @@ export function Flight({
             <span className="t">{new Date(generatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}, data day</span>
             <br />
             <span className="b">
-              est. block<strong>{block}</strong>
+              est. block now<strong>{block}</strong>
             </span>
             <span className="tick" style={{ transform: `scaleX(${(elapsed ?? 0) % 1})` }} />
           </div>
