@@ -17,7 +17,7 @@ export interface MiningRow {
   name: string | null;
   /** Atlas rank on the stored board; null when cut or unrated. */
   rank: number | null;
-  verdict: "possible" | "needs-gpu" | "unknown" | null;
+  verdict: "possible" | "needs-gpu" | "unknown" | "closed" | "stub" | null;
   gpuFloor: string | null;
   vramGb: number | null;
   /** Files in the miner code that mention a GPU, for a `possible` scan. */
