@@ -2126,6 +2126,9 @@ def compact_view(view: Dict[str, Any]) -> Dict[str, Any]:
             "budget_band", "rent_source", "counts", "cut_summary",
             "consensus", "switch_block_ref")
     out = {key: view.get(key) for key in keep}
+    # A successful read says so: the tool audit records `status`, and
+    # without it every board answer was logged as an error.
+    out["status"] = "ok"
     out["model"] = view.get("parity_model") or PARITY_MODEL
     out["units"] = ("TAO figures are per 30-day month at the read block's "
                     "spot price; alpha figures are per day")

@@ -313,6 +313,18 @@ class TestCompactBoard(MiningServerBase):
         self.assertIsNone(out["ranked"][0]["pool_days"])
         self.assertIsNone(out["ranked"][0]["p25_earner_alpha_day"])
 
+    def test_a_successful_board_is_audited_as_ok(self):
+        # Regression: the board payload had no `status`, so the tool audit
+        # logged every successful call as an error.
+        self.seed()
+        records = []
+
+        class Audit:
+            def record(self, tool, params, outcome):
+                records.append((tool, outcome))
+        srv.handle_tool_call(self.store, Audit(), "mining_board", {})
+        self.assertEqual(records, [("mining_board", "ok")])
+
     def test_detail_still_returns_every_stored_column(self):
         self.seed()
         out = self.store.mining_subnet(1)
