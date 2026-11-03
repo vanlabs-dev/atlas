@@ -17,6 +17,7 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.dirname(_HERE))
 
 import atlas_fleet as fleet  # noqa: E402
+import atlas_fleet_index as idx  # noqa: E402
 import atlas_fleet_mining as mine  # noqa: E402
 import mining_fixtures as mf  # noqa: E402
 from mining_fixtures import subnet, synthetic  # noqa: E402
@@ -334,3 +335,89 @@ class TestNetAndPayback(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# 5. Feasibility scanner v4 (D4)
+# ---------------------------------------------------------------------------
+
+
+class TestScannerV4(Base):
+
+    def index_file(self, netuid, path, content, epoch=1):
+        idx.ensure_schema(self.conn)
+        cursor = self.conn.execute(
+            "INSERT INTO fleet_files (netuid, epoch, path, indexed_sha, "
+            "byte_size, indexed_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (netuid, epoch, path, "sha", len(content),
+             "2026-11-03T00:00:00Z"))
+        self.conn.execute(
+            "INSERT INTO fleet_files_fts (rowid, path, content) "
+            "VALUES (?, ?, ?)", (cursor.lastrowid, path, content))
+        self.conn.commit()
+
+    def scan(self, netuid=1, config=None):
+        return mine.scan_slot(self.conn, config or mine.mining_cfg({}),
+                              netuid, 1)
+
+    def gpu(self, result):
+        return [e for e in result["evidence"] if e["kind"] == "gpu"]
+
+    def test_gpu_code_outside_the_entrypoint_is_found(self):
+        # Regression (audit D4, SN9): the entrypoint is clean and the GPU
+        # code sits elsewhere in the miner subtree.
+        self.index_file(1, "neurons/miner.py", "import miner.model\n")
+        self.index_file(1, "miner/model.py",
+                        "import torch\n\nx = torch.cuda.is_available()\n")
+        out = self.scan()
+        self.assertEqual(out["verdict"], mine.VERDICT_NEEDS_GPU)
+        hit = self.gpu(out)[0]
+        self.assertEqual((hit["path"], hit["line"]), ("miner/model.py", 3))
+
+    def test_gpu_code_without_a_recognised_entrypoint_is_needs_gpu(self):
+        self.index_file(1, "src/miner_core/engine.py",
+                        "model.to('cuda:0')\n")
+        out = self.scan()
+        self.assertIsNone(out["entrypoint_path"])
+        self.assertEqual(out["verdict"], mine.VERDICT_NEEDS_GPU)
+
+    def test_a_bare_gpu_mention_is_recorded_and_changes_nothing(self):
+        self.index_file(1, "neurons/miner.py", "print('hello')\n")
+        self.index_file(1, "miner/README.md",
+                        "No GPU needed: this miner runs on any box.\n")
+        out = self.scan()
+        self.assertEqual(out["verdict"], mine.VERDICT_POSSIBLE)
+        self.assertEqual(out["reason"], "no GPU evidence found")
+        mentions = [e for e in out["evidence"]
+                    if e["kind"] == "gpu-mention"]
+        self.assertEqual(mentions[0]["path"], "miner/README.md")
+        self.assertEqual(self.gpu(out), [])
+
+    def test_a_strong_token_in_prose_does_not_count(self):
+        self.index_file(1, "neurons/miner.py", "print('hello')\n")
+        self.index_file(1, "miner/NOTES.md", "we tried vllm once\n")
+        self.assertEqual(self.scan()["verdict"], mine.VERDICT_POSSIBLE)
+
+    def test_a_gpu_dependency_counts(self):
+        self.index_file(1, "neurons/miner.py", "print('hello')\n")
+        self.index_file(1, "miner/requirements.txt", "vllm==0.6.0\n")
+        self.assertEqual(self.scan()["verdict"], mine.VERDICT_NEEDS_GPU)
+
+    def test_validator_and_test_paths_are_ignored(self):
+        self.index_file(1, "neurons/miner.py", "print('hello')\n")
+        self.index_file(1, "validator/miner_scoring.py",
+                        "x = torch.cuda.device_count()\n")
+        self.index_file(1, "miner/tests/test_gpu.py", "torch.cuda.init()\n")
+        self.assertEqual(self.scan()["verdict"], mine.VERDICT_POSSIBLE)
+
+    def test_the_subtree_read_is_bounded(self):
+        self.index_file(1, "neurons/miner.py", "print('hello')\n")
+        self.index_file(1, "miner/a.py", "print(1)\n")
+        self.index_file(1, "miner/z.py", "torch.cuda.init()\n")
+        bounded = mine.mining_cfg({"mining": {"max_subtree_files": 1}})
+        self.assertEqual(self.scan(config=bounded)["verdict"],
+                         mine.VERDICT_POSSIBLE)
+        self.assertEqual(self.scan()["verdict"], mine.VERDICT_NEEDS_GPU)
+
+    def test_the_scanner_version_is_4(self):
+        self.assertEqual(mine.SCAN_VERSION, "4")
