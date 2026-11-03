@@ -58,3 +58,28 @@
 - **Promotion.** No class beats the baseline under the interval rule.
   Econ-code meets the event floor (206 moments), and its 7-day interval
   spans zero.
+
+## End-to-end pass (task 7.2), 2026-11-03 07:50 UTC
+
+- **What ran:** one `run_measurement` on the workstation with the real
+  `default_price_fetcher`: TaoSwap through the live-data layer, plus
+  `read_registration_blocks` over finney RPC.
+- **Store:** a scratch copy of the Pi signal tables. The livedata path was
+  pointed at the Pi snapshot copy.
+- **Newest vector:** 129 rows, all carrying `reg_block`, at block 9424046.
+  - Netuid 0 reads 0.
+  - SN16 9392863, SN36 9420559, SN82 9155260, SN92 9247819, SN116 9210632.
+- **Pass summary:**
+  - 24 gate-crossing entries re-anchored
+  - 1,559 settled rows scored
+  - 5 outcomes filled
+- **Gate-crossing, current rules:**
+
+  | h | filled | events | median excess | 95% interval |
+  |---|---|---|---|---|
+  | 1 | 20 | 18 | -1.566 | -4.377 .. -0.210 |
+  | 7 | 17 | 15 | -4.267 | -13.690 .. 0.000 |
+  | 30 | 7 | 6 | -28.834 | none (<10) |
+
+- **Fix found here:** the per-pass catch-up scored old gate rows before they
+  were re-anchored. Every pass now re-anchors first, with a regression test.

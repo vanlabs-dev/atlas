@@ -1906,8 +1906,13 @@ def run_measurement(connection: sqlite3.Connection, config: Dict[str, Any],
     now = now or _utc_now()
     _ensure_measurement_rows(connection, cfg)
     ingested = ingest_livedata_events(connection, cfg)
+    # Gate crossings entered before eligibility anchors existed move onto
+    # them before anything is scored (idempotent; livedata read-only).
+    reanchored = _reanchor_gate_crossings(connection, cfg)
     summary = {"fetched": False, "entries_filled": 0, "outcomes_filled": 0,
                "unavailable": 0}
+    if reanchored:
+        summary["reanchored"] = reanchored
     if ingested:
         summary["ingested"] = ingested
     if not _measurement_needed(connection, now):
