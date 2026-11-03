@@ -1237,3 +1237,43 @@ noted):
 
 No tier changed. `gate-crossing` stays instant by the earlier operator
 decision, although its 1-day interval lies wholly below zero.
+
+## subnt.dev honesty and freshness (2026-11-04, change: subnt-site-honesty)
+
+Audit items E1 to E10. Operator decisions, 2026-11-04:
+
+- **Aging.** The fixture export reads the latest stored pass of each
+  input and rounds to four significant digits. The seven-day age cut is
+  gone: it paired a pre-WP4 mining pass with no current scan, and it made
+  every board stale on publish.
+- **Mining order, not figures.** The mining page lists subnets in Atlas
+  rank order, cut subnets last with a public reason. It shows no income or
+  price figure. On the rehearsal export, the rank order, the gross figures
+  and the `possible` verdicts bounded the hidden consumer-band rent to
+  1.435 to 1.520 TAO a month (real value 1.5). Atlas ranks by net income
+  and a `possible` row pays no rent, so any inversion between rank and
+  gross bounds the rent. The allowlist now bans income, price, rent,
+  payback and band fields. Residual: a reader who recomputes the model
+  from public chain data can still bound the rent from the published
+  order. Recorded, not fixed.
+- **Wording.** "No GPU code found" (mining-triage wording) plus the
+  GPU-mention file count, never "Runs on a CPU" and never a VRAM figure on
+  such a row. A hardware cut reads "Needs a larger GPU" and names no band.
+  "Top earner" excludes the owner and says so.
+- **No direction cue anywhere public.** The site shows "N places apart"
+  with no sign and no "ahead" text. The retired subnt publisher's
+  `why_phrase` no longer states direction (subnt-publish spec changed).
+  This follows the WP8 decision to drop the accumulate/fade cue.
+- **Labels.** "Code and price apart" only at a gap of 40 or more, the
+  board's own count. "Cold" is "no commits for 30 days or more in the
+  tracked repository" until `fleet-multi-repo-activity` is on.
+- **Data age.** The stale label is in the server HTML when the data is
+  already stale at build. No page calls the data day "today".
+- **Activity bins.** Daily bins use the activity metric's commit reader,
+  bot patterns and window rule, so they equal c7 and c30 exactly. The
+  fleet board is stamped with its activity pass, not compose time.
+
+Deployed 2026-11-04: pushed `3d7ce47..ba44afb`; Vercel built from main;
+live pages checked (no dropped field in any served page, no "today", no
+"Runs on a CPU", data from 3 Nov 2026). Open: `upgrades.generatedAt` is
+the export time, while the table comes from an hourly poll.
