@@ -1180,3 +1180,60 @@ Findings:
 
 First model-3 pass on the Pi, block 9423447: 128 observed, 70 ranked, 58
 cut (prune-risk SN53 and SN118), 21 `needs-gpu` (6 before).
+
+## Signal statistics and tied ranks (2026-11-04, change: signal-statistics-ties)
+
+Audit WP8 (C13, D7, D8). Operator decisions 2026-11-03 and 2026-11-04:
+
+- The board's direction cue is dropped, not shadow-measured: the ▲/▼
+  promising/dangerous cue, its filters and labels, and the
+  accumulate/ride/ignore/fade quadrant. Divergence stays as a scored fact,
+  "N points apart".
+- Activity skips commits by bot and CI author addresses
+  (`metrics.bot_author_patterns`).
+- Gate crossings are measured from `eligibility_at`, the time they can
+  page, not from the crossing.
+- "Beats the baseline" means the 95% interval of the median paired excess
+  return has a lower bound above zero. The promotion floor counts distinct
+  event moments (entry price vectors), not rows. The config key
+  `min_filled_for_promotion` (30) keeps its name.
+- Past outcomes are rescored into new `v2_*` columns; the original
+  columns keep their values. Backup `var/fleet/fleet.db.bak-20261104-wp8`
+  on the Pi.
+- The vector grace is 7 h, not 6 h: 189 of 397 gaps between 6 h fleet
+  passes ran 6 to 7 h. On a copy of the Pi data, 6 h lost 272 rows as
+  `no-vector` and 7 h lost 46, with the same readings.
+
+Findings:
+
+- **Re-registered netuids.** 12 netuids were re-registered between
+  2026-07-19 and 2026-11-03. Each price vector now carries
+  `NetworkRegisteredAt` per netuid (a new `CHAIN_READS` item, so the probe
+  covers it), and a window across a registration change is unavailable.
+- **Re-registered windows in the ledger.** They were 12 filled outcomes,
+  among them SN82 +2533%, SN92 +1302% and SN116 +492%.
+- **Re-registered windows in momentum.** SN16 and SN36 showed about +403%
+  7-day momentum on the board. Both read n/a now.
+- **The old headline was a mean.** The audit's "+50.6% vs -9.3%" for
+  root-rotation was a mean; the old report printed medians (-9.324%
+  against -9.324%).
+- **No archive state.** The public RPC keeps no historical state, so a
+  netuid's earlier registration blocks cannot be read. A window wholly
+  before a later registration is `unverified` and counted apart.
+- **Ties.** 24 of 113 subnets tied at zero activity used to spread over
+  ranks 0.004 to 0.208 in netuid order. They now share one rank (0.115 on
+  the Pi).
+
+Effectiveness read after deploy, Pi 2026-11-04 (7-day horizon unless
+noted):
+
+| class | tier | filled | events | median excess | 95% interval | floor | beats |
+|---|---|---|---|---|---|---|---|
+| econ-code | shadow | 384 | 235 | +0.005 | -0.707 .. +0.602 | met | no |
+| gate-crossing | instant | 17 | 15 | -4.113 | -13.677 .. +0.010 | not met | no |
+| gate-crossing, 1 d | instant | 21 | 19 | -1.515 | -3.959 .. -0.116 | | |
+| narrative-cluster | shadow | 36 | 9 | -0.343 | none (<10 events) | not met | no |
+| watchlist | instant | 3 | 3 | +0.748 | none (<10 events) | not met | no |
+
+No tier changed. `gate-crossing` stays instant by the earlier operator
+decision, although its 1-day interval lies wholly below zero.
