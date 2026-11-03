@@ -28,8 +28,8 @@ E10 (2026-11-02).
   removed from the type leaves the served payload even before fixtures
   are regenerated.
 - Mining page: sort by stored Atlas rank, then cut subnets with a public
-  reason, then the rest. The gross column is labelled as a model estimate
-  at spot with its block. `possible` renders "No GPU code found", plus the
+  reason, then the rest. The rank is labelled as the order of a model
+  estimate at spot with its block. `possible` renders "No GPU code found", plus the
   GPU-mention file count. No "0 GB VRAM" beside it. No income or price
   figure: the rank order with one would bound the rent (operator decision,
   2026-11-04). "Top earner" says it
