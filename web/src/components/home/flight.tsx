@@ -416,7 +416,7 @@ export function Flight({
         <div className="figure">
           <div className="labels" aria-hidden="true" />
           <div className="today" aria-hidden="true">
-            <span className="t">today</span>
+            <span className="t">{new Date(generatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}, data day</span>
             <br />
             <span className="b">
               est. block<strong>{block}</strong>

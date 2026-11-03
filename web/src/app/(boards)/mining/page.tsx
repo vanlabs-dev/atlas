@@ -16,7 +16,7 @@ export default async function MiningPage() {
 
   const notes = [
     ["Rank", "Atlas's order for one new independent miner, after hardware cost at a band it does not publish. Cut subnets follow, with the reason."],
-    ["Model estimate", `Not a quote: what one new miner would earn a month if paid like the lower quarter of today's independent miners, or an equal share if that is lower. Valued at ${at}, after the slippage of selling the subnet's daily emission. Before hardware cost. A dash means Atlas has no honest figure.`],
+    ["Model estimate", `Not a quote: what one new miner would earn a month if paid like the lower quarter of the independent miners in that pass, or an equal share if that is lower. Valued at ${at}, after the slippage of selling the subnet's daily emission. Before hardware cost. A dash means Atlas has no honest figure.`],
     ["Code", "From a scan of the miner code. Atlas never runs it. \"No GPU code found\" means the scan found none, not that a CPU is enough."],
     ["Burn", `Share of miner emission the subnet burns. ${fullBurn} subnets burn all of it.`],
     ["Top earner", "Share taken by the single largest miner, not counting the subnet owner."],

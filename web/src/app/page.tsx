@@ -9,7 +9,9 @@ import { Flight, type FlightRow } from "@/components/home/flight";
 import { LeadPanel, type LeadRow } from "@/components/home/lead-panel";
 import { BandBlock } from "@/components/home/band-block";
 import { CountUp, Reveal } from "@/components/home/reveal";
+import { DataAge } from "@/components/data-age";
 import { day, num, signed } from "@/lib/format";
+import { COLD, lastCommitText } from "@/lib/fleet";
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const tone = (v: number | null) => (v === null || v === 0 ? "" : v < 0 ? "dn" : "up");
@@ -64,17 +66,17 @@ export default async function Home() {
 
   const specs = upgrades.data.events.slice(-8);
   const gaps = specs.map((e, i) => (i ? Math.round((Date.parse(e.observedAt.slice(0, 10)) - Date.parse(specs[i - 1].observedAt.slice(0, 10))) / 864e5) : 0));
-  const meanGap = sum(gaps.slice(1)) / (gaps.length - 1);
+  const meanGap = gaps.length > 1 ? sum(gaps.slice(1)) / (gaps.length - 1) : null;
   const maxGap = Math.max(...gaps.slice(1), 1);
 
   const lastVitals = network.data.vitals[network.data.vitals.length - 1];
   const lastSpec = upgrades.data.events[upgrades.data.events.length - 1];
-  const cpu = mining.data.filter((r) => r.verdict === "possible").length;
+  const ranked = mining.data.filter((r) => r.rank !== null).length;
   const facts: Record<string, string> = {
-    "/mining": `${cpu} of ${mining.data.length} subnets have miner code that runs on a CPU.`,
+    "/mining": `Atlas ranks ${ranked} of ${mining.data.length} subnets for one new miner, after hardware cost.`,
     "/fleet": `${rows.length} repositories scored by how their code moved, set against price.`,
     "/network": `Subnets hold ${num(lastVitals?.subnetsSharePct ?? null, 2)}% of staked TAO, read daily for ${network.data.vitals.length} days.`,
-    "/upgrades": `${upgrades.data.events.length} runtime specs seen. The latest is ${lastSpec?.newSpec}, on ${lastSpec ? day(lastSpec.observedAt) : "-"}.`,
+    "/upgrades": lastSpec ? `${upgrades.data.events.length} runtime specs seen. The latest is ${lastSpec.newSpec}, on ${day(lastSpec.observedAt)}.` : "No runtime spec recorded yet.",
   };
 
   const reads: [string, [string, string][]][] = [
@@ -102,7 +104,7 @@ export default async function Home() {
     <main className="home -mt-[92px] md:-mt-[76px]">
       <Flight
         rows={flightRows}
-        leadN={lead.netuid}
+        leadN={lead?.netuid ?? -1}
         generatedAt={at}
         anchor={anchor}
         stops={
@@ -116,14 +118,20 @@ export default async function Home() {
             <li className="stop">
               <h2>90 days of commits</h2>
               <p>
-                Each mark is one subnet on one day, as tall as its commits, from 90 days ago to today. Red marks the subnets the fleet board ranks
-                highest.
+                Each mark is one subnet on one day, as tall as its commits, over the 90 days to {day(at)}. Red marks the subnets the fleet board
+                ranks highest.
               </p>
             </li>
             <li className="stop">
               <h2>Where the code is moving</h2>
               <p>
-                The front rows are the busiest. <strong>{busiest.name}</strong> wrote {num(busiest.c30)} commits in 30 days, more than any other subnet.
+                {busiest ? (
+                  <>
+                    The front rows are the busiest. <strong>{busiest.name}</strong> wrote {num(busiest.c30)} commits in 30 days, more than any other subnet.
+                  </>
+                ) : (
+                  "No subnet code was read in this window."
+                )}
               </p>
             </li>
           </ol>
@@ -136,6 +144,7 @@ export default async function Home() {
           Code, chain and market, all from one Raspberry Pi. In the last 30 days it read <strong>{num(total)} commits</strong> across{" "}
           <strong>{read.length} repositories</strong>.
         </p>
+        <DataAge at={at} />
         <div className="acts">
           <Link className="btn" href="/fleet">
             Open the fleet board
@@ -172,7 +181,7 @@ export default async function Home() {
                 <span>{num(total - topSum)}</span>
               </div>
             </Reveal>
-            <div className="lab2 mt-2.5">Where the commits went: the top 7 wrote {Math.round((100 * topSum) / total)}%</div>
+            <div className="lab2 mt-2.5">Where the commits went: the top 7 wrote {total ? Math.round((100 * topSum) / total) : 0}%</div>
             <ul className="seglegend">
               {top5.map((s) => (
                 <li key={s.n}>
@@ -193,11 +202,11 @@ export default async function Home() {
             </div>
             <div>
               <dd><b><CountUp value={counts.cold} ms={1000} /></b></dd>
-              <dt className="lab2">Gone cold</dt>
+              <dt className="lab2">No commits in 30+ days, tracked repo</dt>
             </div>
             <div>
               <dd><b><CountUp value={counts.invisible} ms={1000} /></b></dd>
-              <dt className="lab2">No public repository</dt>
+              <dt className="lab2">No public repository, root included</dt>
             </div>
             <div>
               <dd><b><BandBlock anchor={anchor} /></b></dd>
@@ -210,21 +219,21 @@ export default async function Home() {
       <div className="wrap">
         <section className="sec" aria-labelledby="lead-title">
           <h2 className="headline2" id="lead-title">
-            {counts.diverging} subnets show code and price apart. {lead.name} leads.
+            {counts.diverging} subnets show code and price apart.{lead ? ` ${lead.name ?? `SN${lead.netuid}`} leads.` : ""}
           </h2>
           <p className="sub3">
             Atlas ranks every subnet twice: by how much its code moved in 30 days, and by how its price moved in 7. Apart means the two ranks differ
             by 40 places in 100 or more. Scored {day(at)} from {rows.length} repositories.
           </p>
           <div className="lead-grid">
-            <LeadPanel heads={rows.slice(0, 3).map(lr)} generatedAt={at} />
+            {rows.length ? <LeadPanel heads={rows.slice(0, 3).map(lr)} generatedAt={at} /> : <p className="cap">No subnet is on the fleet board in this pass.</p>}
             <aside className="watch" aria-labelledby="watch-title">
               <h2 id="watch-title">Next on the board</h2>
               <p className="cap">Squares: code this week, code this month, three or more authors, price up over 30 days, emission route visible.</p>
               <Reveal as="ul" className="wrows">
                 {watch.map((s) => {
                   const checks = [(s.commits7 ?? 0) > 0, (s.commits30 ?? 0) > 0, (s.authors30 ?? 0) >= 3, (s.momentum30d ?? 0) > 0, !s.emissionOpaque];
-                  const last = s.daysSinceCommit === null ? "no commits read" : s.daysSinceCommit === 0 ? "committed today" : `last commit ${s.daysSinceCommit} days ago`;
+                  const last = lastCommitText(s.daysSinceCommit);
                   return (
                     <li key={s.netuid} className="wrow">
                       <Link href={`/fleet#sn${s.netuid}`} data-ui="">
@@ -271,10 +280,12 @@ export default async function Home() {
       </section>
 
       <div className="wrap">
-        <section className="sec cols" aria-label="Cold code, busy code, runtime upgrades">
+        <section className="sec cols" aria-label="Quiet code, busy code, runtime upgrades">
           <div className="col">
-            <h2>Gone cold</h2>
-            <p className="cap">{counts.cold} subnets on the board stopped committing while their token kept trading. Days since the last commit.</p>
+            <h2>No recent commits</h2>
+            <p className="cap">
+              {counts.cold} subnets on the board: {COLD.toLowerCase()}. Days from the last commit to the data day.
+            </p>
             <ul className="prows" data-ui="">
               {cold.map((s) => (
                 <li key={s.netuid} className="prow">
@@ -297,8 +308,8 @@ export default async function Home() {
             </ul>
           </div>
           <div className="col">
-            <h2>Busiest this week</h2>
-            <p className="cap">Commits in the last 7 days. The line is 30 days of commits; the bright end is this week.</p>
+            <h2>Busiest in 7 days</h2>
+            <p className="cap">Commits in the 7 days to {day(at)}. The line is 30 days of commits; the bright end is the last 7.</p>
             <Reveal as="ul" className="prows" threshold={0.2}>
               {busy.map((s) => {
                 const a30 = byRow.get(s.n)?.authors30 ?? null;
@@ -307,7 +318,7 @@ export default async function Home() {
                     <div>
                       <div className="n">{s.name}</div>
                       <div className="w">
-                        {num(c7(s.daily!))} commits · {a30 ?? "no"} {a30 === 1 ? "author" : "authors"} this month
+                        {num(c7(s.daily!))} commits · {a30 ?? "no"} {a30 === 1 ? "author" : "authors"} in 30 days
                       </div>
                     </div>
                     {spark(s.daily!)}

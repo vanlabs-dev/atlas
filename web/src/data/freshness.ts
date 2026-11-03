@@ -20,3 +20,13 @@ function ageLabel(hours: number): string {
   if (hours < 48) return `${Math.floor(hours)} h ago`;
   return `${Math.floor(hours / 24)} days ago`;
 }
+
+/**
+ * Stale label for the server HTML. Age only grows, so data that is stale
+ * when the page is built is stale for every later visitor too. Without a
+ * build time the server shows no label and the browser decides.
+ */
+export function staleAtBuild(generatedAt: string, builtAt: string | undefined): boolean {
+  if (!builtAt || Number.isNaN(Date.parse(builtAt))) return false;
+  return freshness(generatedAt, new Date(builtAt)).stale;
+}

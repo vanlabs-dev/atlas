@@ -6,7 +6,7 @@ import { row, table, td, th } from "@/components/board-shell";
 import { Lane } from "@/components/lane";
 import type { FleetRow, FleetTier, SubnetActivity } from "@/data/types";
 import { num, polarity, signed } from "@/lib/format";
-import { WHY } from "@/lib/words";
+import { gapPlaces, whyText } from "@/lib/fleet";
 
 type Filter = FleetTier | "all";
 
@@ -50,10 +50,10 @@ export function FleetTable({ rows, activity }: { rows: FleetRow[]; activity: Sub
               <th scope="col" className={th}>Subnet</th>
               <th scope="col" className={`${th} text-right`}>Score</th>
               <th scope="col" className={th}>Why it ranks</th>
-              <th scope="col" className={`${th} text-right`}>Code against price</th>
+              <th scope="col" className={`${th} text-right`}>Code vs price, places apart</th>
               <th scope="col" className={`${th} text-right`}>Commits, 30 d</th>
-              <th scope="col" className={`${th} text-right`}>Price, 7 d</th>
-              <th scope="col" className={`${th} text-right`}>Price, 30 d</th>
+              <th scope="col" className={`${th} text-right`}>Alpha price in TAO, 7 d</th>
+              <th scope="col" className={`${th} text-right`}>Alpha price in TAO, 30 d</th>
               <th scope="col" className={`${th} text-right`}>Last 30 days</th>
             </tr>
           </thead>
@@ -65,10 +65,10 @@ export function FleetTable({ rows, activity }: { rows: FleetRow[]; activity: Sub
                   {r.name ?? "unnamed"}
                 </td>
                 <td className={`${td} num text-right`}>{r.score}</td>
-                <td className={`${td} text-ink-2`}>{r.why ? (WHY[r.why] ?? r.why) : "-"}</td>
-                <td className={`${td} num text-right`}>{signed(r.divergence)}</td>
+                <td className={`${td} text-ink-2`}>{whyText(r.why, r.divergence)}</td>
+                <td className={`${td} num text-right`}>{num(gapPlaces(r.divergence))}</td>
                 <td className={`${td} num text-right`}>{num(r.commits30)}</td>
-                {/* The gap ranks 30-day commits against this 7-day price move. */}
+                {/* The gap ranks 30-day commits against this 7-day price move, unsigned. */}
                 <td className={`${td} num text-right ${polarity(r.momentum7d)}`}>
                   {signed(r.momentum7d, 1, "%")}
                 </td>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { signed } from "@/lib/format";
-import { WHY } from "@/lib/words";
+import { gapPlaces, whyText } from "@/lib/fleet";
 
 export interface LeadRow {
   n: number;
@@ -16,7 +16,7 @@ export interface LeadRow {
   dsc: number | null;
   m7: number | null;
   m30: number | null;
-  /** Code-activity rank minus 7-day price rank, in places out of 100. */
+  /** Code-activity rank minus 7-day price rank, in places out of 100. Shown unsigned. */
   gap: number | null;
 }
 
@@ -107,13 +107,14 @@ export function LeadPanel({ heads, generatedAt }: { heads: LeadRow[]; generatedA
     bars.current?.querySelectorAll(".hl").forEach((x) => x.classList.remove("hl"));
   }
 
-  const last = s.dsc === null ? "-" : s.dsc === 0 ? "today" : `${s.dsc} d`;
+  const last = s.dsc === null ? "-" : `${s.dsc} d`;
+  const gap = gapPlaces(s.gap);
   const tiles: [string, string, string, string][] = [
-    [String(s.c7 ?? "-"), "Commits, 7 days", "this week", ""],
+    [String(s.c7 ?? "-"), "Commits, 7 days", "to the data day", ""],
     [String(s.c30 ?? "-"), "Commits, 30 days", `of ${sum(d).toLocaleString("en-GB")} in 90 days`, ""],
     [String(s.a30 ?? "-"), "Authors, 30 days", "people pushing code", ""],
-    [last, "Last commit", s.dsc === 0 ? "code moved today" : "ago", ""],
-    [signed(s.gap, 0), "Code against price", s.gap === null ? "no price to rank" : s.gap >= 0 ? "code ranks ahead of price" : "price ranks ahead of code", ""],
+    [last, "Last commit", s.dsc === null ? "no commits read" : "before this data", ""],
+    [gap === null ? "-" : String(gap), "Code vs price", gap === null ? "no price to rank" : "places apart, of 100", ""],
   ];
 
   return (
@@ -158,7 +159,7 @@ export function LeadPanel({ heads, generatedAt }: { heads: LeadRow[]; generatedA
               <span>SN {s.n}</span>
             </h3>
             <p>
-              {s.why ? (WHY[s.why] ?? s.why) : "On the board"}. Score {s.score} of 100.
+              {whyText(s.why, s.gap)}. Score {s.score} of 100.
             </p>
           </div>
           <div className="k">
@@ -166,7 +167,7 @@ export function LeadPanel({ heads, generatedAt }: { heads: LeadRow[]; generatedA
               {arrow(s.m7)}
               {signed(s.m7, 1, "%")}
             </b>
-            <span>price, 7 days ({signed(s.m30, 1, "%")} over 30)</span>
+            <span>alpha price in TAO, 7 days ({signed(s.m30, 1, "%")} over 30)</span>
           </div>
         </div>
         <div className="chart">
@@ -196,7 +197,7 @@ export function LeadPanel({ heads, generatedAt }: { heads: LeadRow[]; generatedA
             <span>{short(dateOf(0))}</span>
             <span>{short(dateOf(30))}</span>
             <span>{short(dateOf(60))}</span>
-            <span>{short(dateOf(89))} today</span>
+            <span>{short(dateOf(89))}, data day</span>
           </div>
           <div className="legend">
             <span><i style={{ background: "var(--accent)" }} />Commits per day, last 30 days</span>

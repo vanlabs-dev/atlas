@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Figures, Panel, row, table, td, th } from "@/components/board-shell";
 import { BoardHeader } from "@/components/board-header";
 import { getUpgrades } from "@/data/upgrades";
-import { day, num } from "@/lib/format";
+import { day, mean as avg, num } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Runtime upgrades" };
 
@@ -11,15 +11,18 @@ const DAY_MS = 86_400_000;
 export default async function UpgradesPage() {
   const { generatedAt, data } = await getUpgrades();
   const events = data.events;
+  if (!events.length) {
+    return <BoardHeader title="Runtime upgrades" finding="No runtime upgrade is recorded in this window." at={generatedAt} />;
+  }
   const first = events[0];
   const last = events[events.length - 1];
   const t0 = Date.parse(first.observedAt);
   const t1 = Date.parse(last.observedAt);
   const spanDays = (t1 - t0) / DAY_MS;
   const gaps = events.slice(1).map((e, i) => (Date.parse(e.observedAt) - Date.parse(events[i].observedAt)) / DAY_MS);
-  const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-  const longest = Math.max(...gaps);
-  const finding = `${events.length} runtime upgrades in ${Math.round(spanDays)} days, one every ${num(mean, 1)} days on average. The latest is spec ${last.newSpec}, on ${day(last.observedAt)}.`;
+  const mean = avg(gaps);
+  const longest = gaps.length ? Math.max(...gaps) : null;
+  const finding = `${events.length} runtime upgrades in ${Math.round(spanDays)} days${mean === null ? "" : `, one every ${num(mean, 1)} days on average`}. The latest is spec ${last.newSpec}, on ${day(last.observedAt)}.`;
 
   const rows = events
     .map((e, i) => ({ ...e, gap: i === 0 ? null : gaps[i - 1] }))
@@ -37,7 +40,7 @@ export default async function UpgradesPage() {
         >
           <line x1={0} x2={1000} y1={32} y2={32} className="stroke-rule" />
           {events.map((e) => {
-            const x = ((Date.parse(e.observedAt) - t0) / (t1 - t0)) * 992 + 4;
+            const x = t1 > t0 ? ((Date.parse(e.observedAt) - t0) / (t1 - t0)) * 992 + 4 : 500;
             return <rect key={e.newSpec} x={x - 1.5} y={16} width={3} height={32} className="fill-accent" />;
           })}
         </svg>
