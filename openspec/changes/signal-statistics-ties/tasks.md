@@ -20,7 +20,7 @@
 ## 4. Rescore
 
 - [x] 4.1 `rescore` subcommand: recompute every non-pending outcome into `v2_*` with the current registration map and gate anchors (livedata opened read-only); idempotent; original columns untouched. Verify: tests for idempotence, untouched originals, stretched gate-crossing 7-day row recomputed or `no-vector`.
-- [ ] 4.2 Dry run on a copy of the Pi `fleet.db` (read-only snapshot into the session scratchpad) and record before/after effectiveness figures per class in this change's notes. Verify: figures written; no Pi write.
+- [x] 4.2 Dry run on a copy of the Pi `fleet.db` (read-only snapshot into the session scratchpad) and record before/after effectiveness figures per class in this change's notes. Verify: figures written; no Pi write.
 
 ## 5. Metrics: ties, momentum, bot filter (fleet-rotation-metrics)
 
