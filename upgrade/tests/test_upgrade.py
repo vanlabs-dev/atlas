@@ -1018,8 +1018,11 @@ class HelpersTest(unittest.TestCase):
 
     def test_tool_rules_mirror_lists(self):
         self.assertIn("Edit(docs/decisions.md)", ap.tool_rules())
-        self.assertIn("Write(livedata/**)", ap.tool_denials())
+        self.assertIn("Edit(livedata/**)", ap.tool_denials())
         self.assertFalse(any("livedata" in rule for rule in ap.tool_rules()))
+        # Claude Code ignores Write(path) rules; Edit(path) covers Write.
+        self.assertFalse([r for r in ap.tool_rules() + ap.tool_denials()
+                          if not r.startswith("Edit(")])
 
     def test_status_paths_rename(self):
         out = " M a.md\0R  new.py\0old.py\0?? dir/u.txt\0"

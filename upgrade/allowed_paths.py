@@ -89,11 +89,11 @@ def scope_violations(entries: Iterable[Tuple[str, str]]) -> List[str]:
 
 
 def tool_rules() -> List[str]:
-    """Edit and Write permission rules for `claude --allowedTools`."""
-    return ["%s(%s)" % (tool, p) for p in ALLOWED for tool in ("Edit",
-                                                               "Write")]
+    """Edit permission rules for `claude --allowedTools`. Claude Code
+    applies `Edit(path)` rules to every file-editing tool (Edit, Write) and
+    ignores path rules written for Write."""
+    return ["Edit(%s)" % p for p in ALLOWED]
 
 
 def tool_denials() -> List[str]:
-    return ["%s(%s)" % (tool, p) for p in DENIED for tool in ("Edit",
-                                                              "Write")]
+    return ["Edit(%s)" % p for p in DENIED]
