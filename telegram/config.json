@@ -258,7 +258,7 @@
   },
   "rewrite": {
     "_comment": "Plain-English rewrite pass (changes: plain-english-alerts, rewrite-judge-lockdown). A `claude -p` call rewords the headline and meaning of each paged alert; facts, body lines and the Next line stay code-owned. Code refuses a reply whose numbers, signs, units, from/to order, direction or negation differ from the input, or that adds an assurance, advice or a gloss, and falls back to the template. The call runs with no tools and no MCP servers and code checks each call's own init event (fallback `tools-exposed` otherwise); it does not use Hermes, whose gateway merges MCP servers into any toolset pick. Auth is the `claude` CLI login; the CLI's default model is used. `enabled` false is the whole rollback; an empty `claude_path` keeps the pass off. scan_budget_seconds bounds the total model time in one scan.",
-    "enabled": false,
+    "enabled": true,
     "claude_path": "/home/pi/.local/bin/claude",
     "timeout_seconds": 25,
     "scan_budget_seconds": 180
