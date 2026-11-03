@@ -284,8 +284,9 @@ An absent signal SHALL produce `unknown`. A verdict of `closed` or `stub`
 SHALL require positive evidence cited by path and line, and SHALL NOT be
 inferred from the absence of an entrypoint or from a file count. An
 `unknown` verdict SHALL NOT be rendered or reported as feasible, and SHALL
-NOT cut. A `possible` verdict SHALL be rendered as "no GPU evidence found",
-never as a statement that the miner runs on a CPU.
+NOT cut. A `possible` verdict SHALL be rendered as "no GPU code found",
+with the number of files that mention a GPU where any do, and never as a
+statement that the miner runs on a CPU.
 
 A scan SHALL be keyed by netuid, identity epoch, and the commit that was
 actually indexed. It SHALL be recomputed when that commit moves or when the
@@ -331,8 +332,9 @@ reported as stale or unscanned.
 
 - **WHEN** the only GPU evidence in a miner subtree is the word "GPU" in a
   comment or README
-- **THEN** it is recorded as mention evidence and the verdict stays as the
-  other evidence makes it
+- **THEN** it is recorded as mention evidence, the verdict stays as the
+  other evidence makes it, and a `possible` verdict is shown as "no GPU
+  code found; GPU mentioned in 1 file(s)"
 
 #### Scenario: Missing evidence yields unknown, not feasible
 
@@ -365,7 +367,7 @@ reported as stale or unscanned.
 
 Each surviving subnet SHALL be assigned the hardware band its evidence
 requires:
-- no GPU evidence: the CPU band
+- no GPU code found: the CPU band, marked as assumed
 - a declared VRAM floor: the smallest band that covers it
 - GPU evidence without a declared floor: the smallest GPU band, marked as
   assumed
@@ -395,6 +397,12 @@ subnet SHALL be ranked.
   consumer band
 - **THEN** it survives, and its net figure is gross minus the consumer
   band's rent
+
+#### Scenario: No GPU code is costed as CPU and marked assumed
+
+- **WHEN** a subnet's verdict is `possible`
+- **THEN** its required band is the CPU band with no rent, and the view
+  marks the band as assumed
 
 #### Scenario: Unknown hardware is assumed to fit and says so
 
@@ -560,3 +568,18 @@ recorded switch or "first seen by Atlas" with its date.
   value
 - **THEN** its mode is recorded as unknown, never as Yuma, and no switch is
   recorded from it
+
+### Requirement: History marks a change of economics model
+
+Every economics row SHALL record the model version it was classified
+under. The history tool SHALL mark each observation stored under a model
+other than the newest observation's, and SHALL say that figures across
+that boundary are not a change in the subnet. Rows stored before versions
+were recorded SHALL count as an earlier model.
+
+#### Scenario: A model change is not read as a collapse
+
+- **WHEN** a subnet's history holds a row from before this change and one
+  from after it
+- **THEN** the older row is marked as from an earlier model and the
+  response carries a note not to compare their figures as a change

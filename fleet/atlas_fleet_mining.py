@@ -215,6 +215,7 @@ CREATE TABLE IF NOT EXISTS mine_econ (
     axons_served_7d INTEGER,
     consensus_mode TEXT,
     null_pruning_target INTEGER,
+    model_version INTEGER,
     PRIMARY KEY (ts, netuid)
 );
 CREATE INDEX IF NOT EXISTS mine_econ_netuid_ts
@@ -409,6 +410,9 @@ _MINE_ECON_ADDED: Tuple[Tuple[str, str], ...] = (
     ("axons_served_7d", "INTEGER"),
     ("consensus_mode", "TEXT"),
     ("null_pruning_target", "INTEGER"),
+    # The model each row was classified under. Rows from before this
+    # column stay NULL: an earlier model, never back-filled.
+    ("model_version", "INTEGER"),
 )
 # Columns added to mine_mechanism after it first shipped (change:
 # mining-economics-model).
@@ -613,7 +617,7 @@ def required_band(cfg: Dict[str, Any],
     assumed, basis). Band None with a basis means no configured band covers
     the declared floor.
 
-    - no GPU evidence (`possible`): the smallest band
+    - no GPU code found (`possible`): the smallest band, assumed
     - a declared VRAM floor: the smallest band that covers it
     - GPU evidence without a declared floor: the smallest GPU band, assumed
     - unknown or unscanned: the budget band, assumed
@@ -635,7 +639,8 @@ def required_band(cfg: Dict[str, Any],
             return None, True, "GPU evidence but no GPU band configured"
         return gpu[0][0], True, "GPU evidence, VRAM undeclared"
     if verdict == VERDICT_POSSIBLE:
-        return bands[0][0], False, "no GPU evidence found"
+        # Absence of GPU code is not proof of a CPU miner: assumed.
+        return bands[0][0], True, "no GPU code found"
     return budget, True, "hardware unknown"
 
 
@@ -1558,7 +1563,7 @@ def scan_slot(connection: sqlite3.Connection, cfg: Dict[str, Any],
                   "files; absence is not evidence of a closed subnet"
                   % sources)
     else:
-        verdict, reason = VERDICT_POSSIBLE, "no GPU evidence found"
+        verdict, reason = VERDICT_POSSIBLE, "no GPU code found"
 
     return {"verdict": verdict, "reason": reason,
             "min_compute_path": min_compute_path,
@@ -1926,7 +1931,8 @@ def run_classify(connection: sqlite3.Connection, config: Dict[str, Any],
                 "rent_band": result["required_band"],
                 "rent_tao_month": result["rent_tao_month"],
                 "payback_days": result["payback_days"],
-                "baseline_tao_month": None})
+                "baseline_tao_month": None,
+                "model_version": MODEL_VERSION})
             connection.execute(
                 "UPDATE mine_econ SET %s WHERE ts = ? AND netuid = ?"
                 % ", ".join("%s = ?" % column for column in assignments),
@@ -2102,8 +2108,7 @@ def compact_row(entry: Dict[str, Any]) -> Dict[str, Any]:
                   "immunity_blocks": entry.get("immunity_period"),
                   "registration_burn_tao": entry.get("reg_cost_tao")},
         "hardware_evidence": {
-            "verdict": VERDICT_LABELS.get(feature.get("verdict"),
-                                          feature.get("verdict")),
+            "verdict": hardware_label(feature),
             "path": ("%s:%s" % (gpu.get("path"), gpu.get("line")) if gpu
                      else feature.get("min_compute_path")
                      or feature.get("entrypoint_path"))},
@@ -2237,8 +2242,8 @@ def _entry_cell(entry: Dict[str, Any]) -> str:
 
 
 VERDICT_LABELS = {
-    VERDICT_POSSIBLE: "no GPU evidence found",
-    VERDICT_NEEDS_GPU: "GPU evidence found",
+    VERDICT_POSSIBLE: "no GPU code found",
+    VERDICT_NEEDS_GPU: "GPU code found",
     VERDICT_UNKNOWN: "unverified",
     VERDICT_CLOSED: "closed",
     VERDICT_STUB: "stub",
@@ -2260,6 +2265,22 @@ ACTIVITY_DEFINITIONS = (
 )
 
 
+def gpu_mention_files(feature: Optional[Dict[str, Any]]) -> int:
+    """Distinct files whose only GPU evidence is a bare mention."""
+    evidence = ((feature or {}).get("evidence") or {}).get("evidence") or []
+    return len({e.get("path") for e in evidence
+                if e.get("kind") == "gpu-mention"})
+
+
+def hardware_label(feature: Optional[Dict[str, Any]]) -> str:
+    verdict = (feature or {}).get("verdict")
+    label = VERDICT_LABELS.get(verdict, verdict or "")
+    mentions = gpu_mention_files(feature)
+    if verdict == VERDICT_POSSIBLE and mentions:
+        label += "; GPU mentioned in %d file(s)" % mentions
+    return label
+
+
 def _feasibility_cells(entry: Dict[str, Any]) -> Tuple[str, str]:
     feature = entry.get("feasibility") or {}
     floor = feature.get("gpu_floor")
@@ -2273,7 +2294,7 @@ def _feasibility_cells(entry: Dict[str, Any]) -> Tuple[str, str]:
     elif verdict == VERDICT_UNKNOWN:
         floor_cell = '<span class="warn">unverified</span>'
     else:
-        floor_cell = _esc(VERDICT_LABELS.get(verdict, verdict or ""))
+        floor_cell = _esc(hardware_label(feature))
     if gpu:
         path = "%s:%s" % (gpu.get("path"), gpu.get("line"))
     else:

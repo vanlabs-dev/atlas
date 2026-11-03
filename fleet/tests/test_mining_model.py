@@ -5,6 +5,7 @@ sale, a full subnet with a short immunity period is cut, each subnet is
 costed at the hardware band its evidence needs, and payback is reported.
 """
 
+import json
 import os
 import shutil
 import sqlite3
@@ -19,6 +20,7 @@ sys.path.insert(0, os.path.dirname(_HERE))
 import atlas_fleet as fleet  # noqa: E402
 import atlas_fleet_index as idx  # noqa: E402
 import atlas_fleet_mining as mine  # noqa: E402
+import atlas_fleet_server as srv  # noqa: E402
 import mining_fixtures as mf  # noqa: E402
 from mining_fixtures import subnet, synthetic  # noqa: E402
 
@@ -278,11 +280,12 @@ class TestHardwareBand(unittest.TestCase):
             cfg(), {"verdict": mine.VERDICT_NEEDS_GPU, "vram_gb": 16})
         self.assertEqual((band, assumed), ("consumer-gpu", False))
 
-    def test_no_gpu_evidence_is_the_cpu_band(self):
+    def test_no_gpu_code_is_the_cpu_band_marked_assumed(self):
+        # Absence of GPU code is not proof of a CPU miner.
         band, assumed, basis = mine.required_band(
             cfg(), {"verdict": mine.VERDICT_POSSIBLE})
-        self.assertEqual((band, assumed), ("cpu", False))
-        self.assertEqual(basis, "no GPU evidence found")
+        self.assertEqual((band, assumed), ("cpu", True))
+        self.assertEqual(basis, "no GPU code found")
 
     def test_unknown_hardware_is_the_budget_band_and_assumed(self):
         for feature in (None, {"verdict": mine.VERDICT_UNKNOWN}):
@@ -387,7 +390,7 @@ class TestScannerV4(Base):
                         "No GPU needed: this miner runs on any box.\n")
         out = self.scan()
         self.assertEqual(out["verdict"], mine.VERDICT_POSSIBLE)
-        self.assertEqual(out["reason"], "no GPU evidence found")
+        self.assertEqual(out["reason"], "no GPU code found")
         mentions = [e for e in out["evidence"]
                     if e["kind"] == "gpu-mention"]
         self.assertEqual(mentions[0]["path"], "miner/README.md")
@@ -641,10 +644,55 @@ class TestBoardPage(Base):
                       page)
         self.assertIn("first seen by Atlas", page)
 
-    def test_possible_reads_as_no_gpu_evidence_found(self):
-        self.assertEqual(mine.VERDICT_LABELS[mine.VERDICT_POSSIBLE],
-                         "no GPU evidence found")
+    def test_possible_reads_as_no_gpu_code_found(self):
         cell, _ = mine._feasibility_cells(
             {"feasibility": {"verdict": mine.VERDICT_POSSIBLE}})
-        self.assertEqual(cell, "no GPU evidence found")
+        self.assertEqual(cell, "no GPU code found")
         self.assertNotIn("CPU", cell)
+
+    def test_gpu_mentions_are_counted_beside_possible(self):
+        # SN44 and SN48 at block 9423301: no GPU code, but GPU mentioned in
+        # miner docs and min_compute.yml.
+        feature = {"verdict": mine.VERDICT_POSSIBLE, "evidence": {
+            "evidence": [{"kind": "gpu-mention", "path": "miner/MINER.md"},
+                         {"kind": "gpu-mention", "path": "miner/MINER.md"},
+                         {"kind": "gpu-mention", "path": "miner/README.md"},
+                         {"kind": "entrypoint", "path": "neurons/miner.py"}]}}
+        self.assertEqual(mine.hardware_label(feature),
+                         "no GPU code found; GPU mentioned in 2 file(s)")
+        row = mine.compact_row({"feasibility": feature})
+        self.assertEqual(row["hardware_evidence"]["verdict"],
+                         "no GPU code found; GPU mentioned in 2 file(s)")
+
+
+class TestHistoryModelBoundary(Base):
+    """Regression: after the model-3 pass, SN8's history would jump from
+    147.6 to 0.07 alpha/day with nothing saying the model changed."""
+
+    def test_rows_carry_their_model_version(self):
+        self.seed([subnet(1, [5, 5])])
+        self.assertEqual(self.rows()[1]["model_version"],
+                         mine.MODEL_VERSION)
+
+    def test_history_marks_observations_from_an_earlier_model(self):
+        mf.seed_board(self.conn, self.config, synthetic([subnet(1, [5, 5])]),
+                      now="2026-11-03T00:00:00+00:00")
+        old_ts = self.rows()[1]["ts"]
+        # A pre-deploy row: same subnet, no recorded version.
+        self.conn.execute("UPDATE mine_econ SET model_version = NULL "
+                          "WHERE ts = ?", (old_ts,))
+        self.conn.commit()
+        mf.seed_board(self.conn, self.config, synthetic(
+            [subnet(1, [5, 5])]), now="2026-11-03T06:00:00+00:00")
+        config = os.path.join(self.tmp, "config.json")
+        with open(config, "w", encoding="utf-8") as handle:
+            json.dump({"db": self.db, "clone_root": os.path.join(
+                self.tmp, "clones"), "mining": self.config["mining"]},
+                handle)
+        os.makedirs(os.path.join(self.tmp, "clones"), exist_ok=True)
+        out = srv.FleetStore(config).mining_history(1, None, 10)
+        self.assertEqual(out.get("status"), "ok", out)
+        self.assertTrue(out["model_boundary"])
+        self.assertIn("earlier economics model", out["model_note"])
+        flags = [o["same_model_as_latest"] for o in out["observations"]]
+        self.assertEqual(flags, [True, False])

@@ -261,6 +261,19 @@ Today's runtime:
       keys a row. Before, it was 24.7 KB with 45 keys a row plus every
       mechanism row.
 
+17. **Review fixes before deploy (2026-11-03).**
+    - `possible` is costed at the cpu band **marked assumed**, with the
+      basis "no GPU code found". It renders as "no GPU code found", adding
+      "GPU mentioned in N file(s)" where mentions exist. In the rehearsal,
+      SN44 and SN48 carry GPU mentions with no GPU code. SN4 carries
+      neither.
+    - `mine_econ.model_version` is written at classify. Older rows stay
+      NULL. `mining_history` marks observations from another model
+      (`same_model_as_latest`, `model_boundary`, `model_note`), so the
+      SN8 drop from 147.6 to 0.07 is not read as a market move.
+    - Audit writes during the longer read commit per row, and the live
+      store opens with `timeout=10`, so no write lock spans the read.
+
 ## Risks / Trade-offs
 
 - **SN120 ranks 4th on a Null subnet.** On Null, `Incentive` is a reported
