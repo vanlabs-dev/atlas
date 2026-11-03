@@ -16,7 +16,7 @@
 
 ## 3. Mining page
 
-- [ ] 3.1 Sort by rank, then cut with public reason, then the rest; headline names rank 1; verify with a sort test on a fixture where a cut row has the largest gross
+- [x] 3.1 Sort by rank, then cut with public reason, then the rest; headline names rank 1; verify with a sort test on a fixture where a cut row has the largest gross
 - [ ] 3.2 Labels: "Model estimate, TAO/mo at spot", read block, note text, "No GPU code found" with mention count, no VRAM on `possible`, "Top earner (excluding the owner)", CUT/UNRATED maps with unnamed fallback; verify word-map tests and a render check of the built page
 
 ## 4. Fleet, home, network, upgrades
