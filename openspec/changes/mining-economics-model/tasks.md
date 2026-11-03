@@ -14,13 +14,13 @@
 
 ## 1b. Live-data context reads
 
-- [ ] 1b.1 Add `SubnetEpochConsensus`, `NullPruningTarget`, `ValidatorPermit`, `LastUpdate`, `Weights`, `BlockAtRegistration` and `Axons` to `CHAIN_READS`, with hashers and types from v486 `lib.rs`. Add the substituted defaults to `EXPECTED_DEFAULTS`, with bytes taken from a local probe run. Verify: `livedata/tests/test_chain_reads.py` passes, and `python3 livedata/atlas_probe.py` passes against finney.
-- [ ] 1b.2 Add the codecs `Vec<bool>`, `Vec<u64>`, `Vec<(u16,u16)>`, `EpochConsensus` and the `AxonInfo` block prefix, plus the two-part key tail reader. Verify with regression tests:
+- [x] 1b.1 Add `SubnetEpochConsensus`, `NullPruningTarget`, `ValidatorPermit`, `LastUpdate`, `Weights`, `BlockAtRegistration` and `Axons` to `CHAIN_READS`, with hashers and types from v486 `lib.rs`. Add the substituted defaults to `EXPECTED_DEFAULTS`, with bytes taken from a local probe run. Verify: `livedata/tests/test_chain_reads.py` passes, and `python3 livedata/atlas_probe.py` passes against finney.
+- [x] 1b.2 Add the codecs `Vec<bool>`, `Vec<u64>`, `Vec<(u16,u16)>`, `EpochConsensus` and the `AxonInfo` block prefix, plus the two-part key tail reader. Verify with regression tests:
   - each codec decodes a known payload and rejects a truncated one
   - consensus index 2 fails closed
   - the axon decoder returns only the block
   - a mechanism-1 weight key maps to `(netuid, mecid, uid)`
-- [ ] 1b.3 Read the context in `read_mining_snapshot` at the snapshot block:
+- [x] 1b.3 Read the context in `read_mining_snapshot` at the snapshot block:
   - `BlockAtRegistration` as point reads for uid below `SubnetworkN`
   - per-item fail isolation
 
