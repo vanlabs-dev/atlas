@@ -70,6 +70,21 @@ The operator decided the model on 2026-11-03:
   "enter at rank". `mining_subnet` keeps the full detail.
 - `triage/` gets a README that marks it as an August 2026 snapshot that
   nothing reads.
+- **Miner-activity facts:** each subnet shows earning UIDs, registrations in
+  the last 7 days, UIDs a fresh validator weights, the widest validator row,
+  and axons served in the last 7 days. Each carries its exact definition.
+  None is called "active" or "idle". Axon addresses are never decoded or
+  stored.
+- **Yuma/Null tracker:** each pass records every subnet's consensus mode.
+  Switches are stored with their block in the fleet store. There is no
+  alert (operator decision 2026-11-03).
+  - Null subnets are flagged "one validator's weights set all miner pay".
+  - A pending owner pruning target is flagged.
+  - Today SN24, SN37 and SN120 run Null.
+- **Live-data reads, at the snapshot block:** `SubnetEpochConsensus`,
+  `NullPruningTarget`, `ValidatorPermit`, `LastUpdate`, `Weights`,
+  `BlockAtRegistration` and `Axons`. A failed context read never fails the
+  economics.
 
 ## Capabilities
 
@@ -85,7 +100,10 @@ None.
     a block when no band is set.
   - Feasibility evidence.
   - New requirements for the at-spot label and the subnet-wide haircut,
-    payback, and the compact query surface.
+    payback, the compact query surface, miner-activity facts and consensus
+    tracking.
+- `live-data`: a new requirement for reading the miner-activity and
+  consensus context at the mining snapshot block.
 
 ## Impact
 
@@ -104,11 +122,23 @@ None.
   - Additive `ALTER` only. `ensure_schema` gains a `mine_mechanism`
     migration.
   - The read-only MCP path must tolerate a store that has not yet migrated.
-- **Pi:** a code pull and one mining pass (it migrates and writes a model-3
+- **Deploy:** a code pull, a probe run, and one mining pass (it migrates and writes a model-3
   pass). The next fleet pass rescans all 107 slots under the new scanner.
   Telegram `/restart` loads the MCP change. No unit change.
-- **Not touched:** `livedata/`, the upgrade job, the WP10 rewrite and judge,
-  and the web export.
+- **Live-data:**
+  - `livedata/atlas_live.py` gains 7 `CHAIN_READS` entries, new codecs, a
+    two-part key reader and their defaults.
+  - Those items join the hourly probe and the upgrade job's probe gate. A
+    runtime rename of any of them fails both, and the fix is the operator's
+    (WP5 split).
+  - `livedata/tests/test_chain_reads.py` changes with them.
+- **Pass time:** the mining chain read grows from 48 s to about 8.5 min
+  (measured on the Pi). That is inside the node's 256-block state window.
+  The fleet service has no start timeout.
+- **Pi:** the `atlas-live` MCP server also loads changed code, so it needs
+  the `/restart`.
+- **Not touched:** the upgrade job, the WP10 rewrite and judge, the Telegram
+  classes, and the web export.
 - **Left to WP6:**
   - The fixture export publishes `net_tao_month` and `cut_reason`. With a
     band set, net leaks rent and `above-budget-band` names the band, which
