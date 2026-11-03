@@ -166,6 +166,12 @@ DEFAULT_METRICS_CFG: Dict[str, Any] = {
     "ls_remote_timeout": 45,
     # Momentum windows (days) computed from signal_prices; no new API call.
     "momentum_windows": [7, 30],
+    # Author addresses that are automation, not development (change:
+    # signal-statistics-ties). Case-insensitive regexes on the author email;
+    # matching commits are left out of windowed counts, a30 and
+    # days-since-last-commit. All-time totals stay unfiltered context.
+    "bot_author_patterns": [r"\[bot\]@", r"^(github-)?actions?@github\.com$",
+                            r"^(dependabot|renovate)"],
     # GitHub orgs to drop from the team-concentration view (placeholders).
     "placeholder_orgs": ["deprecated", "orgs", "username", "user",
                          "example", "your-org", "owner"],
@@ -497,21 +503,42 @@ def _commit_log(clone_dir: str,
     return rows
 
 
+def compile_bot_patterns(patterns: Sequence[str]) -> List[Any]:
+    """Compiled bot-author patterns; an invalid pattern is skipped."""
+    compiled = []
+    for pattern in patterns or ():
+        try:
+            compiled.append(re.compile(pattern, re.IGNORECASE))
+        except re.error:
+            continue
+    return compiled
+
+
+def is_bot_author(email: str, patterns: Sequence[Any]) -> bool:
+    return any(p.search(email or "") for p in patterns)
+
+
 def compute_activity(commits: Sequence[Tuple[datetime.datetime, str]],
-                     windows: Sequence[int], now: datetime.datetime
+                     windows: Sequence[int], now: datetime.datetime,
+                     bot_patterns: Sequence[Any] = ()
                      ) -> Dict[str, Any]:
     """Windowed commit counts + 30d author count + all-time context from a
-    commit log. All-time totals are context only — never ranking inputs."""
+    commit log. All-time totals are context only, never ranking inputs.
+    Commits by a bot or CI author address (`bot_patterns`) are not
+    development activity: they are left out of the windows, the author
+    count and the last-commit date (change: signal-statistics-ties)."""
     counts = {w: 0 for w in windows}
     authors_30: set = set()
-    for when, email in commits:
+    human = [(when, email) for when, email in commits
+             if not is_bot_author(email, bot_patterns)]
+    for when, email in human:
         age_days = (now - when).total_seconds() / 86400.0
         for w in windows:
             if age_days <= w:
                 counts[w] += 1
         if age_days <= 30:
             authors_30.add(email)
-    last = max((when for when, _ in commits), default=None)
+    last = max((when for when, _ in human), default=None)
     days_since = (int((now - last).total_seconds() // 86400)
                   if last is not None else None)
     return {
@@ -534,6 +561,7 @@ def run_activity(connection: sqlite3.Connection, config: Dict[str, Any],
     pass_ts = pass_ts or _utc_now()
     now = _parse_iso(pass_ts)
     windows = cfg["activity_windows"]
+    bots = compile_bot_patterns(cfg.get("bot_author_patterns") or [])
     fleet = _fleet()
     clone_root = config.get("clone_root") or fleet.DEFAULT_CLONE_ROOT
     git = git or fleet._run_git
@@ -548,7 +576,7 @@ def run_activity(connection: sqlite3.Connection, config: Dict[str, Any],
         clone_dir = os.path.join(clone_root, str(nid))
         try:
             commits = _commit_log(clone_dir, git)
-            act = compute_activity(commits, windows, now)
+            act = compute_activity(commits, windows, now, bots)
         except Exception:  # noqa: BLE001 — per-slot fail-closed
             connection.rollback()
             summary["failed"] += 1
@@ -668,14 +696,40 @@ def _price_series(connection: sqlite3.Connection
     return series
 
 
+def _occupant_judge(connection: sqlite3.Connection
+                    ) -> Optional[Callable[[int, str, str], Optional[str]]]:
+    """The signals ledger's same-subnet test over stored vectors (change:
+    signal-statistics-ties), or None while no stored vector carries a
+    registration block yet (nothing to judge by)."""
+    try:
+        has_reg = connection.execute(
+            "SELECT 1 FROM signal_prices WHERE reg_block IS NOT NULL LIMIT 1"
+        ).fetchone()
+    except sqlite3.Error:
+        return None
+    if not has_reg:
+        return None
+    sys.path.insert(0, _MODULE_DIR)
+    import atlas_fleet_signals as sig  # noqa: E402
+    panel = sig.PricePanel(
+        connection, registered_now=sig._latest_registration(connection),
+        anchors=sig._livedata_block_anchors)
+    return panel.same_subnet
+
+
 def _window_return(points: Sequence[Tuple[str, float]], window_days: int,
-                   now: datetime.datetime) -> Optional[float]:
+                   now: datetime.datetime,
+                   judge: Optional[Callable[[str, str], Optional[str]]] = None
+                   ) -> Optional[float]:
     """Percent change from the oldest in-window point to the latest, or
-    None when fewer than two points fall inside the window."""
+    None when fewer than two points fall inside the window, or when `judge`
+    says the two points belong to different subnets (a reused netuid)."""
     cutoff = now - datetime.timedelta(days=window_days)
     inside = [(ts, price) for ts, price in points
               if _parse_iso(ts) >= cutoff]
     if len(inside) < 2:
+        return None
+    if judge is not None and judge(inside[0][0], inside[-1][0]) is not None:
         return None
     entry = inside[0][1]
     latest = inside[-1][1]
@@ -696,15 +750,20 @@ def _median(values: Sequence[float]) -> Optional[float]:
 
 def _percentile_ranks(values: Dict[int, float]) -> Dict[int, float]:
     """Fractional percentile rank (0..1) of each netuid's value among the
-    non-null set — ties share the average rank."""
+    non-null set. Ties share the average of the ranks they occupy, so a
+    subnet's rank never depends on its netuid or on input order (change:
+    signal-statistics-ties; before it, ties followed netuid order)."""
     if not values:
         return {}
-    ordered = sorted(values.items(), key=lambda kv: kv[1])
+    ordered = sorted(values.values())
     n = len(ordered)
-    ranks: Dict[int, float] = {}
-    for index, (netuid, _value) in enumerate(ordered):
-        ranks[netuid] = (index + 0.5) / n
-    return ranks
+    first: Dict[float, int] = {}
+    last: Dict[float, int] = {}
+    for index, value in enumerate(ordered):
+        first.setdefault(value, index)
+        last[value] = index
+    return {netuid: ((first[value] + last[value]) / 2.0 + 0.5) / n
+            for netuid, value in values.items()}
 
 
 def _quadrant_region(activity_pct: Optional[float],
@@ -726,15 +785,20 @@ def compute_momentum(connection: sqlite3.Connection, cfg: Dict[str, Any],
                      now: Optional[datetime.datetime] = None
                      ) -> Dict[str, Any]:
     """Per-subnet and fleet-median momentum over each configured window,
-    reusing stored price vectors. Missing history yields None (n/a)."""
+    reusing stored price vectors. Missing history yields None (n/a), and so
+    does a window whose ends belong to different subnets in one netuid; the
+    fleet median leaves those out."""
     now = now or datetime.datetime.now(tz=datetime.timezone.utc)
     series = _price_series(connection)
+    same_subnet = _occupant_judge(connection)
     per_subnet: Dict[int, Dict[int, Optional[float]]] = {}
     baseline: Dict[int, Optional[float]] = {}
     for window in cfg["momentum_windows"]:
         returns: Dict[int, float] = {}
         for netuid, points in series.items():
-            value = _window_return(points, window, now)
+            judge = (None if same_subnet is None else
+                     (lambda a, b, n=netuid: same_subnet(n, a, b)))
+            value = _window_return(points, window, now, judge)
             per_subnet.setdefault(netuid, {})[window] = value
             if value is not None:
                 returns[netuid] = value

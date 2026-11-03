@@ -24,9 +24,9 @@
 
 ## 5. Metrics: ties, momentum, bot filter (fleet-rotation-metrics)
 
-- [ ] 5.1 Average ranks for ties in `_percentile_ranks`. Verify: tests: 24 zeros of 113 all get 12/113; shuffled input order gives identical ranks.
-- [ ] 5.2 Momentum `n/a` across a registration change, excluded from the fleet median. Verify: regression test with a vector pair carrying different `reg_block` (SN16-shaped +403%).
-- [ ] 5.3 `metrics.bot_author_patterns` config and filter in `compute_activity` windowed counts and `a30`. Verify: test with 190 `[bot]@` commits and 10 human commits gives c30 10, a30 1; `fleet/config.json` loads.
+- [x] 5.1 Average ranks for ties in `_percentile_ranks`. Verify: tests: 24 zeros of 113 all get 12/113; shuffled input order gives identical ranks.
+- [x] 5.2 Momentum `n/a` across a registration change, excluded from the fleet median. Verify: regression test with a vector pair carrying different `reg_block` (SN16-shaped +403%).
+- [x] 5.3 `metrics.bot_author_patterns` config and filter in `compute_activity` windowed counts and `a30`. Verify: test with 190 `[bot]@` commits and 10 human commits gives c30 10, a30 1; `fleet/config.json` loads.
 
 ## 6. Cue removal (fleet-rotation-metrics)
 

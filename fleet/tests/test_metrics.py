@@ -4,6 +4,7 @@ fork-history separation, branch-pulse tip diffing, momentum/quadrant from the
 signals price panel, the combined report, and the inline pass + status."""
 
 import datetime
+import json
 import os
 import shutil
 import sys
@@ -439,3 +440,84 @@ class TestReconcileHook(MetricsBase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSignalStatisticsTies(MetricsBase):
+    """Change signal-statistics-ties: tied ranks, momentum across a
+    re-registration, and bot authors."""
+
+    def test_tie_group_shares_the_average_rank(self):
+        # Regression (audit D7): 24 of 113 subnets tied at zero activity
+        # spread over ranks 0.004 to 0.208 in netuid order.
+        values = {n: 0.0 for n in range(24)}
+        values.update({n: float(n) for n in range(24, 113)})
+        ranks = met._percentile_ranks(values)
+        zero = {ranks[n] for n in range(24)}
+        self.assertEqual(len(zero), 1)
+        self.assertAlmostEqual(zero.pop(), 12 / 113, places=12)
+
+    def test_order_does_not_change_ranks(self):
+        values = {7: 1.0, 3: 1.0, 9: 2.0, 1: 0.0, 5: 1.0, 2: 2.0}
+        shuffled = dict(sorted(values.items(), key=lambda kv: -kv[0]))
+        self.assertEqual(met._percentile_ranks(values),
+                         met._percentile_ranks(shuffled))
+        ranks = met._percentile_ranks(values)
+        self.assertEqual(ranks[7], ranks[3])
+        self.assertEqual(ranks[3], ranks[5])
+
+    def _vectors(self, rows):
+        sys.path.insert(0, os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        import atlas_fleet_signals as sig
+        sig.ensure_schema(self.conn)
+        self.conn.executemany(
+            "INSERT INTO signal_prices (ts, netuid, price_tao, reg_block) "
+            "VALUES (?, ?, ?, ?)", rows)
+        self.conn.commit()
+
+    def test_reregistered_netuid_has_no_momentum(self):
+        # Regression (audit C13): SN16 showed +403% over 7 days on the Pi,
+        # a new subnet's price against its predecessor's.
+        now = _dt()
+        old = (now - datetime.timedelta(days=5)).isoformat()
+        self._vectors([(old, 16, 0.002, 100), (now.isoformat(), 16, 0.01,
+                                                9400000),
+                       (old, 2, 10.0, 5), (now.isoformat(), 2, 11.0, 5),
+                       (old, 3, 10.0, 6), (now.isoformat(), 3, 9.0, 6)])
+        mom = met.compute_momentum(self.conn, CFG, now=now)
+        self.assertIsNone(mom["per_subnet"][16][7])
+        self.assertAlmostEqual(mom["per_subnet"][2][7], 10.0, places=6)
+        self.assertAlmostEqual(mom["baseline"][7], 0.0, places=6)
+
+    def test_bot_commits_are_not_activity(self):
+        now = _dt()
+        bot = "326206123+lium-loop[bot]@users.noreply.github.com"
+        commits = [(now - datetime.timedelta(days=1), bot)] * 190 + [
+            (now - datetime.timedelta(days=2), "dev@example.org")] * 10
+        bots = met.compile_bot_patterns(
+            met.DEFAULT_METRICS_CFG["bot_author_patterns"])
+        act = met.compute_activity(commits, [7, 30, 90], now, bots)
+        self.assertEqual(act["windows"][30], 10)
+        self.assertEqual(act["a30"], 1)
+        self.assertEqual(act["days_since"], 2)
+        self.assertEqual(act["total_commits"], 200)  # context, unfiltered
+
+    def test_bot_patterns_match_the_observed_addresses(self):
+        bots = met.compile_bot_patterns(
+            met.DEFAULT_METRICS_CFG["bot_author_patterns"])
+        for email in ("49699333+dependabot[bot]@users.noreply.github.com",
+                      "github-actions@github.com", "actions@github.com",
+                      "280371967+harnyx-validator-version-bump-bot[bot]"
+                      "@users.noreply.github.com"):
+            self.assertTrue(met.is_bot_author(email, bots), email)
+        for email in ("114649324+surcyf123@users.noreply.github.com",
+                      "romain.fanucci@hotmail.fr", "noreply@anthropic.com"):
+            self.assertFalse(met.is_bot_author(email, bots), email)
+
+    def test_config_loads_bot_patterns(self):
+        path = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), "config.json")
+        with open(path, "r", encoding="utf-8") as handle:
+            config = json.load(handle)
+        cfg = met.metrics_cfg(config)
+        self.assertTrue(met.compile_bot_patterns(cfg["bot_author_patterns"]))
