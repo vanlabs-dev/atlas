@@ -14,6 +14,7 @@ construction: unknown fractions, absent price history, and opaque economics are
 shown as such rather than fabricated.
 
 ## Requirements
+
 ### Requirement: Emission-redirect map is extracted from current code, evidence-linked, and never executed
 
 The metrics module SHALL derive, per `(netuid, epoch)`, an emission-redirect
@@ -99,7 +100,9 @@ counts and distinct-author counts over trailing 7/30/90-day windows,
 days-since-last-commit, and all-time totals. Ranking inputs SHALL use only the
 windowed epoch-scoped figures; all-time totals SHALL be retained for context but
 excluded from activity ranking so upstream fork history does not inflate a
-subnet's apparent team or velocity.
+subnet's apparent team or velocity. Windowed counts SHALL exclude commits whose
+author address matches a configured list of bot and CI patterns, so automation
+does not count as development activity.
 
 #### Scenario: Windowed activity drives ranking, all-time is context only
 
@@ -113,6 +116,12 @@ subnet's apparent team or velocity.
 - **WHEN** activity is computed for a slot that has re-pointed
 - **THEN** the recorded activity is tagged to the current epoch and does not
   blend the prior project's history
+
+#### Scenario: Bot commits are not activity
+
+- **WHEN** a slot's last 30 days hold 190 commits by an author address ending
+  `[bot]@users.noreply.github.com` and 10 by a person
+- **THEN** its 30-day commit count is 10 and its 30-day author count is 1
 
 ### Requirement: Branch pulse approximates off-default-branch activity without fetching
 
@@ -143,8 +152,10 @@ Price momentum per subnet SHALL be computed from the existing `signal_prices`
 vectors as the percent change between the oldest in-window and the latest
 available vector over trailing 7/30-day windows, together with the fleet-median
 momentum over the identical window. The module SHALL make no new price API call
-and SHALL NOT backfill history. A window lacking sufficient stored history SHALL
-render `n/a`, never an estimated value.
+and SHALL NOT backfill history. A window lacking sufficient stored history, or
+whose vectors carry different registration blocks for the netuid, SHALL render
+`n/a`, never an estimated value, and that netuid SHALL be left out of the
+fleet median for the window.
 
 #### Scenario: Momentum computed from available history
 
@@ -159,26 +170,10 @@ render `n/a`, never an estimated value.
 - **THEN** that momentum cell renders `n/a` and no value is fabricated or
   backfilled
 
-### Requirement: Quadrant classifies by percentile rank, not a fitted score
+#### Scenario: Re-registration inside the window renders n/a
 
-The module SHALL compute a rotation quadrant placing each qualifying subnet by
-price-momentum percentile (X, 7-day relative) and activity percentile (Y, 30-day
-commits and `changed_tips`). The quadrant SHALL be presented as a lens over the
-underlying columns, which remain visible; it SHALL NOT emit a recommendation or
-a calibrated composite score.
-
-#### Scenario: Subnet is placed by its percentile ranks
-
-- **WHEN** the quadrant is rendered and a subnet has both an activity percentile
-  and a momentum percentile
-- **THEN** it is plotted in the corresponding region (accumulate / ride /
-  ignore / fade) with its raw columns still shown in the table
-
-#### Scenario: Subnet without momentum is not forced into a quadrant
-
-- **WHEN** a subnet's momentum is `n/a` (insufficient price history)
-- **THEN** it is listed with its activity metrics but not placed on the
-  momentum axis, and no verdict is asserted for it
+- **WHEN** a netuid was registered to a new subnet inside the 7-day window
+- **THEN** its 7-day momentum renders `n/a` and the fleet median excludes it
 
 ### Requirement: Metrics are available as CLI/JSON reports independent of the dashboard
 
@@ -228,9 +223,12 @@ scripts, no external asset fetches, no secrets) atomically into a dedicated
 output directory that contains only rendered artifacts and never the store,
 clones, or journals. It SHALL be served by a minimal static file server bound to
 the local network only. The page SHALL present the ranked subnet table, the
-quadrant, the emission map with evidence links, team-concentration groups, and
-an invisible-fleet tier that lists no-repo / unreachable / placeholder-URL slots
-explicitly as opaque, with per-source data-as-of timestamps.
+activity and momentum percentiles, the emission map with evidence links,
+team-concentration groups, and an invisible-fleet tier that lists no-repo /
+unreachable / placeholder-URL slots explicitly as opaque, with per-source
+data-as-of timestamps. The page SHALL NOT show a direction cue, a
+promising/dangerous label or filter, or a sentence that says which way price
+should move.
 
 #### Scenario: Only rendered output is under the served root
 
@@ -256,3 +254,27 @@ explicitly as opaque, with per-source data-as-of timestamps.
 - **THEN** the new file is written to a temporary path and renamed into place so
   a reader sees either the previous or the complete new page, never a partial
   one
+
+#### Scenario: Divergence is a neutral fact
+
+- **WHEN** a subnet's activity percentile is 90 and its momentum percentile is
+  20
+- **THEN** the page states that the two are 70 points apart and shows no ▲ or
+  ▼ cue, no promising or dangerous label, and no claim that the market has
+  not priced the activity
+
+### Requirement: Tied values share the average percentile rank
+
+Percentile ranks SHALL give every member of a tie group the average of the
+ranks the group occupies, so a subnet's rank never depends on its netuid or on
+input order.
+
+#### Scenario: Tie group shares one rank
+
+- **WHEN** 24 of 113 subnets have an activity value of zero
+- **THEN** all 24 receive the same activity percentile, 12/113
+
+#### Scenario: Order does not change ranks
+
+- **WHEN** the same values are ranked with their netuids in a different order
+- **THEN** every netuid receives the same percentile as before
