@@ -25,13 +25,15 @@ Every commit and every push uses the personal identity:
 The runtime upgrade job (`upgrade/atlas_upgrade.py`, change
 `runtime-upgrade-pipeline`, 2026-09-24) runs on the Pi every 30 minutes.
 When the live runtime spec moves past the corpus spec, one headless
-`claude -p` session edits the corpus and chain readers in the
-`~/atlas-upgrade` worktree. Code then checks the goal, the edit scope
-(`upgrade/allowed_paths.py`), every test suite, and a live chain-read
-probe. Only then does the job push to `main` with the Atlas deploy key,
-activate the corpus, and report on Telegram. It never force-pushes. See
-`docs/runtime-upgrade.md`. The job may not edit tests, the probe, itself,
-docs other than `docs/decisions.md`, this file, systemd units, or secrets.
+`claude -p` session edits the corpus in the `~/atlas-upgrade` worktree.
+Code then checks the goal, the edit scope (`upgrade/allowed_paths.py`),
+citations, and runs every test suite and a live chain-read probe in a
+bubblewrap sandbox with no secrets. Only then does the job push to `main`
+with the Atlas deploy key, activate the corpus, and report on Telegram. It never force-pushes. See
+`docs/runtime-upgrade.md`. The job may edit only the corpus,
+`knowledge/supersession-markers.json` and `docs/decisions.md`, and may not
+add files. Since 2026-11-03 (change `upgrade-sandbox-scope`) that excludes
+the chain readers in `livedata/`: a reader fix is the operator's.
 It replaced Hermes cron job `fb98152a3fa1`, removed 2026-09-24.
 
 Supply the personal identity explicitly for automated commits, even when
