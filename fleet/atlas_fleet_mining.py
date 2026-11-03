@@ -334,9 +334,6 @@ DEFAULT_MINING_CFG: Dict[str, Any] = {
     "stale_after_hours": 18,
     # Feasibility scan surface.
     "min_compute_names": ["min_compute.yml", "min_compute.yaml"],
-    "gpu_tokens": ["torch.cuda", "device=\"cuda\"", "device='cuda'",
-                   "cuda:0", "vllm", "bitsandbytes", "nvidia-smi",
-                   "nvidia/cuda", "flash_attn"],
     "closed_api_tokens": ["openai", "anthropic", "api_key", "apikey",
                           "bearer "],
     "exclude_path_parts": ["vendor", "node_modules", "test", "tests",
@@ -347,7 +344,8 @@ DEFAULT_MINING_CFG: Dict[str, Any] = {
 # Keys the screen used before the chain-sourced miner share. A leftover is
 # ignored with a note, never used.
 RETIRED_CFG_KEYS = ("miner_share", "miner_share_source", "entrypoint_tokens",
-                    "staking_apy_pct", "daily_sale_fraction")
+                    "staking_apy_pct", "daily_sale_fraction",
+                    "gpu_tokens")
 
 
 def mining_cfg(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -1136,6 +1134,55 @@ SOURCE_EXTENSIONS = (".py", ".go", ".rs", ".ts", ".tsx", ".js", ".jsx",
                      ".java", ".c", ".cc", ".cpp", ".h", ".hpp", ".cu",
                      ".sol", ".sh")
 
+# GPU evidence (change: mining-economics-model, audit D4). A STRONG token is
+# code or a dependency that uses a GPU, and gives `needs-gpu`, read from
+# source and dependency files only. A WEAK token is a bare mention of a GPU,
+# vendor or card and is recorded as `gpu-mention` evidence; it never sets a
+# verdict, because "no GPU needed" mentions a GPU too.
+GPU_STRONG_RE = re.compile(
+    r"torch\.cuda|\.cuda\(|[\"']cuda(?::\d+)?[\"']|\bcuda:\d+|\bvllm\b|"
+    r"\bsglang\b|flash[_-]attn|\bbitsandbytes\b|\btensorrt\b|nvidia-smi|"
+    r"nvidia/cuda|\bxformers\b|onnxruntime-gpu|\bcupy\b", re.IGNORECASE)
+GPU_WEAK_RE = re.compile(
+    r"\bgpus?\b|\bnvidia\b|\bh100\b|\ba100\b|\brtx\s?\d{4}\b|\bvram\b|"
+    r"\bcuda\b", re.IGNORECASE)
+_DEPENDENCY_NAME_RE = re.compile(
+    r"^(?:requirements[^/]*\.txt|pyproject\.toml|setup\.py|setup\.cfg|"
+    r"environment[^/]*\.ya?ml|dockerfile[^/]*|[^/]*\.dockerfile|"
+    r"docker-compose[^/]*\.ya?ml|[^/]*\.ya?ml)$")
+
+
+def in_miner_subtree(path: str, cfg: Dict[str, Any]) -> bool:
+    """A path with a miner-named directory component (or `neurons`), outside
+    validator, test, docs, example and vendored paths."""
+    parts = path.lower().split("/")
+    directories = parts[:-1]
+    if any(part.startswith("validator") for part in directories):
+        return False
+    if _excluded(path, cfg):
+        return False
+    return any(part.startswith("miner") or part == "neurons"
+               for part in directories)
+
+
+def gpu_code_file(path: str) -> bool:
+    """Whether a strong GPU token in this file counts: source code or a
+    dependency declaration, never prose."""
+    name = path.lower().rsplit("/", 1)[-1]
+    return name.endswith(SOURCE_EXTENSIONS) or bool(
+        _DEPENDENCY_NAME_RE.match(name))
+
+
+def _regex_hits(content: str, regex: "re.Pattern[str]", path: str,
+                limit: int) -> List[Dict[str, Any]]:
+    hits: List[Dict[str, Any]] = []
+    for match in regex.finditer(content or ""):
+        hits.append({"token": match.group(0), "path": path,
+                     "line": _line_of(content, match.start())})
+        if len(hits) >= limit:
+            break
+    return hits
+
 # Normalised sha256 of the unedited bittensor subnet template
 # `min_compute.yml` (opentensor/bittensor-subnet-template main @ 539b77c,
 # fetched 2026-09-25): comments, trailing space and blank lines removed. SN60
@@ -1276,10 +1323,12 @@ def scan_slot(connection: sqlite3.Connection, cfg: Dict[str, Any],
     vram_gb: Optional[float] = None
     vram_basis: Optional[str] = None
     gpu_hits: List[Dict[str, Any]] = []
+    mention_hits: List[Dict[str, Any]] = []
     api_hits: List[Dict[str, Any]] = []
     sources = 0
     entry: Optional[Tuple[int, str, int]] = None
     min_computes: List[Tuple[int, str]] = []
+    subtree: List[Tuple[str, int]] = []
 
     for row_id, path in rows:
         lowered = path.lower()
@@ -1290,15 +1339,23 @@ def scan_slot(connection: sqlite3.Connection, cfg: Dict[str, Any],
             continue
         if lowered.endswith(SOURCE_EXTENSIONS):
             sources += 1
+        if in_miner_subtree(path, cfg):
+            subtree.append((path, row_id))
         precedence = entrypoint_precedence(path)
         if precedence is not None and (
                 entry is None or (precedence, path) < (entry[0], entry[1])):
             entry = (precedence, path, row_id)
 
+    def scan_gpu(content: str, path: str) -> None:
+        if gpu_code_file(path) and len(gpu_hits) < limit:
+            gpu_hits.extend(_regex_hits(content, GPU_STRONG_RE, path,
+                                        limit - len(gpu_hits)))
+        if len(mention_hits) < limit:
+            mention_hits.extend(_regex_hits(content, GPU_WEAK_RE, path,
+                                            limit - len(mention_hits)))
+
     def scan_tokens(content: str, path: str) -> None:
-        if len(gpu_hits) < limit:
-            gpu_hits.extend(_find_tokens(content, cfg.get("gpu_tokens") or [],
-                                         path, limit - len(gpu_hits)))
+        scan_gpu(content, path)
         if len(api_hits) < limit:
             api_hits.extend(_find_tokens(content,
                                          cfg.get("closed_api_tokens") or [],
@@ -1324,9 +1381,18 @@ def scan_slot(connection: sqlite3.Connection, cfg: Dict[str, Any],
     entrypoint_path = entry[1] if entry else None
     if entry:
         scan_tokens(_content(connection, entry[2]), entry[1])
+    # Every file of the miner subtree, bounded, in path order. The
+    # entrypoint was read above.
+    cap = int(cfg.get("max_subtree_files", 400))
+    for path, row_id in sorted(subtree)[:cap]:
+        if entry and path == entry[1]:
+            continue
+        scan_gpu(_content(connection, row_id), path)
 
     for hit in gpu_hits:
         evidence.append(dict(hit, kind="gpu"))
+    for hit in mention_hits:
+        evidence.append(dict(hit, kind="gpu-mention"))
     for hit in api_hits:
         evidence.append(dict(hit, kind="hosted-api"))
     if min_compute_path:
@@ -1336,15 +1402,18 @@ def scan_slot(connection: sqlite3.Connection, cfg: Dict[str, Any],
         evidence.append({"kind": "entrypoint", "path": entrypoint_path,
                          "line": 1})
 
-    if entrypoint_path is None:
+    # Positive GPU evidence wins over a missing entrypoint; the absence of
+    # both stays unknown.
+    if gpu_hits or (vram_gb or 0) > 0:
+        verdict = VERDICT_NEEDS_GPU
+        reason = ("GPU code found" if gpu_hits else "GPU VRAM declared")
+    elif entrypoint_path is None:
         verdict = VERDICT_UNKNOWN
         reason = ("no miner entrypoint recognised among %d indexed source "
                   "files; absence is not evidence of a closed subnet"
                   % sources)
-    elif gpu_hits or (vram_gb or 0) > 0:
-        verdict, reason = VERDICT_NEEDS_GPU, "GPU required"
     else:
-        verdict, reason = VERDICT_POSSIBLE, "runnable miner, no GPU tell"
+        verdict, reason = VERDICT_POSSIBLE, "no GPU evidence found"
 
     return {"verdict": verdict, "reason": reason,
             "min_compute_path": min_compute_path,

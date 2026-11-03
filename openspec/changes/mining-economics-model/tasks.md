@@ -65,7 +65,7 @@
 
 ## 5. Feasibility scanner v4 (D4)
 
-- [ ] 5.1 Scan the miner subtree, the entrypoint and `min_compute`:
+- [x] 5.1 Scan the miner subtree, the entrypoint and `min_compute`:
   - strong-token regex gives `needs-gpu`
   - weak tokens give `gpu-mention` evidence with no verdict change
   - cap of `max_subtree_files`
