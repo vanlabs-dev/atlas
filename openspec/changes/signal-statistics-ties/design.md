@@ -6,7 +6,8 @@ See proposal.md (Why). The facts below were measured read-only on 2026-11-03
 and shape the approach.
 
 - **Price vectors.** `signal_prices` holds every fleet price vector since
-  2026-07-19 (398 vectors, gaps mostly 5 to 6 h, the longest 24 h).
+  2026-07-19: 398 vectors. Of the 397 gaps, 183 are up to 6 h, 189 are
+  6 to 7 h, and 25 are longer, up to 24 h.
   Retention is 120 days, so every filled outcome can be recomputed from
   stored vectors today.
 - **Gate-crossing anchors.** `gate_events` carries `eligibility_at`. Every
@@ -66,6 +67,11 @@ and shape the approach.
      `exit_price_tao`, `return_pct` and `baseline_return_pct` with the
      corrected values, so the Telegram reader and `status` keep working.
      `rescore` writes only `v2_*`.
+   - Each pass also re-anchors old gate crossings, then writes `v2_*`
+     scores for settled rows that have none, once a vector with
+     registration blocks exists. `rescore` does the same for every settled
+     row, with a fresh chain map. Found during apply: without this, the
+     first pass after deploy scored old gate rows from the crossing.
    - The effectiveness report reads only `v2_*` and counts rows without
      `v2_rules` as unscored.
 
@@ -152,7 +158,9 @@ and shape the approach.
 ## Migration Plan
 
 1. Before the Pi pull, save the board (`build_board` read-only) and the
-   effectiveness output.
+   effectiveness output. `ensure_schema` now adds columns, so the backup
+   must come before anything opens fleet.db with the new code: the pass,
+   `rescore`, and the `effectiveness` and `status` CLIs.
 2. Stop `atlas-fleet.timer`. Run `git pull` on the Pi, then the fleet and
    livedata test suites.
 3. Back up fleet.db with `conn.backup()`. Run `rescore`, then

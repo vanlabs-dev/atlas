@@ -1033,6 +1033,27 @@ class TestEconGate(SignalsBase):
             "SELECT payload_json FROM signal_events WHERE class='econ-code' "
             "AND tier='instant' ORDER BY id").fetchall()
 
+    def test_event_from_a_pass_enters_at_that_pass_vector(self):
+        # Change signal-statistics-ties: an entry takes the first vector at
+        # or after its event. A pass must stamp its events and its vector
+        # with one clock, or every new event misses its own pass's vector.
+        origin, clone_dir, state = self.make_slot(
+            65, {"validator/reward.py": "W = 0.1\n"})
+        config = self._gate_config()
+        sig.run_pass(self.conn, config, price_fetcher=lambda: None)
+        self.advance(65, origin, clone_dir, "validator/reward.py",
+                     "W = 0.25\n", state["local_sha"])
+        sig.run_pass(self.conn, config, judge=_stub_judge("high"),
+                     price_fetcher=lambda: snap({65: 0.02, 1: 1.0}))
+        created, status, entry_ts = self.conn.execute(
+            "SELECT created_at, status, entry_ts FROM signal_entries "
+            "WHERE netuid = 65").fetchone()
+        vector_ts = self.conn.execute(
+            "SELECT MAX(ts) FROM signal_prices").fetchone()[0]
+        self.assertEqual(status, "recorded")
+        self.assertEqual(entry_ts, vector_ts)
+        self.assertEqual(created, vector_ts)
+
     def test_material_change_pages_with_verdict(self):
         origin, clone_dir, state = self.make_slot(
             60, {"validator/reward.py": "W = 0.1\n"})
