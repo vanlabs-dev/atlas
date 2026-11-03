@@ -839,15 +839,97 @@ class TestMeasurement(SignalsBase):
             self.conn.execute(
                 "INSERT INTO signal_outcomes (event_id, netuid, "
                 "horizon_days, due_at, return_pct, baseline_return_pct, "
-                "status) VALUES (?, 50, ?, ?, ?, ?, ?)",
-                (event_id, horizon, _iso(), ret, base, status))
+                "status, v2_status, v2_entry_ts, v2_return_pct, "
+                "v2_baseline_pct, v2_excess_pct, v2_rules) VALUES "
+                "(?, 50, ?, ?, ?, ?, ?, ?, 'm1', ?, ?, ?, ?)",
+                (event_id, horizon, _iso(), ret, base, status,
+                 None if status == "pending" else status, ret, base,
+                 None if ret is None else ret - base,
+                 None if status == "pending" else sig.RULES_VERSION))
         self.conn.commit()
         report = sig.effectiveness(self.conn)
         by_horizon = {item["horizon_days"]: item
                       for item in report["report"]}
         self.assertEqual(by_horizon[1]["median_return_pct"], 10.0)
         self.assertEqual(by_horizon[1]["median_baseline_pct"], 2.0)
+        self.assertEqual(by_horizon[1]["median_excess_pct"], 8.0)
         self.assertEqual(by_horizon[30]["pending"], 1)
+
+
+class TestEffectivenessStatistics(SignalsBase):
+    """Change signal-statistics-ties: the floor counts event moments, the
+    headline is the median paired excess, and the interval resamples whole
+    moments."""
+
+    def _rows(self, event_class, moments, per_moment, excess_of,
+              horizon=7, rules=None):
+        rules = sig.RULES_VERSION if rules is None else rules
+        event_id = 0
+        for m in range(moments):
+            for k in range(per_moment):
+                event_id += 1
+                excess = excess_of(m, k)
+                self.conn.execute(
+                    "INSERT INTO signal_outcomes (source_store, event_id, "
+                    "netuid, source_class, horizon_days, due_at, status, "
+                    "return_pct, baseline_return_pct, v2_status, "
+                    "v2_entry_ts, v2_return_pct, v2_baseline_pct, "
+                    "v2_excess_pct, v2_rules) VALUES ('livedata', ?, ?, ?, "
+                    "?, ?, 'recorded', ?, 0.0, 'recorded', ?, ?, 0.0, ?, ?)",
+                    (event_id, k, event_class, horizon, _iso(), excess,
+                     "moment-%03d" % m, excess, excess, rules))
+        self.conn.commit()
+
+    def _entry(self, event_class, horizon=7):
+        for item in sig.effectiveness(self.conn, self.config)["report"]:
+            if item["class"] == event_class and \
+                    item["horizon_days"] == horizon:
+                return item
+        raise AssertionError("no report entry")
+
+    def test_many_rows_from_few_moments_fail_the_floor(self):
+        # Regression (audit C13): 87 root-rotation rows from 8 event hours
+        # passed the 30-outcome floor.
+        self._rows("root-rotation", 8, 11, lambda m, k: 1.0 + m)
+        entry = self._entry("root-rotation")
+        self.assertEqual(entry["filled"], 88)
+        self.assertEqual(entry["events"], 8)
+        self.assertFalse(entry["meets_promotion_sample"])
+        self.assertFalse(entry["beats_baseline"])
+        self.assertIsNone(entry["excess_ci95"])  # below 10 moments
+
+    def test_interval_is_repeatable(self):
+        self._rows("econ-code", 40, 3, lambda m, k: (m % 7) - 2.0 + k)
+        first = self._entry("econ-code")["excess_ci95"]
+        second = self._entry("econ-code")["excess_ci95"]
+        self.assertIsNotNone(first)
+        self.assertEqual(first, second)
+
+    def test_interval_touching_zero_does_not_beat_baseline(self):
+        # Positive median, but half the moments sit below zero.
+        self._rows("watchlist", 40, 1,
+                   lambda m, k: 3.0 if m % 2 else -2.0 + (m % 5) * 0.1)
+        entry = self._entry("watchlist")
+        self.assertTrue(entry["meets_promotion_sample"])
+        self.assertLessEqual(entry["excess_ci95"][0], 0)
+        self.assertFalse(entry["beats_baseline"])
+
+    def test_clear_excess_beats_baseline(self):
+        self._rows("narrative-cluster", 40, 2, lambda m, k: 5.0 + (m % 3))
+        entry = self._entry("narrative-cluster")
+        self.assertTrue(entry["beats_baseline"])
+        self.assertGreater(entry["excess_ci95"][0], 0)
+
+    def test_rows_without_current_rules_are_unscored(self):
+        self._rows("econ-code", 3, 1, lambda m, k: 1.0, rules=1)
+        entry = self._entry("econ-code")
+        self.assertEqual((entry["filled"], entry["unscored"]), (0, 3))
+
+    def test_report_changes_no_state(self):
+        self._rows("econ-code", 12, 2, lambda m, k: float(m))
+        before = self.conn.total_changes
+        sig.effectiveness(self.conn, self.config)
+        self.assertEqual(self.conn.total_changes, before)
 
 
 # ---------------------------------------------------------------------------
@@ -1474,3 +1556,149 @@ class TestRegistrationMigration(unittest.TestCase):
             "SELECT status, anchor_at FROM signal_entries").fetchone(),
             ("recorded", None))
         conn.close()
+
+
+class TestRescore(SignalsBase):
+    """`rescore` (change: signal-statistics-ties) writes v2 columns only,
+    re-anchors gate crossings, and is idempotent."""
+
+    T0 = datetime.datetime(2026, 9, 9, 16, 0, tzinfo=datetime.timezone.utc)
+
+    def _vector(self, when, prices, reg=None):
+        self.conn.executemany(
+            "INSERT INTO signal_prices (ts, netuid, price_tao, reg_block) "
+            "VALUES (?, ?, ?, ?)",
+            [(when.isoformat(), n, p, (reg or {}).get(n))
+             for n, p in prices.items()])
+
+    def _livedata(self, rows):
+        path = os.path.join(self.tmp, "livedata.db")
+        conn = sqlite3.connect(path)
+        conn.execute(
+            "CREATE TABLE gate_events (id INTEGER PRIMARY KEY, netuid "
+            "INTEGER, observed_at TEXT, eligibility TEXT, eligibility_at "
+            "TEXT)")
+        conn.executemany("INSERT INTO gate_events VALUES (?, ?, ?, ?, ?)",
+                         rows)
+        conn.commit()
+        conn.close()
+        return path
+
+    def _old_gate_row(self):
+        """A gate crossing as the old code left it: entry filled 48 h late
+        at eligibility, 7-day horizon due from the crossing and filled 5
+        days after entry, 1-day horizon filled at 0.000%."""
+        crossed = self.T0
+        eligible = crossed + datetime.timedelta(hours=48)
+        sig.enter_measured_event(self.conn, CFG, sig.SOURCE_LIVEDATA, 1, 34,
+                                 "gate-crossing", crossed.isoformat())
+        self.conn.execute(
+            "UPDATE signal_entries SET price_tao = 1.0, as_of = ?, "
+            "status = 'late'", ((eligible + datetime.timedelta(hours=1))
+                                .isoformat(),))
+        self.conn.execute(
+            "UPDATE signal_outcomes SET status = 'late', return_pct = 0.0, "
+            "baseline_return_pct = 0.0 WHERE horizon_days = 1")
+        self.conn.execute(
+            "UPDATE signal_outcomes SET status = 'recorded', "
+            "return_pct = -4.0, baseline_return_pct = -1.0 "
+            "WHERE horizon_days = 7")
+        self.conn.commit()
+        return crossed, eligible
+
+    def test_rescore_recomputes_from_eligibility_and_keeps_originals(self):
+        crossed, eligible = self._old_gate_row()
+        # Legacy vectors (no occupant key), as stored before this change.
+        self._vector(eligible + datetime.timedelta(hours=1),
+                     {34: 1.0, 51: 1.0})
+        self._vector(eligible + datetime.timedelta(days=1, hours=2),
+                     {34: 0.95, 51: 1.0})
+        self._vector(eligible + datetime.timedelta(days=7, hours=3),
+                     {34: 0.8, 51: 1.1})
+        self.conn.commit()
+        path = self._livedata([(1, 34, crossed.isoformat(), "eligible",
+                                eligible.isoformat())])
+        now = (crossed + datetime.timedelta(days=40)).isoformat()
+        out = sig.rescore(self.conn, self.config, now=now,
+                          registered_now={34: 0, 51: 0}, livedata_path=path,
+                          anchors=[])
+        self.assertEqual(out["reanchored_gate_entries"], 1)
+        rows = {h: r for h, *r in self.conn.execute(
+            "SELECT horizon_days, return_pct, status, v2_status, v2_reason, "
+            "v2_return_pct FROM signal_outcomes ORDER BY horizon_days")}
+        # Originals untouched.
+        self.assertEqual(rows[1][:2], [0.0, "late"])
+        self.assertEqual(rows[7][:2], [-4.0, "recorded"])
+        # 1 day is a real day now; 7 days a real week.
+        self.assertEqual(rows[1][2], "recorded")
+        self.assertAlmostEqual(rows[1][4], -5.0, places=6)
+        self.assertEqual(rows[7][2], "recorded")
+        self.assertAlmostEqual(rows[7][4], -20.0, places=6)
+        # 30 days: no vector near its due time.
+        self.assertEqual(rows[30][1:4], ["pending", None, None])
+
+    def test_stretched_window_without_vector_is_unavailable(self):
+        crossed, eligible = self._old_gate_row()
+        self._vector(eligible + datetime.timedelta(hours=1), {34: 1.0})
+        self.conn.commit()
+        path = self._livedata([(1, 34, crossed.isoformat(), "eligible",
+                                eligible.isoformat())])
+        sig.rescore(self.conn, self.config,
+                    now=(crossed + datetime.timedelta(days=40)).isoformat(),
+                    registered_now={34: 0}, livedata_path=path, anchors=[])
+        v2, reason = self.conn.execute(
+            "SELECT v2_status, v2_reason FROM signal_outcomes WHERE "
+            "horizon_days = 7").fetchone()
+        self.assertEqual((v2, reason), ("unavailable", "no-vector"))
+
+    def test_window_wholly_before_a_later_registration_is_unverified(self):
+        crossed, eligible = self._old_gate_row()
+        start = eligible + datetime.timedelta(hours=1)
+        self._vector(start, {34: 1.0})
+        self._vector(eligible + datetime.timedelta(days=1, hours=2),
+                     {34: 0.5})
+        self.conn.commit()
+        path = self._livedata([(1, 34, crossed.isoformat(), "eligible",
+                                eligible.isoformat())])
+        # SN34's current registration is 30 days after the window.
+        anchors = [(5000, start),
+                   (5000 + 7200 * 60, start + datetime.timedelta(days=60))]
+        sig.rescore(self.conn, self.config,
+                    now=(crossed + datetime.timedelta(days=40)).isoformat(),
+                    registered_now={34: 5000 + 7200 * 30},
+                    livedata_path=path, anchors=anchors)
+        v2, reason = self.conn.execute(
+            "SELECT v2_status, v2_reason FROM signal_outcomes WHERE "
+            "horizon_days = 1").fetchone()
+        self.assertEqual((v2, reason), ("unverified", "unverified"))
+
+    def test_rescore_is_idempotent(self):
+        crossed, eligible = self._old_gate_row()
+        self._vector(eligible + datetime.timedelta(hours=1), {34: 1.0})
+        self._vector(eligible + datetime.timedelta(days=1, hours=2),
+                     {34: 0.9})
+        self.conn.commit()
+        path = self._livedata([(1, 34, crossed.isoformat(), "eligible",
+                                eligible.isoformat())])
+        kwargs = dict(now=(crossed + datetime.timedelta(days=40)).isoformat(),
+                      registered_now={34: 0}, livedata_path=path, anchors=[])
+        sig.rescore(self.conn, self.config, **kwargs)
+        query = ("SELECT id, due_at, status, return_pct, v2_status, "
+                 "v2_reason, v2_entry_ts, v2_exit_ts, v2_return_pct, "
+                 "v2_baseline_pct, v2_excess_pct FROM signal_outcomes "
+                 "ORDER BY id")
+        first = self.conn.execute(query).fetchall()
+        out = sig.rescore(self.conn, self.config, **kwargs)
+        self.assertEqual(self.conn.execute(query).fetchall(), first)
+        self.assertEqual(out["reanchored_gate_entries"], 0)
+
+    def test_rescore_fails_without_registration_map(self):
+        def broken(_config):
+            raise RuntimeError("registration read failed: rpc down")
+        saved = sig._registration_now
+        sig._registration_now = broken
+        try:
+            with self.assertRaises(RuntimeError):
+                sig.rescore(self.conn, self.config)
+        finally:
+            sig._registration_now = saved
