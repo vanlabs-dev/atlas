@@ -34,7 +34,9 @@ depth); no build or test of subtensor is ever run (ATLAS-REPO-009).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime
+import fcntl
 import json
 import os
 import re
@@ -46,7 +48,7 @@ import urllib.error
 import urllib.request
 import secrets as secretsmod
 import shutil
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_MODULE_DIR)
@@ -703,8 +705,79 @@ def _disk_free(path: str) -> Optional[int]:
         return None
 
 
+# One update at a time per clone (change: upgrade-sandbox-scope). The
+# repotrack timer and the upgrade job both run `update`; the upgrade job
+# also holds this lock while it reads the clone (spec, release anchors,
+# diff, source export), so the tree cannot move under it. The job runs
+# `update` as a child while it holds the lock and names the clone in
+# LOCK_HELD_ENV, so the child does not wait on its own parent.
+LOCK_HELD_ENV = "ATLAS_REPO_LOCK_HELD"
+LOCK_WAIT_SECONDS = 900
+LOCK_POLL_SECONDS = 2.0
+
+
+class LockBusy(Exception):
+    """The clone lock stayed held past the wait bound."""
+
+
+def clone_lock_path(clone_dir: str) -> str:
+    return os.path.abspath(clone_dir).rstrip(os.sep) + ".lock"
+
+
+@contextlib.contextmanager
+def clone_lock(clone_dir: str, wait_s: float = LOCK_WAIT_SECONDS,
+               sleep: Any = time.sleep, clock: Any = time.monotonic
+               ) -> Iterator[None]:
+    """Hold the exclusive update lock on `clone_dir`, waiting up to
+    `wait_s` seconds for it. Raises LockBusy when it stays held."""
+    path = clone_lock_path(clone_dir)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a") as handle:
+        deadline = clock() + wait_s
+        while True:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if clock() >= deadline:
+                    raise LockBusy("clone lock %s held for over %ds"
+                                   % (path, int(wait_s)))
+                sleep(LOCK_POLL_SECONDS)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def update(config: Dict[str, Any], repo_root: str = _REPO_ROOT,
-           actor: Optional[str] = None) -> int:
+           actor: Optional[str] = None, sleep: Any = time.sleep) -> int:
+    """`update` under the clone lock. A lock that stays held records the
+    run as `busy`, touches nothing, and returns 1."""
+    clone_dir = _resolve(repo_root, config["clone_dir"])
+    if os.environ.get(LOCK_HELD_ENV) == os.path.abspath(clone_dir):
+        return _update_locked(config, repo_root, actor)
+    wait_s = float(config.get("update_lock_wait_seconds",
+                              LOCK_WAIT_SECONDS))
+    try:
+        with clone_lock(clone_dir, wait_s, sleep=sleep):
+            return _update_locked(config, repo_root, actor)
+    except LockBusy as exc:
+        connection = open_store(_resolve(repo_root, config["db"]))
+        try:
+            now = _utc_now()
+            connection.execute(
+                "INSERT INTO update_runs (run_id, started_at, finished_at, "
+                "status, error) VALUES (?, ?, ?, 'busy', ?)",
+                (_run_id(), now, now, str(exc)))
+            connection.commit()
+        finally:
+            connection.close()
+        print("update busy: %s" % exc, file=sys.stderr)
+        return 1
+
+
+def _update_locked(config: Dict[str, Any], repo_root: str = _REPO_ROOT,
+                   actor: Optional[str] = None) -> int:
     identity = require_confirmed_identity(config)
     clone_dir = _resolve(repo_root, config["clone_dir"])
     db_path = _resolve(repo_root, config["db"])
