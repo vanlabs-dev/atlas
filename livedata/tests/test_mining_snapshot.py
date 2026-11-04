@@ -65,10 +65,12 @@ def uids_key(netuid, hotkey):
 def snapshot_tables(**extra):
     return tables(extra=dict({
         "SubnetOwner": {1: COLDKEY, 8: COLDKEY},
-        "SubnetOwnerHotkey": {1: OWNER_HK},
+        # The chain holds an owner hotkey and a balancer for every non-root
+        # subnet; both are dense maps (change: live-data-correctness).
+        "SubnetOwnerHotkey": {1: OWNER_HK, 8: OWNER_HK},
         "MechanismCountCurrent": {1: u8_hex(2)},
         "MechanismEmissionSplit": {1: vec_u16_hex([1311, 64224])},
-        "SwapBalancer": {1: perquintill_hex(0.5)},
+        "SwapBalancer": {1: perquintill_hex(0.5), 8: perquintill_hex(0.5)},
     }, **extra), incentive={1: vec_u16_hex([100, 0, 50, 0]),
                             4097: vec_u16_hex([0, 7, 0, 0]),
                             8: vec_u16_hex([1, 2])})
@@ -217,12 +219,15 @@ class OwnerResolution(StoreCase):
         out = al.read_mining_snapshot(CONFIG, rpc=rpc)
         self.assertEqual(out["owners"][1]["state"], "unread")
 
-    def test_an_unset_owner_coldkey_resolves_like_the_runtime_default(self):
+    def test_a_missing_owner_key_is_unread_not_the_runtime_default(self):
+        # Audit A13: every registered non-root subnet has a SubnetOwner key,
+        # so a missing one is a read fault, never "the owner owns nothing".
         rpc = FakeChain(snapshot_tables(SubnetOwner={1: COLDKEY}),
                         points=snapshot_points())
         out = al.read_mining_snapshot(CONFIG, rpc=rpc)
-        self.assertEqual(out["owners"][8], {"state": "ok", "uids": [],
-                                            "hotkeys": 0})
+        self.assertEqual(out["owners"][8], {
+            "state": "unread",
+            "reason": "SubnetOwner absent from dense map"})
 
     def test_audit_row_per_read_on_success(self):
         out, _ = self.snapshot()
@@ -244,7 +249,8 @@ class OwnerResolution(StoreCase):
         self.assertIn("SwapBalancer", maps["items"])
         uids = json.loads(rows[3]["params"])
         self.assertEqual(uids["items"], ["Uids"])
-        self.assertEqual(uids["keys_requested"]["Uids"], 3)
+        # SN1: the coldkey's hotkey plus the owner hotkey; SN8 the same.
+        self.assertEqual(uids["keys_requested"]["Uids"], 4)
         # No storage value is retained in the audit.
         self.assertNotIn(COLDKEY[2:], "".join(r["params"] for r in rows))
 
