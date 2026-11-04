@@ -1,0 +1,35 @@
+# Atlas nightly backup (change: pi-offsite-backup). Copies every store
+# with the SQLite backup API, checks each copy, and sends an encrypted
+# restic snapshot to Google Drive through rclone. Keeps 3 daily snapshots.
+#
+# Preconditions, none of them in the repo:
+#   - packages restic and rclone;
+#   - rclone remote `gdrive` with scope drive.file and use_trash = false
+#     (without it, pruned data sits in Drive trash for 30 days and fills
+#     the quota);
+#   - ~/.config/atlas-backup/restic-password, mode 600, with a second copy
+#     in the operator's password manager;
+#   - `restic init` done against the repository below.
+#
+# Install (user-level, as pi; linger is on):
+#   cp ~/atlas/backup/systemd/atlas-backup.{service,timer} \
+#     ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user start atlas-backup.service   # first run by hand
+#   systemctl --user enable --now atlas-backup.timer
+[Unit]
+Description=Atlas nightly backup
+Wants=network-online.target
+After=network-online.target
+OnFailure=atlas-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/pi/atlas
+Environment=RESTIC_REPOSITORY=rclone:gdrive:atlas-backup
+Environment=RESTIC_PASSWORD_FILE=/home/pi/.config/atlas-backup/restic-password
+Environment=RESTIC_CACHE_DIR=/home/pi/.cache/restic
+ExecStart=/usr/bin/python3 /home/pi/atlas/backup/atlas_backup.py run
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h

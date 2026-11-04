@@ -2,19 +2,19 @@
 
 ## 1. Staging and backup set
 
-- [ ] 1.1 Add `backup/config.json`: include roots, exclude patterns, required stores, retention (3 daily), minimum free space (5 GB). Verify: config test loads it and rejects a missing key.
-- [ ] 1.2 Add `backup/atlas_backup.py stage`: walk include roots, detect SQLite by header, skip excluded paths and `-wal`/`-shm`/`.bak-*`, copy each database with `Connection.backup` into `var/backup/staging/` under its home-relative path, run `PRAGMA quick_check` on each copy, fail on a missing required store or a failed check, fail before staging when free space is under the minimum. Verify: unit tests with temp WAL databases written during the copy, a corrupt copy, a missing required store and an excluded `.bak` file.
-- [ ] 1.3 Add `backup/README.md` (what is backed up, what is not and why, where secrets live, install). Verify: file exists and names every exclude.
+- [x] 1.1 Add `backup/config.json`: include roots, exclude patterns, required stores, retention (3 daily), minimum free space (5 GB). Verify: config test loads it and rejects a missing key.
+- [x] 1.2 Add `backup/atlas_backup.py stage`: walk include roots, detect SQLite by header, skip excluded paths and `-wal`/`-shm`/`.bak-*`, copy each database with `Connection.backup` into `var/backup/staging/` under its home-relative path, run `PRAGMA quick_check` on each copy, fail on a missing required store or a failed check, fail before staging when free space is under the minimum. Verify: unit tests with temp WAL databases written during the copy, a corrupt copy, a missing required store and an excluded `.bak` file.
+- [x] 1.3 Add `backup/README.md` (what is backed up, what is not and why, where secrets live, install). Verify: file exists and names every exclude.
 
 ## 2. Upload, retention and status
 
-- [ ] 2.1 Add `run`: stage, then `restic backup` of staging plus non-database includes with the exclude list, then `restic forget --keep-daily 3 --prune`, then `restic check`, then write `var/backup/last.json` atomically on success, then clear staging (also on failure). Commands built as argument lists, environment from `RESTIC_REPOSITORY` and `RESTIC_PASSWORD_FILE`, no secret in any log line. Verify: tests with a fake `restic` on `PATH` cover the call order, the exact include and exclude arguments, a failed upload leaving `last.json` unchanged, staging cleared after failure, and no secret in captured output.
-- [ ] 2.2 Add `restore-check`: restore the latest snapshot into a scratch dir under `var/backup/`, `quick_check` every restored database, report counts, remove the scratch dir. Verify: test with the fake `restic` writing a good and a corrupt database.
+- [x] 2.1 Add `run`: stage, then `restic backup` of staging plus non-database includes with the exclude list, then `restic forget --keep-daily 3 --prune`, then `restic check`, then write `var/backup/last.json` atomically on success, then clear staging (also on failure). Commands built as argument lists, environment from `RESTIC_REPOSITORY` and `RESTIC_PASSWORD_FILE`, no secret in any log line. Verify: tests with a fake `restic` on `PATH` cover the call order, the exact include and exclude arguments, a failed upload leaving `last.json` unchanged, staging cleared after failure, and no secret in captured output.
+- [x] 2.2 Add `restore-check`: restore the latest snapshot into a scratch dir under `var/backup/`, `quick_check` every restored database, report counts, remove the scratch dir. Verify: test with the fake `restic` writing a good and a corrupt database.
 
 ## 3. Units and README tables
 
-- [ ] 3.1 Add `backup/systemd/atlas-backup.{service,timer}`: oneshot, 03:40 local, `RandomizedDelaySec=10m`, `Persistent=true`, `Nice=10`, idle IO, `OnFailure=atlas-notify-failure@%n.service`, the two restic environment variables, install comment in the header. Verify: `systemd-analyze verify` on the workstation passes.
-- [ ] 3.2 Add `backup` to `COMPONENTS` in `tools/readme_sync.py` and run `python3 tools/readme_sync.py`. Verify: `python3 tools/readme_sync.py --check` and `tools/tests` pass; every Python suite passes.
+- [x] 3.1 Add `backup/systemd/atlas-backup.{service,timer}`: oneshot, 03:40 local, `RandomizedDelaySec=10m`, `Persistent=true`, `Nice=10`, idle IO, `OnFailure=atlas-notify-failure@%n.service`, the two restic environment variables, install comment in the header. Verify: `systemd-analyze verify` on the workstation passes.
+- [x] 3.2 Add `backup` to `COMPONENTS` in `tools/readme_sync.py` and run `python3 tools/readme_sync.py`. Verify: `python3 tools/readme_sync.py --check` and `tools/tests` pass; every Python suite passes.
 
 ## 4. Pi setup (operator approval for each step)
 

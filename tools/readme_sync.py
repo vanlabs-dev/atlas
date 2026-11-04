@@ -42,6 +42,7 @@ COMPONENTS: Dict[str, str] = {
     "hermes": "Read-only verifiers for the Hermes agent baseline, memory and model",
     "inventory": "Read-only device inventory collector",
     "hardening": "Read-only security-posture assessor and the operator-approved apply scripts",
+    "backup": "Nightly encrypted restic backup of the stores and Hermes state to Google Drive",
     "tools": "Repository tooling, including this README generator",
     "web": "The subnt.dev site: Next.js pages over a typed data layer",
 }
