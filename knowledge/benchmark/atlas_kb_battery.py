@@ -146,7 +146,8 @@ _PA = (
      [["pool", "amm"], ["not"]]),
     ("KB-PA-4", "A subnet just got kicked off the network — what happens "
      "to the alpha tokens people were holding?",
-     [["tao"], ["proportional", "returned"]]),
+     # "proportion" also matches "proportional" (word-start rule).
+     [["tao"], ["proportion", "returned", "paid out", "pro rata", "pro-rata"]]),
     ("KB-PA-5", "Can just anyone validate on a subnet, or is there a "
      "bar to clear?", [["64"], ["stake"]]),
     # network-drift-443: a rank-pinned bar moves on its own, so "crossed
@@ -192,7 +193,8 @@ _CF = (
     ("KB-CF-4", "Root Reborn curation is live and validators are "
      "steering their baskets, right?",
      [["false", "off", "disabled", "unset", "retired", "removed"],
-      ["null strategy", "accumulate", "in place"],
+      ["accumulate", "in place", "stay on", "stays on", "where they land",
+       "origin subnet", "not steered"],
       ["464", "469", "2026-09-17", "september 2026", "sep 2026"]]),
     # network-drift-455: tempts the bar as the only reason a subnet with
     # demand earns no TAO. A passing answer names the pool-side switch.
