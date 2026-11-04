@@ -369,6 +369,7 @@ def open_store(db_path: str) -> sqlite3.Connection:
                              ("eligibility", "TEXT"),
                              ("eligibility_at", "TEXT"))),
             ("gate_sides", (("hovering", "INTEGER"),)),
+            ("panel_snapshot", (("panel_block", "INTEGER"),)),
             ("spec_upgrades", (("source", "TEXT"),))):
         columns = {row[1] for row in connection.execute(
             "PRAGMA table_info(%s)" % table)}
@@ -3998,15 +3999,50 @@ _SNAPSHOT_PANEL_FIELDS = (
     "active_miners", "emission_miner_burn", "name")
 
 
+def check_panel(gcfg: Dict[str, Any], panel: Dict[str, Any],
+                chain_block: Optional[int],
+                chain_values: Dict[str, Dict[Any, Any]]) -> Dict[str, Any]:
+    """Whether a validated TaoSwap panel is current and complete enough to
+    snapshot (change: live-data-correctness, audit A14). Current: its own
+    block trails the pass's chain block by at most `panel_max_lag_blocks`;
+    a panel with no block is not current. Complete: at least as many
+    non-root rows as the chain has non-root registered subnets."""
+    max_lag = int(gcfg.get("panel_max_lag_blocks", 300))
+    block = panel.get("block_reference")
+    block = block if isinstance(block, int) and not isinstance(
+        block, bool) else None
+    lag = (chain_block - block
+           if block is not None and isinstance(chain_block, int) else None)
+    out = {"ok": False, "block": block, "lag": lag}
+    if lag is None or lag > max_lag:
+        out.update(category="panel-lagging",
+                   detail="panel block %s vs chain block %s (limit %d)"
+                   % (block, chain_block, max_lag))
+        return out
+    rows = sum(1 for row in (panel.get("values") or {}).get("subnets") or []
+               if row.get("netuid") != ROOT_NETUID)
+    registered = sum(1 for n in (chain_values.get("SubnetworkN") or {})
+                     if n != ROOT_NETUID)
+    if rows < registered:
+        out.update(category="panel-short",
+                   detail="panel has %d non-root rows, chain has %d "
+                   "registered subnets" % (rows, registered))
+        return out
+    out["ok"] = True
+    return out
+
+
 def record_panel_snapshot(connection: sqlite3.Connection,
                           gcfg: Dict[str, Any],
                           subnets: List[Dict[str, Any]],
                           shares: Dict[int, float],
-                          block_number: Optional[int]) -> int:
+                          block_number: Optional[int],
+                          panel_block: Optional[int] = None) -> int:
     """Persist one snapshot row per non-root subnet from the validated
     panel of this pass, carrying the computed demand share (change:
-    pulse-briefing). Absent fields persist as NULL, never zero. Retention
-    is bounded and pruned in the same pass."""
+    pulse-briefing) and both the chain block and the panel's own block
+    (change: live-data-correctness). Absent fields persist as NULL, never
+    zero. Retention is bounded and pruned in the same pass."""
     now = _utc_now()
     retention = max(1, int(gcfg.get("panel_snapshot_retention_days", 90)))
     written = 0
@@ -4035,8 +4071,8 @@ def record_panel_snapshot(connection: sqlite3.Connection,
             "outflow, volume_24h, holders_count, market_cap, active_miners, "
             "emission_miner_burn, emission_is_enabled, dereg_risk_level, "
             "dereg_prune_rank, dereg_is_immune, conviction_is_contested, "
-            "takeover_eligible, king_is_owner, name) "
-            "VALUES (%s)" % ", ".join("?" * 24), values)
+            "takeover_eligible, king_is_owner, name, panel_block) "
+            "VALUES (%s)" % ", ".join("?" * 25), values + [panel_block])
         written += 1
     cutoff = (datetime.datetime.now(datetime.timezone.utc)
               - datetime.timedelta(days=retention)).isoformat()
@@ -4274,9 +4310,17 @@ def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
     if panel.get("status") != "ok":
         summary["panel"] = "live-unavailable"
     else:
-        summary["panel_snapshot_rows"] = record_panel_snapshot(
-            connection, gcfg, panel["values"]["subnets"], shares,
-            state["block_number"])
+        panel_check = check_panel(gcfg, panel, state["block_number"],
+                                  share_read.get("values") or {})
+        summary["panel_lag_blocks"] = panel_check["lag"]
+        if panel_check["ok"]:
+            summary["panel_snapshot_rows"] = record_panel_snapshot(
+                connection, gcfg, panel["values"]["subnets"], shares,
+                state["block_number"], panel_block=panel_check["block"])
+        else:
+            summary["panel"] = panel_check["category"]
+            health_event(connection, "taoswap", "subnets_taoswap",
+                         panel_check["category"], panel_check["detail"])
     events = update_gate_sides(connection, gcfg, state["theta"], shares,
                                enabled, state["block_number"],
                                prev_theta=state.get("prev_theta"))

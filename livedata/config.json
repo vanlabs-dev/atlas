@@ -81,6 +81,8 @@
     "above_count_tolerance": 1,
     "_pin_check_comment": "Exact rank check at each theta pin (change: live-data-correctness). The runtime re-pins theta when block % 360 == 0 from the shares in that block before its moving prices advance, so shares rebuilt from the state at pin - 1 put exactly N subnets at or above it. A pass runs the check only within pin_check_max_age_blocks of the pin (the node keeps about 256 blocks of state); an older pass or pruned state is a skip, not a failure. Any other count records pin-check-divergence.",
     "pin_check_max_age_blocks": 240,
+    "_panel_check_comment": "The TaoSwap panel feeds only panel_snapshot (change: live-data-correctness). A pass writes snapshot rows only when the panel's own block (dereg_context.current_block) trails the chain block by at most panel_max_lag_blocks and the panel holds at least as many non-root rows as the chain has registered subnets; otherwise it records panel-lagging or panel-short. The lag is in every pass summary; 300 (about 1 h) is a first value to tune from that record.",
+    "panel_max_lag_blocks": 300,
     "_pulse_comment": "pulse-briefing additions: panel_snapshot_retention_days bounds the per-pass per-subnet panel snapshot (hourly x 128 subnets; pruned in the same pass). hover_crossings/hover_window_days flag a subnet as hovering once it records MORE THAN hover_crossings crossings inside the window; flagged crossings are still recorded, carry a hovering annotation, and clear only after a full quiet window. A zero moving price is treated as a panel gap for side tracking (no crossing to zero; counts toward absence), because a live subnet with a pool cannot price at zero.",
     "panel_snapshot_retention_days": 90,
     "hover_crossings": 2,
