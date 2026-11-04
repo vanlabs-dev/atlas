@@ -92,6 +92,7 @@ livedata-metagraphed-gaps, 2026-11-02):
 - `live_validators`: TaoSwap. Every validator by total stake, one
   subnet's validators (`netuid`), or one validator's subnets and top
   delegators (`hotkey`).
+- `live_chain_params`: the latest hourly reading of every network-wide watched chain parameter (gate bar, registration rules, conviction rates, childkey rules, commit-reveal version, basket switches) from the local store, with block, read time and provenance. No provider call.
 - `live_hyperparams`: chain first. Each hyperparameter is read from Finney
   storage at one finalized block. TaoSwap fills unset items and
   cross-checks set ones; a mismatch is `conflicting` with both values.

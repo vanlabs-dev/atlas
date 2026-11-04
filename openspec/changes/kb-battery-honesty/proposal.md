@@ -59,6 +59,7 @@ None.
   - The Retrieval benchmark gate's refusal and marker rules.
   - New requirements: markers pinned to the corpus; the pre-activation retrieval check; the corpus polarity lint; the grounding report.
 - `agent-voice`: a new requirement that mechanism claims need knowledge or live evidence in the session.
+- `live-data` (added 2026-11-05, operator decisions A and 3A): the nine corpus-stated network values are declared reads, in `read-knobs` and in the chain-parameter watch, and a new read-only `live_chain_params` tool serves the watched values to the agent.
 - `runtime-upgrade`: the push gate list names the knowledge retrieval checks as part of the test gate.
 
 ## Impact
