@@ -1,11 +1,11 @@
 {
-  "origin": "D:/Coding/Bittensor/IntoOps/intoops-routines/references (source of truth)",
-  "sync_date": "2026-10-26",
-  "coverage_date": "2026-10-26",
+  "origin": "knowledge/corpus/ in vanlabs-dev/atlas (source of truth)",
+  "sync_date": "2026-11-05",
+  "coverage_date": "2026-11-05",
   "grounded_spec": 486,
   "files": {
-    "ground-truth.md": "ac642315cd0e708c9008d16381cb0a683c624fc221fe92fe5598d961a73c240d",
-    "fact-patterns.md": "3169fb8c5357a8b5dcfab5ae3f9a720fee51c7590236f81460c099bfaa47a970",
+    "ground-truth.md": "9162cd36321cca353d74c50fd353d81ecc44a59bf63634484ad58c5b216a3723",
+    "fact-patterns.md": "0eae62e93a8f0d5ea524a9fb5075e76c8e84b6c3bb17bd3e8653eb0067230559",
     "negative-claim-rules.md": "7b008af1b1cfe2441b520d2b66164dd5b0ba85c1fca71456c5466872727330de"
   },
   "note": "sha256 over newline-normalized (LF) bytes; see load_corpus"

@@ -28,7 +28,7 @@ Fix: Current daily emission is ~3,600 TAO (0.5 TAO/block) after the first halvin
 ### 3. Outdated emission model
 Patterns: "emissions based on net tao flows", "taoflow determines/drives emissions", "flow-based emissions", "net staking flows determine emissions" (when NOT describing Taoflow as the historical November 2025 to June 2026 model)
 
-Fix: As of June 2026, emissions are PRICE-based again (subtensor v3.4.6-421), and the price model itself has since evolved: root_prop was removed from the share on 2026-07-16 (spec 432), an emission gate was added on 2026-07-27 (spec 440), and the gate's bar became rank-pinned on 2026-08-03 (spec 441). The CURRENT share is EMA price x (1 - miner_burn), normalized across emit-enabled subnets, then passed through a Hill gate that collapses below-bar (low-demand) subnets toward zero and redistributes to above-bar subnets. Taoflow (flow-based) applied only from November 2025 to June 2026. A correct price-based description must NOT be flagged.
+Fix: As of June 2026, emissions are PRICE-based again (subtensor v3.4.6-421), and the price model itself has since evolved: root_prop was removed from the share on 2026-07-16 (spec 432), an emission gate was added on 2026-07-27 (spec 440), and the gate's bar became rank-pinned on 2026-08-03 (spec 441). The CURRENT share is EMA price x (1 - miner_burn), normalized across the chain's emit-to set (every non-root subnet with a first emission block, `SubtokenEnabled` and registration allowed); a subnet with `SubnetEmissionEnabled` false stays in that set through the gate and is zeroed only afterwards. The share is then passed through a Hill gate that collapses below-bar (low-demand) subnets toward zero and redistributes to above-bar subnets. Taoflow (flow-based) applied only from November 2025 to June 2026. A correct price-based description must NOT be flagged.
 
 ### 3a. Outdated price-based formula (root_prop in the share, or no gate)
 Patterns: "root_prop x EMA price", "root proportion weights/determines emission share", any CURRENT-tense share formula that includes root_prop, or any claim that every subnet with demand earns a proportional share (ignoring the gate).
@@ -45,7 +45,7 @@ Fix: Use the model in effect THEN. For a subnet that burned historically and is 
 ### 4. Root validators voting on emissions
 Pattern: "root validators vote/voting/decide/determine emissions"
 
-Fix: Root validator voting was replaced by dTAO in February 2025. Emissions are now gated price-based: EMA price x (1 - miner_burn), normalized across emit-enabled subnets, then passed through the emission gate.
+Fix: Root validator voting was replaced by dTAO in February 2025. Emissions are now gated price-based: EMA price x (1 - miner_burn), normalized across the chain's emit-to set (every non-root subnet with a first emission block, `SubtokenEnabled` and registration allowed); a subnet with `SubnetEmissionEnabled` false stays in that set through the gate and is zeroed only afterwards. The share is then passed through the emission gate.
 
 ### 4a. Zero TAO attributed to the emission-gate bar alone
 Pattern: a subnet with real demand (nonzero moving price, nonzero demand share) earning no TAO is explained only by the emission-gate bar, theta, "below the bar", or "gated emission collapsed", with no mention of the pool-side emission switch / `SubnetEmissionEnabled`.
@@ -77,7 +77,7 @@ Fix: Locking stake (conviction) does NOT change emissions or rewards. Canon: "Lo
 ### 7c. Miner burn confused with chain buys or emission share
 Pattern: treating "miner burn" / emission_miner_burn as the same thing as chain buys, or as the subnet's emission share.
 
-Fix: miner_burn is a THIRD distinct metric: the proportion (0..1) of a subnet's miner emission withheld from miners (sent to the owner/burn key) in a tempo, counted whether recycled or burned. Under the price-based model it scales the subnet's emission share via the (1 - miner_burn) term. It is NOT chain buys and NOT emission share. Keep all three terms distinct.
+Fix: miner_burn is a THIRD distinct metric: the proportion (0..1) of a subnet's miner emission withheld from miners (sent to the owner/burn key) in a tempo, counted whether recycled or burned. Under the price-based model it scales the subnet's emission share via the (1 - miner_burn) term. It is NOT chain buys and NOT emission share. Keep all three terms distinct. On chain it is `MinerBurned` (per netuid, a 0..1 fraction, written each epoch). Atlas tools report it as a PERCENT: `atlas-live` `emission_miner_burn` is 0-100 (`emission_miner_burn_unit` `percent_0_100`) and the fleet mining board's `miner_burn_pct` is 0-100. A tool value of 57.6 is 0.576 on chain. Never mix the two scales in one answer.
 
 ### 7d. Emission gate bar described as a q-mass quantile
 Pattern: "the bar is the share at which cumulative demand crosses q", "subnets above the bar carry 75% of demand", or quoting EmissionBarQuantile as the thing that sets the bar.

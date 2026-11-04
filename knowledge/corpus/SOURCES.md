@@ -5,13 +5,37 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 
 | field | value |
 |---|---|
-| Source of truth | `D:\Coding\Bittensor\IntoOps\intoops-routines\references\` |
-| Sync date | 2026-10-27 |
-| Coverage date | 2026-10-27 |
+| Source of truth | this directory, `knowledge/corpus/` in `vanlabs-dev/atlas` (the IntoOps copy is closed and never synced from) |
+| Sync date | 2026-11-05 |
+| Coverage date | 2026-11-05 |
 | Grounded at | Finney `spec_version` **486** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
+
+Verified 2026-11-05 against Finney RPC, workstation reads (audit WP13):
+
+- Per-subnet hyperparameters for all 128 subnets at finalized block
+  9434494 (`0x0f641a845c312690e6deb171aefa657a72fb23249692a84a87c1fadc7481036b`):
+  `Tempo` 360 on 124 subnets, SN1 99, SN18 1800, SN19 7200, SN38 1440.
+  `ImmunityPeriod` set on all 128, 5000 on 68, range 0 to 65535.
+  `CommitRevealWeightsEnabled` true on 44, false on 35, unset (default
+  true) on 49. `Yuma3On` true on 32, false on 1, unset (default false) on
+  95. `LiquidAlphaOn` true on 8. `BondsMovingAverage` unset on 109.
+- Plain values at finalized block 9434521
+  (`0xacf84f86e78af06dbb9f1589fc9b3db44b3932639c994c21ba967d89f3ab0063`):
+  `MaturityRate` 311622 (explicit; code default 934866), `UnlockRate`
+  unset, `PendingChildKeyCooldown` 7200, `StakeThreshold` 1000 TAO, `CKBurn`
+  0, `MaxChildkeyTake`, `MinChildkeyTake`, `TxChildkeyTakeRateLimit` and
+  `CommitRevealWeightsVersion` unset.
+- Mechanics added or corrected from the subtensor `v486` tag (commit
+  `72323e132`): per-subnet tempo and the `LastEpochBlock` scheduler; UID
+  immunity and pruning; commit-reveal, bonds, Yuma 3 and liquid alpha;
+  childkeys and take; per-subnet alpha halving; subnet lock and UID
+  registration TAO destination; emit-to set normalization; conviction
+  rates as time constants. dTAO launch date 2025-02-13 from the subtensor
+  `v2.0.0 DTAO` GitHub release.
+
 
 Verified 2026-10-27 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
 
@@ -318,5 +342,5 @@ same order:
    the subnt deploy key.
 10. Activate only after the push lands: `activate --run <run>`.
 
-The originals in `intoops-routines` are never modified or deleted from this
-repo (ATLAS-KB-007 closed as not-applicable).
+This directory is the only corpus source. Nothing is synced from the
+closed IntoOps copy (ATLAS-KB-007 closed as not-applicable).

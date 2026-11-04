@@ -1315,3 +1315,20 @@ Audit WP12 (A13 to A19). Operator decisions:
 New chain reads (probe-coupled; since WP5 a rename is an operator fix):
 `SubnetMovingPrice` (`FixedI128<U32>`), `FirstEmissionBlockNumber`,
 `SubtokenEnabled`.
+
+## Corpus quality pass (2026-11-05, audit WP13)
+
+Spec stays **486**. The corpus was corrected and extended from the
+subtensor `v486` tag and Finney reads at finalized blocks 9434494 and
+9434521 (details in `knowledge/corpus/SOURCES.md`).
+- Corrected: tempo is per subnet (four subnets run other values); subnet
+  lock TAO becomes pool TAO, not recycled; UID registration TAO enters the
+  pool and the burned share is alpha; dTAO launched 2025-02-13;
+  `MaturityRate` and `UnlockRate` are time constants, and the live
+  maturity half-life is 30 days, not 90; the demand share normalizes over
+  the chain's emit-to set; miner_burn is 0..1 on chain and a percent in
+  Atlas tools.
+- Added: UID immunity and pruning, commit-reveal, bonds, Yuma 3, liquid
+  alpha (effective only with Yuma 3 in spec 486), childkeys and take,
+  per-subnet alpha halving.
+- `SOURCES.md` and `hashes.json` name this repo as the only corpus source.
