@@ -24,7 +24,7 @@
 
 ## 5. Vitals
 
-- [ ] 5.1 `run_vitals_daily` per design decision 10: the expected date is UTC yesterday; no call when that row exists; `INSERT OR IGNORE`; anything not `fresh` writes nothing and records `vitals-aged` at most once per expected date. Verify: tests: provider lagging one more day is retried with no write and no replace; expected date stored makes no call; aged response gives one health event over two passes; a new date is inserted; an invalid response gives a health event as today.
+- [x] 5.1 `run_vitals_daily` per design decision 10: the expected date is UTC yesterday; no call when that row exists; `INSERT OR IGNORE`; anything not `fresh` writes nothing and records `vitals-aged` at most once per expected date. Verify: tests: provider lagging one more day is retried with no write and no replace; expected date stored makes no call; aged response gives one health event over two passes; a new date is inserted; an invalid response gives a health event as today.
 
 ## 6. Docs, rehearsal, deploy
 
