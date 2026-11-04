@@ -74,7 +74,7 @@ See proposal.md (Why). State measured on 2026-11-04 during the WP12 re-check:
      - count shares `>= theta x (1 - 1e-6)`.
    - Expected: N, or every positive share when fewer than N are positive. Anything else records `pin-check-divergence`.
    - A read error at P - 1 (pruned state) records `skipped` in the summary with no health event.
-   - Results go to two new nullable `gate_state` columns: `pin_block` and `pin_above_count`.
+   - Results go to three new nullable `gate_state` columns: `pin_block`, `pin_above_count` and `pin_status` (`checked`, `divergent`, or `skipped: <reason>`). The status is on the pass's own row because the Pi keeps no journal (added during apply).
    - About two thirds of hourly passes qualify.
    - Why the epsilon: Atlas sums floats while the chain uses truncating U64F64. At the pin, s_N equals theta, so a strict `>=` could flip on rounding. The measured gap to the next share was 3% (0.00807796 against 0.00832901), far above 1e-6.
    - Alternative considered: exact fixed-point arithmetic. Rejected as out of proportion for a health check.

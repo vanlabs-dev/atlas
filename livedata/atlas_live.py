@@ -366,7 +366,8 @@ def open_store(db_path: str) -> sqlite3.Connection:
                             ("bar_mode", "TEXT"),
                             ("above_count", "INTEGER"),
                             ("pin_block", "INTEGER"),
-                            ("pin_above_count", "INTEGER"))),
+                            ("pin_above_count", "INTEGER"),
+                            ("pin_status", "TEXT"))),
             ("gate_events", (("prev_theta", "REAL"),
                              ("hovering", "INTEGER"),
                              ("eligibility", "TEXT"),
@@ -3226,6 +3227,10 @@ def read_mining_context(config: Dict[str, Any], values: Dict[str, Any],
     else:
         out["maps"] = maps["values"]
         out["failures"] = dict(maps.get("failures") or {})
+        # A failed item (empty or short batch) comes back as an empty map;
+        # without this it would read as every subnet at the runtime default.
+        for item, reason in (maps.get("failed_items") or {}).items():
+            out["unread"][item] = reason
         permits = maps["values"].get("ValidatorPermit") or {}
         permit_failures = (maps.get("failures") or {}).get(
             "ValidatorPermit") or {}
@@ -4397,8 +4402,17 @@ def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
                 "above-bar count %d vs rank %d at block %s"
                 % (above_count, rank, state["block_number"]))
     summary["above_count"] = above_count
-    summary["pin_check"] = run_pin_check(connection, config, state, rpc=rpc,
-                                         read_maps=read_maps)
+    pin = run_pin_check(connection, config, state, rpc=rpc,
+                        read_maps=read_maps)
+    summary["pin_check"] = pin
+    # Durable on the pass's own row: the Pi keeps no journal, and a NULL
+    # would read the same as a row written before the check existed.
+    connection.execute(
+        "UPDATE gate_state SET pin_status = ? WHERE id = "
+        "(SELECT id FROM gate_state ORDER BY id DESC LIMIT 1)",
+        (pin["status"] if pin["status"] != "skipped"
+         else "skipped: %s" % pin.get("reason"),))
+    connection.commit()
     return summary
 
 
