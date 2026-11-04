@@ -1323,7 +1323,8 @@ subtensor `v486` tag and Finney reads at finalized blocks 9434494 and
 9434521 (details in `knowledge/corpus/SOURCES.md`).
 - Corrected: tempo is per subnet (four subnets run other values); subnet
   lock TAO becomes pool TAO, not recycled; UID registration TAO enters the
-  pool and the burned share is alpha; dTAO launched 2025-02-13;
+  pool and the burned share's alpha leaves issuance; dTAO's first block
+  4920351 is 2025-02-13 21:41:24 UTC;
   `MaturityRate` and `UnlockRate` are time constants, and the live
   maturity half-life is 30 days, not 90; the demand share normalizes over
   the chain's emit-to set; miner_burn is 0..1 on chain and a percent in
