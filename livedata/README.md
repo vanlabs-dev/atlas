@@ -152,10 +152,18 @@ shares sit at or above the bar, so each rank-mode pass persists
 `invariant-divergence` health event when they disagree beyond
 `above_count_tolerance`. The count comes from the computed shares, not
 from tracked sides, so hysteresis cannot masquerade as disagreement. It
-never suppresses events or discards a pass. Demand shares come
-from the `subnets_taoswap` panel of the same pass, normalized over ALL
-non-root subnets (the chain's bar universe includes emission-disabled
-subnets — they are zeroed only after gating). Per-netuid sides flip only
+never suppresses events or discards a pass. Demand shares are read
+from chain storage at the gate's own block (change:
+live-data-correctness): `SubnetMovingPrice x (1 - MinerBurned)`,
+normalized over the chain's emit-to universe (non-root, a recorded
+`FirstEmissionBlockNumber`, `SubtokenEnabled`, registration allowed).
+Emission-disabled subnets stay in it; the chain zeroes them only after
+gating. A failed share read records `share-read-failed` and the pass
+records no events; a TaoSwap outage no longer stops the gate. In rank
+mode a pass within `pin_check_max_age_blocks` of the latest 360-block
+theta pin also rebuilds the shares at pin - 1, where exactly N must sit
+at or above the pinned theta (`pin_block`, `pin_above_count` on
+`gate_state`; `pin-check-divergence` otherwise; pruned state is a skip). Per-netuid sides flip only
 after the share exits a ±`hysteresis_pct` band around theta on
 `confirm_polls` consecutive polls; first sight seeds silently, absence
 for `absence_clear_polls` clears a side (netuid-reuse guard), and a
@@ -206,12 +214,23 @@ atlas-live:
 ## Panel snapshot, vitals, and gate smoothing (change: pulse-briefing)
 
 Each gate pass that validates the TaoSwap panel persists one
-`panel_snapshot` row per non-root subnet (computed demand share plus the
+`panel_snapshot` row per non-root subnet (the chain demand share plus the
 panel fields the briefing reads; absent fields stay NULL, never zero),
-pruned to `gate_signal.panel_snapshot_retention_days`. Once per UTC day
-the poll also persists one `network_vitals` row from two keyless calls
-(`network_stats_taoswap`, `price_daily_taoswap`); a failed or invalid
-fetch records a health event and persists nothing for the day.
+with the chain block and the panel's own `panel_block`, pruned to
+`gate_signal.panel_snapshot_retention_days`. Rows are written only when
+the panel trails the chain by at most `panel_max_lag_blocks` and holds a
+row for every registered non-root subnet; otherwise the pass records
+`panel-lagging` or `panel-short` (change: live-data-correctness). The
+panel is never cut to a fixed length.
+
+The poll also persists one `network_vitals` row per provider data date
+from two keyless calls (`network_stats_taoswap`, `price_daily_taoswap`).
+Each pass fetches until UTC yesterday's date is stored, so a provider
+lagging one to two days does not skip a date; a stored row is never
+replaced. A failed or invalid fetch records a health event; a response
+that is not fresh writes nothing and records one `vitals-aged` event per
+expected date. Scheduled calls wait out the provider spacing rather than
+being refused.
 
 Side tracking treats a zero moving price as a panel gap, not a demand
 reading: no crossing to or from zero, and the pass counts toward the
