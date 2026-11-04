@@ -97,7 +97,12 @@ _EX = (
     # question no longer asks whether curation is active.
     ("KB-EX-8", "Under Root Reborn, what happens to root dividends once "
      "they reach a validator's basket?",
-     [["null strategy", "accumulate", "in place", "disabled", "false"]]),
+     # spec 469 retired root weights: "null strategy", "disabled" and
+     # "false" named the old switch. Live fact: dividends stay where they
+     # land and only a basket trade changes the mix.
+     [["accumulate", "in place", "stay on", "stays on", "where they land",
+       "origin subnet", "not steered"],
+      ["swap_basket"]]),
     # network-drift-455: spec 454 narrowed claim_root.
     ("KB-EX-9", "When I call claim_root, does it redeem pro-rata across "
      "every holding in the basket?",

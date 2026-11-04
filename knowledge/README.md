@@ -78,15 +78,18 @@ tag scoring from `state.db`, threshold sheet, exceptions, exit codes
 # on the Pi, after ingest + activate + Hermes config points at atlas-kb:
 python3 hermes/modelval/run_battery.py \
     --battery knowledge/benchmark/atlas_kb_battery.py \
-    --toolsets-tc atlas-kb --toolsets-plain atlas-kb \
+    --toolsets-tc atlas-kb,atlas-live,atlas-fleet,atlas-repo \
+    --toolsets-plain atlas-kb,atlas-live,atlas-fleet,atlas-repo \
     --tool-sets exact,paraphrase,historical,conflict,unsupported,adversarial
 python3 knowledge/benchmark/atlas_kb_score.py score
 ```
 
-Every `hermes -z` session loads all enabled Atlas MCP servers whatever
-`--toolsets-*` says (WP10 trace), so the battery measures the production
-tool set: a live-sourced value on an adversarial question is a correct
-answer, and the scorer checks for the live-tool call.
+Name all four Atlas MCP servers in `--toolsets-*`. A `hermes -z` session
+loads only the toolsets it is given (2026-11-05 run: with `atlas-kb` alone,
+the agent saw the knowledge base and X search, no live tools), so a run
+with fewer servers does not measure the production tool set. With all four,
+a live-sourced value on an adversarial question is a correct answer, and
+the scorer checks for the live-tool call.
 
 ## Hermes registration (replacing atlas-test)
 
