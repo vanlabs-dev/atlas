@@ -11,7 +11,7 @@ from _helpers import CORPUS_DIR, akb, ingest_real_corpus
 
 
 class SplitterTests(unittest.TestCase):
-    def test_real_corpus_splits_into_sections(self):
+    def test_real_corpus_splits_into_blocks(self):
         corpus = akb.load_corpus()
         total = 0
         for filename, info in corpus["files"].items():
@@ -21,8 +21,9 @@ class SplitterTests(unittest.TestCase):
                 self.assertTrue(unit["content"].strip())
                 self.assertLessEqual(unit["line_start"], unit["line_end"])
                 self.assertTrue(unit["unit_id"].startswith(filename))
-        self.assertGreaterEqual(total, 15)
-        self.assertLessEqual(total, 40)
+        # block units (change: knowledge-retrieval): hundreds, not dozens
+        self.assertGreaterEqual(total, 200)
+        self.assertLessEqual(total, 600)
 
     def test_unique_unit_ids_in_real_corpus(self):
         corpus = akb.load_corpus()

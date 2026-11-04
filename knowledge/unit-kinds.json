@@ -1,0 +1,25 @@
+{
+  "_comment": "Unit kind by heading path (change: knowledge-retrieval). An entry covers its exact path and every subsection under it; the longest match wins. Unmapped units are fact. procedure units are stored but never searched. Every entry must match a real corpus heading (tested).",
+  "kinds": {
+    "Fact-Check Patterns": "procedure",
+    "CRITICAL: SOURCE VERIFICATION (before anything else)": "procedure",
+    "Known wrong claims": "correction",
+    "Claims to verify": "correction",
+    "Claims to verify > 8. Em dashes": "procedure",
+    "Self-Check Procedure": "procedure",
+    "Common Mistakes to Avoid": "correction",
+    "Negative Claim Rules": "procedure",
+    "What Counts as a Negative Claim": "procedure",
+    "Verification Process (Required Before Writing)": "procedure",
+    "Single-Repo Limitation": "procedure",
+    "Market Size Claims": "procedure",
+    "Auto-Publish Restriction": "procedure",
+    "Stale-Identity Stub Exemption": "procedure",
+    "Demand share is not TAO earned": "correction",
+    "One validator is not a validator outage": "correction",
+    "A subnet's emission split is a chain read, not an inference": "correction",
+    "Stake left on an old hotkey is not a stranded delegator": "correction",
+    "A coldkey merge or a delegated weight setter is not a fault": "correction",
+    "A dissolving subnet's rows are not stuck funds": "correction"
+  }
+}

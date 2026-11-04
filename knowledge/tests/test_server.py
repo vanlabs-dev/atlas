@@ -41,13 +41,17 @@ class ServerTests(unittest.TestCase):
         result = payloads[1]
         self.assertEqual(result["status"], "ok")
         top = result["results"][0]
-        for field in ("unit_id", "source_file", "heading_path",
-                      "coverage_date", "evidence_state", "content"):
+        for field in ("unit_id", "kind", "source_file", "heading_path",
+                      "lines", "temporal_scope", "evidence_state",
+                      "content"):
             self.assertIn(field, top)
+        # run-level fields once per response (change: knowledge-retrieval)
         with open(os.path.join(CORPUS_DIR, "hashes.json"),
                   encoding="utf-8") as handle:
             coverage_date = json.load(handle)["coverage_date"]
-        self.assertEqual(top["coverage_date"], coverage_date)
+        self.assertEqual(result["coverage_date"], coverage_date)
+        self.assertEqual(result["run_id"], self.run_id)
+        self.assertNotIn("coverage_date", top)
 
     def test_conflict_surfaced(self):
         # The real corpus has no markers since the 2026-08-06 re-sync;
@@ -56,17 +60,23 @@ class ServerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             markers = os.path.join(tmp, "markers.json")
             with open(markers, "w", encoding="utf-8") as handle:
-                _json.dump([{"match": "emission gate",
+                _json.dump([{"match": "staking tao on a subnet",
                              "state": "conflicting",
                              "note": "synthetic test marker"}], handle)
             db, _run, _report = ingest_real_corpus(
                 tmp, markers_file=markers)
             payloads = call_server(db, [tool_call(
-                1, "knowledge_search", {"query": "emission gate"})])
-            top = payloads[1]["results"][0]
-            self.assertEqual(top["evidence_state"], "conflicting")
-            self.assertEqual(top["conflict_note"],
-                             "synthetic test marker")
+                1, "knowledge_search", {"query": "staking"})])
+            # block units: the marker marks each block whose text holds
+            # the phrase, and every such result carries state and note
+            marked = [unit for unit in payloads[1]["results"]
+                      if "staking tao on a subnet" in
+                      unit["content"].lower()]
+            self.assertTrue(marked)
+            for unit in marked:
+                self.assertEqual(unit["evidence_state"], "conflicting")
+                self.assertEqual(unit["conflict_note"],
+                                 "synthetic test marker")
 
     def test_insufficient_evidence_is_structured(self):
         payloads = call_server(self.db, [tool_call(

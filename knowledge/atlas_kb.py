@@ -49,18 +49,31 @@ import atlas_hermes_verify as ahv  # noqa: E402
 inv = ahv.inv
 
 KB_VERSION = "0.1.0"
-PARSER_VERSION = "2"  # 2: ISO dates in temporal scope
+PARSER_VERSION = "3"  # 2: ISO dates in temporal scope; 3: block units
+INDEX_VERSION = 2  # porter unicode61, active fact/correction units only
 
 CORPUS_DIR = os.path.join(_MODULE_DIR, "corpus")
 HASHES_FILE = os.path.join(CORPUS_DIR, "hashes.json")
 MARKERS_FILE = os.path.join(_MODULE_DIR, "supersession-markers.json")
+KINDS_FILE = os.path.join(_MODULE_DIR, "unit-kinds.json")
+UNIT_KINDS = ("fact", "correction", "procedure")
+SEARCHABLE_KINDS = ("fact", "correction")
 DEFAULT_DB = os.path.join("var", "knowledge", "knowledge.db")
 DEFAULT_OUTPUT_DIR = os.path.join("var", "knowledge")
 
 EVIDENCE_STATES = ("confirmed", "confirmed-historical", "superseded",
                    "conflicting", "unverified", "inference", "web-lead")
 
-_HEADING = re.compile(r"^(#{1,2})\s+(?P<title>.+?)\s*$")
+_HEADING = re.compile(r"^(?P<level>#{1,3})\s+(?P<title>.+?)\s*$")
+# A line that starts a new block at column 0: a list item, a numbered
+# item, or a bold-led entry. Indented lines continue the open block.
+_BLOCK_START = re.compile(r"^(?:[-*]\s|\d+[.)]\s|\*\*)")
+_RULE = re.compile(r"^\s*(?:-{3,}|\*{3,}|_{3,})\s*$")
+_FENCE = re.compile(r"^\s*```")
+_NESTED_ITEM = re.compile(r"^\s+(?:[-*]\s|\d+[.)]\s)")
+# A block longer than this is split at its nested items, so a search
+# result can carry it whole (the server caps content at the same size).
+BLOCK_CAP = 1500
 # ISO dates (YYYY-MM-DD) count too: most corpus dates since the 2026-08
 # re-syncs are ISO. Longer forms come first so a range or a "since" phrase
 # is kept whole rather than split into bare dates.
@@ -106,10 +119,12 @@ CREATE TABLE IF NOT EXISTS units (
     evidence_state TEXT NOT NULL,
     conflict_note TEXT,
     content TEXT NOT NULL,
-    active INTEGER NOT NULL DEFAULT 0
+    active INTEGER NOT NULL DEFAULT 0,
+    kind TEXT NOT NULL DEFAULT 'fact'
 );
-CREATE VIRTUAL TABLE IF NOT EXISTS units_fts USING fts5(
-    heading_path, content, content=units, content_rowid=id
+CREATE TABLE IF NOT EXISTS kb_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS audit (
     id INTEGER PRIMARY KEY,
@@ -183,39 +198,112 @@ def load_markers(path: str = MARKERS_FILE) -> List[Dict[str, str]]:
 
 
 def split_units(filename: str, text: str) -> List[Dict[str, Any]]:
-    """One unit per `#`/`##` section subtree, plus a preamble unit when a
-    file has content before its first section."""
+    """Block units (change: knowledge-retrieval). A unit is one top-level
+    list item, numbered item, bold-led entry, or paragraph inside its
+    `#`/`##`/`###` section; nested and continuation lines stay with their
+    block, and a fenced code block is never split. Heading lines and
+    horizontal rules belong to no unit. The heading path is the section
+    title, or `## title > ### title` for a subsection; text before the
+    first heading is `(preamble)`. Ids are `<file>::<path>#<n>`, n counted
+    within the section from 1."""
     lines = text.splitlines()
     units: List[Dict[str, Any]] = []
-    current_title: Optional[str] = None
-    current_start = 1
-    buffer: List[str] = []
+    path = "(preamble)"
+    parent: Optional[str] = None
+    counter: Dict[str, int] = {}
+    block: List[str] = []
+    start = 0
+    end = 0
+    in_fence = False
 
-    def flush(end_line: int) -> None:
-        content = "\n".join(buffer).strip()
+    def emit(piece: List[str], first: int, last: int) -> None:
+        content = "\n".join(piece).strip()
         if not content:
             return
-        title = current_title or "(preamble)"
+        counter[path] = counter.get(path, 0) + 1
         units.append({
-            "unit_id": "%s::%s" % (filename, title),
+            "unit_id": "%s::%s#%d" % (filename, path, counter[path]),
             "source_file": filename,
-            "heading_path": title,
-            "line_start": current_start,
-            "line_end": end_line,
+            "heading_path": path,
+            "line_start": first,
+            "line_end": last,
             "content": content,
         })
 
+    def flush() -> None:
+        nonlocal block
+        if len("\n".join(block)) <= BLOCK_CAP:
+            emit(block, start, end)
+        else:
+            # split at nested items: the lead lines, then each item with
+            # its own continuation lines
+            piece: List[str] = []
+            first = start
+            for offset, line in enumerate(block):
+                if _NESTED_ITEM.match(line) and piece:
+                    emit(piece, first, start + offset - 1)
+                    piece = []
+                    first = start + offset
+                piece.append(line)
+            emit(piece, first, end)
+        block = []
+
     for number, line in enumerate(lines, 1):
+        if in_fence:
+            block.append(line)
+            end = number
+            if _FENCE.match(line):
+                in_fence = False
+            continue
         match = _HEADING.match(line)
         if match:
-            flush(number - 1)
-            current_title = match.group("title")
-            current_start = number
-            buffer = [line]
-        else:
-            buffer.append(line)
-    flush(len(lines))
+            flush()
+            level = len(match.group("level"))
+            title = match.group("title")
+            if level <= 2:
+                parent = title
+                path = title
+            else:
+                path = "%s > %s" % (parent, title) if parent else title
+            continue
+        if not line.strip() or _RULE.match(line):
+            flush()
+            continue
+        if _BLOCK_START.match(line) and block:
+            flush()
+        if not block:
+            start = number
+        block.append(line)
+        end = number
+        if _FENCE.match(line):
+            in_fence = True
+    flush()
     return units
+
+
+def load_kinds(path: str = KINDS_FILE) -> Dict[str, str]:
+    """Heading path -> kind. An entry matches its exact path and every
+    subsection under it (`entry > ...`); the longest matching entry wins.
+    Unmapped units are `fact`."""
+    with open(path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    kinds = data.get("kinds") if isinstance(data, dict) else None
+    if not isinstance(kinds, dict):
+        raise FatalKbError("unit-kinds.json needs a \"kinds\" object")
+    for heading, kind in kinds.items():
+        if kind not in UNIT_KINDS or not heading:
+            raise FatalKbError("unit-kinds.json entry %r is invalid"
+                               % heading)
+    return kinds
+
+
+def kind_for(heading_path: str, kinds: Dict[str, str]) -> str:
+    best = None
+    for entry in kinds:
+        if heading_path == entry or heading_path.startswith(entry + " > "):
+            if best is None or len(entry) > len(best):
+                best = entry
+    return kinds[best] if best is not None else "fact"
 
 
 def extract_temporal_scope(content: str) -> Optional[str]:
@@ -249,7 +337,44 @@ def open_store(db_path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     connection = sqlite3.connect(db_path)
     connection.executescript(SCHEMA_SQL)
+    columns = {row[1] for row in connection.execute(
+        "PRAGMA table_info(units)")}
+    if "kind" not in columns:
+        # a store written before change knowledge-retrieval
+        connection.execute("ALTER TABLE units ADD COLUMN kind TEXT NOT NULL "
+                           "DEFAULT 'fact'")
+        connection.commit()
     return connection
+
+
+def rebuild_index(connection: sqlite3.Connection) -> int:
+    """Rebuild the search index from the active fact and correction units.
+    Runs inside the caller's transaction; returns the indexed row count."""
+    connection.execute("DROP TABLE IF EXISTS units_fts")
+    connection.execute(
+        "CREATE VIRTUAL TABLE units_fts USING fts5(heading_path, content, "
+        "content=units, content_rowid=id, tokenize='porter unicode61')")
+    connection.execute(
+        "INSERT INTO units_fts (rowid, heading_path, content) "
+        "SELECT id, heading_path, content FROM units WHERE active = 1 "
+        "AND kind IN (%s)" % ", ".join("'%s'" % k for k in SEARCHABLE_KINDS))
+    count = connection.execute(
+        "SELECT count(*) FROM units_fts_docsize").fetchone()[0]
+    connection.execute(
+        "INSERT OR REPLACE INTO kb_meta (key, value) VALUES "
+        "('index_version', ?)", (str(INDEX_VERSION),))
+    return count
+
+
+def index_version(connection: sqlite3.Connection) -> Optional[int]:
+    """The store's rebuilt-index version, or None for an older store."""
+    try:
+        row = connection.execute(
+            "SELECT value FROM kb_meta WHERE key = 'index_version'"
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    return int(row[0]) if row else None
 
 
 def _audit(connection: sqlite3.Connection, actor: str, action: str,
@@ -268,10 +393,12 @@ def _audit(connection: sqlite3.Connection, actor: str, action: str,
 def ingest(db_path: str, output_dir: str, corpus_dir: str = CORPUS_DIR,
            hashes_file: str = HASHES_FILE,
            markers_file: str = MARKERS_FILE,
-           actor: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
+           actor: Optional[str] = None,
+           kinds_file: str = KINDS_FILE) -> Tuple[str, Dict[str, Any]]:
     """Stage units + write the validation report. Returns (run_id, report)."""
     corpus = load_corpus(corpus_dir, hashes_file)
     markers = load_markers(markers_file)
+    kinds = load_kinds(kinds_file)
     run_id = _run_id()
     coverage_date = corpus["manifest"]["coverage_date"]
     actor = actor or ahv._account()
@@ -286,6 +413,7 @@ def ingest(db_path: str, output_dir: str, corpus_dir: str = CORPUS_DIR,
             unit["coverage_date"] = coverage_date
             unit["temporal_scope"] = extract_temporal_scope(unit["content"])
             apply_markers(unit, markers)
+            unit["kind"] = kind_for(unit["heading_path"], kinds)
         all_units.extend(units)
         ahv._scan_for_secrets(info["text"], filename, secret_findings)
         structure[filename] = {
@@ -302,6 +430,9 @@ def ingest(db_path: str, output_dir: str, corpus_dir: str = CORPUS_DIR,
     for unit in all_units:
         counts[unit["evidence_state"]] = counts.get(
             unit["evidence_state"], 0) + 1
+    kind_counts: Dict[str, int] = {}
+    for unit in all_units:
+        kind_counts[unit["kind"]] = kind_counts.get(unit["kind"], 0) + 1
 
     connection = open_store(db_path)
     try:
@@ -319,23 +450,21 @@ def ingest(db_path: str, output_dir: str, corpus_dir: str = CORPUS_DIR,
                 " coverage_date) VALUES (?, ?, ?, ?, ?)",
                 (run_id, filename, info["bytes"], info["sha256"],
                  coverage_date))
+        # Staged units are never indexed: activation rebuilds the index
+        # from the active run only (change: knowledge-retrieval).
         for unit in all_units:
-            cursor = connection.execute(
+            connection.execute(
                 "INSERT INTO units (unit_id, run_id, source_file, "
                 "source_sha256, heading_path, line_start, line_end, "
                 "coverage_date, temporal_scope, evidence_state, "
-                "conflict_note, content, active) VALUES "
-                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+                "conflict_note, content, active, kind) VALUES "
+                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)",
                 (unit["unit_id"], run_id, unit["source_file"],
                  unit["source_sha256"], unit["heading_path"],
                  unit["line_start"], unit["line_end"],
                  unit["coverage_date"], unit["temporal_scope"],
                  unit["evidence_state"], unit["conflict_note"],
-                 unit["content"]))
-            connection.execute(
-                "INSERT INTO units_fts (rowid, heading_path, content) "
-                "VALUES (?, ?, ?)",
-                (cursor.lastrowid, unit["heading_path"], unit["content"]))
+                 unit["content"], unit["kind"]))
         _audit(connection, actor, "ingest",
                "run %s staged %d units (%s)"
                % (run_id, len(all_units),
@@ -353,6 +482,7 @@ def ingest(db_path: str, output_dir: str, corpus_dir: str = CORPUS_DIR,
         "kb_version": KB_VERSION,
         "structure": structure,
         "unit_counts_by_state": counts,
+        "unit_counts_by_kind": kind_counts,
         "total_units": len(all_units),
         "duplicate_unit_ids": duplicate_ids,
         "secret_scan_findings": [inv.redact(finding)
@@ -461,13 +591,20 @@ def activate(db_path: str, run_id: str, actor: Optional[str] = None) -> int:
                 print("FATAL: run %s has rejected units: %s"
                       % (run_id, "; ".join(rejected[:5])), file=sys.stderr)
                 return 1
-        connection.execute("UPDATE units SET active = 0 WHERE active = 1")
-        connection.execute(
-            "UPDATE units SET active = 1 WHERE run_id = ?", (run_id,))
-        _audit(connection, actor, "activate",
-               "run %s activated (%d units); prior active runs "
-               "deactivated" % (run_id, staged))
-        connection.commit()
+        try:
+            connection.execute("UPDATE units SET active = 0 WHERE active = 1")
+            connection.execute(
+                "UPDATE units SET active = 1 WHERE run_id = ?", (run_id,))
+            indexed = rebuild_index(connection)
+            _audit(connection, actor, "activate",
+                   "run %s activated (%d units, %d indexed); prior active "
+                   "runs deactivated" % (run_id, staged, indexed))
+            connection.commit()
+        except sqlite3.Error as exc:
+            connection.rollback()
+            print("FATAL: activation of %s rolled back: %s"
+                  % (run_id, exc), file=sys.stderr)
+            return 1
     finally:
         connection.close()
     print("Activated run %s (%d units). Knowledge tools now serve it."
@@ -491,12 +628,15 @@ def status(db_path: str) -> int:
         runs = connection.execute(
             "SELECT run_id, intake_date, coverage_date FROM intake_runs "
             "ORDER BY intake_date DESC LIMIT 5").fetchall()
+        version = index_version(connection)
     finally:
         connection.close()
     if active:
         for run_id, count in active:
             print("active run: %s (%d units)" % (run_id, count))
         print("states: %s" % ", ".join("%s=%d" % row for row in states))
+        print("index_version: %s" % (version if version is not None
+                                     else "none (rebuilt at next activate)"))
     else:
         print("NO ACTIVE RUN — tools fail closed until `activate` is run")
     for run_id, intake_date, coverage_date in runs:
