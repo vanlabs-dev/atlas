@@ -45,10 +45,10 @@
 ## 5. Integration and deploy
 
 - [x] 5.1 Run every Python suite, and once in bwrap with no network. Verify that all pass.
-- [ ] 5.2 Deploy with `knowledge-retrieval` (design Migration Plan). Each Pi step needs operator approval:
+- [x] 5.2 Deploy with `knowledge-retrieval` (design Migration Plan). Each Pi step needs operator approval:
   1. SOUL.md backup and apply;
   2. device-match check;
   3. `/restart`.
 
   Verify that the match check passes.
-- [ ] 5.3 With separate approval, run the live battery and score it, then record the verdict and the grounding baseline in `docs/decisions.md`. Verify that the scorer issues a verdict against the approved thresholds.
+- [x] 5.3 With separate approval, run the live battery and score it, then record the verdict and the grounding baseline in `docs/decisions.md`. Verify that the scorer issues a verdict against the approved thresholds.
