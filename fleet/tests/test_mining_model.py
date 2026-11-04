@@ -155,6 +155,27 @@ class TestEntrantFigure(unittest.TestCase):
         self.assertAlmostEqual(out["incumbent_alpha_day"], 1000.0)
 
 
+class TestDenseMapFailure(Base):
+    """A key missing from a dense live-data map arrives as a per-netuid
+    failure (change: live-data-correctness). The row reads it as unknown,
+    never as the runtime default."""
+
+    def test_missing_dense_keys_read_as_unknown(self):
+        missing = "absent from dense map"
+        row, _ = mine.subnet_economics(
+            self.config["mining"], 3, synthetic(
+                [subnet(3, [5, 5])],
+                failures={"Burn": {3: missing},
+                          "MaxAllowedUids": {3: missing},
+                          "SwapBalancer": {3: missing},
+                          "MinerBurned": {3: missing}}),
+            "2026-11-04T00:00:00+00:00")
+        self.assertIsNone(row["reg_cost_tao"])
+        self.assertIsNone(row["uids_full"])
+        self.assertIsNone(row["balancer_quote"])
+        self.assertIsNone(row["miner_burn_pct"])
+
+
 class TestZeroEarners(Base):
 
     def test_zero_earning_uids_are_neither_a_divisor_nor_a_cut(self):
