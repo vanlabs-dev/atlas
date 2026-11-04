@@ -281,6 +281,32 @@ class PollGateStateTests(unittest.TestCase):
         self.assertAlmostEqual(second["prev_theta"], 0.009249393, places=6)
 
 
+def chain_maps(subnets, root=True):
+    """Decoded share maps as `read_subnet_maps` returns them. Each subnet is
+    (netuid, price, burn) with optional keys: started (first-emission block
+    set), subtoken, reg, switch."""
+    values = {item: {} for item in al.SHARE_MAP_ITEMS}
+    if root:
+        values["SubnetworkN"][0] = 64
+        values["NetworkRegistrationAllowed"][0] = True
+    for spec in subnets:
+        n, price, burn = spec[0], spec[1], spec[2]
+        opts = spec[3] if len(spec) > 3 else {}
+        values["SubnetworkN"][n] = 256
+        values["NetworkRegistrationAllowed"][n] = opts.get("reg", True)
+        if opts.get("started", True):
+            values["FirstEmissionBlockNumber"][n] = 100
+        if opts.get("subtoken", True):
+            values["SubtokenEnabled"][n] = True
+        if price is not None:
+            values["SubnetMovingPrice"][n] = price
+        if burn is not None:
+            values["MinerBurned"][n] = burn
+        if "switch" in opts:
+            values["SubnetEmissionEnabled"][n] = opts["switch"]
+    return values
+
+
 def panel(*rows):
     return [dict(row) for row in rows]
 
@@ -290,26 +316,106 @@ def subnet(netuid, price, burn=None, enabled=True):
             "emission_miner_burn": burn, "emission_is_enabled": enabled}
 
 
+def maps_reader(values=None, failures=None, failed_items=None, ok=True,
+                error="boom", calls=None):
+    """Stand-in for read_subnet_maps: serves decoded share maps."""
+    def read(_config, items, rpc=None, block=None, connection=None):
+        if calls is not None:
+            calls.append((sorted(items), block))
+        if not ok:
+            return {"ok": False, "error": error}
+        return {"ok": True, "block_hash": block[0] if block else None,
+                "block_number": block[1] if block else None,
+                "values": values if values is not None else {},
+                "failures": failures or {}, "failed_items":
+                    failed_items or {}, "empty_items": []}
+    return read
+
+
+def panel_reader(rows, **kw):
+    """Chain maps carrying the same prices, burns and switches as a list
+    of panel rows, so a scenario reads the same from the chain."""
+    specs = []
+    for row in rows:
+        if row["netuid"] == 0:
+            continue
+        burn = row.get("emission_miner_burn")
+        specs.append((row["netuid"], row.get("moving_price_tao"),
+                      0.0 if burn is None else burn / 100.0,
+                      {"switch": bool(row.get("emission_is_enabled", True))}))
+    return maps_reader(chain_maps(specs), **kw)
+
+
 class DemandShareTests(unittest.TestCase):
-    def test_universe_includes_disabled_and_excludes_root(self):
-        shares, enabled = al.compute_demand_shares(panel(
-            subnet(0, 1.0),                       # root: excluded
-            subnet(1, 0.010, burn=0.0, enabled=True),
-            subnet(2, 0.010, burn=0.0, enabled=False),  # stays IN
-            subnet(3, 0.020, burn=50.0, enabled=True),  # weight halved
-            {"netuid": 4, "moving_price_tao": None},    # unpriced: no share
-        ))
+    """Chain-native demand shares (change: live-data-correctness)."""
+
+    def test_universe_matches_the_chain_rule(self):
+        out = al.chain_demand_shares(chain_maps([
+            (1, 0.010, 0.0),
+            (2, 0.010, 0.0, {"switch": False}),   # disabled stays IN
+            (3, 0.020, 0.5),                      # weight halved
+            (36, 0.010, 0.0, {"started": False, "subtoken": False}),
+            (40, 0.010, 0.0, {"reg": False}),
+        ]))
+        self.assertTrue(out["ok"])
+        shares = out["shares"]
+        self.assertEqual(sorted(shares), [1, 2, 3])
         self.assertNotIn(0, shares)
-        self.assertNotIn(4, shares)
         self.assertAlmostEqual(sum(shares.values()), 1.0)
         self.assertAlmostEqual(shares[1], shares[2])
-        self.assertAlmostEqual(shares[3], shares[1])  # 0.02 * 0.5 == 0.01
-        self.assertEqual(enabled[2], False)
+        self.assertAlmostEqual(shares[3], shares[1])
+        self.assertIs(out["enabled"][2], False)
+        self.assertIs(out["enabled"][1], True)  # absent switch: default on
+
+    def test_subnet_outside_the_universe_gets_no_share(self):
+        # SN36 on 2026-11-04: no first-emission block, subtoken off.
+        out = al.chain_demand_shares(chain_maps([
+            (1, 0.01, 0.0),
+            (36, 0.5, 0.0, {"started": False, "subtoken": False})]))
+        self.assertEqual(out["shares"], {1: 1.0})
+
+    def test_missing_burn_fails_the_shares(self):
+        out = al.chain_demand_shares(
+            chain_maps([(1, 0.01, 0.0), (2, 0.01, None)]),
+            failures={"MinerBurned": {2: al.DENSE_MISSING}})
+        self.assertFalse(out["ok"])
+        self.assertIn("MinerBurned", out["reason"])
+        self.assertIn("2", out["reason"])
+
+    def test_failed_item_fails_the_shares(self):
+        out = al.chain_demand_shares(
+            chain_maps([(1, 0.01, 0.0)]),
+            failed_items={"SubnetMovingPrice": "short batch"})
+        self.assertFalse(out["ok"])
+
+    def test_burn_is_a_fraction_and_clamped(self):
+        out = al.chain_demand_shares(chain_maps([
+            (1, 0.01, 1.0), (2, 0.01, 0.75), (3, 0.01, 0.0)]))
+        self.assertAlmostEqual(out["shares"][1], 0.0)
+        self.assertAlmostEqual(out["shares"][2], 0.25 / 1.25)
+
+    def test_zero_price_stays_with_zero_weight(self):
+        out = al.chain_demand_shares(chain_maps([
+            (1, 0.01, 0.0), (2, None, 0.0)]))
+        self.assertEqual(out["shares"], {1: 1.0, 2: 0.0})
+
+    def test_all_burned_falls_back_to_price_shares(self):
+        out = al.chain_demand_shares(chain_maps([
+            (1, 0.01, 1.0), (2, 0.03, 1.0)]))
+        self.assertAlmostEqual(out["shares"][1], 0.25)
+        self.assertAlmostEqual(out["shares"][2], 0.75)
 
     def test_nothing_normalizable(self):
-        shares, _enabled = al.compute_demand_shares(panel(
-            subnet(1, 0.0), subnet(2, 0.0)))
-        self.assertEqual(shares, {})
+        out = al.chain_demand_shares(chain_maps([(1, 0.0, 0.0),
+                                                 (2, None, 0.0)]))
+        self.assertFalse(out["ok"])
+
+    def test_unreadable_switch_is_unknown_not_a_failure(self):
+        out = al.chain_demand_shares(
+            chain_maps([(1, 0.01, 0.0)]),
+            failures={"SubnetEmissionEnabled": {1: "bad"}})
+        self.assertTrue(out["ok"])
+        self.assertIsNone(out["enabled"][1])
 
 
 class GateSideTests(unittest.TestCase):
@@ -407,7 +513,8 @@ class GatePassTests(unittest.TestCase):
             return {"status": "ok",
                     "values": {"subnets": self.panel_rows}}
         return al.run_gate_pass(self.conn, self.config, ledger=None,
-                                rpc=fake_rpc(storage), run_op=run_op)
+                                rpc=fake_rpc(storage), run_op=run_op,
+                                read_maps=panel_reader(self.panel_rows))
 
     def test_kill_switch_is_inert(self):
         self.config["gate_signal"]["enabled"] = False
@@ -428,13 +535,67 @@ class GatePassTests(unittest.TestCase):
         self.assertEqual(summary["events_recorded"], 0)   # silent re-seed
         self.assertEqual(summary["sides_tracked"], 2)
 
-    def test_no_panel_no_events(self):
-        summary = self.run_pass({"0xbar": THETA_HEX},
+    def test_panel_outage_does_not_stop_crossings(self):
+        # Shares come from the chain (change: live-data-correctness).
+        self.config["gate_signal"]["confirm_polls"] = 1
+        theta = "0x" + int(0.15 * 2 ** 64).to_bytes(16, "little").hex()
+        self.panel_rows = panel(subnet(1, 0.30), subnet(2, 0.30))
+        self.run_pass({"0xbar": theta})                  # seeds: 0.5, 0.5
+        self.panel_rows = panel(subnet(1, 0.30), subnet(2, 0.01))
+        summary = self.run_pass({"0xbar": theta},
                                 panel_status="live-unavailable")
         self.assertEqual(summary["panel"], "live-unavailable")
+        self.assertEqual(summary["events_recorded"], 1)
+        self.assertNotIn("panel_snapshot_rows", summary)
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM panel_snapshot").fetchone()[0], 2)
+
+    def test_failed_chain_share_read_records_nothing(self):
+        def run_op(*_a, **_kw):
+            raise AssertionError("no panel call without shares")
+        summary = al.run_gate_pass(
+            self.conn, self.config, ledger=None,
+            rpc=fake_rpc({"0xbar": THETA_HEX}), run_op=run_op,
+            read_maps=maps_reader(ok=False, error="batched read failed"))
+        self.assertEqual(summary["shares"], "unavailable")
         self.assertEqual(summary["events_recorded"], 0)
         self.assertEqual(self.conn.execute(
             "SELECT COUNT(*) FROM gate_sides").fetchone()[0], 0)
+        self.assertIn("share-read-failed",
+                      [r[0] for r in health_rows(self.conn)])
+
+    def test_missing_burn_fails_the_pass_closed(self):
+        values = chain_maps([(1, 0.02, 0.0), (2, 0.002, None)])
+        summary = al.run_gate_pass(
+            self.conn, self.config, ledger=None,
+            rpc=fake_rpc({"0xbar": THETA_HEX}),
+            run_op=lambda *a, **k: {"status": "ok",
+                                    "values": {"subnets": []}},
+            read_maps=maps_reader(values, failures={
+                "MinerBurned": {2: al.DENSE_MISSING}}))
+        self.assertEqual(summary["events_recorded"], 0)
+        self.assertIn("MinerBurned", summary["share_error"])
+
+    def test_share_read_is_pinned_and_feeds_the_switch_watch(self):
+        # With the chain-param watch on, the switch watch must reuse the
+        # share read: fake_rpc raises on any map read of its own.
+        self.config = make_config(watch_enabled=True)
+        calls = []
+        def run_op(*_a, **_kw):
+            return {"status": "ok", "values": {"subnets": self.panel_rows}}
+        values = chain_maps([(1, 0.02, 0.0, {"switch": True}),
+                             (2, 0.002, 0.0, {"switch": False})])
+        summary = al.run_gate_pass(
+            self.conn, self.config, ledger=None,
+            rpc=fake_rpc({"0xbar": THETA_HEX}), run_op=run_op,
+            read_maps=maps_reader(values, calls=calls))
+        self.assertEqual(summary["status"], "ok")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][1], ("0x" + "ab" * 32, int("0x84f1c1", 16)))
+        self.assertEqual(self.conn.execute(
+            "SELECT value FROM chain_params WHERE item = "
+            "'SubnetEmissionEnabled[2]' ORDER BY id DESC LIMIT 1"
+        ).fetchone()[0], "false")
 
 
 # ---------------------------------------------------------------------------
@@ -610,7 +771,8 @@ class BarRepricingTests(unittest.TestCase):
             return {"status": "ok",
                     "values": {"subnets": self.panel_rows}}
         return al.run_gate_pass(self.conn, self.config, ledger=None,
-                                rpc=fake_rpc(storage), run_op=run_op)
+                                rpc=fake_rpc(storage), run_op=run_op,
+                                read_maps=panel_reader(self.panel_rows))
 
     @staticmethod
     def theta_hex(value):
@@ -677,7 +839,7 @@ class RankInvariantTests(unittest.TestCase):
         return al.run_gate_pass(
             self.conn, self.config, ledger=None,
             rpc=fake_rpc({"0xbar": theta, "0xrank": rank_hex(rank)}),
-            run_op=run_op)
+            run_op=run_op, read_maps=panel_reader(self.panel_rows))
 
     def categories(self):
         return [r[0] for r in health_rows(self.conn)]
@@ -975,7 +1137,7 @@ class PanelSnapshotTests(unittest.TestCase):
         return al.run_gate_pass(
             self.conn, self.config, ledger=None,
             rpc=fake_rpc({"0xbar": theta, "0xrank": rank_hex(2)}),
-            run_op=run_op)
+            run_op=run_op, read_maps=panel_reader(rows))
 
     def test_snapshot_row_per_subnet_with_share(self):
         summary = self.run_pass([rich_subnet(0, 1.0), rich_subnet(1, 0.30),
