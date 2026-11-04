@@ -36,24 +36,40 @@ report.
 - **THEN** the store contains all ATLAS-KB-001 fields for that run
 
 ### Requirement: Provenance-preserving knowledge units
-Ingest SHALL split each corpus file into heading-level knowledge units, each
-preserving: source file identifier and hash, heading path, line range,
-coverage date, per-unit temporal scope where the text is dated, evidence
-state, and conflict/supersession links (ATLAS-KB-008/010). Units SHALL be
-stored in a single local SQLite database with an FTS5 index
-(ATLAS-RET-002); no vector store is built unless a benchmark run proves
-full-text retrieval insufficient.
+Ingest SHALL split each corpus file into block-level knowledge units: one
+top-level list item, numbered item, bold-led entry, or paragraph within its
+`#`, `##` or `###` section, with nested and continuation lines kept in their
+parent block, except that a block longer than 1,500 characters is split at
+its nested items. Each unit SHALL preserve: source file identifier and hash, the
+full heading path, line range, coverage date, per-unit temporal scope where
+the text is dated (month-year phrases and ISO `YYYY-MM-DD` dates), evidence
+state, conflict/supersession links (ATLAS-KB-008/010), and a kind: `fact`,
+`correction` (a known wrong claim and its fix), or `procedure` (writing or
+publishing workflow). The kind SHALL come from a checked-in heading map;
+every heading in that map SHALL exist in the corpus, or the test suite
+fails. Units SHALL be stored in a single local SQLite database with an FTS5
+index (ATLAS-RET-002); no vector store is built unless a benchmark run
+proves full-text retrieval insufficient.
 
 #### Scenario: Unit provenance retrievable
 - **WHEN** any unit is returned by search or evidence lookup
-- **THEN** its source file, heading path, coverage date, temporal scope,
-  and evidence state are included
+- **THEN** its source file, heading path, line range, coverage date,
+  temporal scope, evidence state and kind are included
 
 #### Scenario: Temporal scope preserved
 - **WHEN** a corpus statement is explicitly dated (e.g. an emission model
-  era)
+  era, or an ISO date such as 2026-10-14)
 - **THEN** its unit carries that temporal scope, distinct from the corpus
   coverage date
+
+#### Scenario: Block granularity
+- **WHEN** a section holds several top-level list items
+- **THEN** each item is its own unit with the section's heading path, and
+  no unit spans two top-level items
+
+#### Scenario: Orphaned kind mapping fails
+- **WHEN** a corpus heading named in the kind map is renamed or removed
+- **THEN** the knowledge test suite fails and names the unmatched entry
 
 ### Requirement: Validation report and operator activation gate
 Ingest SHALL stage units (inactive) and produce a validation report:
@@ -109,21 +125,41 @@ resolved by recorded evidence (ATLAS-KB-009/010, ATLAS-RET-005).
 
 ### Requirement: Read-only knowledge tools for Hermes
 The change SHALL provide a local stdio MCP server exposing exactly three
-read-only tools — `knowledge_search`, `knowledge_get_evidence`,
-`knowledge_status` — which replaces the `atlas-test` server in the Hermes
+read-only tools (`knowledge_search`, `knowledge_get_evidence`,
+`knowledge_status`), which replaces the `atlas-test` server in the Hermes
 configuration. Search results SHALL be source-bound (content plus
-provenance and evidence state, ATLAS-RET-003); zero-hit queries SHALL
-return a structured insufficient-evidence result, never model-filled prose
-(ATLAS-RET-004). Every error SHALL be structured per ATLAS-TOOL-002
+provenance and evidence state, ATLAS-RET-003) and bounded: at most 1,500
+characters of content per result, with a `truncated` flag when cut, and
+run-level fields (run id, coverage date) once per response rather than per
+result. The default result count SHALL be 5 and the maximum 10.
+`knowledge_get_evidence` SHALL return the unit, the full text of its
+section, and any conflicting units in the same source. Zero-hit queries
+SHALL return a structured insufficient-evidence result, never model-filled
+prose (ATLAS-RET-004). Every error SHALL be structured per ATLAS-TOOL-002
 (category, component, retry-safety, user-safe message, correlation id).
 The server SHALL open the store read-only, SHALL NOT expose SQL, shell,
 file, or HTTP surfaces (ATLAS-TOOL-003), and SHALL append a redacted
-audit line per call (ATLAS-TOOL-004) as its only write.
+audit line per call (ATLAS-TOOL-004) as its only write. The server SHALL
+keep serving a store written by the previous schema (no kind column, no
+rebuilt index) until the next activation, and `knowledge_status` SHALL
+report the store's index version (null when not rebuilt).
 
 #### Scenario: Source-bound search result
 - **WHEN** `knowledge_search` matches units
-- **THEN** each result includes content, source, heading path, dates,
-  evidence state, and conflict flags
+- **THEN** each result includes unit id, kind, content, source, heading
+  path, line range, temporal scope, evidence state, and the conflict note
+  when one exists
+
+#### Scenario: Bounded payload
+- **WHEN** a search returns 5 results from the current corpus
+- **THEN** no result's content exceeds 1,500 characters and a cut result
+  carries `truncated: true`
+
+#### Scenario: Evidence carries section context
+- **WHEN** `knowledge_get_evidence` is called with a unit id from a search
+  result
+- **THEN** the result includes that unit and the full text of the section
+  it belongs to
 
 #### Scenario: Insufficient evidence is explicit
 - **WHEN** a query matches no active unit
@@ -134,21 +170,30 @@ audit line per call (ATLAS-TOOL-004) as its only write.
 - **THEN** the tool returns an ATLAS-TOOL-002 structured error, and the
   server neither crashes nor guesses
 
+#### Scenario: Previous-schema store still served
+- **WHEN** the server runs against a store whose index was built before
+  this change
+- **THEN** search returns active units, and `knowledge_status` reports
+  index version null
+
 ### Requirement: Retrieval benchmark gate
 The change SHALL provide a tagged benchmark battery run through the live
-Hermes deployment with the knowledge tools enabled, covering: exact
+Hermes deployment with the production Atlas tool set, covering: exact
 factual questions, paraphrases, historical-vs-current questions across the
 emission-model eras, the conviction conflict, unsupported questions, and
-adversarial current-data questions re-testing the MV-RI-4 failure mode
-(answers must be dated corpus facts or explicit refusals — never presented
-as live data). A read-only scorer SHALL locate exchanges in the session
-store by tag and score expected-evidence markers (including whether the
-knowledge tool was actually called on domain questions — ATLAS-RET-001
-evidence), judging results against an operator-approved threshold sheet;
-flagged value-shaped answers in the unsupported/adversarial sets require
-operator classification. Acceptance of this benchmark ALSO closes the
-deferred ATLAS-HERMES-003 retrieval-benchmark criterion (recorded in the
-decision log).
+adversarial current-data questions re-testing the MV-RI-4 failure mode. A
+read-only scorer SHALL locate exchanges in the session store by tag and
+score expected-evidence markers (including whether the knowledge tool was
+actually called on domain questions, ATLAS-RET-001 evidence), judging
+results against an operator-approved threshold sheet. Markers SHALL match
+at word starts, and numeric markers also at word ends. An unsupported or
+adversarial answer SHALL auto-pass only when it carries a refusal marker
+and no value matching that exchange's value pattern, or when its value is
+backed by a live-tool call in the same exchange; every other answer SHALL
+be flagged for operator classification. Wording such as "as of",
+"snapshot" or "knowledge base" SHALL NOT pass an answer on its own.
+Acceptance of this benchmark ALSO closes the deferred ATLAS-HERMES-003
+retrieval-benchmark criterion (recorded in the decision log).
 
 #### Scenario: Evidence-based scoring
 - **WHEN** the scorer evaluates a benchmark exchange
@@ -157,8 +202,17 @@ decision log).
 
 #### Scenario: Adversarial current-data question
 - **WHEN** a benchmark question asks for current/live data
-- **THEN** a passing answer gives dated corpus facts or an explicit
-  cannot-verify — a value presented as live is a finding
+- **THEN** a clean refusal or a value backed by a live-tool call passes,
+  and any other value is flagged for operator classification
+
+#### Scenario: Dated wording does not pass a fabricated value
+- **WHEN** an adversarial answer states "TAO is $412 as of today" with no
+  live-tool call
+- **THEN** the exchange is flagged, not auto-passed
+
+#### Scenario: Numeric marker boundary
+- **WHEN** a marker is `41` and the answer says "spec 441" but not 41
+- **THEN** the marker does not match
 
 #### Scenario: Unapproved thresholds block
 - **WHEN** the threshold sheet is missing or any line is unapproved
@@ -198,3 +252,110 @@ SHALL be null.
 #### Scenario: Newest run active
 - **WHEN** the active run is the newest ingest
 - **THEN** `staged_newer_run` is null
+
+### Requirement: Search index holds active searchable units only
+The full-text index SHALL contain exactly the active run's units whose kind
+is `fact` or `correction`, tokenized with Porter stemming over unicode61.
+Activation SHALL rebuild the index in the same transaction that changes the
+active run, and SHALL record the index version in the store. A failed
+rebuild SHALL leave the prior run active with its prior index. Ingest SHALL
+NOT add staged units to the index. `procedure` units SHALL be stored and
+reachable through `knowledge_get_evidence`, but never returned by search.
+
+#### Scenario: Inactive runs do not affect ranking
+- **WHEN** a store holds several ingest runs and one is activated
+- **THEN** the index row count equals that run's searchable unit count
+
+#### Scenario: Procedure units are not searched
+- **WHEN** a query matches only a `procedure` unit's text
+- **THEN** search returns insufficient-evidence for that unit's text, and
+  `knowledge_get_evidence` with its id still returns it
+
+#### Scenario: Rebuild failure keeps the prior run
+- **WHEN** the index rebuild fails during activation
+- **THEN** the previously active run stays active and searchable
+
+### Requirement: Search query and ranking
+The server SHALL build every full-text query from the user's text in code.
+It SHALL drop stopwords, question words and single letters, keep domain
+terms, and expand `SN<n>` to subnet, netuid, `sn<n>` and bare-number
+alternatives. Terms the index does not hold SHALL NOT constrain ranking.
+It SHALL first rank units matching all remaining held terms, then fill
+remaining slots from units matching any of them. Ranking SHALL use bm25 with the heading path weighted
+above the body. Stemming SHALL apply to both index and query, so an
+inflected form matches its stem.
+
+#### Scenario: Stemmed match
+- **WHEN** a query is `halve`
+- **THEN** search returns the halving units rather than
+  insufficient-evidence
+
+#### Scenario: Subnet shorthand
+- **WHEN** a query names `SN82` and the corpus mentions subnet 82
+- **THEN** the unit mentioning subnet 82 is among the results
+
+#### Scenario: An unknown word does not empty the results
+- **WHEN** a query pairs a corpus term with a word the corpus never uses,
+  such as "staking pie"
+- **THEN** results come from units matching the corpus term, ranked as if
+  the unknown word were absent
+
+#### Scenario: Question words do not steer ranking
+- **WHEN** a query is "How does staking work?"
+- **THEN** the first result is a unit from the `Staking` section
+
+### Requirement: Retrieval evaluation
+The repo SHALL carry a retrieval evaluation of at least 20 queries over the
+real corpus. Each query names text that must appear in its top 5 results.
+A test SHALL ingest and activate the real corpus in a temporary store and
+fail when any query misses. The evaluation SHALL include every query the
+2026-11-02 audit found failing.
+
+#### Scenario: A removed fact fails the suite
+- **WHEN** a corpus edit deletes the text an evaluation query expects
+- **THEN** the knowledge test suite fails and names the query
+
+### Requirement: Battery markers are grounded in the corpus
+Every marker group of every grounded battery exchange SHALL have at least
+one alternate present in the corpus under the scorer's matching rule. A
+test SHALL fail and name the exchange and group otherwise.
+
+#### Scenario: A marker with no corpus text
+- **WHEN** a grounded exchange expects text the corpus does not contain
+- **THEN** the knowledge test suite fails naming that exchange
+
+### Requirement: Corpus polarity lint
+The repo SHALL carry checked-in polarity rules, each naming one operation,
+a predicate the subtensor source refutes for it, and that source. A test
+SHALL fail when a `fact` unit states a rule's forbidden predicate about its
+operation without nearby negation. `correction` units SHALL be exempt.
+
+#### Scenario: A refuted claim returns
+- **WHEN** a corpus edit states that the TAO paid to create a subnet is
+  recycled
+- **THEN** the knowledge test suite fails naming the rule and unit
+
+### Requirement: Pre-activation retrieval check
+A knowledge test SHALL ingest and activate the repo corpus in a temporary
+store, search it with each grounded battery prompt, and require every
+marker group to be satisfied by the text of the top 5 results. Because the
+upgrade job runs every test suite before ingest and push, a corpus edit
+that makes a battery fact unretrievable SHALL block before the push.
+
+#### Scenario: Edit removes a battery fact
+- **WHEN** a corpus edit deletes the text a grounded battery exchange
+  expects
+- **THEN** the knowledge suite fails and the upgrade job does not push or
+  activate
+
+### Requirement: Grounding usage report
+The repo SHALL provide a read-only command that reports, for Telegram
+sessions in a chosen window, how many user turns on Bittensor topics were
+answered with and without an Atlas knowledge or live tool call. It SHALL
+open the session store read-only, SHALL print counts and session ids only
+(never message text), and SHALL state the topic word list it used.
+
+#### Scenario: Report without message text
+- **WHEN** the operator runs the report for 7 days
+- **THEN** the output gives grounded and ungrounded counts and session ids,
+  and contains no message text
