@@ -520,6 +520,15 @@ class MiningContext(StoreCase):
         self.assertIn("Axons", out["context"]["unread"])
         self.assertTrue(out["owners"])
 
+    def test_short_context_batch_is_unread_not_default(self):
+        # A short batch fails the item (change: live-data-correctness); the
+        # context must say so, or every subnet would read as Yuma.
+        out, _ = self.snapshot(drop_query_item="SubnetEpochConsensus")
+        self.assertTrue(out["ok"], out.get("error"))
+        self.assertEqual(out["context"]["unread"]["SubnetEpochConsensus"],
+                         "short batch")
+        self.assertEqual(out["context"]["maps"]["SubnetEpochConsensus"], {})
+
     def test_unknown_consensus_index_fails_that_subnet_only(self):
         out, _ = self.snapshot(tables=context_tables(
             consensus={1: "0x02", 8: "0x00"}))

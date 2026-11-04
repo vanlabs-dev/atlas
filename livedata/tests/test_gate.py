@@ -1175,8 +1175,8 @@ class PinCheckTests(unittest.TestCase):
         self.assertIn(("0xh%d" % (self.PIN - 1), self.PIN - 1), self.calls)
         self.assertNotIn("pin-check-divergence", self.categories())
         self.assertEqual(self.conn.execute(
-            "SELECT pin_block, pin_above_count FROM gate_state "
-            "ORDER BY id DESC LIMIT 1").fetchone(), (self.PIN, 3))
+            "SELECT pin_block, pin_above_count, pin_status FROM gate_state "
+            "ORDER BY id DESC LIMIT 1").fetchone(), (self.PIN, 3, "checked"))
 
     def test_off_by_one_at_the_pin_is_reported(self):
         summary = self.gate(self.PIN + 10, [0.36, 0.36, 0.14, 0.09, 0.05])
@@ -1193,6 +1193,9 @@ class PinCheckTests(unittest.TestCase):
                            maps_ok=False)
         self.assertEqual(summary["pin_check"]["status"], "skipped")
         self.assertNotIn("pin-check-divergence", self.categories())
+        self.assertTrue(self.conn.execute(
+            "SELECT pin_status FROM gate_state ORDER BY id DESC LIMIT 1"
+        ).fetchone()[0].startswith("skipped: state before the pin"))
         summary = self.gate(self.PIN + 10, [0.35, 0.35, 0.15, 0.10, 0.05],
                            fail_hash=True)
         self.assertEqual(summary["pin_check"]["status"], "skipped")
@@ -1222,7 +1225,8 @@ class PinCheckTests(unittest.TestCase):
             conn = al.open_store(path)
             cols = {r[1] for r in conn.execute("PRAGMA table_info(gate_state)")}
             conn.close()
-        self.assertTrue({"pin_block", "pin_above_count"} <= cols)
+        self.assertTrue({"pin_block", "pin_above_count", "pin_status"}
+                        <= cols)
 
 
 # ---------------------------------------------------------------------------
