@@ -91,6 +91,12 @@ So k stays 5, and the check uses search results only, not section context.
 
 **Grounding baseline** (2026-11-05, read-only on the Pi store, `--days 30`): 22 Telegram sessions, 13 topic turns, 10 grounded, 3 ungrounded. Re-run after the SOUL deploy to see whether the mechanism rule moves the ungrounded count.
 
+**SOUL measurement before deploy** (2026-11-05, Pi, two temporary Hermes profiles cloned from the live home plus `memories/`, cwd pinned to an empty directory, model claude-opus-5-5 via DirectSDK, the Pi's active KB run; profiles deleted afterwards). Old canon (2,684 B) against new canon (2,861 B), 26 prompts each, 0 run failures:
+- MV-VP-1 answer-first 5/5 vs 5/5; MV-VP-2 banned synonyms 5/5 vs 5/5; MV-VP-3 next-action presence 5/5 vs 5/5.
+- Mechanism questions (commit-reveal, childkey take) made a knowledge or live tool call 3/3 vs 3/3 each.
+- MV-VP-4 (next-action absence) 0/5 vs 0/5. Its premise ("the fixed protocol split") is false since spec 481, so a `next:` line is the right answer. A replacement on a fixed fact (the TAO supply cap) also scored 0/5 vs 0/5: the tail rule adds `next:` whenever the last line names a source. Pre-existing in both canons; left for WP15 (no-boilerplate rule vs tail rule), not tuned here.
+- Verdict: no regression from the mechanism sentence. A shadow `HERMES_HOME` no longer works on Hermes 0.22.5 (the dependency environment is recorded by absolute path); use `hermes profile create --clone` plus a `memories/` copy, and set PATH to include `~/.local/bin` for the `claude` binary.
+
 ## Risks / Trade-offs
 
 - [Value patterns miss a paraphrased value ("about three hundred dollars")] → Anything without a clean refusal marker is still flagged for the operator. A pattern only widens auto-fail, never auto-pass.
