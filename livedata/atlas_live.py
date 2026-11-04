@@ -2089,6 +2089,15 @@ CHAIN_READS: Tuple[ChainRead, ...] = tuple(
         # ValueQuery default 0; read from live metadata at spec 486, block
         # 9423920. Netuid 0 (root) has no entry and reads as block 0.
         ("NetworkRegisteredAt", ("identity",), "u64"),
+        # Gate demand-share inputs and the chain's emit-to filters (change:
+        # live-data-correctness), per subtensor v486 get_subnets_to_emit_to
+        # and get_shares. Identity hasher; value types and defaults read
+        # from live metadata at spec 486, block 9430842. An unset moving
+        # price is zero; an unset subtoken flag is false; the first-emission
+        # block is only checked for presence.
+        ("SubnetMovingPrice", ("identity",), "FixedI128<U32>"),
+        ("FirstEmissionBlockNumber", ("identity",), "u64"),
+        ("SubtokenEnabled", ("identity",), "bool"),
     )) + (
         # Balancer is a struct with one Perquintill field, the quote weight.
         ChainRead("Swap", "SwapBalancer", ("twox64concat",), "Balancer"),
@@ -2124,6 +2133,10 @@ EXPECTED_DEFAULTS: Dict[Tuple[str, str], str] = {
     # Signal registration key (change: signal-statistics-ties), spec 486,
     # block 9423920. An unset entry is block 0.
     (SUBTENSOR_PALLET, "NetworkRegisteredAt"): "00" * 8,
+    # Gate share inputs (change: live-data-correctness), spec 486, block
+    # 9430842.
+    (SUBTENSOR_PALLET, "SubnetMovingPrice"): "00" * 16,  # 0.0, I96F32
+    (SUBTENSOR_PALLET, "SubtokenEnabled"): "00",  # false
 }
 
 
@@ -2253,6 +2266,15 @@ def decode_u96f32(hex_payload: str) -> float:
     return int.from_bytes(data, "little") / float(2 ** 32)
 
 
+def decode_i96f32(hex_payload: str) -> float:
+    """Decode a SCALE I96F32 storage payload (16 bytes little-endian,
+    two's complement, value = raw / 2^32), the type of SubnetMovingPrice."""
+    data = _payload_bytes(hex_payload)
+    if len(data) != 16:
+        raise ValueError("expected 16 bytes, got %d" % len(data))
+    return int.from_bytes(data, "little", signed=True) / float(2 ** 32)
+
+
 def _decode_compact(data: bytes, offset: int = 0) -> Tuple[int, int]:
     """SCALE compact integer. Returns (value, bytes_consumed)."""
     if offset >= len(data):
@@ -2354,6 +2376,7 @@ def decode_perquintill(hex_payload: str) -> float:
 
 
 _CODECS["u96f32"] = decode_u96f32
+_CODECS["i96f32"] = decode_i96f32
 _CODECS["vec_u16"] = decode_vec_u16
 _CODECS["identity_name"] = decode_identity_name
 _CODECS["u8"] = decode_u8

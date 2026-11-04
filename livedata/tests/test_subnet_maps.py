@@ -115,6 +115,22 @@ class Codecs(unittest.TestCase):
         self.assertLess(al.decode_u64f64(payload), 1e-9)
         self.assertNotAlmostEqual(al.decode_u64f64(payload), 0.3456, places=6)
 
+    def test_i96f32_decodes_positive_and_negative(self):
+        # SubnetMovingPrice is I96F32 (change: live-data-correctness).
+        raw = int(0.0123 * 2 ** 32)
+        self.assertAlmostEqual(al.decode_i96f32(
+            "0x" + raw.to_bytes(16, "little").hex()), 0.0123, places=9)
+        neg = (-raw) & ((1 << 128) - 1)
+        self.assertAlmostEqual(al.decode_i96f32(
+            "0x" + neg.to_bytes(16, "little").hex()), -0.0123, places=9)
+        self.assertAlmostEqual(al.decode_by_codec(
+            "i96f32", "0x" + raw.to_bytes(16, "little").hex()), 0.0123,
+            places=9)
+
+    def test_i96f32_rejects_wrong_length(self):
+        with self.assertRaises(ValueError):
+            al.decode_i96f32("0x" + "00" * 8)
+
     def test_u96f32_rejects_wrong_length(self):
         with self.assertRaises(ValueError):
             al.decode_u96f32("0x0102")
