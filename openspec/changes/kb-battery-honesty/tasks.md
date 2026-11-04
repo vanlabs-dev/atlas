@@ -34,7 +34,7 @@
 ## 4. Honesty contract and grounding report
 
 - [x] 4.1 Add the mechanism-claim rule to `telegram/docs/voice.md` next to the numeric rule (design 6). Verify that any voice-canon tests still pass, and that the device-match check (read-only) reports a mismatch against the current Pi SOUL.md before deploy.
-- [ ] 4.2 `knowledge/benchmark/atlas_kb_usage.py report --days N` (design 7). Verify with a test on a synthetic `state.db`: correct grounded and ungrounded counts, `mode=ro`, and no message text in the output. Then run it read-only against a copy of the Pi store for the last 30 days, and record the baseline counts in the change notes.
+- [x] 4.2 `knowledge/benchmark/atlas_kb_usage.py report --days N` (design 7). Verify with a test on a synthetic `state.db`: correct grounded and ungrounded counts, `mode=ro`, and no message text in the output. Then run it read-only against a copy of the Pi store for the last 30 days, and record the baseline counts in the change notes.
 
 ## 5. Integration and deploy
 
