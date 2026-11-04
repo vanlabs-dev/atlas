@@ -1,0 +1,16 @@
+# Atlas nightly backup timer, 03:40 local.
+#
+# The fleet pass starts between 00:20 and 00:35 and runs about 9 minutes;
+# the next starts at 06:20. 03:40 plus up to 10 minutes sits clear of
+# both. Local time, like atlas-fleet.timer, so the gap holds across DST.
+# Persistent=true runs a slot missed while the Pi was off once at boot.
+[Unit]
+Description=Atlas nightly backup timer
+
+[Timer]
+OnCalendar=*-*-* 03:40:00
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

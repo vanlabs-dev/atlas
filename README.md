@@ -107,6 +107,7 @@ livedata stores, and deploys to Vercel from `main`.
 | [`hermes/`](hermes/README.md) | Read-only verifiers for the Hermes agent baseline, memory and model |
 | [`inventory/`](inventory/README.md) | Read-only device inventory collector |
 | [`hardening/`](hardening/README.md) | Read-only security-posture assessor and the operator-approved apply scripts |
+| [`backup/`](backup/README.md) | Nightly encrypted restic backup of the stores and Hermes state to Google Drive |
 | [`tools/`](tools/) | Repository tooling, including this README generator |
 | [`web/`](web/README.md) | The subnt.dev site: Next.js pages over a typed data layer |
 <!-- END:components -->
@@ -152,6 +153,7 @@ every change are in [`openspec/changes/archive/`](openspec/changes/archive/).
 <!-- BEGIN:schedule -->
 | Timer | When | Does |
 |---|---|---|
+| `atlas-backup` | `*-*-* 03:40:00` | Nightly backup |
 | `atlas-fleet` | Every 6 hours, at :20 | Subnet-repo-fleet reconcile |
 | `atlas-poll-chain-head` | Every hour | Live chain-head poll |
 | `atlas-probe` | Every hour | Chain-read probe |
