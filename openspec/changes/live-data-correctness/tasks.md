@@ -20,7 +20,7 @@
 
 ## 4. Spec observation
 
-- [ ] 4.1 `run_operation` records a `chain_head_taostats` reading only when it is `fresh`. `record_spec_observation` refuses a lower spec from any source other than `rpc` with health event `spec-regression-unconfirmed` and leaves `meta` unchanged. Verify: tests: aged TaoStats head records nothing; lower spec from TaoStats records nothing plus the health event; lower spec from RPC records an event with source `rpc`; the existing spec-observation tests pass.
+- [x] 4.1 `run_operation` records a `chain_head_taostats` reading only when it is `fresh`. `record_spec_observation` refuses a lower spec from any source other than `rpc` with health event `spec-regression-unconfirmed` and leaves `meta` unchanged. Verify: tests: aged TaoStats head records nothing; lower spec from TaoStats records nothing plus the health event; lower spec from RPC records an event with source `rpc`; the existing spec-observation tests pass.
 
 ## 5. Vitals
 
