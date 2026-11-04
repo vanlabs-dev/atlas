@@ -38,7 +38,7 @@
 
 ## 5. Integration and deploy
 
-- [ ] 5.1 Run every Python suite, and once in bwrap with no network. Verify that all pass.
+- [x] 5.1 Run every Python suite, and once in bwrap with no network. Verify that all pass.
 - [ ] 5.2 Deploy with `knowledge-retrieval` (design Migration Plan). Each Pi step needs operator approval:
   1. SOUL.md backup and apply;
   2. device-match check;

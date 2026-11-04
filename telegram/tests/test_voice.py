@@ -733,7 +733,7 @@ class SoulCanonTests(unittest.TestCase):
         soul = self.vc.canonical_soul()
         self.assertIn("how the\nprotocol works", soul)
         self.assertIn("knowledge_search", soul)
-        self.assertNotIn("—", soul)
+        self.assertNotIn("\u2014", soul)
 
     def test_check_matches_and_mismatches(self):
         import tempfile
