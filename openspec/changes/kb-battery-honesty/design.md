@@ -42,7 +42,9 @@ Alternative considered: auto-fail every value. Rejected because a sourced live v
 **4. The pre-activation retrieval check is a knowledge test, not job code.**
 - It ingests the real corpus into a temporary store, activates the run, and calls the server's search for each grounded prompt with `max_results` 5.
 - It requires `markers_match` over the concatenated result contents.
-- Prompts are the user wording, so this also tests the query builder.
+- Prompts are the user wording, so this also tests the query builder. Hermes writes its own search query in production, so a paraphrase that no realistic search would use carries a `search_query` override (`SEARCH_QUERIES`; one entry today, KB-PA-1).
+- Search ranks over the query terms the index holds, so a user word the corpus never uses ("pie", "handed") does not empty the AND pass (found during apply).
+- Corpus vocabulary was added where users and the corpus disagreed: "who gets what share of a subnet's rewards", "kicked off" for deregistration, "launched" for dTAO.
 
 Why a test and not a job step:
 - the job already runs every suite on the edited worktree before ingest and push;

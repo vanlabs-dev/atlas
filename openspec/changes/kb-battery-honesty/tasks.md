@@ -2,14 +2,14 @@
 
 ## 1. Marker rules and pin test
 
-- [ ] 1.1 Word-start matching, plus word-end matching for numeric and `%` markers, in `markers_match` (design 2). Verify with tests: `41` does not match "spec 441"; `41%` matches; `recycl` matches "recycled".
-- [ ] 1.2 Marker pin test: every group of every grounded exchange has an alternate in the corpus. Verify that it fails on the current battery (KB-CF-5, KB-PA-2), naming each exchange and group, then passes after 2.1.
+- [x] 1.1 Word-start matching, plus word-end matching for numeric and `%` markers, in `markers_match` (design 2). Verify with tests: `41` does not match "spec 441"; `41%` matches; `recycl` matches "recycled".
+- [x] 1.2 Marker pin test: every group of every grounded exchange has an alternate in the corpus. Verify that it fails on the current battery (KB-CF-5, KB-PA-2), naming each exchange and group, then passes after 2.1.
 
-- [ ] 1.3 Corpus polarity lint (design 9): `knowledge/polarity-rules.json` with the A10 seed rules, and the test. Verify that it passes on the current corpus, and fails on a temp copy where the subnet lock line says "This TAO is recycled" (the pre-WP13 wording).
+- [x] 1.3 Corpus polarity lint (design 9): `knowledge/polarity-rules.json` with the A10 seed rules, and the test. Verify that it passes on the current corpus, and fails on a temp copy where the subnet lock line says "This TAO is recycled" (the pre-WP13 wording).
 
 ## 2. Re-baselined battery
 
-- [ ] 2.1 Re-baseline per the proposal, and bump `BATTERY_VERSION` to 0.2.0:
+- [x] 2.1 Re-baseline per the proposal, and bump `BATTERY_VERSION` to 0.2.0:
   - KB-EX-1 and KB-PA-1: default split and its override.
   - KB-PA-2: subnet lock goes to pool TAO.
   - KB-EX-6: per-subnet tempo.
@@ -18,7 +18,7 @@
   - New grounded exchanges: UID immunity, Yuma 3 with liquid alpha, commit-reveal, childkey take, alpha halving, conviction half-lives.
 
   Verify that the pin test passes and `tags_by_set` counts match the README and the threshold sheet rationale.
-- [ ] 2.2 Pre-activation retrieval check (design 4): a test ingests and activates the real corpus, searches each grounded prompt with 5 results, and asserts the markers. Add the dissolution synonyms to the corpus for KB-PA-4. Verify that all grounded exchanges pass (baseline before the re-baseline: 23 of 25), and that the test fails when one fact line is removed from a temp copy of the corpus.
+- [x] 2.2 Pre-activation retrieval check (design 4): a test ingests and activates the real corpus, searches each grounded prompt with 5 results, and asserts the markers. Add the dissolution synonyms to the corpus for KB-PA-4. Verify that all grounded exchanges pass (baseline before the re-baseline: 23 of 25), and that the test fails when one fact line is removed from a temp copy of the corpus.
 - [ ] 2.3 Tested facts in the edit prompt (design 8): add `$tested_facts` to `upgrade/prompt.md`, generated from the battery and `retrieval_eval.json`. Verify with an upgrade test that the substituted prompt lists every grounded marker group and every evaluation marker.
 
 ## 3. Refusal scoring
