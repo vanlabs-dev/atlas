@@ -224,6 +224,90 @@ class SecretFreeLogsTests(unittest.TestCase):
         self.assertEqual(result.status, ahv.CHECK_DENIED)
 
 
+class SecretShapeTests(unittest.TestCase):
+    """Detector coverage (audit A12). Every secret-shaped fixture is built
+    at runtime, so no token, key or mnemonic literal sits in the repo."""
+
+    def scan(self, text):
+        findings = []
+        ahv._scan_for_secrets(text, "t", findings)
+        return findings
+
+    def assertFound(self, text, label):
+        findings = self.scan(text)
+        self.assertTrue(any(label in finding for finding in findings),
+                        findings)
+        return findings
+
+    def test_prefixed_env_key_is_found(self):
+        value = "q7" * 12
+        findings = self.assertFound("TAOSTATS_API_KEY=" + value,
+                                    "credential assignment")
+        self.assertNotIn(value, "\n".join(findings))
+
+    def test_dashed_header_key_is_found(self):
+        self.assertFound("x-api-key: " + "Zk3" * 6, "credential assignment")
+
+    def test_bot_token_in_url_is_found(self):
+        token = "123456789:" + "Ab_-" * 8 + "xyz"
+        findings = self.assertFound(
+            "POST https://api.telegram.org/bot%s/sendMessage" % token,
+            "Telegram bot token")
+        self.assertNotIn(token, "\n".join(findings))
+
+    def test_github_tokens_are_found(self):
+        self.assertFound("push with gh" + "p_" + "a1B2" * 9,
+                         "GitHub token")
+        self.assertFound("github" + "_pat_" + "x9" * 12, "GitHub token")
+
+    def test_cloud_tokens_are_found(self):
+        self.assertFound("key AKIA" + "Q" * 16, "AWS access key")
+        self.assertFound("xox" + "b-" + "1234-abcd-5678", "Slack token")
+        self.assertFound("AIza" + "k" * 35, "Google API key")
+
+    def test_pem_key_with_body_is_found(self):
+        header = "-----BEGIN " + "OPENSSH PRIVATE KEY-----"
+        body = "b3Bl" * 16
+        self.assertFound(header + "\n" + body, "PEM private key")
+        self.assertFound('{"k": "%s\\n%s"}' % (header, body),
+                         "PEM private key")
+
+    def test_bare_pem_header_is_not_a_key(self):
+        header = "-----BEGIN " + "RSA PRIVATE KEY-----"
+        self.assertEqual(self.scan("content = '%s'\nassert x" % header), [])
+
+    def test_seed_phrase_is_found(self):
+        words = sorted(ahv._load_bip39_words())
+        phrase = " ".join(words[(index * 97) % 2048] for index in range(12))
+        findings = self.assertFound("mnemonic: " + phrase, "seed phrase")
+        self.assertFound('{"words": "%s"}' % phrase, "seed phrase")
+        for word in phrase.split():
+            self.assertFalse(any(" %s " % word in " %s " % finding
+                                 for finding in findings), word)
+
+    def test_eleven_words_is_not_a_seed(self):
+        words = sorted(ahv._load_bip39_words())
+        self.assertEqual(self.scan(" ".join(words[:11])), [])
+
+    def test_prose_and_chain_ids_are_clean(self):
+        for text in (
+                "the miner can stake and the validator will set weights "
+                "above the bar for a subnet",
+                "block 0x" + "a4f5e963" * 8,
+                "hotkey 5" + "F" * 47,
+                "def setup(token: Optional[str] = None) -> bool:",
+                "_TOKEN = re.compile(r'[A-Za-z0-9_]+')",
+                "api_key = os.environ.get('TAOSTATS_API_KEY')",
+                "max_tokens: 4096"):
+            self.assertEqual(self.scan(text), [], text)
+
+    def test_wordlist_is_pinned(self):
+        words = ahv._load_bip39_words()
+        self.assertEqual(len(words), 2048)
+        self.assertIn("abandon", words)
+        self.assertIn("zoo", words)
+
+
 class ExceptionApplicationTests(unittest.TestCase):
     def test_documented_exception_is_attached_not_erased(self):
         record = make_record(exceptions=[
