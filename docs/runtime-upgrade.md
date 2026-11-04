@@ -69,7 +69,9 @@ code) and never edits that tree.
 5. **Edit.** One `claude -p --restricted` session in the worktree, with no
    Bash and no web tools. Its prompt (`upgrade/prompt.md`) carries the
    `read-knobs` output at one finalized block, the preflight probe result,
-   the anchor and the log between the two releases. File reads (Read,
+   the anchor, the log between the two releases, and the corpus facts the
+   knowledge suite tests (battery markers, retrieval evaluation, polarity
+   rules; a corpus edit that breaks one fails the test gate). File reads (Read,
    Grep, Glob) are `Read(path)` rules over the worktree, the source
    export and `var/upgrade` only; `~/.ssh`, `~/.hermes`, `~/.claude` and every `.env` are denied.
    The model follows `knowledge/corpus/SOURCES.md` and updates the
