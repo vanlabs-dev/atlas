@@ -4913,8 +4913,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                         "spec_version and an upgrade event on change")
     sub.add_parser("poll-gate",
                    help="one emission-gate pass: theta/q/h from finney "
-                        "RPC at a finalized block, demand shares from the "
-                        "TaoSwap panel, hysteresis-guarded crossing "
+                        "RPC at a finalized block, demand shares from "
+                        "chain storage at that block, hysteresis-guarded "
+                        "crossing "
                         "events (inert unless gate_signal.enabled)")
     sub.add_parser("read-knobs",
                    help="read-only: every corpus-stated live knob at one "

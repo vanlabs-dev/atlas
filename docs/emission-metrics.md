@@ -106,14 +106,23 @@ Conversion formulas are in §2.1 — derive in alpha, convert last.
 
 ---
 
-## 2.1 The bar is read, not computed (2026-09-11)
+## 2.1 The bar is read, not computed (2026-09-11; shares from chain 2026-11-04)
 
 Atlas does not compute `EmissionGateBar` (theta). It reads it from chain
 storage on a pinned key that re-derives as
 `twox128("SubtensorModule") ++ twox128(item)`. What Atlas computes is the
-demand share it compares against theta:
-`moving_price x (1 - miner_burn)`, normalized over the TaoSwap panel's
-non-root set.
+demand share it compares against theta. Since 2026-11-04 (change:
+live-data-correctness) it reads every input from chain storage at the
+gate's own block, as subtensor v486 does: `SubnetMovingPrice x (1 -
+MinerBurned)`, normalized over the chain's `get_subnets_to_emit_to` set
+(non-root, a recorded `FirstEmissionBlockNumber`, `SubtokenEnabled`,
+registration allowed). At block 9430559, the block before the pin at
+9430560, the 32nd share computed this way was 0.00832901, equal to the
+theta pinned at 9430560. The runtime pins theta every 360 blocks from the
+shares in the pin block before its moving prices advance, so between
+pins the count drifts by one either way.
+
+The history below describes the panel-based shares Atlas used before.
 
 Measured at block 9041640: the 32nd-largest share was `0.0086453632`
 against a chain theta of `0.0086161991`, **+0.34%**, with exactly 32

@@ -1280,3 +1280,38 @@ Deployed 2026-11-04: pushed `3d7ce47..ba44afb`; Vercel built from main;
 live pages checked (no dropped field in any served page, no "today", no
 "Runs on a CPU", data from 3 Nov 2026). Open: `upgrades.generatedAt` is
 the export time, while the table comes from an hourly poll.
+
+## Live-data correctness (2026-11-04, change: live-data-correctness)
+
+Audit WP12 (A13 to A19). Operator decisions:
+
+- **Gate shares come from the chain (option A).** The gate reads
+  `SubnetMovingPrice`, `MinerBurned` and the emit-to filters at its own
+  finalized block and computes shares as subtensor v486 does. This
+  reverses the "accepted deviation" in the 2026-09-11 entry, where the
+  panel's non-root set stood in for the chain's emit-to set. Reason: at
+  block 9430559 the chain-native 32nd share equalled the theta pinned at
+  9430560 (0.00832901), so the provider is not needed on the alert path.
+  The panel stays for the snapshot and the live tools. Option B (guards
+  on the panel) needed two of the same chain reads for the universe.
+- **Exact pin check.** The runtime pins theta every 360 blocks from the
+  shares in the pin block before its moving prices advance. A pass within
+  240 blocks of a pin rebuilds the shares at pin - 1 and expects exactly
+  N at or above theta (relative allowance 1e-6 for float against U64F64).
+  The hourly check keeps tolerance 1, because between pins the Nth subnet
+  drifts across the bar. That drift, not the universe, explains the
+  31-against-32 counts the audit saw (A15 stale as stated).
+- **`chain_params` dedupe: wontfix.** About 6,200 rows a day; checks after
+  each deploy read the newest row as a freshness stamp.
+- **Dense maps.** A registered subnet missing from a dense per-subnet map
+  is a per-netuid read failure, never the runtime default.
+  `SubnetEmissionEnabled` stays sparse because the switch-watch
+  requirement records an absent entry as its default.
+- **Vitals freshness.** Both vitals adapters stamp the start of the data
+  date, so with the configured 48 h limit a provider two days behind reads
+  as aged. That gives one `vitals-aged` event per expected date and loses
+  no data; the limit stays as configured.
+
+New chain reads (probe-coupled; since WP5 a rename is an operator fix):
+`SubnetMovingPrice` (`FixedI128<U32>`), `FirstEmissionBlockNumber`,
+`SubtokenEnabled`.
