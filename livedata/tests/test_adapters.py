@@ -273,9 +273,10 @@ class SpecUpgradeTests(AdapterHarness):
     """Live runtime spec_version persistence + upgrade events
     (signal-tiering; consumed by the chain-runtime-upgrade class)."""
 
-    def _head_payload(self, spec, block):
+    def _head_payload(self, spec, block, age_s=0):
         import datetime as dt
-        now = dt.datetime.now(tz=dt.timezone.utc)
+        now = (dt.datetime.now(tz=dt.timezone.utc)
+               - dt.timedelta(seconds=age_s))
         return json.dumps({
             "pagination": {"current_page": 1},
             "data": [{"block_number": block, "spec_version": spec,
@@ -306,6 +307,52 @@ class SpecUpgradeTests(AdapterHarness):
         self.assertEqual(len(self._upgrades()), 1)
         self.assertEqual(
             al.meta_get(self.connection, al.META_LAST_LIVE_SPEC), "425")
+
+    def _health(self):
+        return [r[0] for r in self.connection.execute(
+            "SELECT category FROM integration_health")]
+
+    def test_aged_head_records_nothing(self):
+        # Audit A16 (change: live-data-correctness): a lagging TaoStats head
+        # must not move the recorded spec.
+        self.run_op("chain_head_taostats")                      # 424
+        self.fixture.set_override("/v1/blocks", 200,
+                                  self._head_payload(425, 8612004,
+                                                     age_s=3600))
+        result = self.run_op("chain_head_taostats")
+        self.assertEqual(result["freshness_status"], "aged-upstream")
+        self.assertEqual(self._upgrades(), [])
+        self.assertEqual(
+            al.meta_get(self.connection, al.META_LAST_LIVE_SPEC), "424")
+
+    def test_lower_spec_from_taostats_is_not_recorded(self):
+        self.run_op("chain_head_taostats")
+        self.fixture.set_override("/v1/blocks", 200,
+                                  self._head_payload(425, 8612004))
+        self.run_op("chain_head_taostats")
+        observed = al.meta_get(self.connection,
+                               al.META_LAST_LIVE_SPEC_OBSERVED)
+        self.fixture.set_override("/v1/blocks", 200,
+                                  self._head_payload(424, 8612010))
+        self.run_op("chain_head_taostats")
+        self.assertEqual(self._upgrades(), [(424, 425, 8612004)])
+        self.assertEqual(
+            al.meta_get(self.connection, al.META_LAST_LIVE_SPEC), "425")
+        self.assertEqual(al.meta_get(
+            self.connection, al.META_LAST_LIVE_SPEC_OBSERVED), observed)
+        self.assertIn("spec-regression-unconfirmed", self._health())
+
+    def test_lower_spec_from_rpc_is_recorded(self):
+        al.record_spec_observation(self.connection, {
+            "spec_version": 486, "block_number": 100, "source": "rpc"})
+        upgrade = al.record_spec_observation(self.connection, {
+            "spec_version": 485, "block_number": 101, "source": "rpc"})
+        self.assertIsNotNone(upgrade)
+        self.assertEqual(self.connection.execute(
+            "SELECT prev_spec, new_spec, source FROM spec_upgrades"
+        ).fetchall(), [(486, 485, "rpc")])
+        self.assertEqual(
+            al.meta_get(self.connection, al.META_LAST_LIVE_SPEC), "485")
 
     def test_restart_does_not_reemit(self):
         self.run_op("chain_head_taostats")

@@ -461,14 +461,26 @@ def record_spec_observation(connection: sqlite3.Connection,
     if not isinstance(new_spec, int):
         return None
     block = values.get("block_number")
+    source = values.get("source", "taostats")
     prev_raw = meta_get(connection, META_LAST_LIVE_SPEC)
+    # A runtime rollback is real, but only RPC at a finalized block may say
+    # so (change: live-data-correctness, audit A16): a lagging provider head
+    # would otherwise record a fake downgrade and then a fake upgrade.
+    if (prev_raw is not None and new_spec < int(prev_raw)
+            and source != "rpc"):
+        health_event(connection, source, "spec_observation",
+                     "spec-regression-unconfirmed",
+                     "%s reported spec %d below the recorded %s; not "
+                     "recorded without RPC confirmation"
+                     % (source, new_spec, prev_raw))
+        return None
     upgrade_id: Optional[int] = None
     if prev_raw is not None and int(prev_raw) != new_spec:
         cursor = connection.execute(
             "INSERT INTO spec_upgrades (observed_at, prev_spec, new_spec, "
             "block_reference, source) VALUES (?, ?, ?, ?, ?)",
             (_utc_now(), int(prev_raw), new_spec, block,
-             values.get("source", "taostats")))
+             source))
         upgrade_id = cursor.lastrowid
     meta_set(connection, META_LAST_LIVE_SPEC, str(new_spec))
     if block is not None:
@@ -1684,10 +1696,12 @@ def run_operation(connection: sqlite3.Connection, config: Dict[str, Any],
         "values": processed["values"],
     }
     cache_put(connection, config, provider, op_name, params_key, response)
-    if op_name == "chain_head_taostats":
-        # Validated live chain head: persist the last-seen runtime
+    if (op_name == "chain_head_taostats"
+            and response["freshness_status"] == "fresh"):
+        # Validated, fresh live chain head: persist the last-seen runtime
         # spec_version and record an upgrade event on change (the
-        # chain-runtime-upgrade notifier class reads these read-only).
+        # chain-runtime-upgrade notifier class reads these read-only). An
+        # aged head records nothing (change: live-data-correctness).
         record_spec_observation(connection, response["values"])
     return response
 
