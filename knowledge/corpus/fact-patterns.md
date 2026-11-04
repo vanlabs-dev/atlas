@@ -13,7 +13,7 @@ Pattern: Any description of how miners/validators work that was NOT read directl
 
 Fix: Replace with what the source actually says, or write "details of the mechanism are not publicly documented" if no source exists.
 
-## ERRORS (must fix before publishing)
+## Known wrong claims
 
 ### 1. Emissions described as single-token
 Patterns: "emissions paid in tao", "earning tao from emissions", "tao emissions distributed to miners/validators", "receives tao as emissions", "emissions in tao" (but NOT "tao flow"), "emissions paid only in alpha", "emissions are only alpha"
@@ -149,7 +149,7 @@ Patterns: "subnet X is still running" or "subnet X still has N TAO staked" drawn
 
 Fix: a dissolved subnet stays in the reporting runtime APIs until its background cleanup finishes (`SubnetState` `PendingDissolution` or `Dissolving`). It no longer operates: `NetworksAdded` is cleared at dissolution. During cleanup each hotkey's stake drops to zero as that hotkey is paid out, and no stake is reported as available. Listed stake on a dissolving subnet is pending settlement, not lost or stuck. Check whether the subnet was deregistered before treating its API rows as a live subnet.
 
-## WARNINGS (verify but don't block)
+## Claims to verify
 
 ### 8. Em dashes
 Check for U+2014 or U+2013 characters.
