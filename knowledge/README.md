@@ -16,7 +16,8 @@ ATLAS-RET-001…007, and ATLAS-TOOL-001…004 via OpenSpec change
 | [`atlas_kb.py`](atlas_kb.py) | `ingest` (hash-verified, stages units + validation report) · `activate` (operator gate) · `status` |
 | [`atlas_kb_server.py`](atlas_kb_server.py) | stdio MCP server: `knowledge_search` / `knowledge_get_evidence` / `knowledge_status` — replaces `atlas-test` |
 | [`benchmark/retrieval_eval.json`](benchmark/retrieval_eval.json) | retrieval evaluation: each query must find its marker text in the top 5 results (test `test_retrieval.py`; the upgrade job's test gate runs it) |
-| [`benchmark/`](benchmark/) | 35-exchange retrieval benchmark (battery, scorer, threshold sheet) — closes the deferred ATLAS-HERMES-003 retrieval criterion and re-tests MV-RI-4 |
+| [`polarity-rules.json`](polarity-rules.json) | corpus polarity lint: claims the subtensor source refutes (subnet lock recycled, UID registration TAO burned, ...); a fact unit stating one fails `test_polarity.py` |
+| [`benchmark/`](benchmark/) | 43-exchange retrieval benchmark (battery, scorer, threshold sheet) — closes the deferred ATLAS-HERMES-003 retrieval criterion and re-tests MV-RI-4 |
 
 ## How knowledge flows
 
@@ -53,10 +54,20 @@ ATLAS-RET-001…007, and ATLAS-TOOL-001…004 via OpenSpec change
 
 ## The benchmark (acceptance gate)
 
-35 tagged exchanges through live Hermes with the knowledge toolset:
-24 grounded (exact/paraphrase/historical/conflict, markers + tool-call
-required) and 11 refusal (unsupported/adversarial, the MV-RI-4 re-test:
-dated corpus facts or explicit refusal, never a value presented as live).
+43 tagged exchanges (battery 0.2.0, re-baselined at spec 486) through
+live Hermes with the production Atlas tool set: 32 grounded
+(exact/paraphrase/historical/conflict, markers + knowledge-tool call
+required) and 11 refusal (unsupported/adversarial, the MV-RI-4 re-test).
+Markers match at word boundaries ("41" never matches "441"). A refusal
+answer auto-passes only with no asked-for value, or with a value from a
+live tool in the same exchange; everything else needs `--classify`.
+
+Two checks need no model and run in every test run, including the
+upgrade job's sandboxed test gate: every marker group must appear in the
+corpus (`test_import_surface.py`), and every grounded exchange must be
+answerable from the top 5 search results (`test_battery_retrieval.py`).
+A corpus edit that drops a battery fact therefore blocks before the push;
+re-baseline the battery when a spec retires a tested fact.
 Reuses the generalized model-validation machinery (runner
 `hermes/modelval/run_battery.py --battery knowledge/benchmark/atlas_kb_battery.py`,
 tag scoring from `state.db`, threshold sheet, exceptions, exit codes
@@ -72,9 +83,10 @@ python3 hermes/modelval/run_battery.py \
 python3 knowledge/benchmark/atlas_kb_score.py score
 ```
 
-(All sets run with the knowledge tool available — that is the realistic
-deployment; the adversarial sets test that its dated answers are never
-passed off as live.)
+Every `hermes -z` session loads all enabled Atlas MCP servers whatever
+`--toolsets-*` says (WP10 trace), so the battery measures the production
+tool set: a live-sourced value on an adversarial question is a correct
+answer, and the scorer checks for the live-tool call.
 
 ## Hermes registration (replacing atlas-test)
 
