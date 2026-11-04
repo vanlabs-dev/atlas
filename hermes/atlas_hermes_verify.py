@@ -150,7 +150,8 @@ _SECRET_DETECTORS: Tuple[Tuple[re.Pattern, str], ...] = (
     # The key may carry a prefix joined by "_" or "-" (TAOSTATS_API_KEY,
     # x-api-key): "_" is a word character, so a plain \b misses it.
     (re.compile(r"(?i)(?<![A-Za-z0-9])(?:[A-Za-z0-9]+[_-])*"
-                r"(api[_-]?key|apikey|secret|token|passwd|password"
+                r"(api[_-]?key|apikey|private[_-]?key|secret|token|passwd"
+                r"|password"
                 r"|credential|authorization)\b\s*[\"']?\s*[:=]\s*[\"']?"
                 r"(?P<v>[^\s\"'()\[\]{}<>,;]{8,})"
                 r"(?![^\s\"'()\[\]{}<>,;]|[(\[])"), "credential assignment"),
