@@ -255,8 +255,9 @@ class RunTests(FakeResticMixin, Base):
         self.assertEqual(paths, [os.path.join(self.home, p)
                                  for p in ("atlas/var", "atlas/.env",
                                            ".hermes")])
-        self.assertEqual(calls[1], ["forget", "--quiet", "--keep-daily", "3",
-                                    "--prune"])
+        self.assertEqual(calls[1], ["forget", "--quiet", "--tag", "atlas",
+                                    "--group-by", "host,tags",
+                                    "--keep-daily", "3", "--prune"])
 
     def test_exclude_file_lists_live_databases_and_trees(self):
         self.install_fake()

@@ -291,8 +291,11 @@ def upload(layout: Layout, databases: Sequence[str]) -> Dict:
 
 
 def prune(keep_daily: int) -> None:
-    proc = restic(["forget", "--quiet", "--keep-daily", str(keep_daily),
-                   "--prune"])
+    # Group by host and tag, not the default host+paths: an include root
+    # that appears or vanishes would start a new group and leave the old
+    # one unpruned on Drive for good.
+    proc = restic(["forget", "--quiet", "--tag", "atlas", "--group-by",
+                   "host,tags", "--keep-daily", str(keep_daily), "--prune"])
     if proc.returncode != 0:
         raise _fail("forget", proc)
 
