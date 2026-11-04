@@ -361,7 +361,9 @@ def open_store(db_path: str) -> sqlite3.Connection:
             ("gate_state", (("rank", "INTEGER"),
                             ("rank_provenance", "TEXT"),
                             ("bar_mode", "TEXT"),
-                            ("above_count", "INTEGER"))),
+                            ("above_count", "INTEGER"),
+                            ("pin_block", "INTEGER"),
+                            ("pin_above_count", "INTEGER"))),
             ("gate_events", (("prev_theta", "REAL"),
                              ("hovering", "INTEGER"),
                              ("eligibility", "TEXT"),
@@ -4076,6 +4078,96 @@ def run_vitals_daily(connection: sqlite3.Connection, config: Dict[str, Any],
     return {"status": "ok", "date": sv.get("date")}
 
 
+# The runtime re-pins theta when block % 360 == 0
+# (`EMISSION_BAR_UPDATE_INTERVAL`, subnet_emissions.rs at v486), from the
+# shares computed in that block before its moving prices advance, so the
+# state at pin - 1 reproduces them.
+EMISSION_BAR_UPDATE_INTERVAL = 360
+# Atlas sums floats where the runtime truncates U64F64: at the pin the Nth
+# share equals theta, so `>=` needs a small relative allowance. The measured
+# gap to the next share was 3% (block 9430559), far above it.
+PIN_CHECK_REL_EPSILON = 1e-6
+
+
+def run_pin_check(connection: sqlite3.Connection, config: Dict[str, Any],
+                  state: Dict[str, Any], rpc: Optional[Any] = None,
+                  read_maps: Optional[Any] = None) -> Dict[str, Any]:
+    """Exact rank check at the latest theta pin (change:
+    live-data-correctness). Recomputes shares from the state at pin - 1 and
+    counts those at or above theta as pinned: exactly N, or every positive
+    share when fewer than N are positive. A pass too far from the pin, or a
+    node that no longer serves that state, is a skip, never a failure."""
+    gcfg = config.get("gate_signal") or {}
+    if state.get("bar_mode") != GATE_MODE_RANK:
+        return {"status": "skipped", "reason": "not rank mode"}
+    block = state.get("block_number")
+    if not isinstance(block, int):
+        return {"status": "skipped", "reason": "no block number"}
+    pin = block - block % EMISSION_BAR_UPDATE_INTERVAL
+    max_age = int(gcfg.get("pin_check_max_age_blocks", 240))
+    if block - pin + 1 > max_age:
+        return {"status": "skipped", "reason": "pass %d blocks past the pin"
+                % (block - pin)}
+    rpc = rpc or (lambda method, params: _rpc_call(config, method, params))
+    read_maps = read_maps or read_subnet_maps
+    keys = gcfg.get("storage_keys") or {}
+
+    hashes = {}
+    for number in (pin, pin - 1):
+        got = rpc("chain_getBlockHash", [number])
+        if not got.get("ok") or not got.get("result"):
+            return {"status": "skipped", "reason": "no hash for block %d"
+                    % number}
+        hashes[number] = got["result"]
+    raw = {}
+    for item in ("EmissionGateBar", "EmissionBarRank"):
+        read = rpc("state_getStorage", [keys[item], hashes[pin]])
+        if not read.get("ok"):
+            return {"status": "skipped", "reason": "state at the pin "
+                    "unavailable"}
+        raw[item] = read.get("result")
+    try:
+        theta = (decode_u64f64(raw["EmissionGateBar"])
+                 if raw["EmissionGateBar"] is not None else 0.0)
+        rank = (decode_u16(raw["EmissionBarRank"])
+                if raw["EmissionBarRank"] is not None
+                else int((gcfg.get("assumed_defaults") or {}).get(
+                    "EmissionBarRank", 32)))
+    except ValueError as exc:
+        return {"status": "skipped", "reason": "pin decode: %s" % exc}
+    if theta <= 0.0 or rank <= 0:
+        return {"status": "skipped", "reason": "no rank-mode bar at the pin"}
+
+    maps = read_maps(config, dict(SHARE_MAP_ITEMS), rpc=rpc,
+                     block=(hashes[pin - 1], pin - 1), connection=connection)
+    if not maps.get("ok"):
+        return {"status": "skipped", "reason": "state before the pin "
+                "unavailable: %s" % maps.get("error")}
+    computed = chain_demand_shares(maps.get("values") or {},
+                                   maps.get("failures"),
+                                   maps.get("failed_items"))
+    if not computed["ok"]:
+        return {"status": "skipped", "reason": computed["reason"]}
+    positive = [x for x in computed["shares"].values() if x > 0.0]
+    count = sum(1 for x in positive
+                if x >= theta * (1.0 - PIN_CHECK_REL_EPSILON))
+    expected = rank if len(positive) >= rank else len(positive)
+    connection.execute(
+        "UPDATE gate_state SET pin_block = ?, pin_above_count = ? WHERE id = "
+        "(SELECT id FROM gate_state ORDER BY id DESC LIMIT 1)", (pin, count))
+    connection.commit()
+    result = {"status": "checked", "pin_block": pin, "count": count,
+              "expected": expected}
+    if count != expected:
+        health_event(connection, GATE_PROVIDER, GATE_OPERATION,
+                     "pin-check-divergence",
+                     "%d shares at or above theta pinned at block %d, "
+                     "expected %d (shares from block %d)"
+                     % (count, pin, expected, pin - 1))
+        result["status"] = "divergent"
+    return result
+
+
 def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
                   ledger: QuotaLedger, rpc: Optional[Any] = None,
                   run_op: Optional[Any] = None,
@@ -4211,6 +4303,8 @@ def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
                 "above-bar count %d vs rank %d at block %s"
                 % (above_count, rank, state["block_number"]))
     summary["above_count"] = above_count
+    summary["pin_check"] = run_pin_check(connection, config, state, rpc=rpc,
+                                         read_maps=read_maps)
     return summary
 
 
