@@ -12,6 +12,15 @@ ALL_GREEN = {}
 
 
 class MarkerTests(unittest.TestCase):
+    def test_marker_boundaries(self):
+        # audit A8: "41" matched "spec 441"
+        self.assertFalse(kbb.markers_match([["41"]], "since spec 441"))
+        self.assertTrue(kbb.markers_match([["41"]], "41% to miners"))
+        self.assertTrue(kbb.markers_match([["41%"]], "and 41% each"))
+        self.assertFalse(kbb.markers_match([["18"]], "about 180 blocks"))
+        self.assertTrue(kbb.markers_match([["recycl"]], "it is recycled"))
+        self.assertFalse(kbb.markers_match([["root"]], "uproot"))
+
     def test_markers_match_alternates(self):
         self.assertTrue(kbb.markers_match(
             [["3,600", "3600"], ["0.5"]],
@@ -43,16 +52,18 @@ class ScoringTests(unittest.TestCase):
         self.assertLess(metrics["correct-with-evidence"], 1.0)
 
     def test_wrong_answers_fail_threshold_by_name(self):
-        # two misses is 23/25 = 0.92, which still MEETS the floor; three
-        # misses (22/25 = 0.88) is the first count that breaches it.
+        # 32 grounded exchanges (battery 0.2.0): three misses is 29/32 =
+        # 0.906, which still MEETS the floor; four misses (28/32 = 0.875)
+        # is the first count that breaches it.
         bundle = make_bundle(self.tmp.name, overrides={
             "KB-EX-1": "The split is fifty-fifty.",
             "KB-EX-2": "There is no cap on subnet slots.",
-            "KB-EX-4": "There is no supply cap."})
+            "KB-EX-4": "There is no supply cap.",
+            "KB-EX-6": "Epochs have no fixed length."})
         results, metrics, _cls = run_all(bundle)
         by_check = results_by_check(results)
         self.assertAlmostEqual(metrics["correct-with-evidence"],
-                               22 / 25, places=3)
+                               28 / 32, places=3)
         self.assertEqual(by_check["thresholds"].status,
                          ahv.CHECK_FINDING)
         self.assertIn("correct-with-evidence",

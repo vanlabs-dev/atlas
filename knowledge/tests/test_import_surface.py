@@ -54,7 +54,7 @@ class ImportSurfaceTests(unittest.TestCase):
 
     def test_battery_invariants(self):
         exchanges = kbb.battery()
-        self.assertEqual(len(exchanges), 36)
+        self.assertEqual(len(exchanges), 43)
         tags = [str(exchange["tag"]) for exchange in exchanges]
         self.assertEqual(len(tags), len(set(tags)))
         for exchange in exchanges:
@@ -65,21 +65,23 @@ class ImportSurfaceTests(unittest.TestCase):
                          set(kbb.GROUNDED_SETS) | set(kbb.REFUSAL_SETS))
         grounded = sum(len(grouped[name]) for name in kbb.GROUNDED_SETS)
         refusal = sum(len(grouped[name]) for name in kbb.REFUSAL_SETS)
-        self.assertEqual((grounded, refusal), (25, 11))
+        self.assertEqual((grounded, refusal), (32, 11))
 
     def test_expected_markers_pinned_against_corpus(self):
         # every marker group must have at least one alternate present in
         # the corpus snapshot — evidence markers may not drift from the
         # knowledge they are supposed to evidence
+        # Every grounded set, the conflict set included, under the scorer's
+        # own matching rule (change: kb-battery-honesty).
         corpus = _corpus_text()
+        missing = []
         for exchange in kbb.battery():
-            if exchange["set"] in ("exact", "paraphrase", "historical"):
+            if exchange["set"] in kbb.GROUNDED_SETS:
                 for group in exchange["expected"]:  # type: ignore[union-attr]
-                    self.assertTrue(
-                        any(alternate.lower() in corpus
-                            for alternate in group),
-                        "%s marker group %r not found in corpus"
-                        % (exchange["tag"], group))
+                    if not any(kbb.alternate_in(alternate, corpus)
+                               for alternate in group):
+                        missing.append("%s %r" % (exchange["tag"], group))
+        self.assertEqual(missing, [], "marker groups not in the corpus")
 
     def test_corpus_snapshot_hashes_match(self):
         # the recorded hashes must match the snapshot files (load_corpus

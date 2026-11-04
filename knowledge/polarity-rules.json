@@ -1,0 +1,26 @@
+{
+  "_comment": "Corpus polarity lint (change: kb-battery-honesty, audit A10). A fact unit whose text matches `subject` must not contain a clause matching `forbidden` unless a negation word precedes the match in the same clause. Correction units are exempt: they quote wrong claims on purpose. Each rule names the subtensor v486 source that settles it.",
+  "negations": ["not", "no", "never", "neither", "nor", "none of", "isn't", "aren't", "wasn't"],
+  "rules": [
+    {"id": "subnet-lock-not-recycled",
+     "subject": "(?i)creat\\w* (a|the) subnet|burn cost|lock cost|NetworkMinLockCost",
+     "forbidden": "(?i)\\b(TAO|lock|cost|price)\\b[^.;:]{0,40}\\b(is|are|gets|was|were) (recycled|burned|destroyed)",
+     "source": "pallets/subtensor/src/subnets/subnet.rs set_new_network_state: the lock becomes SubnetTAO in full"},
+    {"id": "uid-registration-tao-not-burned",
+     "subject": "(?i)burned_register|uid registration|registering a miner|registration's TAO",
+     "forbidden": "(?i)\\bTAO\\b[^.;:]{0,30}\\b(is|are|gets|was|were) (burned|recycled|destroyed)",
+     "source": "pallets/subtensor/src/subnets/collateral.rs: the TAO is swapped into the pool"},
+    {"id": "staking-tao-not-burned",
+     "subject": "(?i)\\bstak(e|es|ed|ing)\\b",
+     "forbidden": "(?i)\\bTAO\\b[^.;:]{0,30}\\b(is|are|gets|was|were) (burned|destroyed)",
+     "source": "pallets/subtensor/src/staking/stake_utils.rs: staking TAO joins SubnetTAO"},
+    {"id": "dtao-date-not-approximate",
+     "subject": "(?i)\\bdTAO\\b[^.]{0,80}\\blaunch",
+     "forbidden": "(?i)early 2025|approximate",
+     "source": "first dTAO block 4,920,351 timestamp (Finney read 2026-11-05)"},
+    {"id": "conviction-rate-is-a-time-constant",
+     "subject": "(?i)MaturityRate|UnlockRate",
+     "forbidden": "(?i)\\b(is|are) (currently )?an? \\d+-day half-life",
+     "source": "pallets/subtensor/src/staking/lock.rs exp_decay: the rates are tau, not half-lives"}
+  ]
+}

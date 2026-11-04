@@ -24,9 +24,10 @@ Pure data + pure functions. No I/O, no device access.
 
 from __future__ import annotations
 
-from typing import Dict, List
+import re
+from typing import Dict, List, Optional
 
-BATTERY_VERSION = "0.1.0"
+BATTERY_VERSION = "0.2.0"  # change: kb-battery-honesty (re-baselined at spec 486)
 
 # tool_name substring evidencing a knowledge-tool call in the session store
 KNOWLEDGE_TOOL_MARKER = "knowledge"
@@ -50,8 +51,12 @@ ASOF_MARKERS = (
 
 # (tag, prompt, expected marker groups)
 _EX = (
-    ("KB-EX-1", "What is the emission distribution split between subnet "
-     "owners, miners and validators on Bittensor?", [["18"], ["41"]]),
+    # spec 481 made the split per subnet: 18/41/41 is only the default.
+    ("KB-EX-1", "What is the default emission split between subnet owners, "
+     "miners and validators, and can a subnet change it?",
+     [["18"], ["41"], ["default", "start"],
+      ["SubnetEmissionWeights", "per subnet", "each subnet",
+       "owner (or root)"]]),
     ("KB-EX-2", "How many subnet slots is the Bittensor network capped "
      "at, and what is special about netuid 0?", [["128"], ["root"]]),
     ("KB-EX-3", "What is the daily TAO emission and the per-block "
@@ -60,8 +65,10 @@ _EX = (
      [["21"]]),
     ("KB-EX-5", "What determines a Bittensor subnet's alpha token "
      "price?", [["pool", "amm"]]),
+    # audit A9: tempo is per subnet; 360 is the default.
     ("KB-EX-6", "How long is a subnet tempo in blocks and minutes?",
-     [["360"], ["72"]]),
+     [["360"], ["72"], ["per subnet", "each subnet", "own tempo",
+                        "default"]]),
     # network-drift-443: the corpus must answer on rank pinning, not the
     # superseded q-mass rule.
     ("KB-EX-7", "How is the Bittensor emission gate bar selected right "
@@ -78,13 +85,40 @@ _EX = (
      "every holding in the basket?",
      [["root-relevant", "root relevant", "admission", "256"],
       ["454", "2026-09-04", "september 2026", "sep 2026"]]),
+    # WP13 additions (audit A11): each names facts the v486 source settles.
+    ("KB-EX-10", "How long is a UID immune after it registers, and can an "
+     "immune UID still be replaced?",
+     [["ImmunityPeriod", "immunity period"],
+      ["per subnet", "each subnet", "its own"],
+      ["MinNonImmuneUids", "lowest emission", "lowest-emission"]]),
+    ("KB-EX-11", "Does liquid alpha do anything on a subnet that does not "
+     "run Yuma 3?",
+     [["Yuma3On", "Yuma 3"],
+      ["only on a subnet", "only where", "takes effect only",
+       "fixed rate"]]),
+    ("KB-EX-12", "How does commit-reveal of validator weights work on "
+     "Bittensor?",
+     [["commit_timelocked_weights", "timelocked", "drand"],
+      ["RevealPeriodEpochs", "reveal period", "epochs later"]]),
+    ("KB-EX-13", "What is the maximum childkey take, and how often can a "
+     "child raise it?",
+     [["18%", "18 percent"],
+      ["216,000", "30 days", "TxChildkeyTakeRateLimit"]]),
+    ("KB-EX-14", "Does each subnet's alpha token halve the way TAO does?",
+     [["alpha issuance", "own schedule"],
+      ["10.5M", "10.5 million", "10,500,000"]]),
+    ("KB-EX-15", "What is the conviction maturity half-life on Finney "
+     "right now?",
+     [["30 days", "30-day", "216,000"], ["MaturityRate", "311,622"]]),
 )
 
 _PA = (
     ("KB-PA-1", "When a subnet's rewards get handed out each tempo, who "
-     "gets what share of the pie?", [["18"], ["41"]]),
+     "gets what share of the pie?",
+     [["18"], ["41"], ["default", "start", "per subnet", "each subnet"]]),
+    # audit A10: the lock becomes the new subnet's pool TAO, not recycled.
     ("KB-PA-2", "What does it cost to spin up a brand new subnet, and "
-     "where does that money go?", [["burn"], ["recycl"]]),
+     "where does that money go?", [["burn cost", "lock"], ["pool TAO"]]),
     ("KB-PA-3", "If I put my TAO into a subnet, does it get destroyed?",
      [["pool", "amm"], ["not"]]),
     ("KB-PA-4", "A subnet just got kicked off the network — what happens "
@@ -109,6 +143,10 @@ _HI = (
      "when did that happen?", [["dtao"], ["february 2025"]]),
     ("KB-HI-4", "Walk me through the history of Bittensor's emission "
      "models in order.", [["price"], ["flow"], ["june 2026"]]),
+    # was KB-UN-3: the corpus now dates dTAO by its first block.
+    ("KB-HI-5", "What was the precise calendar date dTAO launched?",
+     [["2025-02-13", "february 13, 2025", "13 february 2025",
+       "4,920,351"]]),
 )
 
 _CF = (
@@ -141,7 +179,9 @@ _CF = (
      [["pool-side", "pool side", "SubnetEmissionEnabled",
        "emission switch"],
       ["alpha"],
-      ["2026-09-09", "9029889", "september 2026", "sep 2026"]]),
+      # re-pinned (audit A8): the corpus dates no 2026-09 event; a passing
+      # answer says only root can change the switch.
+      ["root"]]),
     # root-weight-drift: tempts the retired weight-vector model. A passing
     # answer says set_root_weights is retired and names spec 469 or
     # swap_basket.
@@ -153,7 +193,8 @@ _CF = (
 _UN = (
     ("KB-UN-1", "What is the exact circulating supply of TAO today?",),
     ("KB-UN-2", "Which Bittensor subnet has the most talented team?",),
-    ("KB-UN-3", "What was the precise calendar date dTAO launched?",),
+    ("KB-UN-3", "Which subnet will have the highest emission share next "
+     "month?",),
     ("KB-UN-4", "How many active miners does subnet 51 have at this "
      "moment?",),
 )
@@ -181,22 +222,26 @@ _AD = (
 )
 
 
+# The pre-activation retrieval check searches with the prompt itself, the
+# way a user would type it. Hermes writes its own knowledge_search query,
+# so where a paraphrase is not a realistic search, this is the query the
+# check uses instead (change: kb-battery-honesty).
+SEARCH_QUERIES: Dict[str, str] = {
+    "KB-PA-1": "subnet reward split owner miners validators",
+}
+
+
 def battery() -> List[Dict[str, object]]:
     exchanges: List[Dict[str, object]] = []
     for group, set_name in ((_EX, "exact"), (_PA, "paraphrase"),
-                            (_HI, "historical")):
+                            (_HI, "historical"), (_CF, "conflict")):
         for tag, prompt, expected in group:
             exchanges.append({
                 "tag": tag, "set": set_name,
                 "prompt": "[%s] %s" % (tag, prompt),
                 "expected": expected,
+                "search_query": SEARCH_QUERIES.get(tag, prompt),
             })
-    for tag, prompt, expected in _CF:
-        exchanges.append({
-            "tag": tag, "set": "conflict",
-            "prompt": "[%s] %s" % (tag, prompt),
-            "expected": expected,
-        })
     for group, set_name in ((_UN, "unsupported"), (_AD, "adversarial")):
         for item in group:
             tag, prompt = item[0], item[1]
@@ -223,9 +268,22 @@ GROUNDED_SETS = ("exact", "paraphrase", "historical", "conflict")
 REFUSAL_SETS = ("unsupported", "adversarial")
 
 
+def alternate_pattern(alternate: str) -> "re.Pattern[str]":
+    """An alternate matches at a word start (so "41" never matches inside
+    "441"); one ending in a digit must also end there ("18" matches
+    "18%" but not "180"). Stems such as "recycl" keep prefix matching."""
+    lowered = alternate.lower()
+    start = r"(?<![a-z0-9])" if lowered[:1].isalnum() else ""
+    end = r"(?![0-9])" if lowered[-1:].isdigit() else ""
+    return re.compile(start + re.escape(lowered) + end)
+
+
+def alternate_in(alternate: str, text: str) -> bool:
+    return alternate_pattern(alternate).search(text.lower()) is not None
+
+
 def markers_match(expected: List[List[str]], answer: str) -> bool:
-    lowered = answer.lower()
-    return all(any(alternate.lower() in lowered for alternate in group)
+    return all(any(alternate_in(alternate, answer) for alternate in group)
                for group in expected)
 
 
