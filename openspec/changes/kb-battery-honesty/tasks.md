@@ -5,6 +5,8 @@
 - [ ] 1.1 Word-start matching, plus word-end matching for numeric and `%` markers, in `markers_match` (design 2). Verify with tests: `41` does not match "spec 441"; `41%` matches; `recycl` matches "recycled".
 - [ ] 1.2 Marker pin test: every group of every grounded exchange has an alternate in the corpus. Verify that it fails on the current battery (KB-CF-5, KB-PA-2), naming each exchange and group, then passes after 2.1.
 
+- [ ] 1.3 Corpus polarity lint (design 9): `knowledge/polarity-rules.json` with the A10 seed rules, and the test. Verify that it passes on the current corpus, and fails on a temp copy where the subnet lock line says "This TAO is recycled" (the pre-WP13 wording).
+
 ## 2. Re-baselined battery
 
 - [ ] 2.1 Re-baseline per the proposal, and bump `BATTERY_VERSION` to 0.2.0:

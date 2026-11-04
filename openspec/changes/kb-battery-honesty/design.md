@@ -37,7 +37,7 @@ Alternative considered: auto-fail every value. Rejected because a sourced live v
 - An alternate ending in a digit or `%` also needs a word end.
 - Stems such as `recycl` and `proportional` keep prefix matching.
 
-**3. The marker pin test** asserts, for every grounded exchange, that each marker group has at least one alternate found in the corpus text, using the same boundary rule. It runs in `knowledge/tests`.
+**3. The marker pin test** (the existing `test_expected_markers_pinned_against_corpus`, widened to the conflict set) asserts, for every grounded exchange, that each marker group has at least one alternate found in the corpus text, using the same boundary rule. It runs in `knowledge/tests`.
 
 **4. The pre-activation retrieval check is a knowledge test, not job code.**
 - It ingests the real corpus into a temporary store, activates the run, and calls the server's search for each grounded prompt with `max_results` 5.
@@ -79,6 +79,13 @@ So k stays 5, and the check uses search results only, not section context.
 - A user turn counts as Bittensor-topic when it holds a corpus term: a curated list of protocol words such as subnet, emission, stake, validator, miner, alpha, yuma, commit, childkey, tempo, halving, conviction.
 - For each such turn, the report records whether any `atlas_kb`, `atlas_live`, `atlas_fleet` or `atlas_repo` tool row follows before the next user turn.
 - Output: counts and session ids only, never message text.
+
+**9. Corpus polarity lint.**
+- `knowledge/polarity-rules.json` holds rules: `id`, `subject` (regex for one operation, such as the subnet lock or a UID registration), `forbidden` (regex for a predicate the source refutes, such as `recycled` or `burned`), `source` (the v486 path that settles it).
+- The test splits `fact` units into sentences. A sentence that matches a rule's subject and forbidden predicate fails, unless a negation (`not`, `no`, `never`, `neither`, `nor`, `none of`) appears within 40 characters before the predicate.
+- `correction` units are skipped: they quote wrong claims on purpose.
+- Seed rules are the audit A10 cases: subnet lock TAO recycled or burned; non-root UID registration TAO burned or recycled; staking TAO burned; the dTAO launch described as approximate or "early 2025"; a conviction rate called a half-life as its value.
+- Why rules, not a general contradiction detector: a detector over free text either misses paraphrases or floods false positives. Rules are cheap, readable, and each one encodes a fact the source settled.
 
 ## Risks / Trade-offs
 

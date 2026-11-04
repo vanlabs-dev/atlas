@@ -53,6 +53,17 @@ test SHALL fail and name the exchange and group otherwise.
 - **WHEN** a grounded exchange expects text the corpus does not contain
 - **THEN** the knowledge test suite fails naming that exchange
 
+### Requirement: Corpus polarity lint
+The repo SHALL carry checked-in polarity rules, each naming one operation,
+a predicate the subtensor source refutes for it, and that source. A test
+SHALL fail when a `fact` unit states a rule's forbidden predicate about its
+operation without nearby negation. `correction` units SHALL be exempt.
+
+#### Scenario: A refuted claim returns
+- **WHEN** a corpus edit states that the TAO paid to create a subnet is
+  recycled
+- **THEN** the knowledge test suite fails naming the rule and unit
+
 ### Requirement: Pre-activation retrieval check
 A knowledge test SHALL ingest and activate the repo corpus in a temporary
 store, search it with each grounded battery prompt, and require every
