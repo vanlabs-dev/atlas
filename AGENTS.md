@@ -1,5 +1,15 @@
 # AGENTS.md
 
+## Quality fixes, not quick fixes
+
+Fix the cause, completely and verifiably. A fix that only hides a
+symptom, narrows the test, or defers the real work is not a fix.
+
+When you offer options, you may list a quicker fix, but never mark a
+quick fix as the recommended option. Recommend the fix that holds up:
+the one with sourced facts, tests that can fail, and no known gap left
+open. Name what the quicker option leaves undone.
+
 ## This repo is personal
 
 It is not work, and it is not shared. Nothing in it is written for or on
