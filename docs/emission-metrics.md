@@ -279,7 +279,7 @@ So a `registration_cost` from `/v2/subnets/` is a **momentary** value that a
 burst of registrations spikes and time decays. Never treat it as fixed.
 
 Immunity is the figure to weigh against setup time: netuid 76 gives 100 blocks
-(~8 minutes) before you are prunable, netuid 8 gives 1200 (~4 hours), while
+(~20 minutes) before you are prunable, netuid 8 gives 1200 (~4 hours), while
 netuids 50 and 18 give 65,535 (9.1 days). Long immunity also explains high
 `earn_rate_pct` — on netuid 50, 235 of 248 slots earn because dead slots cannot
 be recycled quickly.
