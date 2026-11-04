@@ -18,6 +18,12 @@ See proposal.md (Why). State measured on 2026-11-04 during the WP12 re-check:
 - **Node state window.** About 256 blocks (measured in WP4). A pass reaches back to the block before the pin only if that block is no older than this window.
 - **Panel today.** 129 rows, 7 blocks behind the chain. `dereg_context.current_block` carries the panel's block.
 - **Vitals.** The provider's data date is normally UTC yesterday. At 00:xx UTC it often still serves the day before. `INSERT OR REPLACE` on `date` plus a "done for today" marker then skips that date.
+- **Rehearsal (task 6.2, shipped code, workstation, scratch stores).**
+  - Exact pin count 32 of 32 at pins 9430920 (pass at block 9430967) and 9433800 (pass at 9433921, universe 128 after SN36 started emitting); 9430560 matched by the earlier ad hoc read.
+  - Hourly count 31 and 32 between pins; no health events; panel lag -1 and -4 blocks; 128 snapshot rows.
+  - Pins 407 blocks or more back are pruned on the node, and the check records a skip.
+  - At block 9431037 no subnet changed zone or side between panel and chain shares, so the first chain-share pass needs no re-seed.
+  - A full pass took 48 s against the alerts unit's 20 min timeout. The live mining snapshot (block 9430993) had no failed items and no dense-missing keys.
 
 ## Goals / Non-Goals
 
