@@ -89,6 +89,8 @@ So k stays 5, and the check uses search results only, not section context.
 - Seed rules are the audit A10 cases: subnet lock TAO recycled or burned; non-root UID registration TAO burned or recycled; staking TAO burned; the dTAO launch described as approximate or "early 2025"; a conviction rate called a half-life as its value.
 - Why rules, not a general contradiction detector: a detector over free text either misses paraphrases or floods false positives. Rules are cheap, readable, and each one encodes a fact the source settled.
 
+**Grounding baseline** (2026-11-05, read-only on the Pi store, `--days 30`): 22 Telegram sessions, 13 topic turns, 10 grounded, 3 ungrounded. Re-run after the SOUL deploy to see whether the mechanism rule moves the ungrounded count.
+
 ## Risks / Trade-offs
 
 - [Value patterns miss a paraphrased value ("about three hundred dollars")] → Anything without a clean refusal marker is still flagged for the operator. A pattern only widens auto-fail, never auto-pass.
