@@ -29,7 +29,7 @@
   - a block number with an `atlas-live` tool row passes;
   - a block number with no tool is flagged;
   - the 2026-09-24 fixture answers still pass.
-- [ ] 3.2 Update `knowledge/benchmark/docs/thresholds.md` rationale and `knowledge/README.md` (run with the production Atlas tool set, live evidence rule). Verify that `python3 tools/readme_sync.py` reports no drift and the threshold sheet still parses.
+- [x] 3.2 Update `knowledge/benchmark/docs/thresholds.md` rationale and `knowledge/README.md` (run with the production Atlas tool set, live evidence rule). Verify that `python3 tools/readme_sync.py` reports no drift and the threshold sheet still parses.
 
 ## 4. Honesty contract and grounding report
 
