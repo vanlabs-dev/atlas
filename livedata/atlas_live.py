@@ -212,7 +212,10 @@ META_LAST_LIVE_SPEC = "last_live_spec"
 META_LAST_LIVE_SPEC_BLOCK = "last_live_spec_block"
 META_LAST_LIVE_SPEC_OBSERVED = "last_live_spec_observed_at"
 META_GATE_ACTIVE = "gate_active"
-META_VITALS_DATE = "network_vitals_date"
+META_VITALS_DATE = "network_vitals_date"  # no longer read (2026-11)
+# The expected vitals date a `vitals-aged` health event was last recorded
+# for, so a lagging provider gives one event per date, not one per pass.
+META_VITALS_AGED_FOR = "network_vitals_aged_for"
 
 
 class FatalLiveError(Exception):
@@ -4098,16 +4101,26 @@ def record_panel_snapshot(connection: sqlite3.Connection,
 
 def run_vitals_daily(connection: sqlite3.Connection, config: Dict[str, Any],
                      ledger: QuotaLedger, run_op: Optional[Any] = None,
-                     env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-    """Persist one network-vitals row per UTC day from two keyless calls
-    (change: pulse-briefing): TaoSwap network stats and the daily TAO/USD
-    close, through the existing contract-validated adapters. Zero TaoStats
-    quota. Fails closed: an invalid or failed fetch records a health event
-    and persists nothing for the day."""
+                     env: Optional[Dict[str, str]] = None,
+                     today: Optional[datetime.date] = None
+                     ) -> Dict[str, Any]:
+    """Persist one network-vitals row per upstream data date from two
+    keyless calls (change: pulse-briefing): TaoSwap network stats and the
+    daily TAO/USD close, through the existing contract-validated adapters.
+    Zero TaoStats quota.
+
+    Keyed on the data date (change: live-data-correctness, audit A18). The
+    expected newest date is the UTC day before the pass; every pass fetches
+    until a row for it exists, so a provider that lags one to two days does
+    not skip a date. A stored row is never replaced. A failed or invalid
+    fetch records a health event; a response that is not fresh writes
+    nothing and records one health event per expected date."""
     run_op = run_op or run_operation
-    today = _utc_now()[:10]
-    if meta_get(connection, META_VITALS_DATE) == today:
-        return {"status": "current", "date": today}
+    today = today or datetime.datetime.now(datetime.timezone.utc).date()
+    expected = (today - datetime.timedelta(days=1)).isoformat()
+    if connection.execute("SELECT 1 FROM network_vitals WHERE date = ?",
+                          (expected,)).fetchone():
+        return {"status": "current", "date": expected}
     stats = run_op(connection, config, ledger, "network_stats_taoswap",
                    interactive=False, env=env)
     price = run_op(connection, config, ledger, "price_daily_taoswap",
@@ -4117,10 +4130,23 @@ def run_vitals_daily(connection: sqlite3.Connection, config: Dict[str, Any],
                      "provider-failure",
                      "vitals unavailable: stats=%s price=%s"
                      % (stats.get("status"), price.get("status")))
-        return {"status": "live-unavailable"}
+        return {"status": "live-unavailable", "expected": expected}
     sv, pv = stats["values"], price["values"]
-    connection.execute(
-        "INSERT OR REPLACE INTO network_vitals (date, observed_at, "
+    aged = [name for name, result in (("stats", stats), ("price", price))
+            if result.get("freshness_status") != "fresh"]
+    if aged:
+        if meta_get(connection, META_VITALS_AGED_FOR) != expected:
+            health_event(connection, "taoswap", "network_vitals",
+                         "vitals-aged",
+                         "%s not fresh: data date %s, close %s, expected %s"
+                         % ("+".join(aged), sv.get("date"),
+                            pv.get("close_date"), expected))
+            meta_set(connection, META_VITALS_AGED_FOR, expected)
+            connection.commit()
+        return {"status": "aged", "date": sv.get("date"),
+                "expected": expected}
+    cursor = connection.execute(
+        "INSERT OR IGNORE INTO network_vitals (date, observed_at, "
         "total_staked_tao, available_tao, root_stake_tao, "
         "subnets_stake_tao, subnets_share_pct, subnet_reg_cost_tao, "
         "total_accounts, new_accounts_today, tao_usd, tao_usd_close_date) "
@@ -4131,9 +4157,11 @@ def run_vitals_daily(connection: sqlite3.Connection, config: Dict[str, Any],
          sv.get("subnet_reg_cost_tao"), sv.get("total_accounts"),
          sv.get("new_accounts_today"), pv.get("tao_usd"),
          pv.get("close_date")))
-    meta_set(connection, META_VITALS_DATE, today)
     connection.commit()
-    return {"status": "ok", "date": sv.get("date")}
+    if cursor.rowcount == 0:
+        return {"status": "waiting", "date": sv.get("date"),
+                "expected": expected}
+    return {"status": "ok", "date": sv.get("date"), "expected": expected}
 
 
 # The runtime re-pins theta when block % 360 == 0

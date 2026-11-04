@@ -1391,32 +1391,45 @@ class PanelCheckTests(unittest.TestCase):
 
 
 class VitalsTests(unittest.TestCase):
+    """Vitals keyed on the provider data date (change:
+    live-data-correctness, audit A18)."""
+
+    TODAY = datetime.date(2026, 8, 31)        # expected date 2026-08-30
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.conn = al.open_store(os.path.join(self.tmp.name, "live.db"))
         self.addCleanup(self.conn.close)
         self.config = make_config()
+        self.calls = []
 
-    def vitals(self, stats_status="ok", price_status="ok"):
+    def vitals(self, date="2026-08-30", stats_status="ok", price_status="ok",
+               fresh=True, staked=7417081.7, today=None):
         def run_op(_conn, _config, _ledger, op, **_kw):
+            self.calls.append(op)
+            freshness = "fresh" if fresh else "aged-upstream"
             if op == "network_stats_taoswap":
-                return {"status": stats_status, "values": {
-                    "date": "2026-08-30", "total_staked_tao": 7417081.7,
+                return {"status": stats_status, "freshness_status": freshness,
+                        "values": {
+                    "date": date, "total_staked_tao": staked,
                     "root_stake_tao": 5385758.8,
                     "subnets_stake_tao": 2028542.6,
                     "subnets_share_pct": 27.35, "available_tao": 3830803.3,
                     "subnet_reg_cost_tao": 583.49,
                     "total_accounts": 2296264, "new_accounts_today": 862}}
-            return {"status": price_status, "values": {
-                "tao_usd": 198.59, "close_date": "2026-08-30"}}
+            return {"status": price_status, "freshness_status": freshness,
+                    "values": {"tao_usd": 198.59, "close_date": date}}
         return al.run_vitals_daily(self.conn, self.config, ledger=None,
-                                   run_op=run_op)
+                                   run_op=run_op, today=today or self.TODAY)
 
     def rows(self):
         return self.conn.execute(
             "SELECT date, total_staked_tao, subnets_share_pct, tao_usd "
-            "FROM network_vitals").fetchall()
+            "FROM network_vitals ORDER BY date").fetchall()
+
+    def health(self):
+        return [r[0] for r in health_rows(self.conn)]
 
     def test_one_row_per_day(self):
         self.assertEqual(self.vitals()["status"], "ok")
@@ -1424,12 +1437,37 @@ class VitalsTests(unittest.TestCase):
         self.assertEqual(self.rows(),
                          [("2026-08-30", 7417081.7, 27.35, 198.59)])
 
+    def test_expected_date_stored_makes_no_call(self):
+        self.vitals()
+        self.calls.clear()
+        self.assertEqual(self.vitals()["status"], "current")
+        self.assertEqual(self.calls, [])
+
+    def test_lagging_provider_is_retried_not_replaced(self):
+        # 2026-08-29 already stored; the provider still serves it.
+        self.vitals(date="2026-08-29", today=datetime.date(2026, 8, 30))
+        result = self.vitals(date="2026-08-29", staked=1.0)
+        self.assertEqual(result["status"], "waiting")
+        self.assertEqual(self.rows()[0][1], 7417081.7)    # not replaced
+        # The next pass fetches again and the new date lands.
+        self.assertEqual(self.vitals()["status"], "ok")
+        self.assertEqual([r[0] for r in self.rows()],
+                         ["2026-08-29", "2026-08-30"])
+
+    def test_aged_response_writes_nothing_one_event_per_date(self):
+        self.assertEqual(self.vitals(fresh=False)["status"], "aged")
+        self.assertEqual(self.vitals(fresh=False)["status"], "aged")
+        self.assertEqual(self.rows(), [])
+        self.assertEqual(self.health().count("vitals-aged"), 1)
+        # A new expected date may record its own event.
+        self.vitals(fresh=False, today=datetime.date(2026, 9, 1))
+        self.assertEqual(self.health().count("vitals-aged"), 2)
+
     def test_failed_fetch_persists_nothing(self):
         result = self.vitals(price_status="live-unavailable")
         self.assertEqual(result["status"], "live-unavailable")
         self.assertEqual(self.rows(), [])
-        self.assertIn("provider-failure",
-                      [r[0] for r in health_rows(self.conn)])
+        self.assertIn("provider-failure", self.health())
         # The day is not marked current, so recovery can still write.
         self.assertEqual(self.vitals()["status"], "ok")
 
