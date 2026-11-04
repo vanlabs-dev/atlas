@@ -2507,6 +2507,33 @@ SUBNET_MAP_FAIL_EMPTY = frozenset({"SubnetEmissionEnabled",
                                    "SubnetAlphaOutEmission", "SubnetTAO",
                                    "SubnetAlphaIn", "NetworkRegisteredAt"})
 
+# Per-subnet maps that hold a key for every registered subnet ("all") or
+# every non-root registered subnet ("non-root"), measured at spec 486, block
+# 9430798 (change: live-data-correctness). For these a registered subnet
+# with no key is a read failure, never the runtime default: an absent
+# SubnetOwner would otherwise read as "the owner owns nothing". Every item
+# not listed is sparse, and an absent key there is a real unset state.
+SUBNET_MAP_COVERAGE: Dict[str, str] = {
+    "SubnetworkN": "all",
+    "Burn": "all",
+    "ImmunityPeriod": "all",
+    "MaxAllowedUids": "all",
+    "NetworkRegistrationAllowed": "all",
+    "SubnetTAO": "all",
+    "SubnetAlphaIn": "all",
+    "SubnetAlphaOut": "all",
+    "SubnetOwner": "non-root",
+    "SubnetOwnerHotkey": "non-root",
+    "MinerBurned": "non-root",
+    "SwapBalancer": "non-root",
+}
+# SubnetEmissionEnabled holds a key for every non-root subnet too, but stays
+# sparse: the switch watch records an absent entry as its assumed default,
+# distinct from a failed read (live-data spec, "An absent switch entry is
+# off, not unread"), and SUBNET_MAP_FAIL_EMPTY already catches a lost batch.
+UNIVERSE_ITEM = "SubnetworkN"
+DENSE_MISSING = "absent from dense map"
+
 # Maps keyed by NetUidStorageIndex = mecid * 4096 + netuid
 # (`subnets/mechanism.rs:21-40`). Their values are returned keyed by
 # (netuid, mecid), so a mechanism-1 vector is never mistaken for a netuid.
@@ -2712,6 +2739,21 @@ def read_subnet_maps(config: Dict[str, Any],
                       "as a derivation or endpoint fault rather than an "
                       "empty chain" % SUBNET_MAP_CONTROL, "control-empty")
 
+    # The registered-subnet universe for dense coverage, from the same
+    # block. Enumerating keys is enough; no value is needed.
+    universe: Optional[set] = None
+    if any(item in SUBNET_MAP_COVERAGE for item in items):
+        try:
+            _, universe_netuids = _enumerate_map_keys(
+                rpc, storage_prefix(SUBTENSOR_PALLET, UNIVERSE_ITEM),
+                block_hash)
+        except FatalLiveError as exc:
+            return failed(redact(str(exc)), "key-layout")
+        universe = set(universe_netuids)
+        if not universe:
+            return failed("%s enumerated empty; dense maps cannot be "
+                          "checked" % UNIVERSE_ITEM, "control-empty")
+
     values: Dict[str, Dict[Any, Any]] = {item: {} for item in items}
     failures: Dict[str, Dict[Any, str]] = {item: {} for item in items}
     for start in range(0, len(all_keys), _QUERY_CHUNK):
@@ -2734,20 +2776,35 @@ def read_subnet_maps(config: Dict[str, Any],
                 except ValueError as exc:
                     failures[item][netuid] = str(exc)
 
-    # Per-item fail-closed: an empty or short batch of a populated map is
-    # a wrong prefix or a truncated query, not 128 subnets flipping off.
-    # The rest of the read still stands.
+    # Per-item fail-closed. A short batch (the query answered fewer keys
+    # than were enumerated) is a truncated response for ANY item. An empty
+    # batch fails only the maps that are never legitimately empty. The rest
+    # of the read still stands.
     failed_items: Dict[str, str] = {}
     for item in items:
-        if item not in SUBNET_MAP_FAIL_EMPTY:
-            continue
-        if requested.get(item, 0) == 0:
+        if item in SUBNET_MAP_FAIL_EMPTY and requested.get(item, 0) == 0:
             failed_items[item] = "empty batch"
         elif returned.get(item, 0) < requested.get(item, 0):
             failed_items[item] = "short batch"
         if item in failed_items:
             values[item] = {}
             failures[item] = {}
+
+    # Dense coverage: a registered subnet with no value is a per-netuid
+    # failure, so no consumer substitutes the runtime default for it. This
+    # also catches a truncated key enumeration, which lowers `requested`
+    # with it and so cannot show up as a short batch.
+    if universe is not None:
+        for item in items:
+            coverage = SUBNET_MAP_COVERAGE.get(item)
+            if coverage is None or item in failed_items:
+                continue
+            expected = (universe if coverage == "all"
+                        else universe - {ROOT_NETUID})
+            for netuid in expected:
+                if (netuid not in values[item]
+                        and netuid not in failures[item]):
+                    failures[item][netuid] = DENSE_MISSING
 
     audit_chain_read(connection, rpc, list(items), requested, returned,
                      block_number, block_hash, started)
@@ -2852,6 +2909,14 @@ ZERO_ACCOUNT = "0x" + expected_default("SubnetOwner").hex()
 OWNED_HOTKEYS_CAP = 256
 
 
+def _read_failure_reason(item: str, failure: str) -> str:
+    """Plain reason for a per-netuid map failure: a key missing from a dense
+    map, or a value that did not decode."""
+    if failure == DENSE_MISSING:
+        return "%s %s" % (item, DENSE_MISSING)
+    return "%s undecodable" % item
+
+
 def resolve_owner_uids(config: Dict[str, Any], values: Dict[str, Any],
                        failures: Dict[str, Any], netuids: List[int],
                        block: Tuple[str, Optional[int]],
@@ -2877,10 +2942,12 @@ def resolve_owner_uids(config: Dict[str, Any], values: Dict[str, Any],
     for netuid in netuids:
         if netuid in owner_fail:
             owners[netuid] = {"state": "unread",
-                              "reason": "SubnetOwner undecodable"}
+                              "reason": _read_failure_reason(
+                                  "SubnetOwner", owner_fail[netuid])}
         elif netuid in hotkey_fail:
             owners[netuid] = {"state": "unread",
-                              "reason": "SubnetOwnerHotkey undecodable"}
+                              "reason": _read_failure_reason(
+                                  "SubnetOwnerHotkey", hotkey_fail[netuid])}
         else:
             coldkey_of[netuid] = owner_values.get(netuid, ZERO_ACCOUNT)
 

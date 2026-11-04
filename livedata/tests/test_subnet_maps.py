@@ -474,6 +474,76 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class DenseCoverage(unittest.TestCase):
+    """Dense per-subnet maps (change: live-data-correctness, audit A13): a
+    registered subnet with no key is a failed read, never the default."""
+
+    def read(self, items, **table_extra):
+        rpc = FakeChain(tables(extra=table_extra))
+        return al.read_subnet_maps(CONFIG, items=items, rpc=rpc)
+
+    def test_coverage_table_is_pinned(self):
+        # Measured at spec 486, block 9430798. A change here is deliberate.
+        self.assertEqual(al.SUBNET_MAP_COVERAGE, {
+            "SubnetworkN": "all", "Burn": "all", "ImmunityPeriod": "all",
+            "MaxAllowedUids": "all", "NetworkRegistrationAllowed": "all",
+            "SubnetTAO": "all", "SubnetAlphaIn": "all",
+            "SubnetAlphaOut": "all", "SubnetOwner": "non-root",
+            "SubnetOwnerHotkey": "non-root", "MinerBurned": "non-root",
+            "SwapBalancer": "non-root"})
+        for item in al.SUBNET_MAP_COVERAGE:
+            self.assertIn((al.SUBTENSOR_PALLET, item) if item != "SwapBalancer"
+                          else ("Swap", item), al._DECLARED_READS, item)
+
+    def test_missing_owner_key_is_a_per_netuid_failure(self):
+        out = self.read({"SubnetOwner": "account_id"},
+                        SubnetOwner={1: "0x" + "11" * 32})
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["failures"]["SubnetOwner"],
+                         {8: al.DENSE_MISSING})
+        self.assertNotIn(8, out["values"]["SubnetOwner"])
+
+    def test_truncated_key_list_is_caught(self):
+        # The enumeration returns one Burn key for two registered subnets:
+        # `requested` drops with it, so only the universe can catch it.
+        out = self.read({"Burn": "u64"}, Burn={1: u64_hex(10 ** 9)})
+        self.assertEqual(out["failed_items"], {})
+        self.assertEqual(out["failures"]["Burn"], {8: al.DENSE_MISSING})
+
+    def test_root_is_not_expected_in_a_non_root_map(self):
+        out = al.read_subnet_maps(CONFIG, items={"SubnetOwner": "account_id"},
+                                  rpc=FakeChain(tables(
+                                      network_n={0: u16_hex(64),
+                                                 1: u16_hex(256)},
+                                      extra={"SubnetOwner": {
+                                          1: "0x" + "11" * 32}})))
+        self.assertNotIn("SubnetOwner", out["failures"])
+
+    def test_sparse_item_absence_stays_unset(self):
+        out = self.read({"SubnetIdentitiesV3": "identity_name"})
+        out2 = al.read_subnet_maps(
+            CONFIG, items={"SubnetIdentitiesV3": "identity_name"},
+            rpc=FakeChain(tables(identity={1: identity_hex("Apex", "")})))
+        self.assertNotIn("SubnetIdentitiesV3", out["failures"])
+        self.assertNotIn("SubnetIdentitiesV3", out2["failures"])
+        self.assertNotIn(8, out2["values"]["SubnetIdentitiesV3"])
+
+    def test_short_query_fails_any_item(self):
+        # MinerBurned is not in the fail-empty set; a query that answers
+        # fewer keys than were enumerated still fails it.
+        rpc = FakeChain(tables(), drop_query_item="MinerBurned")
+        out = al.read_subnet_maps(CONFIG, items={"MinerBurned": "u96f32",
+                                                 "SubnetworkN": "u16"},
+                                  rpc=rpc)
+        self.assertEqual(out["failed_items"]["MinerBurned"], "short batch")
+        self.assertEqual(out["values"]["MinerBurned"], {})
+
+    def test_empty_universe_fails_a_dense_read(self):
+        rpc = FakeChain(tables(network_n={}))
+        out = al.read_subnet_maps(CONFIG, items={"Burn": "u64"}, rpc=rpc)
+        self.assertFalse(out["ok"])
+
+
 class ReadRegistrationBlocks(unittest.TestCase):
     """`NetworkRegisteredAt` per netuid (change: signal-statistics-ties): the
     occupant key that keeps a reused netuid from joining two subnets'

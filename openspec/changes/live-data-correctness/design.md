@@ -12,7 +12,7 @@ See proposal.md (Why). State measured on 2026-11-04 during the WP12 re-check:
 - **Universe today.** SN36 is the only registered subnet outside the emit-to set. It has no first-emission block and its subtoken is off. Its weight is zero, so it changes nothing.
 - **Key coverage at block 9430798** (129 registered including root):
   - Every subnet: `Burn`, `ImmunityPeriod`, `MaxAllowedUids`, `NetworkRegistrationAllowed`, `SubnetTAO`, `SubnetAlphaIn`, `SubnetAlphaOut`, `SubnetworkN`.
-  - Every non-root subnet: `SubnetOwner`, `SubnetOwnerHotkey`, `MinerBurned`, `SubnetEmissionEnabled`, `SwapBalancer`.
+  - Every non-root subnet: `SubnetOwner`, `SubnetOwnerHotkey`, `MinerBurned`, `SubnetEmissionEnabled`, `SwapBalancer`. `SubnetEmissionEnabled` stays sparse in the coverage table: the existing switch-watch requirement records an absent entry as its assumed default, distinct from a failed read, and the fail-empty rule already catches a lost batch (found during apply).
   - All others are sparse: identity, mechanism items, `CollateralLockShare`, `OwnerCutEnabled`, `SubnetProtocolAlpha`, and the items missing for SN36 only (`SubnetMovingPrice`, `SubnetAlphaOutEmission`, `FirstEmissionBlockNumber`).
 - **Metadata types.** `SubnetMovingPrice` is `FixedI128<U32>`, `FirstEmissionBlockNumber` is `u64`, `SubtokenEnabled` is `bool`. All three use the identity hasher. The probe already accepts these names.
 - **Node state window.** About 256 blocks (measured in WP4). A pass reaches back to the block before the pin only if that block is no older than this window.
