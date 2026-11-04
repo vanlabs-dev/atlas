@@ -12,7 +12,7 @@ export const SIGNAL_CLASSES = ["econ-code", "narrative-cluster", "signal-digest"
 export const DAYS = 90;
 
 export const REMOTE = String.raw`
-import datetime, json, os, sqlite3, sys
+import datetime, json, sqlite3, sys
 sys.path.insert(0, "fleet")
 import atlas_fleet as fleet, atlas_fleet_dashboard as dash
 import atlas_fleet_metrics as metrics, atlas_fleet_mining as mining
@@ -62,10 +62,11 @@ for tier in ("head", "mid", "quiet"):
 # Commit ages per subnet, from the reader and bot patterns the activity
 # metric uses, measured from that subnet's latest activity pass. Commits
 # dated after the pass were not in the pass, so they are left out. The
-# site bins the ages with the metric's window rule.
+# site bins the ages with the metric's window rule. The commits are the
+# ones behind the board's figures: with activity.multi_repo "on", that
+# includes the organisation repositories the pass counted.
 mcfg = metrics.metrics_cfg(cfg)
 bots = metrics.compile_bot_patterns(mcfg.get("bot_author_patterns") or [])
-clone_root = cfg.get("clone_root") or fleet.DEFAULT_CLONE_ROOT
 passes = dict(f.execute("SELECT netuid, MAX(pass_ts) FROM metric_activity "
                         "GROUP BY netuid").fetchall())
 activity = []
@@ -73,8 +74,8 @@ for nid in range(1, 129):
     ages = None
     if nid in passes:
         try:
-            log = metrics._commit_log(os.path.join(clone_root, str(nid)),
-                                      fleet._run_git)
+            log = metrics.activity_commit_log(f, cfg, nid, passes[nid],
+                                              fleet._run_git)
         except RuntimeError:
             log = None
         if log is not None:

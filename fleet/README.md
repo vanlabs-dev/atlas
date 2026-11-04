@@ -91,8 +91,14 @@ once-off fleet tracking-policy confirmation.
   created on first metrics run: `metric_emission_routes` +
   `metric_emission_scan` (the per-`(netuid,epoch,sha)` emission-redirect
   map, sha-gated), `metric_activity` (windowed epoch-scoped commit/author
-  counts), `metric_branch_tips` (per-pass `ls-remote` tip snapshots for the
-  branch-pulse metric), `metric_state`.
+  counts, plus the combined `*_all` columns, `repos_counted` and
+  `single_why`), `metric_activity_repos` (per pass, each repository counted
+  and its 30-day count, kept 30 days), `metric_branch_tips` (per-pass
+  `ls-remote` tip snapshots for the branch-pulse metric), `metric_state`.
+- `org_repos`, `org_repo_history`, `org_repos_state` (change:
+  fleet-multi-repo-activity), owned by `atlas_fleet_orgrepos.py`: the last
+  good GitHub listing per owner with its last attempt and error, the state
+  of each history-only repository, and the rate-limit hold.
 
 ## Commands
 
@@ -298,6 +304,26 @@ executing subnet code, per-slot fail-closed:
   (no fetch, no dating); `changed_tips` between passes is the branch-pulse
   metric, so a live subnet working off its default branch is not mistaken
   for abandoned.
+- **Organisation-wide activity** (change: fleet-multi-repo-activity).
+  Some subnets work in several repositories of one organisation. With
+  `activity.multi_repo` at `shadow` or `on`, each pass lists the owner's
+  repositories (GitHub REST, unauthenticated, at most daily per owner,
+  `max_calls_per_pass` calls a pass) and keeps a bare `--filter=tree:0`
+  clone of each counted one under `<clone_root>/activity/<owner>/`: commits
+  only, no working tree, no trees, no tags, no hooks, push URL disabled,
+  never indexed or scanned. Free disk is checked before each clone and
+  fetch, and a history over `max_repo_bytes` is removed and left out.
+  Commits are read with `git rev-list` (in a `tree:0` repository `git log`
+  fetches trees on demand), merged by commit id and bot-filtered, and
+  stored as `c7_all`/`c30_all`/`c90_all`/`a30_all`/`days_since_all`.
+  Not counted: an owner that several current subnets name on chain
+  (detected each pass), a personal account, forks, archived repositories,
+  repositories with no push in 90 days, a listing older than 7 days, and
+  the operator's `exclude_repos` and `single_repo_owners`. In `shadow` the
+  board, cold flag, scores, signals and the site export keep the
+  single-repository figures; `on` switches all of them through
+  `select_figures`. `activity-sources` lists both sets per subnet with the
+  repositories counted and the reason a subnet kept one repository.
 - **Momentum and ranks.** Alpha-price momentum reused from the signals
   `signal_prices` panel (no new API call, no backfill; missing history is
   `n/a`). A window whose two vectors carry different registration blocks
@@ -326,6 +352,7 @@ python3 fleet/atlas_fleet_metrics.py status        # coverage + failure summary
 python3 fleet/atlas_fleet_metrics.py pass           # branch tips + activity + emissions + render (also inline on reconcile)
 python3 fleet/atlas_fleet_metrics.py emissions      # sha-gated emission-map scan
 python3 fleet/atlas_fleet_metrics.py report         # combined ranked JSON view
+python3 fleet/atlas_fleet_metrics.py activity-sources  # single vs organisation-wide activity, repos counted
 python3 fleet/atlas_fleet_dashboard.py board        # ranked head (JSON), no render
 python3 fleet/atlas_fleet_dashboard.py render       # write var/fleet/www/index.html
 ```

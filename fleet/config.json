@@ -199,6 +199,19 @@
       "^(dependabot|renovate)"
     ]
   },
+  "activity": {
+    "_comment": "Organisation-wide activity (change: fleet-multi-repo-activity). `multi_repo`: `off` reads only the on-chain repository and makes no GitHub call; `shadow` lists the owner's other repositories, fetches their commit history and records combined figures beside the single-repository ones, while the board, cold flag, scores, signals and site export keep the single figures; `on` switches all of them to the combined figures. An owner named on chain by more than one current subnet, a personal account, a fork, an archived repository and a repository with no push in `recent_push_days` are never counted. `exclude_repos` (`owner/name`) and `single_repo_owners` are operator overrides, applied from the next pass. `max_repos` counts the on-chain repository plus the most recently pushed others. Extra repositories are bare commit-only clones under `<clone_root>/activity/` (no files, no index, no scan); `max_repo_bytes` caps each one, and `min_free_bytes` is checked before every fetch. Listings use the unauthenticated GitHub REST API: each owner at most every `listing_refresh_hours`, at most `max_calls_per_pass` calls a pass; a listing older than `listing_max_age_days` is not used. Report: `python3 fleet/atlas_fleet_metrics.py activity-sources`.",
+    "multi_repo": "shadow",
+    "exclude_repos": [],
+    "single_repo_owners": [],
+    "max_repos": 20,
+    "max_repo_bytes": 268435456,
+    "recent_push_days": 90,
+    "listing_refresh_hours": 24,
+    "listing_max_age_days": 7,
+    "max_calls_per_pass": 50,
+    "max_new_histories_per_pass": 40
+  },
   "dashboard": {
     "_comment": "fleet-rotation-metrics ranked 'attention board' (change: fleet-rotation-metrics). Rendered inline after the metrics pass into `www_dir` (served LAN-only by atlas-dashboard.service — a dedicated dir holding ONLY the rendered page, never the store/clones). Ranking rules v2: one explicit attention score per subnet, shown per row; `head_min_score`/`mid_min_score` set the LOOK-HERE vs SKIM floors; `head_count`/`mid_count` cap each tier; fresh events (econ-code change within `fresh_hours`, or ≥`pulse_spike` changed branch tips) get a boost large enough to reach the head; pure-opaque-no-other-signal subnets collapse into one grouped line. Set `enabled` false to skip rendering.",
     "enabled": true,
