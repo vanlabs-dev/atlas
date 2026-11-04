@@ -32,7 +32,7 @@ A phone-facing agent also receives article-pipeline text: "Every article MUST...
   - all remaining terms are AND'd, and an OR pass fills any remaining slots;
   - ranking is bm25 with the heading weighted 8 to 1 over the body.
 - **Payload.**
-  - Search returns compact results: `unit_id`, `kind`, heading path, source and lines, temporal scope, evidence state, and the block text capped at 1,200 characters with a `truncated` flag.
+  - Search returns compact results: `unit_id`, `kind`, heading path, source and lines, temporal scope, evidence state, and the block text capped at 1,500 characters with a `truncated` flag.
   - Run-level fields (coverage date, run id) appear once per response.
   - The default result count rises from 3 to 5.
   - `knowledge_get_evidence` returns the unit plus its whole section as context.

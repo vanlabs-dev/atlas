@@ -43,7 +43,7 @@ In the last row, the one miss (`yuma3`) is a corpus gap (A11), not a ranking fau
 
 **1. Block units, not section units.**
 - A unit is one top-level list item (`- `, `* `, `1. `), one bold-led entry (`**Term**:`), or one paragraph, inside its `#`/`##`/`###` section.
-- Continuation lines and nested bullets stay with their parent item.
+- Continuation lines and nested bullets stay with their parent item. A block over 1,500 characters (`BLOCK_CAP`) splits at its nested items, so every unit fits a search result whole (found during apply: four blocks of 1.4 to 5.8 KB hid facts past the payload cap).
 - `heading_path` is the full path (`ERRORS > 7o. Coldkey swap ...`). The section's own heading line is not repeated in each block, but the heading column carries it into ranking.
 - Unit id: `<file>::<heading path>#<n>`. `n` is the 1-based block index within its section, so it is stable while that section's earlier blocks do not change.
 
@@ -70,7 +70,7 @@ Alternative considered: inferring the kind from words such as "publish", "articl
 Alternative considered: a standalone `reindex` command. Rejected because it is one more operator step that can be forgotten, and the upgrade job would need it too.
 
 **4. Schema migration in `open_store`.**
-- New columns `kind TEXT NOT NULL DEFAULT 'fact'` and `section_path TEXT`, added by `ALTER TABLE` when missing.
+- New column `kind TEXT NOT NULL DEFAULT 'fact'`, added by `ALTER TABLE` when missing. (No `section_path` column: the section is the set of active blocks with the same source and heading path, so evidence assembles it from `heading_path`.)
 - A new table `kb_meta(key PRIMARY KEY, value)` records `index_version` = 2 after a rebuild.
 - `open_store` is only ever called with a writable connection (ingest, activate).
 
@@ -82,8 +82,8 @@ Alternative considered: a standalone `reindex` command. Rejected because it is o
 
 **6. Query builder.**
 - Extract `[A-Za-z0-9_]+` tokens, keeping order.
-- Expand `SN<n>` / `sn<n>` / `SN <n>` to the group `("subnet <n>" OR "netuid <n>" OR "sn<n>")`.
-- Drop stopwords plus question words: `work`, `happen`, `mean`, `explain`, `tell`, `give`, `show`, `please`, and their inflections. Keep domain words even when they are common English words (`take`, `stake`, `long`).
+- Expand `SN<n>` / `sn<n>` / `SN <n>` to the group `("subnet <n>" OR "netuid <n>" OR "sn<n>" OR "<n>")`. The bare number is needed because the corpus also lists netuids plainly ("82 and 103 off").
+- Drop stopwords plus question words: `work`, `happen`, `mean`, `explain`, `tell`, `give`, `show`, `please`, `go`, `get`, and their inflections. Keep domain words even when they are common English words (`take`, `stake`, `long`).
 - If nothing is left, return the existing `invalid` error.
 - Cap the query at 12 terms.
 - Run the AND query first. If it returns fewer than k units, run the OR query and append unseen units.
@@ -97,7 +97,7 @@ Alternatives considered:
 **7. Payload.**
 - Search response: `status`, `query`, `run_id`, `coverage_date`, a `note`, and `results`.
 - Each result carries `unit_id`, `kind`, `source_file`, `heading_path`, `lines`, `temporal_scope`, `evidence_state`, `conflict_note` (only when not null) and `content`.
-- `content` is capped at 1,200 characters; a capped result has `truncated: true` and the note says to call `knowledge_get_evidence`.
+- `content` is capped at 1,500 characters (equal to `BLOCK_CAP`, so in practice nothing from the corpus is cut); a capped result has `truncated: true` and the note says to call `knowledge_get_evidence`.
 - Default `max_results` is 5, the maximum stays 10.
 - `knowledge_get_evidence` returns the unit, `section` (the full text of its `##`/`###` section, assembled from the run's blocks in line order), and the conflicting units as today.
 - FTS `snippet()` is not used: blocks average 325 characters, so a snippet would cut a fact without saving bytes.
