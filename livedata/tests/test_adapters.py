@@ -131,6 +131,21 @@ class HappyPathTests(AdapterHarness):
         self.assertEqual(result["block_reference"], 8602000)
         self.assertIn("0-100", result["units"])
 
+    def test_subnets_panel_is_never_truncated(self):
+        # Audit A14: `rows[:130]` cut silently (change: live-data-correctness).
+        payload = {"results": [{"id": n, "name": "s%d" % n}
+                               for n in range(140)],
+                   "dereg_context": {"current_block": 9430724}}
+        out = al._pp_subnets_taoswap(payload, {})
+        self.assertEqual(out["values"]["count"], 140)
+        self.assertEqual(out["block_reference"], 9430724)
+
+    def test_subnets_row_without_integer_id_fails_the_panel(self):
+        for bad in (None, "7", True):
+            payload = {"results": [{"id": 1}, {"id": bad}]}
+            with self.assertRaises(al.FatalLiveError):
+                al._pp_subnets_taoswap(payload, {})
+
     def test_metagraph_taoswap_sorts_by_emission(self):
         result = self.run_op("metagraph_taoswap",
                              dynamic_params={"netuid": 1, "limit": 10})

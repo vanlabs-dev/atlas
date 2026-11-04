@@ -15,7 +15,7 @@
 
 ## 3. Panel checks
 
-- [ ] 3.1 `_pp_subnets_taoswap`: drop `rows[:130]`; a row whose `id` is not an int raises `FatalLiveError`. Verify: tests: 140-row fixture keeps 140; a bad id fails validation; the live subnets tool test still passes.
+- [x] 3.1 `_pp_subnets_taoswap`: drop `rows[:130]`; a row whose `id` is not an int raises `FatalLiveError`. Verify: tests: 140-row fixture keeps 140; a bad id fails validation; the live subnets tool test still passes.
 - [ ] 3.2 `record_panel_snapshot` takes `panel_block` (new nullable column, additive `ALTER`) and stores the chain share. The pass writes rows only when the lag is within `gate_signal.panel_max_lag_blocks` (300) and the non-root row count is at least the chain's non-root count. Otherwise it records health event `panel-lagging` or `panel-short`. Every pass summary carries the lag. Verify: tests for a lagging panel, a short panel, a missing panel block, and a good panel (rows carry both blocks and the chain share); migration runs twice.
 
 ## 4. Spec observation
