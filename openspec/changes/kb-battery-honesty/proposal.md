@@ -16,7 +16,7 @@ The knowledge battery cannot catch the failures it exists for. Re-verified 2026-
 - **The corpus contradicted itself** on what happens to registration TAO (recycled, burned, seeds the pool) and nothing would catch a repeat (audit A10, second half).
 - **No battery runs before activation.** The upgrade job activates corpus edits it wrote itself, and nothing checks that the battery's facts can still be retrieved.
 - **The honesty contract covers numbers only** (SOUL and `agent-voice`). Mechanism claims such as commit-reveal, Yuma 3 or childkey take may come from model memory. Telegram made 5 `knowledge_search` calls since 2026-10-01.
-- **The battery runner no longer matches the deployment.** Since WP10 we know a CLI `-z` session loads every enabled MCP server. A rerun therefore has `atlas-live`, and a correct live-sourced answer to "latest block" would be flagged.
+- **The battery runner does not match the deployment.** The documented command passes only `atlas-kb`. The 2026-11-05 run showed that a `-z` session loads only the toolsets it is given (the WP10 note that it loads every enabled server does not hold), so the battery never saw `atlas-live`. With all four servers, a correct live-sourced answer to "latest block" would be flagged by the old scorer.
 
 ## What Changes
 
@@ -40,7 +40,7 @@ The knowledge battery cannot catch the failures it exists for. Re-verified 2026-
   - A knowledge test retrieves, from the real corpus, the top 5 units for every grounded battery prompt, and requires each marker group to be satisfied by those units' text.
   - It runs with the retrieval evaluation from `knowledge-retrieval`.
   - The upgrade job runs every suite in its sandbox before ingest and push, and may not edit tests. So a corpus edit that drops a battery fact blocks before the push.
-- **Runner matches production.** The battery runs with the production Atlas tool set (all four Atlas MCP servers), and the scorer treats an `atlas-live` call as live evidence.
+- **Runner matches production.** The battery runs with the production Atlas tool set: the runner command names all four Atlas MCP servers in `--toolsets-*`, and the scorer treats an `atlas-live` call as live evidence.
 - **Honesty contract covers mechanisms.**
   - `telegram/docs/voice.md` (canon for `~/.hermes/SOUL.md`): a statement of how the protocol works needs a `knowledge_search` or live-tool result in the session; otherwise it is marked "not verified".
   - The device SOUL.md is updated from canon, with a backup.
