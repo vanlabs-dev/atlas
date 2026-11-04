@@ -58,6 +58,40 @@ repositories; an authenticated GitHub token; org-only identities.
    the export and the signals read through it. In `shadow` the output is
    byte-identical to today (test).
 
+## Implementation notes (apply, 2026-11-04)
+
+- `git log` in a `tree:0` repository fetches the missing trees from the
+  remote on demand (seen with git 2.43). History is read with
+  `git rev-list --no-merges --no-commit-header --format=...` instead; a
+  test asserts the bare repository holds only commit objects after the
+  clone, a fetch and a read.
+- A bare clone records no fetch refspec, so a plain `fetch` would not move
+  the branch. The clone sets `remote.origin.fetch` to the default branch.
+- `metric_activity` also gets `last_commit_at_all` and `single_why`. The
+  spec requires the report to say why a subnet kept one repository
+  (shared owner, personal account, operator, no or stale listing, no
+  history); the decision 4 columns had no place for it.
+- `org_repos` also keeps `owner_type`, `attempted_at` and `last_error`, so
+  a failed refresh keeps the last good listing and records the error.
+  `org_repos_state` holds the rate-limit hold (403 with
+  `X-RateLimit-Remaining: 0`, or 429).
+- Budget: `ceil(owners / 4)` calls a pass, capped at `max_calls_per_pass`
+  (50). While any owner has no listing yet, the pass may use the full cap,
+  because a first listing costs two calls (owner type, then repositories).
+  Shared, placeholder and operator single-repository owners are never
+  listed.
+- `max_new_histories_per_pass` (40) bounds first clones, like
+  `max_new_clones_per_pass`. A history over `max_repo_bytes` (256 MiB,
+  measured on disk) is removed and not retried for 7 days.
+- The code default for `multi_repo` is `off`, so a store or test without
+  the block never calls GitHub. `fleet/config.json` sets `shadow`. Fleet
+  tests replace the default opener with one that raises.
+- Signals do not read activity directly; they reach it only through
+  `report()`. subnt's `SUM(c7 > 0)` reads the single column directly; its
+  publisher timer is masked, so it is left as is.
+- Readers tolerate an unmigrated store (read-only MCP or export before the
+  first new pass): the combined columns read as null.
+
 ## Risks / Trade-offs
 
 - [Unrelated repositories in a single-subnet organisation] → shadow

@@ -41,6 +41,23 @@ for _module in (_dashboard, _mining):
         _module._atomic_write = _guarded(_module._atomic_write)
 
 
+# No fleet test may reach GitHub (change: fleet-multi-repo-activity): the
+# upgrade job runs every suite in a sandbox with no network. A listing call
+# without an injected opener fails loudly instead.
+import atlas_fleet_orgrepos as _orgrepos  # noqa: E402
+
+
+class NetworkCall(BaseException):
+    """BaseException, so a pass's isolation cannot hide it."""
+
+
+def _no_network(url, timeout):
+    raise NetworkCall("a test called the GitHub API: %s" % url)
+
+
+_orgrepos.default_opener = _no_network
+
+
 def git(cwd, *args):
     completed = subprocess.run(
         ["git", "-C", cwd] + list(args), capture_output=True, text=True,

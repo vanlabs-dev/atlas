@@ -104,6 +104,15 @@ CREATE TABLE IF NOT EXISTS metric_activity (
     total_authors INTEGER,
     PRIMARY KEY (netuid, epoch, pass_ts)
 );
+CREATE TABLE IF NOT EXISTS metric_activity_repos (
+    netuid INTEGER NOT NULL,
+    epoch INTEGER NOT NULL,
+    pass_ts TEXT NOT NULL,
+    repo TEXT NOT NULL,
+    c30 INTEGER,
+    last_commit_at TEXT,
+    PRIMARY KEY (netuid, epoch, pass_ts, repo)
+);
 CREATE TABLE IF NOT EXISTS metric_branch_tips (
     netuid INTEGER NOT NULL,
     epoch INTEGER NOT NULL,
@@ -200,10 +209,28 @@ def _parse_iso(text: str) -> datetime.datetime:
     return parsed
 
 
+# Combined (organisation-wide) activity columns, added to an existing
+# store in place (change: fleet-multi-repo-activity). `single_why` records
+# why a subnet kept one repository; null means its organisation was read.
+_ACTIVITY_ALL_COLUMNS = (
+    ("c7_all", "INTEGER"), ("c30_all", "INTEGER"), ("c90_all", "INTEGER"),
+    ("a30_all", "INTEGER"), ("last_commit_at_all", "TEXT"),
+    ("days_since_all", "INTEGER"), ("repos_counted", "INTEGER"),
+    ("single_why", "TEXT"),
+)
+
+
 def ensure_schema(connection: sqlite3.Connection) -> None:
     """Create the metric tables if absent. Owns only its own tables — the
     reconcile and signals schemas are never touched."""
     connection.executescript(SCHEMA_SQL)
+    have = {row[1] for row in connection.execute(
+        "PRAGMA table_info(metric_activity)")}
+    for name, kind in _ACTIVITY_ALL_COLUMNS:
+        if name not in have:
+            connection.execute("ALTER TABLE metric_activity ADD COLUMN "
+                               "%s %s" % (name, kind))
+    connection.commit()
 
 
 def state_get(connection: sqlite3.Connection, key: str) -> Optional[str]:
@@ -229,6 +256,19 @@ def _fleet() -> Any:
         import atlas_fleet  # noqa: E402
         _FLEET = atlas_fleet
     return _FLEET
+
+
+_ORGREPOS: Any = None
+
+
+def _orgrepos() -> Any:
+    """Lazy import of the organisation-repository module."""
+    global _ORGREPOS
+    if _ORGREPOS is None:
+        sys.path.insert(0, _MODULE_DIR)
+        import atlas_fleet_orgrepos  # noqa: E402
+        _ORGREPOS = atlas_fleet_orgrepos
+    return _ORGREPOS
 
 
 # ---------------------------------------------------------------------------
@@ -505,6 +545,32 @@ def _commit_log(clone_dir: str,
     return rows
 
 
+def _commit_log_ids(clone_dir: str,
+                    git: Callable[..., Tuple[int, str, str]]
+                    ) -> List[Tuple[str, datetime.datetime, str]]:
+    """(sha, committer time, author email) for every non-merge commit on
+    HEAD. The commit id lets commits from several repositories be counted
+    once (change: fleet-multi-repo-activity)."""
+    code, out, err = git(clone_dir, ["log", "--no-merges",
+                                     "--format=%H%x09%cI%x09%ae"])
+    if code != 0:
+        raise RuntimeError("git log failed: %s" % err.strip()[:200])
+    return _orgrepos().parse_log(out)
+
+
+def union_commits(logs: Sequence[Sequence[Tuple[str, datetime.datetime,
+                                                str]]]
+                  ) -> List[Tuple[datetime.datetime, str]]:
+    """Merge commit logs, each commit id counted once. The first log wins
+    for a repeated id, so the on-chain repository goes first."""
+    seen: Dict[str, Tuple[datetime.datetime, str]] = {}
+    for log in logs:
+        for sha, when, email in log:
+            if sha not in seen:
+                seen[sha] = (when, email)
+    return list(seen.values())
+
+
 def compile_bot_patterns(patterns: Sequence[str]) -> List[Any]:
     """Compiled bot-author patterns; an invalid pattern is skipped."""
     compiled = []
@@ -558,18 +624,27 @@ def run_activity(connection: sqlite3.Connection, config: Dict[str, Any],
                  git: Optional[Callable[..., Tuple[int, str, str]]] = None
                  ) -> Dict[str, Any]:
     """Record windowed epoch-scoped activity for every active slot. Per-slot
-    fail-closed."""
+    fail-closed. Unless `activity.multi_repo` is `off`, the combined
+    figures over the organisation's counted repositories are recorded
+    beside the single-repository ones (change: fleet-multi-repo-activity).
+    """
     cfg = metrics_cfg(config)
     pass_ts = pass_ts or _utc_now()
     now = _parse_iso(pass_ts)
     windows = cfg["activity_windows"]
     bots = compile_bot_patterns(cfg.get("bot_author_patterns") or [])
     fleet = _fleet()
+    org = _orgrepos()
     clone_root = config.get("clone_root") or fleet.DEFAULT_CLONE_ROOT
     git = git or fleet._run_git
+    all_slots = fleet.all_slots(connection)
     slots = ([fleet.get_slot(connection, netuid)] if netuid is not None
-             else fleet.all_slots(connection))
-    summary = {"recorded": 0, "failed": 0}
+             else all_slots)
+    combine = org.mode(config) != org.MODE_OFF
+    if combine:
+        org.ensure_schema(connection)
+        plans = org.plan(connection, config, all_slots, now=pass_ts)
+    summary = {"recorded": 0, "failed": 0, "combined": 0}
     for slot in slots:
         if not slot or slot.get("status") != "active":
             continue
@@ -590,9 +665,118 @@ def run_activity(connection: sqlite3.Connection, config: Dict[str, Any],
             (nid, epoch, pass_ts, act["windows"].get(7), act["windows"].get(30),
              act["windows"].get(90), act["a30"], act["last_commit_at"],
              act["days_since"], act["total_commits"], act["total_authors"]))
+        if combine:
+            try:
+                _record_combined(connection, config, plans.get(nid) or {},
+                                 nid, epoch, pass_ts, clone_dir, git,
+                                 windows, now, bots)
+                summary["combined"] += 1
+            except Exception:  # noqa: BLE001 (single figures still land)
+                connection.execute(
+                    "UPDATE metric_activity SET single_why = ? WHERE "
+                    "netuid = ? AND epoch = ? AND pass_ts = ?",
+                    ("combine-failed", nid, epoch, pass_ts))
         connection.commit()
         summary["recorded"] += 1
+    if combine:
+        cutoff = (now - datetime.timedelta(days=30)).isoformat()
+        connection.execute("DELETE FROM metric_activity_repos WHERE "
+                           "pass_ts < ?", (cutoff,))
+        connection.commit()
     return summary
+
+
+def _record_combined(connection: sqlite3.Connection, config: Dict[str, Any],
+                     plan: Dict[str, Any], nid: int, epoch: int,
+                     pass_ts: str, clone_dir: str,
+                     git: Callable[..., Tuple[int, str, str]],
+                     windows: Sequence[int], now: datetime.datetime,
+                     bots: Sequence[Any]) -> None:
+    """Combined figures for one slot: the on-chain log plus every counted
+    history repository, by commit id. A history whose log cannot be read
+    is left out and named in `single_why` only when none is counted."""
+    org = _orgrepos()
+    fleet = _fleet()
+    clone_root = config.get("clone_root") or fleet.DEFAULT_CLONE_ROOT
+    onchain = plan.get("onchain") or "SN%d" % nid
+    logs = [(onchain, _commit_log_ids(clone_dir, git))]
+    why = plan.get("why")
+    if not why:
+        counted, dropped = org.counted_repos(connection, config,
+                                             plan.get("repos") or [])
+        for repo in counted:
+            try:
+                logs.append((repo, org.history_log(clone_root, repo, git)))
+            except RuntimeError:
+                continue
+        if len(logs) == 1 and (plan.get("repos") or []):
+            why = "no-history"
+        elif len(logs) == 1:
+            why = "no-sibling"
+    act = compute_activity(union_commits([log for _, log in logs]),
+                           windows, now, bots)
+    connection.execute(
+        "UPDATE metric_activity SET c7_all = ?, c30_all = ?, c90_all = ?, "
+        "a30_all = ?, last_commit_at_all = ?, days_since_all = ?, "
+        "repos_counted = ?, single_why = ? WHERE netuid = ? AND epoch = ? "
+        "AND pass_ts = ?",
+        (act["windows"].get(7), act["windows"].get(30),
+         act["windows"].get(90), act["a30"], act["last_commit_at"],
+         act["days_since"], len(logs), why, nid, epoch, pass_ts))
+    for repo, log in logs:
+        one = compute_activity([(w, e) for _, w, e in log], windows, now,
+                               bots)
+        connection.execute(
+            "INSERT OR REPLACE INTO metric_activity_repos (netuid, epoch, "
+            "pass_ts, repo, c30, last_commit_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (nid, epoch, pass_ts, repo, one["windows"].get(30),
+             one["last_commit_at"]))
+
+
+def activity_commit_log(connection: sqlite3.Connection,
+                        config: Dict[str, Any], netuid: int,
+                        pass_ts: str,
+                        git: Optional[Callable[..., Tuple[int, str, str]]]
+                        = None) -> List[Tuple[datetime.datetime, str]]:
+    """(when, email) commits behind the figures the board shows for one
+    subnet's pass: the on-chain log, plus the repositories that pass
+    counted when `activity.multi_repo` is `on`. The site export bins
+    these, so its bins match the shown c7/c30."""
+    fleet = _fleet()
+    org = _orgrepos()
+    git = git or fleet._run_git
+    clone_root = config.get("clone_root") or fleet.DEFAULT_CLONE_ROOT
+    clone_dir = os.path.join(clone_root, str(netuid))
+    if org.mode(config) != org.MODE_ON or not _has_combined(
+            connection, netuid, pass_ts):
+        return _commit_log(clone_dir, git)
+    logs = [_commit_log_ids(clone_dir, git)]
+    rows = connection.execute(
+        "SELECT repo FROM metric_activity_repos WHERE netuid = ? AND "
+        "pass_ts = ? ORDER BY repo", (netuid, pass_ts)).fetchall()
+    slot_repo = org.owner_repo((fleet.get_slot(connection, netuid) or {})
+                               .get("github_repo"))
+    onchain = ("%s/%s" % slot_repo) if slot_repo else None
+    for (repo,) in rows:
+        if "/" not in repo or repo == onchain:
+            continue
+        try:
+            logs.append(org.history_log(clone_root, repo, git))
+        except RuntimeError:
+            continue
+    return union_commits(logs)
+
+
+def _has_combined(connection: sqlite3.Connection, netuid: int,
+                  pass_ts: str) -> bool:
+    have = {r[1] for r in connection.execute(
+        "PRAGMA table_info(metric_activity)")}
+    if "c30_all" not in have:
+        return False
+    row = connection.execute(
+        "SELECT c30_all FROM metric_activity WHERE netuid = ? AND "
+        "pass_ts = ?", (netuid, pass_ts)).fetchone()
+    return bool(row) and row[0] is not None
 
 
 # ---------------------------------------------------------------------------
@@ -807,19 +991,42 @@ def _github_org(github_repo: Optional[str]) -> Optional[str]:
     return parts[0].lower() if parts and parts[0] else None
 
 
-def _latest_activity(connection: sqlite3.Connection
+def _latest_activity(connection: sqlite3.Connection,
+                     config: Optional[Dict[str, Any]] = None
                      ) -> Dict[int, Dict[str, Any]]:
+    """Latest pass per subnet, with the figure set the board uses."""
+    use_all = (config is not None
+               and _orgrepos().mode(config) == _orgrepos().MODE_ON)
+    # A read-only reader can meet a store the pass has not migrated yet.
+    have = {row[1] for row in connection.execute(
+        "PRAGMA table_info(metric_activity)")}
+    combined = ("c7_all, c30_all, c90_all, a30_all, days_since_all"
+                if "days_since_all" in have
+                else "NULL, NULL, NULL, NULL, NULL")
     rows = connection.execute(
         "SELECT netuid, epoch, c7, c30, c90, a30, days_since, total_commits, "
-        "total_authors FROM metric_activity WHERE (netuid, pass_ts) IN "
+        "total_authors, %s FROM metric_activity WHERE (netuid, pass_ts) IN "
         "(SELECT netuid, MAX(pass_ts) FROM metric_activity GROUP BY netuid)"
-    ).fetchall()
+        % combined).fetchall()
     out: Dict[int, Dict[str, Any]] = {}
-    for (nid, epoch, c7, c30, c90, a30, days_since, tc, ta) in rows:
-        out[nid] = {"epoch": epoch, "c7": c7, "c30": c30, "c90": c90,
-                    "a30": a30, "days_since": days_since,
-                    "total_commits": tc, "total_authors": ta}
+    for row in rows:
+        out[row[0]] = select_figures(row, use_all)
     return out
+
+
+def select_figures(row: Sequence[Any], use_all: bool) -> Dict[str, Any]:
+    """The one switch between single-repository and combined figures
+    (change: fleet-multi-repo-activity). `row` is (netuid, epoch, c7, c30,
+    c90, a30, days_since, total_commits, total_authors, c7_all, c30_all,
+    c90_all, a30_all, days_since_all). Combined figures are used only when
+    switched on and present for that pass; otherwise the single ones."""
+    (_nid, epoch, c7, c30, c90, a30, days_since, tc, ta,
+     c7a, c30a, c90a, a30a, daysa) = row
+    if use_all and c30a is not None:
+        c7, c30, c90, a30, days_since = c7a, c30a, c90a, a30a, daysa
+    return {"epoch": epoch, "c7": c7, "c30": c30, "c90": c90,
+            "a30": a30, "days_since": days_since,
+            "total_commits": tc, "total_authors": ta}
 
 
 def _latest_branch_pulse(connection: sqlite3.Connection) -> Dict[int, Any]:
@@ -881,7 +1088,7 @@ def report(connection: sqlite3.Connection, config: Dict[str, Any],
     now = now or datetime.datetime.now(tz=datetime.timezone.utc)
     fleet = _fleet()
     slots = fleet.all_slots(connection)
-    activity = _latest_activity(connection)
+    activity = _latest_activity(connection, config)
     pulse = _latest_branch_pulse(connection)
     emissions = _emission_map(connection)
     momentum = compute_momentum(connection, cfg, now=now)
@@ -975,12 +1182,22 @@ def run_pass(connection: sqlite3.Connection, config: Dict[str, Any],
     if state_get(connection, "installed_at") is None:
         state_set(connection, "installed_at", now)
         connection.commit()
-    summary = {
+    summary: Dict[str, Any] = {
         "branch_tips": record_branch_tips(connection, config, pass_ts=now,
-                                          token=token, git=git),
+                                          token=token, git=git)}
+    # Organisation listings and history fetches (change:
+    # fleet-multi-repo-activity). Fail-isolated: a GitHub or git failure
+    # leaves single-repository activity untouched.
+    try:
+        summary["org_repos"] = _orgrepos().run(connection, config, now=now,
+                                               git=git)
+    except Exception as exc:  # noqa: BLE001 (never blocks activity)
+        connection.rollback()
+        summary["org_repos"] = {"error": str(exc)[:160]}
+    summary.update({
         "activity": run_activity(connection, config, pass_ts=now, git=git),
         "emissions": run_emissions(connection, config, now=now, git=git),
-    }
+    })
     # Render the ranked dashboard from the just-computed metrics. Read-only,
     # config-gated, and fail-isolated — a render error never fails the pass.
     dash_cfg = config.get("dashboard") or {}
@@ -1010,6 +1227,59 @@ def _dashboard() -> Any:
 # ---------------------------------------------------------------------------
 # Status + CLI
 # ---------------------------------------------------------------------------
+
+
+def activity_sources(connection: sqlite3.Connection,
+                     config: Dict[str, Any]) -> Dict[str, Any]:
+    """Shadow report (change: fleet-multi-repo-activity): per subnet, both
+    figure sets from its latest pass, the repositories counted with their
+    own 30-day counts, why a subnet kept one repository, and repositories
+    left out (oversized, disk-limited, failed, pending). Read-only."""
+    org = _orgrepos()
+    org.ensure_schema(connection)
+    history = org._history_rows(connection)
+    listings = org._owner_rows(connection)
+    planned = org.plan(connection, config, _fleet().all_slots(connection))
+    rows = connection.execute(
+        "SELECT netuid, pass_ts, c7, c30, a30, days_since, c7_all, c30_all, "
+        "a30_all, days_since_all, repos_counted, single_why FROM "
+        "metric_activity WHERE (netuid, pass_ts) IN (SELECT netuid, "
+        "MAX(pass_ts) FROM metric_activity GROUP BY netuid) ORDER BY netuid"
+    ).fetchall()
+    subnets = []
+    for (nid, pass_ts, c7, c30, a30, days, c7a, c30a, a30a, daysa, counted,
+         why) in rows:
+        repos = [{"repo": repo, "c30": rc30, "last_commit_at": last}
+                 for repo, rc30, last in connection.execute(
+                     "SELECT repo, c30, last_commit_at FROM "
+                     "metric_activity_repos WHERE netuid = ? AND pass_ts = ? "
+                     "ORDER BY c30 DESC, repo", (nid, pass_ts))]
+        plan = planned.get(nid) or {}
+        left_out = [{"repo": r, "status": (history.get(r) or {}).get(
+                        "status") or org.H_PENDING,
+                     "error": (history.get(r) or {}).get("error")}
+                    for r in plan.get("repos") or []
+                    if r not in {x["repo"] for x in repos}]
+        owner = plan.get("owner")
+        listing = listings.get(owner) if owner else None
+        subnets.append({
+            "netuid": nid, "pass_ts": pass_ts,
+            "single": {"c7": c7, "c30": c30, "a30": a30, "days_since": days},
+            "combined": None if c30a is None else {
+                "c7": c7a, "c30": c30a, "a30": a30a, "days_since": daysa},
+            "c30_gain": None if c30a is None else (c30a - (c30 or 0)),
+            "repos_counted": counted, "single_why": why,
+            "plan_why": plan.get("why"), "plan_detail": plan.get("detail"),
+            "listing": None if not listing else {
+                "owner_type": listing["owner_type"],
+                "fetched_at": listing["fetched_at"],
+                "last_error": listing["last_error"]},
+            "repos": repos, "left_out": left_out,
+        })
+    subnets.sort(key=lambda r: (-(r["c30_gain"] or 0), r["netuid"]))
+    return {"mode": org.mode(config),
+            "changed": sum(1 for r in subnets if r["c30_gain"]),
+            "subnets": subnets}
 
 
 def metrics_status(connection: sqlite3.Connection) -> Dict[str, Any]:
@@ -1055,6 +1325,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     sub.add_parser("pass", help="branch tips + activity + emissions "
                                 "(also runs inline on reconcile)")
     sub.add_parser("report", help="combined ranked rotation view (read-only)")
+    sub.add_parser("activity-sources",
+                   help="single vs organisation-wide activity per subnet, "
+                        "with the repositories counted (read-only)")
     args = parser.parse_args(argv)
 
     fleet = _fleet()
@@ -1077,6 +1350,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 result = run_pass(connection, config, token=token)
             elif args.command == "report":
                 result = report(connection, config)
+            elif args.command == "activity-sources":
+                result = activity_sources(connection, config)
             else:
                 return 2
             print(json.dumps(result, indent=2, sort_keys=True))

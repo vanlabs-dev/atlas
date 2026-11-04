@@ -46,7 +46,7 @@ print(json.dumps(act["windows"]))
 
 test("export leaves out bot authors and post-pass commits", () => {
   assert.match(REMOTE, /is_bot_author\(email, bots\) or when > anchor/);
-  assert.match(REMOTE, /metrics\._commit_log/);
+  assert.match(REMOTE, /metrics\.activity_commit_log\(f, cfg, nid, passes\[nid\]/);
   assert.doesNotMatch(REMOTE, /--format=%cI"/);
 });
 
