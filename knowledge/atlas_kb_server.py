@@ -57,10 +57,30 @@ INVALID_PARAMS = -32602
 DEFAULT_DB = os.path.join(_REPO_ROOT, "var", "knowledge", "knowledge.db")
 AUDIT_FILE_NAME = "tool-audit.jsonl"
 AUDIT_MAX_BYTES = 5 * 1024 * 1024
-DEFAULT_MAX_RESULTS = 3
+DEFAULT_MAX_RESULTS = 5
 MAX_MAX_RESULTS = 10
+MAX_QUERY_TERMS = 12
+CONTENT_CAP = 1500  # equals atlas_kb.BLOCK_CAP
+# heading column weighted over the body (change: knowledge-retrieval)
+BM25_WEIGHTS = "8.0, 1.0"
+SEARCHABLE_KINDS = ("fact", "correction")
 
 _TOKEN = re.compile(r"[A-Za-z0-9_]+")
+_SUBNET = re.compile(r"(?i)^sn(\d+)$")
+# Stopwords and question words carry no domain meaning. Domain words that
+# are also common English (take, stake, long, lock) are kept.
+STOPWORDS = frozenset("""
+a about above after again all also am an and any are as at be been before
+being below between both but by can could did do does doing down during
+each few for from further had has have having he her here hers him his
+how i if in into is it its itself just me more most my no nor not now of
+off on once only or other our out over own please right same she should
+so some still such than that the their them then there these they this
+those through to too under until up very was we were what when where
+which while who whom why will with would you your
+work works working worked happen happens happened happening mean means
+meant explain explains tell give show go goes going went get gets
+""".split())
 
 TOOLS: List[Dict[str, Any]] = [
     {
@@ -69,9 +89,11 @@ TOOLS: List[Dict[str, Any]] = [
             "Search the validated Bittensor knowledge base (full-text). "
             "USE THIS FIRST for any Bittensor question — protocol "
             "mechanics, emissions, subnets, staking, conviction, "
-            "validators, miners. Returns source-bound units with "
-            "provenance, coverage dates, and evidence state. This is "
-            "curated knowledge as of its coverage date, NOT live data."),
+            "validators, miners. Returns up to 5 short source-bound units "
+            "(one fact or correction each) with provenance and evidence "
+            "state. Write the question in plain words; subnet shorthand "
+            "like SN82 works. This is curated knowledge as of its coverage "
+            "date, NOT live data."),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -88,9 +110,9 @@ TOOLS: List[Dict[str, Any]] = [
         "name": "knowledge_get_evidence",
         "description": (
             "Fetch one knowledge unit in full by unit_id (from a search "
-            "result), including provenance and any linked conflicting "
-            "units. Use when the user asks for sources or evidence "
-            "detail."),
+            "result), plus the full text of its section and any linked "
+            "conflicting units. Use for context, a truncated result, or "
+            "when the user asks for sources."),
         "inputSchema": {
             "type": "object",
             "properties": {"unit_id": {"type": "string"}},
@@ -129,6 +151,13 @@ def structured_error(category: str, message: str,
             "correlation_id": _correlation_id(),
         }
     }
+
+
+def _subnet_group(number: str) -> str:
+    """`SN82` as an FTS group: the corpus writes subnet 82, netuid 82,
+    SN82, or the bare number in a list ("82 and 103 off")."""
+    return '("subnet %s" OR "netuid %s" OR "sn%s" OR "%s")' % (
+        number, number, number, number)
 
 
 class KnowledgeStore:
@@ -174,15 +203,73 @@ class KnowledgeStore:
     # the FTS join needs qualification: units_fts also has heading_path
     _UNIT_COLUMNS_QUALIFIED = ", ".join("u." + f for f in _UNIT_FIELDS)
 
+    @staticmethod
+    def build_queries(query: str) -> List[str]:
+        """FTS5 queries in rank order: all terms (AND), then any term (OR).
+        Built from tokens only, so no user text reaches FTS syntax."""
+        terms: List[str] = []
+        for token in _TOKEN.findall(query):
+            subnet = _SUBNET.match(token)
+            if subnet:
+                number = subnet.group(1)
+                term = _subnet_group(number)
+            elif token.isdigit() and terms and terms[-1].lower() == '"sn"':
+                terms.pop()  # "SN 82" written with a space
+                term = _subnet_group(token)
+            elif token.lower() in STOPWORDS:
+                continue
+            else:
+                term = '"%s"' % token
+            if term not in terms:
+                terms.append(term)
+            if len(terms) >= MAX_QUERY_TERMS:
+                break
+        if not terms:
+            return []
+        if len(terms) == 1:
+            return [terms[0]]
+        return [" AND ".join(terms), " OR ".join(terms)]
+
+    def _schema(self, connection: sqlite3.Connection) -> Dict[str, Any]:
+        columns = {row[1] for row in connection.execute(
+            "PRAGMA table_info(units)")}
+        try:
+            row = connection.execute(
+                "SELECT value FROM kb_meta WHERE key = 'index_version'"
+            ).fetchone()
+        except sqlite3.OperationalError:
+            row = None
+        return {"has_kind": "kind" in columns,
+                "index_version": int(row[0]) if row else None}
+
+    def _result_payload(self, row: Any, has_kind: bool) -> Dict[str, Any]:
+        unit = self._unit_payload(row[:10])
+        kind = row[10] if has_kind else "fact"
+        content = unit["content"]
+        result: Dict[str, Any] = {
+            "unit_id": unit["unit_id"],
+            "kind": kind,
+            "source_file": unit["source_file"],
+            "heading_path": unit["heading_path"],
+            "lines": unit["lines"],
+            "temporal_scope": unit["temporal_scope"],
+            "evidence_state": unit["evidence_state"],
+            "content": content[:CONTENT_CAP],
+        }
+        if len(content) > CONTENT_CAP:
+            result["truncated"] = True
+        if unit["conflict_note"]:
+            result["conflict_note"] = unit["conflict_note"]
+        return result
+
     def search(self, query: str, max_results: int) -> Dict[str, Any]:
         guard = self._guard()
         if guard:
             return guard
-        tokens = _TOKEN.findall(query)[:12]
-        if not tokens:
+        queries = self.build_queries(query)
+        if not queries:
             return structured_error("invalid", "query has no searchable "
                                     "terms", retry_safe=False)
-        fts_query = " OR ".join('"%s"' % token for token in tokens)
         try:
             connection = self._connect()
             try:
@@ -190,15 +277,36 @@ class KnowledgeStore:
                         "SELECT count(*) FROM units WHERE active = 1"
                         ).fetchone()[0] == 0:
                     return structured_error(
-                        "unavailable", "knowledge base not activated — "
+                        "unavailable", "knowledge base not activated: "
                         "an operator must approve and activate an ingest "
                         "run", retry_safe=False)
-                rows = connection.execute(
-                    "SELECT %s FROM units u JOIN units_fts f "
-                    "ON f.rowid = u.id WHERE units_fts MATCH ? "
-                    "AND u.active = 1 ORDER BY bm25(units_fts) LIMIT ?"
-                    % self._UNIT_COLUMNS_QUALIFIED,
-                    (fts_query, max_results)).fetchall()
+                schema = self._schema(connection)
+                columns = self._UNIT_COLUMNS_QUALIFIED + (
+                    ", u.kind" if schema["has_kind"] else "")
+                kind_filter = (" AND u.kind IN (%s)" % ", ".join(
+                    "'%s'" % kind for kind in SEARCHABLE_KINDS)
+                    if schema["has_kind"] else "")
+                weights = (BM25_WEIGHTS if schema["index_version"]
+                           else "1.0, 1.0")
+                rows: List[Any] = []
+                seen = set()
+                for fts_query in queries:
+                    for row in connection.execute(
+                            "SELECT %s FROM units u JOIN units_fts f "
+                            "ON f.rowid = u.id WHERE units_fts MATCH ? "
+                            "AND u.active = 1%s ORDER BY "
+                            "bm25(units_fts, %s) LIMIT ?"
+                            % (columns, kind_filter, weights),
+                            (fts_query, max_results)):
+                        if row[0] not in seen:
+                            seen.add(row[0])
+                            rows.append(row)
+                    if len(rows) >= max_results:
+                        break
+                rows = rows[:max_results]
+                run = connection.execute(
+                    "SELECT run_id, coverage_date FROM units WHERE "
+                    "active = 1 LIMIT 1").fetchone()
             finally:
                 connection.close()
         except sqlite3.Error as exc:
@@ -209,16 +317,24 @@ class KnowledgeStore:
                 "status": "insufficient-evidence",
                 "query": query,
                 "message": "No active knowledge unit matches this query. "
-                           "The knowledge base cannot support an answer — "
+                           "The knowledge base cannot support an answer: "
                            "say so rather than filling the gap.",
             }
+        results = [self._result_payload(row, schema["has_kind"])
+                   for row in rows]
+        note = ("Knowledge as of coverage_date, not live data. Units with "
+                "a conflict_note MUST have it surfaced.")
+        if any(result.get("truncated") for result in results):
+            note += (" A truncated result is cut at %d characters: call "
+                     "knowledge_get_evidence for its full text."
+                     % CONTENT_CAP)
         return {
             "status": "ok",
             "query": query,
-            "results": [self._unit_payload(row) for row in rows],
-            "note": "Knowledge as of each unit's coverage date — not "
-                    "live data. Units marked 'conflicting' carry a "
-                    "conflict_note that MUST be surfaced.",
+            "run_id": run[0] if run else None,
+            "coverage_date": run[1] if run else None,
+            "results": results,
+            "note": note,
         }
 
     def get_evidence(self, unit_id: str) -> Dict[str, Any]:
@@ -233,7 +349,19 @@ class KnowledgeStore:
                     "active = 1" % self._UNIT_COLUMNS,
                     (unit_id,)).fetchone()
                 related: List[Any] = []
+                section_text: List[str] = []
+                section_rows: Optional[Any] = None
                 if row is not None:
+                    # the whole section: every active block with the same
+                    # source and heading path, in line order
+                    section_text = [item[0] for item in connection.execute(
+                        "SELECT content FROM units WHERE active = 1 AND "
+                        "source_file = ? AND heading_path = ? ORDER BY "
+                        "line_start", (row[1], row[2]))]
+                    if self._schema(connection)["has_kind"]:
+                        section_rows = connection.execute(
+                            "SELECT kind FROM units WHERE unit_id = ? AND "
+                            "active = 1", (unit_id,)).fetchone()
                     related = connection.execute(
                         "SELECT %s FROM units WHERE active = 1 AND "
                         "conflict_note IS NOT NULL AND source_file = ? "
@@ -249,9 +377,16 @@ class KnowledgeStore:
                 "not-found", "no active unit with unit_id %r — use a "
                 "unit_id from a knowledge_search result" % unit_id,
                 retry_safe=False)
+        unit = self._unit_payload(row)
+        if section_rows is not None:
+            unit["kind"] = section_rows[0]
         return {
             "status": "ok",
-            "unit": self._unit_payload(row),
+            "unit": unit,
+            "section": {
+                "heading_path": unit["heading_path"],
+                "content": "\n\n".join(section_text),
+            },
             "conflicting_units_in_source": [
                 self._unit_payload(item) for item in related],
         }
@@ -270,6 +405,7 @@ class KnowledgeStore:
                     "SELECT evidence_state, count(*) FROM units "
                     "WHERE active = 1 GROUP BY evidence_state").fetchall()
                 run = newer = None
+                version = self._schema(connection)["index_version"]
                 if active:
                     # The active run's own row, never simply the newest
                     # ingest: a staged run must not pose as the served one.
@@ -299,6 +435,7 @@ class KnowledgeStore:
             "units_by_state": {state: count for state, count in states},
             "coverage_date": run[0] if run else None,
             "corpus_files": json.loads(run[2]) if run else None,
+            "index_version": version,
             "staged_newer_run": ({"run_id": newer[0],
                                   "coverage_date": newer[1]}
                                  if newer else None),
