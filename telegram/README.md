@@ -56,8 +56,8 @@ the hysteresis and 2-poll confirmation before an event exists). The
 headline names the subnet and direction. Key figures give the demand
 share and its distance from the bar, the bar (as the Nth largest share in
 rank mode), the cause (the subnet's demand or the bar moving), and the
-alpha price at the event's block. The fold names each source (`Shares:
-TaoSwap panel. Bar: chain RPC.`) and the block. A crossing on a subnet
+alpha price at the event's block. The fold names the source (`Demand and
+cutoff (the emission bar): chain RPC.`) and the block. A crossing on a subnet
 with emission switched off renders as a short 🔵 note: it earns zero
 either way. Both directions page (a cliff either way);
 `cooldown_hours` (per netuid, default 24) records further events in the
