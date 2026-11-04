@@ -1689,14 +1689,48 @@ def run_operation(connection: sqlite3.Connection, config: Dict[str, Any],
 # ---------------------------------------------------------------------------
 
 
+_FRESHNESS_ORDER = ("fresh", "aged-upstream", "unknown-upstream")
+
+
+def _worst_freshness(statuses: List[str]) -> str:
+    """The least fresh of several page statuses; an unrecognized status
+    counts as unknown."""
+    worst = 0
+    for status in statuses:
+        rank = (_FRESHNESS_ORDER.index(status)
+                if status in _FRESHNESS_ORDER else len(_FRESHNESS_ORDER) - 1)
+        worst = max(worst, rank)
+    return _FRESHNESS_ORDER[worst] if statuses else "unknown-upstream"
+
+
 def run_subnet_identity(connection, config, ledger, env=None,
                         max_pages: int = 200, run_op=None) -> Dict[str, Any]:
+    """Page the identity map to completion. Pages are fetched one after the
+    other, so the list can shift between pages: an identical repeat of a
+    netuid is dropped, a conflicting repeat or a revisited page fails the
+    read (the map would be a mix of two states). The result's freshness is
+    the worst page's, not the last page's."""
     run_op = run_op or run_operation
     subnets: List[Dict[str, Any]] = []
-    last: Optional[Dict[str, Any]] = None
+    by_netuid: Dict[Any, Dict[str, Any]] = {}
+    freshness: List[str] = []
+    seen_pages: set = set()
     page = 1
     pages_fetched = 0
+
+    def inconsistent(message: str) -> Dict[str, Any]:
+        return {"status": "live-unavailable",
+                "freshness_status": "unknown-upstream",
+                "block_reference": None,
+                "values": {"subnets": subnets, "count": len(subnets),
+                           "complete": False},
+                "error": {"category": "pagination-inconsistent",
+                          "message": message}}
+
     while pages_fetched < max_pages:
+        if page in seen_pages:
+            return inconsistent("page %s requested twice" % page)
+        seen_pages.add(page)
         result = run_op(connection, config, ledger, "subnet_identity_taostats",
                         dynamic_params={"page": page}, interactive=False,
                         env=env)
@@ -1710,14 +1744,22 @@ def run_subnet_identity(connection, config, ledger, env=None,
                     "error": result.get("error") or {
                         "category": "pagination-failed",
                         "message": "page %d did not validate" % page}}
-        last = result
         values = result["values"]
-        subnets.extend(values["subnets"])
+        freshness.append(result.get("freshness_status")
+                         or "unknown-upstream")
+        for row in values["subnets"]:
+            earlier = by_netuid.get(row.get("netuid"))
+            if earlier is None:
+                by_netuid[row.get("netuid")] = row
+                subnets.append(row)
+            elif earlier != row:
+                return inconsistent("netuid %s differs between pages"
+                                    % row.get("netuid"))
         next_page = values.get("next_page")
         total_pages = values.get("total_pages")
         if not next_page or (total_pages and page >= total_pages):
             return {"status": "ok",
-                    "freshness_status": last["freshness_status"],
+                    "freshness_status": _worst_freshness(freshness),
                     "block_reference": None,
                     "values": {"subnets": subnets, "count": len(subnets),
                                "complete": True}}

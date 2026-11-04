@@ -107,6 +107,58 @@ class RunSubnetIdentityAggregatorTests(unittest.TestCase):
                          [1, 2])
         self.assertEqual(seen, [1, 2])
 
+    @staticmethod
+    def _pager(pages):
+        def run_op(conn, config, ledger, op, dynamic_params=None,
+                   interactive=True, env=None):
+            return pages[(dynamic_params or {}).get("page", 1) - 1]
+        return run_op
+
+    @staticmethod
+    def _page(rows, page, total, freshness="unknown-upstream", nxt=None):
+        return {"status": "ok", "freshness_status": freshness,
+                "values": {"subnets": [
+                    {"netuid": n, "github_repo": repo, "subnet_name": "s",
+                     "owner_ss58": None} for n, repo in rows],
+                    "current_page": page, "total_pages": total,
+                    "next_page": nxt}}
+
+    def test_identical_repeat_across_pages_is_dropped(self):
+        pages = [self._page([(1, "u1"), (2, "u2")], 1, 2, nxt=2),
+                 self._page([(2, "u2"), (3, "u3")], 2, 2)]
+        result = al.run_subnet_identity(None, {}, None,
+                                        run_op=self._pager(pages))
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual([s["netuid"] for s in result["values"]["subnets"]],
+                         [1, 2, 3])
+        self.assertEqual(result["values"]["count"], 3)
+
+    def test_conflicting_repeat_fails_closed(self):
+        pages = [self._page([(1, "u1"), (2, "u2")], 1, 2, nxt=2),
+                 self._page([(2, "moved"), (3, "u3")], 2, 2)]
+        result = al.run_subnet_identity(None, {}, None,
+                                        run_op=self._pager(pages))
+        self.assertEqual(result["status"], "live-unavailable")
+        self.assertFalse(result["values"]["complete"])
+        self.assertEqual(result["error"]["category"],
+                         "pagination-inconsistent")
+
+    def test_revisited_page_fails_closed(self):
+        pages = [self._page([(1, "u1")], 1, 3, nxt=2),
+                 self._page([(2, "u2")], 2, 3, nxt=1)]
+        result = al.run_subnet_identity(None, {}, None,
+                                        run_op=self._pager(pages))
+        self.assertEqual(result["status"], "live-unavailable")
+        self.assertEqual(result["error"]["category"],
+                         "pagination-inconsistent")
+
+    def test_freshness_is_the_worst_page(self):
+        pages = [self._page([(1, "u1")], 1, 2, "aged-upstream", nxt=2),
+                 self._page([(2, "u2")], 2, 2, "fresh")]
+        result = al.run_subnet_identity(None, {}, None,
+                                        run_op=self._pager(pages))
+        self.assertEqual(result["freshness_status"], "aged-upstream")
+
     def test_failed_page_reports_degraded_incomplete(self):
         def run_op(*args, **kwargs):
             return {"status": "live-unavailable",
