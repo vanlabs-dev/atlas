@@ -49,7 +49,7 @@ import atlas_hermes_verify as ahv  # noqa: E402
 inv = ahv.inv
 
 KB_VERSION = "0.1.0"
-PARSER_VERSION = "1"
+PARSER_VERSION = "2"  # 2: ISO dates in temporal scope
 
 CORPUS_DIR = os.path.join(_MODULE_DIR, "corpus")
 HASHES_FILE = os.path.join(CORPUS_DIR, "hashes.json")
@@ -61,8 +61,15 @@ EVIDENCE_STATES = ("confirmed", "confirmed-historical", "superseded",
                    "conflicting", "unverified", "inference", "web-lead")
 
 _HEADING = re.compile(r"^(#{1,2})\s+(?P<title>.+?)\s*$")
+# ISO dates (YYYY-MM-DD) count too: most corpus dates since the 2026-08
+# re-syncs are ISO. Longer forms come first so a range or a "since" phrase
+# is kept whole rather than split into bare dates.
+_ISO_DATE = r"20\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])"
 _TEMPORAL = re.compile(
-    r"(?i)\b(since\s+\w+\s+20\d{2}|as of\s+\w+\s+20\d{2}"
+    r"(?i)\b((?:from\s+)?" + _ISO_DATE + r"\s+to\s+" + _ISO_DATE
+    + r"|(?:since|as of|from|until)\s+" + _ISO_DATE
+    + r"|" + _ISO_DATE + r"(?![\d-])"
+    + r"|since\s+\w+\s+20\d{2}|as of\s+\w+\s+20\d{2}"
     r"|\w+\s+20\d{2}\s+to\s+\w+\s+20\d{2}"
     r"|(?:january|february|march|april|may|june|july|august|september"
     r"|october|november|december)\s+20\d{2})")
