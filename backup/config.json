@@ -1,0 +1,41 @@
+{
+  "include": [
+    "atlas/var",
+    "atlas/.env",
+    ".hermes",
+    ".ssh",
+    ".claude",
+    ".config"
+  ],
+  "exclude_paths": [
+    "atlas/var/fleet/clones",
+    "atlas/var/repotrack/subtensor",
+    "atlas/var/upgrade/source-*",
+    "atlas/var/backup/restore-check",
+    ".hermes/hermes-agent",
+    ".hermes/tools",
+    ".hermes/installs",
+    ".hermes/node",
+    ".hermes/lsp",
+    ".hermes/bin",
+    ".hermes/cache"
+  ],
+  "exclude_globs": [
+    "*.db.bak-*",
+    "*-wal",
+    "*-shm",
+    "*-journal"
+  ],
+  "required_stores": [
+    "atlas/var/fleet/fleet.db",
+    "atlas/var/livedata/livedata.db",
+    "atlas/var/repotrack/repotrack.db",
+    "atlas/var/knowledge/knowledge.db",
+    "atlas/var/telegram/telegram.db",
+    ".hermes/state.db"
+  ],
+  "staging": "atlas/var/backup/staging",
+  "status_file": "atlas/var/backup/last.json",
+  "keep_daily": 3,
+  "min_free_bytes": 5000000000
+}
