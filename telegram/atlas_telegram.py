@@ -2031,8 +2031,8 @@ def gate_crossing_events(source_db: str, watermark: Optional[str],
     gate bar, an economic cliff in either direction. Instant tier with a
     per-netuid cooldown: events inside the cooldown are recorded in the
     delivery ledger as suppressed, never dropped. The share is
-    panel-derived (TaoSwap), the bar is chain-read; the body names both
-    sources."""
+    read from chain storage at the gate block, like the bar (change:
+    live-data-correctness); the body names the source."""
     conn = open_source_ro(source_db)
     if conn is None:
         return [], watermark
@@ -2194,7 +2194,7 @@ def _gate_crossing_event(event_id: str, observed_at: str, netuid: int,
                  "the subnet's own demand moved across the reward cutoff")
         details.append("Cutoff moved %s this poll (%s → %s)" % (
             fmt_change(bar_move), fmt_pct(prev_theta), fmt_pct(theta)))
-    details.append("Demand: TaoSwap panel. Cutoff (the emission bar): chain RPC.")
+    details.append("Demand and cutoff (the emission bar): chain RPC.")
     details.append("Block %s · %s" % (fmt_int(block_number),
                                       fmt_time(observed_at)))
     buttons = button(config, "Subnet %d on taostats" % netuid,

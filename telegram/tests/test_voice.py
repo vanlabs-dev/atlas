@@ -435,8 +435,8 @@ class PerClassVoiceTests(RenderedClassBase):
         self.assertIn("its rewards shrink toward zero", fell["text"])
         for word in ("demand", "reward cutoff"):
             self.assertIn(word, fell["text"])
-        self.assertIn("Demand: TaoSwap panel. Cutoff (the emission bar): "
-                      "chain RPC.", fell["text"])
+        self.assertIn("Demand and cutoff (the emission bar): chain RPC.",
+                      fell["text"])
         self.assertIn("Reward cutoff: 0.930% (the 32nd largest demand)",
                       fell["text"])
         self.assertEqual(fell["text"].split("\n")[-1],

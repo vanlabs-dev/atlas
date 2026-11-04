@@ -117,7 +117,8 @@ class GateAdapterTests(unittest.TestCase):
         self.assertIn("its rewards shrink toward zero", text)
         self.assertIn("Its demand: 0.520%", text)
         self.assertIn("Reward cutoff: 0.930%", text)
-        self.assertIn("Demand: TaoSwap panel. Cutoff (the emission bar): chain RPC.", text)
+        self.assertIn("Demand and cutoff (the emission bar): chain RPC.", text)
+        self.assertNotIn("TaoSwap", text)
         self.assertIn("Next: review your subnet 42 position", text)
         self.assertNotIn("—", text)  # em dash
         self.assertNotIn("–", text)  # en dash
