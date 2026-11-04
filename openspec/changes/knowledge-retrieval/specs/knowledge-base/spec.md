@@ -4,7 +4,8 @@
 Ingest SHALL split each corpus file into block-level knowledge units: one
 top-level list item, numbered item, bold-led entry, or paragraph within its
 `#`, `##` or `###` section, with nested and continuation lines kept in their
-parent block. Each unit SHALL preserve: source file identifier and hash, the
+parent block, except that a block longer than 1,500 characters is split at
+its nested items. Each unit SHALL preserve: source file identifier and hash, the
 full heading path, line range, coverage date, per-unit temporal scope where
 the text is dated (month-year phrases and ISO `YYYY-MM-DD` dates), evidence
 state, conflict/supersession links (ATLAS-KB-008/010), and a kind: `fact`,
@@ -40,7 +41,7 @@ The change SHALL provide a local stdio MCP server exposing exactly three
 read-only tools (`knowledge_search`, `knowledge_get_evidence`,
 `knowledge_status`), which replaces the `atlas-test` server in the Hermes
 configuration. Search results SHALL be source-bound (content plus
-provenance and evidence state, ATLAS-RET-003) and bounded: at most 1,200
+provenance and evidence state, ATLAS-RET-003) and bounded: at most 1,500
 characters of content per result, with a `truncated` flag when cut, and
 run-level fields (run id, coverage date) once per response rather than per
 result. The default result count SHALL be 5 and the maximum 10.
@@ -64,7 +65,7 @@ report the store's index version (null when not rebuilt).
 
 #### Scenario: Bounded payload
 - **WHEN** a search returns 5 results from the current corpus
-- **THEN** no result's content exceeds 1,200 characters and a cut result
+- **THEN** no result's content exceeds 1,500 characters and a cut result
   carries `truncated: true`
 
 #### Scenario: Evidence carries section context
