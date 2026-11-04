@@ -718,3 +718,32 @@ class WorstCaseBudgetTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SoulCanonTests(unittest.TestCase):
+    """agent-voice: mechanism claims need tool evidence; the device check
+    is read-only (change: kb-battery-honesty)."""
+
+    def setUp(self):
+        sys.path.insert(0, os.path.dirname(_HERE))
+        import voice_canon
+        self.vc = voice_canon
+
+    def test_canon_carries_the_mechanism_rule(self):
+        soul = self.vc.canonical_soul()
+        self.assertIn("how the\nprotocol works", soul)
+        self.assertIn("knowledge_search", soul)
+        self.assertNotIn("—", soul)
+
+    def test_check_matches_and_mismatches(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "SOUL.md")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(self.vc.canonical_soul())
+            self.assertEqual(self.vc.main(["check", "--soul", path]), 0)
+            with open(path, "a", encoding="utf-8") as handle:
+                handle.write("extra\n")
+            self.assertEqual(self.vc.main(["check", "--soul", path]), 1)
+            self.assertEqual(self.vc.main(
+                ["check", "--soul", os.path.join(tmp, "missing")]), 2)
