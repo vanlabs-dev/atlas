@@ -1101,6 +1101,126 @@ class RankInvariantToleranceTests(RankInvariantTests):
         self.assertIn("invariant-divergence", self.categories())
 
 
+class PinCheckTests(unittest.TestCase):
+    """Exact rank check at the latest theta pin (change:
+    live-data-correctness)."""
+
+    PIN = 360 * 26_000            # 9,360,000
+    THETA = 0.15
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.conn = al.open_store(os.path.join(self.tmp.name, "live.db"))
+        self.addCleanup(self.conn.close)
+        self.config = make_config(above_count_tolerance=1)
+        self.calls = []
+
+    def pin_rpc(self, block, rank=3, fail_hash=False):
+        theta = "0x" + int(self.THETA * 2 ** 64).to_bytes(16, "little").hex()
+        def rpc(method, params):
+            if method == "chain_getFinalizedHead":
+                return {"ok": True, "result": "0xhead", "endpoint": "fake"}
+            if method == "chain_getHeader":
+                return {"ok": True, "result": {"number": hex(block)},
+                        "endpoint": "fake"}
+            if method == "chain_getBlockHash":
+                if fail_hash:
+                    return {"ok": False, "error": "pruned"}
+                return {"ok": True, "result": "0xh%d" % params[0]}
+            if method == "state_getStorage":
+                key, at = params
+                if key == "0xbar":
+                    return {"ok": True, "result": theta}
+                if key == "0xrank":
+                    return {"ok": True, "result": rank_hex(rank)}
+                return {"ok": True, "result": None}
+            raise AssertionError("unexpected %s" % method)
+        return rpc
+
+    def gate(self, block, shares_at_pin, rank=3, maps_ok=True, **kw):
+        head = chain_maps([(n, p, 0.0) for n, p in
+                           [(1, 0.30), (2, 0.30), (3, 0.30), (4, 0.05),
+                            (5, 0.05)]])
+        at_pin = chain_maps([(n, p, 0.0)
+                             for n, p in enumerate(shares_at_pin, 1)])
+        def read(_config, items, rpc=None, block=None, connection=None):
+            self.calls.append(block)
+            if block[0] != "0xhead":
+                if not maps_ok:
+                    return {"ok": False, "error": "state pruned"}
+                values = at_pin
+            else:
+                values = head
+            return {"ok": True, "values": values, "failures": {},
+                    "failed_items": {}, "empty_items": []}
+        return al.run_gate_pass(
+            self.conn, self.config, ledger=None,
+            rpc=self.pin_rpc(block, rank=rank, **kw),
+            run_op=lambda *a, **k: {"status": "live-unavailable"},
+            read_maps=read)
+
+    def categories(self):
+        return [r[0] for r in health_rows(self.conn)]
+
+    def test_exact_count_at_the_pin_is_silent(self):
+        # Three prices, normalized, put the third share exactly on theta.
+        summary = self.gate(self.PIN + 10, [0.35, 0.35, 0.15, 0.10, 0.05])
+        self.assertEqual(summary["pin_check"]["status"], "checked")
+        self.assertEqual(summary["pin_check"]["count"], 3)
+        self.assertIn(("0xh%d" % (self.PIN - 1), self.PIN - 1), self.calls)
+        self.assertNotIn("pin-check-divergence", self.categories())
+        self.assertEqual(self.conn.execute(
+            "SELECT pin_block, pin_above_count FROM gate_state "
+            "ORDER BY id DESC LIMIT 1").fetchone(), (self.PIN, 3))
+
+    def test_off_by_one_at_the_pin_is_reported(self):
+        summary = self.gate(self.PIN + 10, [0.36, 0.36, 0.14, 0.09, 0.05])
+        self.assertEqual(summary["pin_check"]["status"], "divergent")
+        self.assertIn("pin-check-divergence", self.categories())
+
+    def test_fewer_positive_than_n_expects_all_positive(self):
+        summary = self.gate(self.PIN + 10, [0.85, 0.15, 0.0, 0.0, 0.0])
+        self.assertEqual(summary["pin_check"]["expected"], 2)
+        self.assertEqual(summary["pin_check"]["status"], "checked")
+
+    def test_pruned_state_is_a_skip(self):
+        summary = self.gate(self.PIN + 10, [0.35, 0.35, 0.15, 0.10, 0.05],
+                           maps_ok=False)
+        self.assertEqual(summary["pin_check"]["status"], "skipped")
+        self.assertNotIn("pin-check-divergence", self.categories())
+        summary = self.gate(self.PIN + 10, [0.35, 0.35, 0.15, 0.10, 0.05],
+                           fail_hash=True)
+        self.assertEqual(summary["pin_check"]["status"], "skipped")
+
+    def test_pass_too_far_from_the_pin_skips(self):
+        summary = self.gate(self.PIN + 300, [0.36, 0.36, 0.14, 0.09, 0.05])
+        self.assertEqual(summary["pin_check"]["status"], "skipped")
+        self.assertEqual(len(self.calls), 1)   # head read only
+
+    def test_q_mass_mode_skips(self):
+        summary = self.gate(self.PIN + 10, [0.36, 0.36, 0.14, 0.09, 0.05],
+                           rank=0)
+        self.assertEqual(summary["pin_check"]["status"], "skipped")
+
+    def test_migration_is_idempotent(self):
+        path = os.path.join(self.tmp.name, "old.db")
+        old = sqlite3.connect(path)
+        old.execute("CREATE TABLE gate_state (id INTEGER PRIMARY KEY, "
+                    "observed_at TEXT NOT NULL, block_hash TEXT, "
+                    "block_number INTEGER, gate_active INTEGER NOT NULL, "
+                    "theta REAL, q REAL NOT NULL, q_provenance TEXT NOT NULL,"
+                    " h REAL NOT NULL, h_provenance TEXT NOT NULL, "
+                    "endpoint TEXT NOT NULL)")
+        old.commit()
+        old.close()
+        for _ in range(2):
+            conn = al.open_store(path)
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(gate_state)")}
+            conn.close()
+        self.assertTrue({"pin_block", "pin_above_count"} <= cols)
+
+
 # ---------------------------------------------------------------------------
 # pulse-briefing: panel snapshot, daily vitals, zero-price gap, hovering
 # ---------------------------------------------------------------------------
