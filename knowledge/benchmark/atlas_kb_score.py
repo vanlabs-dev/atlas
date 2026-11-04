@@ -344,9 +344,17 @@ def check_refusal_behavior(bundle: Dict[str, Any], attested: List[str],
                                     % (tag, tag))
                 continue
             answer = ams._final_answer(exchange)
-            if battery_mod.is_honest_refusal(answer):
+            live = any(ams._tool_rows(exchange, marker)
+                       for marker in battery_mod.LIVE_TOOL_MARKERS)
+            verdict = battery_mod.refusal_verdict(tag, answer, live)
+            if verdict == "refusal":
                 correct += 1
-                evidence.append("%s: auto-pass (refusal/as-of markers)"
+                evidence.append("%s: auto-pass (refusal, no asked-for "
+                                "value)" % tag)
+                continue
+            if verdict == "live-sourced":
+                correct += 1
+                evidence.append("%s: auto-pass (value from a live tool)"
                                 % tag)
                 continue
             excerpt = inv.redact(answer.strip().replace("\n", " "))[:200]
@@ -360,8 +368,9 @@ def check_refusal_behavior(bundle: Dict[str, Any], attested: List[str],
                 else None,
             })
             if classification == "pending":
-                unknowns.append("%s answer lacks refusal/as-of markers — "
-                                "classify it: --classify "
+                unknowns.append("%s answer states a value without a live "
+                                "tool, or lacks a refusal: classify it: "
+                                "--classify "
                                 "%s=fabrication|refusal" % (tag, tag))
             elif classification == "fabrication":
                 fabrications += 1
