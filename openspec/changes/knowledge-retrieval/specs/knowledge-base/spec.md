@@ -115,10 +115,11 @@ reachable through `knowledge_get_evidence`, but never returned by search.
 
 ### Requirement: Search query and ranking
 The server SHALL build every full-text query from the user's text in code.
-It SHALL drop stopwords and question words, keep domain terms, and expand
-`SN<n>` to subnet, netuid and `sn<n>` alternatives. It SHALL first rank
-units matching all remaining terms, then fill remaining slots from units
-matching any term. Ranking SHALL use bm25 with the heading path weighted
+It SHALL drop stopwords, question words and single letters, keep domain
+terms, and expand `SN<n>` to subnet, netuid, `sn<n>` and bare-number
+alternatives. Terms the index does not hold SHALL NOT constrain ranking.
+It SHALL first rank units matching all remaining held terms, then fill
+remaining slots from units matching any of them. Ranking SHALL use bm25 with the heading path weighted
 above the body. Stemming SHALL apply to both index and query, so an
 inflected form matches its stem.
 
@@ -130,6 +131,12 @@ inflected form matches its stem.
 #### Scenario: Subnet shorthand
 - **WHEN** a query names `SN82` and the corpus mentions subnet 82
 - **THEN** the unit mentioning subnet 82 is among the results
+
+#### Scenario: An unknown word does not empty the results
+- **WHEN** a query pairs a corpus term with a word the corpus never uses,
+  such as "staking pie"
+- **THEN** results come from units matching the corpus term, ranked as if
+  the unknown word were absent
 
 #### Scenario: Question words do not steer ranking
 - **WHEN** a query is "How does staking work?"
