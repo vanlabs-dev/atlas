@@ -204,9 +204,10 @@ class KnowledgeStore:
     _UNIT_COLUMNS_QUALIFIED = ", ".join("u." + f for f in _UNIT_FIELDS)
 
     @staticmethod
-    def build_queries(query: str) -> List[str]:
-        """FTS5 queries in rank order: all terms (AND), then any term (OR).
-        Built from tokens only, so no user text reaches FTS syntax."""
+    def build_terms(query: str) -> List[str]:
+        """FTS5 terms from the user's text: tokens only (no user text
+        reaches FTS syntax), stopwords and question words dropped, subnet
+        shorthand expanded, at most MAX_QUERY_TERMS."""
         terms: List[str] = []
         for token in _TOKEN.findall(query):
             subnet = _SUBNET.match(token)
@@ -216,14 +217,24 @@ class KnowledgeStore:
             elif token.isdigit() and terms and terms[-1].lower() == '"sn"':
                 terms.pop()  # "SN 82" written with a space
                 term = _subnet_group(token)
-            elif token.lower() in STOPWORDS:
-                continue
+            elif token.lower() in STOPWORDS or (len(token) == 1
+                                                 and not token.isdigit()):
+                continue  # a stray "s" from "subnet's" is not a term
             else:
                 term = '"%s"' % token
             if term not in terms:
                 terms.append(term)
             if len(terms) >= MAX_QUERY_TERMS:
                 break
+        return terms
+
+    @classmethod
+    def build_queries(cls, query: str,
+                      terms: Optional[List[str]] = None) -> List[str]:
+        """FTS5 queries in rank order: all terms (AND), then any term (OR).
+        `terms` overrides the parsed terms (search passes only the terms
+        the index holds)."""
+        terms = cls.build_terms(query) if terms is None else terms
         if not terms:
             return []
         if len(terms) == 1:
@@ -266,8 +277,8 @@ class KnowledgeStore:
         guard = self._guard()
         if guard:
             return guard
-        queries = self.build_queries(query)
-        if not queries:
+        terms = self.build_terms(query)
+        if not terms:
             return structured_error("invalid", "query has no searchable "
                                     "terms", retry_safe=False)
         try:
@@ -288,6 +299,12 @@ class KnowledgeStore:
                     if schema["has_kind"] else "")
                 weights = (BM25_WEIGHTS if schema["index_version"]
                            else "1.0, 1.0")
+                # Words the corpus never uses ("pie", "handed") would
+                # empty the AND pass: rank over the terms the index holds.
+                present = [term for term in terms if connection.execute(
+                    "SELECT 1 FROM units_fts WHERE units_fts MATCH ? "
+                    "LIMIT 1", (term,)).fetchone()]
+                queries = self.build_queries(query, present)
                 rows: List[Any] = []
                 seen = set()
                 for fts_query in queries:
