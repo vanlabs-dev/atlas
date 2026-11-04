@@ -3777,36 +3777,85 @@ def watch_subnet_emission_switch(connection: sqlite3.Connection,
         block_number=maps.get("block_number"))
 
 
-def compute_demand_shares(subnets: List[Dict[str, Any]]
-                          ) -> Tuple[Dict[int, float],
-                                     Dict[int, Optional[bool]]]:
-    """Demand shares from the validated TaoSwap panel: moving price
-    weighted by (1 - miner_burn), normalized over ALL non-root panel
-    subnets (emission-disabled INCLUDED — the chain zeroes them only
-    after the bar is computed). Returns ({netuid: share}, {netuid:
-    emission_is_enabled}); empty shares when nothing normalizes."""
-    weights: Dict[int, float] = {}
-    enabled: Dict[int, Optional[bool]] = {}
-    for row in subnets:
-        netuid = row.get("netuid")
-        price = row.get("moving_price_tao")
-        if not isinstance(netuid, int) or netuid == 0:
-            continue
-        if not isinstance(price, (int, float)) or price < 0:
-            continue  # no priced entry -> no share this pass
-        burn = row.get("emission_miner_burn")
-        factor = 1.0
-        if isinstance(burn, (int, float)):
-            factor = 1.0 - min(max(float(burn), 0.0), 100.0) / 100.0
-        weights[netuid] = float(price) * factor
-        enabled[netuid] = (bool(row["emission_is_enabled"])
-                           if row.get("emission_is_enabled") is not None
-                           else None)
+# The storage items a gate pass reads at its own block to compute demand
+# shares the way subtensor v486 does (change: live-data-correctness):
+# `get_subnets_to_emit_to` filters, `get_shares_price_ema` prices,
+# `scale_price_shares_by_miner_burn` burns. The pool-side emission switch is
+# read in the same batch as an annotation.
+SHARE_MAP_ITEMS: Dict[str, str] = {
+    "SubnetworkN": "u16",
+    "SubnetMovingPrice": "i96f32",
+    "MinerBurned": "u96f32",
+    "FirstEmissionBlockNumber": "u64",
+    "SubtokenEnabled": "bool",
+    "NetworkRegistrationAllowed": "bool",
+    "SubnetEmissionEnabled": "bool",
+}
+# Items whose failure for any non-root registered subnet leaves the shares
+# undefined. The switch is an annotation only.
+_SHARE_REQUIRED = tuple(item for item in SHARE_MAP_ITEMS
+                        if item != "SubnetEmissionEnabled")
+
+
+def chain_demand_shares(values: Dict[str, Dict[Any, Any]],
+                        failures: Optional[Dict[str, Dict[Any, str]]] = None,
+                        failed_items: Optional[Dict[str, str]] = None
+                        ) -> Dict[str, Any]:
+    """Demand shares from one batched chain read, as the runtime computes
+    them: non-root subnets with a first-emission block, subtoken enabled and
+    registration allowed form the universe; each weighs its moving price by
+    (1 - MinerBurned) and the weights are normalized. When every weight is
+    zero the runtime keeps the plain price shares, and so does this.
+
+    Returns {ok, shares, enabled, universe} or {ok: False, reason}. Any
+    failure of a required item for a non-root registered subnet fails the
+    whole computation: a share set with one subnet missing would misplace
+    every other subnet against the bar. A universe member with a zero or
+    unset price keeps a zero share (a gap for side tracking)."""
+    failures = failures or {}
+    failed_items = failed_items or {}
+    for item in _SHARE_REQUIRED:
+        if item in failed_items:
+            return {"ok": False,
+                    "reason": "%s %s" % (item, failed_items[item])}
+    registered = sorted(n for n in (values.get("SubnetworkN") or {})
+                        if n != ROOT_NETUID)
+    if not registered:
+        return {"ok": False, "reason": "no registered subnets"}
+    for item in _SHARE_REQUIRED:
+        bad = sorted(n for n in (failures.get(item) or {})
+                     if n in registered)
+        if bad:
+            return {"ok": False, "reason": "%s failed for netuid %s: %s" % (
+                item, bad[0], failures[item][bad[0]])}
+
+    first = values.get("FirstEmissionBlockNumber") or {}
+    subtoken = values.get("SubtokenEnabled") or {}
+    reg_ok = values.get("NetworkRegistrationAllowed") or {}
+    universe = [n for n in registered
+                if n in first and subtoken.get(n, False)
+                and reg_ok.get(n, False)]
+    prices = values.get("SubnetMovingPrice") or {}
+    burns = values.get("MinerBurned") or {}
+    price = {n: max(float(prices.get(n, 0.0)), 0.0) for n in universe}
+    weights = {n: price[n] * (1.0 - min(max(float(burns.get(n, 0.0)), 0.0),
+                                        1.0))
+               for n in universe}
     total = sum(weights.values())
     if total <= 0.0:
-        return {}, enabled
-    return {netuid: weight / total
-            for netuid, weight in weights.items()}, enabled
+        weights, total = price, sum(price.values())
+    if total <= 0.0:
+        return {"ok": False, "reason": "no subnet has a moving price"}
+
+    switch = values.get("SubnetEmissionEnabled") or {}
+    switch_fail = failures.get("SubnetEmissionEnabled") or {}
+    default_on = expected_default("SubnetEmissionEnabled") == b"\x01"
+    enabled: Dict[int, Optional[bool]] = {
+        n: (None if n in switch_fail else bool(switch.get(n, default_on)))
+        for n in universe}
+    return {"ok": True,
+            "shares": {n: w / total for n, w in weights.items()},
+            "enabled": enabled, "universe": universe}
 
 
 def update_gate_sides(connection: sqlite3.Connection,
@@ -4030,19 +4079,30 @@ def run_vitals_daily(connection: sqlite3.Connection, config: Dict[str, Any],
 def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
                   ledger: QuotaLedger, rpc: Optional[Any] = None,
                   run_op: Optional[Any] = None,
-                  env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-    """One full gate pass: chain state -> panel shares -> sides/events.
-    Inert when the kill-switch is off. A gate-inactive -> active
-    transition re-seeds every side silently (no events for the
-    transition pass)."""
+                  env: Optional[Dict[str, str]] = None,
+                  read_maps: Optional[Any] = None) -> Dict[str, Any]:
+    """One full gate pass: chain state -> chain shares -> sides/events,
+    then the TaoSwap panel snapshot. Inert when the kill-switch is off. A
+    gate-inactive -> active transition re-seeds every side silently (no
+    events for the transition pass).
+
+    Shares come from chain storage at the gate's own block (change:
+    live-data-correctness); the panel feeds only the snapshot, so a panel
+    outage no longer stops crossing events. `read_maps` replaces
+    `read_subnet_maps` in tests."""
     gcfg = config.get("gate_signal") or {}
     if not gcfg.get("enabled"):
         return {"status": "disabled"}
     run_op = run_op or run_operation
+    read_maps = read_maps or read_subnet_maps
 
     state = poll_gate_state(connection, config, rpc=rpc)
     if not state.get("ok"):
         return {"status": "live-unavailable", "error": state.get("error")}
+
+    gate_block = (state.get("block_hash"), state.get("block_number"))
+    share_read = read_maps(config, dict(SHARE_MAP_ITEMS), rpc=rpc,
+                           block=gate_block, connection=connection)
 
     # The watch runs inside the pass so bar parameters are recorded at the
     # gate observation's own block, with no second storage read.
@@ -4050,7 +4110,9 @@ def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
         connection, config, rpc=rpc, bar_params=state.get("bar_params"),
         block_hash=state.get("block_hash"),
         block_number=state.get("block_number"))
-    switch_watch = watch_subnet_emission_switch(connection, config, rpc=rpc)
+    switch_watch = watch_subnet_emission_switch(
+        connection, config, rpc=rpc,
+        maps=share_read if share_read.get("ok") else None)
     if switch_watch.get("transitions"):
         watch.setdefault("transitions", []).extend(
             switch_watch["transitions"])
@@ -4088,20 +4150,33 @@ def run_gate_pass(connection: sqlite3.Connection, config: Dict[str, Any],
     meta_set(connection, META_GATE_ACTIVE, "1")
     connection.commit()
 
+    computed = (chain_demand_shares(share_read.get("values") or {},
+                                    share_read.get("failures"),
+                                    share_read.get("failed_items"))
+                if share_read.get("ok")
+                else {"ok": False,
+                      "reason": share_read.get("error") or "read failed"})
+    if not computed["ok"]:
+        # Fail closed: no shares, no events, no snapshot for this pass.
+        health_event(connection, GATE_PROVIDER, GATE_OPERATION,
+                     "share-read-failed",
+                     "%s at block %s" % (computed["reason"],
+                                         state["block_number"]))
+        summary["shares"] = "unavailable"
+        summary["share_error"] = computed["reason"]
+        summary["events_recorded"] = 0
+        return summary
+    shares, enabled = computed["shares"], computed["enabled"]
+    summary["share_universe"] = len(computed["universe"])
+
     panel = run_op(connection, config, ledger, "subnets_taoswap",
                    interactive=False, env=env)
     if panel.get("status") != "ok":
         summary["panel"] = "live-unavailable"
-        summary["events_recorded"] = 0
-        return summary
-    shares, enabled = compute_demand_shares(panel["values"]["subnets"])
-    summary["panel_snapshot_rows"] = record_panel_snapshot(
-        connection, gcfg, panel["values"]["subnets"], shares,
-        state["block_number"])
-    if not shares:
-        summary["panel"] = "no-normalizable-shares"
-        summary["events_recorded"] = 0
-        return summary
+    else:
+        summary["panel_snapshot_rows"] = record_panel_snapshot(
+            connection, gcfg, panel["values"]["subnets"], shares,
+            state["block_number"])
     events = update_gate_sides(connection, gcfg, state["theta"], shares,
                                enabled, state["block_number"],
                                prev_theta=state.get("prev_theta"))
