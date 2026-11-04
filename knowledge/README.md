@@ -17,7 +17,7 @@ ATLAS-RET-001…007, and ATLAS-TOOL-001…004 via OpenSpec change
 | [`atlas_kb_server.py`](atlas_kb_server.py) | stdio MCP server: `knowledge_search` / `knowledge_get_evidence` / `knowledge_status` — replaces `atlas-test` |
 | [`benchmark/retrieval_eval.json`](benchmark/retrieval_eval.json) | retrieval evaluation: each query must find its marker text in the top 5 results (test `test_retrieval.py`; the upgrade job's test gate runs it) |
 | [`polarity-rules.json`](polarity-rules.json) | corpus polarity lint: claims the subtensor source refutes (subnet lock recycled, UID registration TAO burned, ...); a fact unit stating one fails `test_polarity.py` |
-| [`benchmark/`](benchmark/) | 43-exchange retrieval benchmark (battery, scorer, threshold sheet) — closes the deferred ATLAS-HERMES-003 retrieval criterion and re-tests MV-RI-4 |
+| [`benchmark/`](benchmark/) | 43-exchange retrieval benchmark (battery, scorer, threshold sheet); closes the deferred ATLAS-HERMES-003 retrieval criterion and re-tests MV-RI-4 |
 
 ## How knowledge flows
 

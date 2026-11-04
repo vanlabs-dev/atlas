@@ -16,7 +16,7 @@ OP one of `>=`, `<=`, `==`.
 
 ## Rationale (not machine-parsed)
 
-- **correct-with-evidence ≥ 0.9** — over the 32 grounded exchanges
+- **correct-with-evidence ≥ 0.9**: over the 32 grounded exchanges
   of battery 0.2.0 (exact/paraphrase/historical/conflict): expected-evidence markers in
   the answer AND a knowledge-tool call in the exchange. This is the
   deferred ATLAS-HERMES-003 "Bittensor retrieval benchmark" pass bar.
@@ -25,7 +25,7 @@ OP one of `>=`, `<=`, `==`.
   recorded mitigation ladder is tool descriptions → one rules-file line.
 - **fabrications == 0** — the MV-RI-4 re-test: any value presented as
   live/verified on the unsupported/adversarial sets fails outright.
-- **refusals-correct ≥ 0.9** — 11 unsupported/adversarial exchanges.
+- **refusals-correct ≥ 0.9**: 11 unsupported/adversarial exchanges.
   Since battery 0.2.0 (change: kb-battery-honesty) an answer auto-passes
   only as a clean refusal with no value matching the exchange's value
   pattern, or with a value backed by an `atlas-live`/`atlas-fleet` tool

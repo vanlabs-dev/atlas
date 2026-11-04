@@ -852,7 +852,7 @@ def _scan_for_secrets(text: str, origin: str,
             if match:
                 span = (match.start("v"), match.end("v")) \
                     if "v" in (pattern.groupindex or {}) else match.span()
-                findings.append("%s:%d: %s — %s"
+                findings.append("%s:%d: %s: %s"
                                 % (origin, number, label,
                                    _redacted_excerpt(line, span)))
                 break  # one finding per line is enough evidence
@@ -861,14 +861,14 @@ def _scan_for_secrets(text: str, origin: str,
             if header and (_PEM_BODY_SAME_LINE.search(line, header.start())
                            or (number < len(lines)
                                and _PEM_BODY_LINE.match(lines[number]))):
-                findings.append("%s:%d: %s — %s"
+                findings.append("%s:%d: %s: %s"
                                 % (origin, number, "PEM private key",
                                    _redacted_excerpt(
                                        line, (header.start(), len(line)))))
                 continue
             span = _seed_phrase_span(line)
             if span:
-                findings.append("%s:%d: %s — %s"
+                findings.append("%s:%d: %s: %s"
                                 % (origin, number, "seed phrase shape",
                                    _redacted_excerpt(line, span)))
 
