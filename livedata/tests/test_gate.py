@@ -83,6 +83,9 @@ def make_config(watch_enabled=False, **gate_over):
     }
 
 
+FAKE_BLOCK = int("0x84f1c1", 16)
+
+
 def fake_rpc(storage, head="0x" + "ab" * 32, number="0x84f1c1",
              fail=None):
     """storage: {pinned_key: hex_or_None}. fail: method name to fail."""
@@ -510,7 +513,7 @@ class GatePassTests(unittest.TestCase):
             self.assertEqual(op_name, "subnets_taoswap")
             if panel_status != "ok":
                 return {"status": panel_status}
-            return {"status": "ok",
+            return {"status": "ok", "block_reference": FAKE_BLOCK,
                     "values": {"subnets": self.panel_rows}}
         return al.run_gate_pass(self.conn, self.config, ledger=None,
                                 rpc=fake_rpc(storage), run_op=run_op,
@@ -582,7 +585,8 @@ class GatePassTests(unittest.TestCase):
         self.config = make_config(watch_enabled=True)
         calls = []
         def run_op(*_a, **_kw):
-            return {"status": "ok", "values": {"subnets": self.panel_rows}}
+            return {"status": "ok", "block_reference": FAKE_BLOCK,
+                    "values": {"subnets": self.panel_rows}}
         values = chain_maps([(1, 0.02, 0.0, {"switch": True}),
                              (2, 0.002, 0.0, {"switch": False})])
         summary = al.run_gate_pass(
@@ -768,7 +772,7 @@ class BarRepricingTests(unittest.TestCase):
 
     def run_pass(self, storage):
         def run_op(_conn, _config, _ledger, _op, **_kw):
-            return {"status": "ok",
+            return {"status": "ok", "block_reference": FAKE_BLOCK,
                     "values": {"subnets": self.panel_rows}}
         return al.run_gate_pass(self.conn, self.config, ledger=None,
                                 rpc=fake_rpc(storage), run_op=run_op,
@@ -833,7 +837,7 @@ class RankInvariantTests(unittest.TestCase):
 
     def run_pass(self, rank):
         def run_op(_conn, _config, _ledger, _op, **_kw):
-            return {"status": "ok",
+            return {"status": "ok", "block_reference": FAKE_BLOCK,
                     "values": {"subnets": self.panel_rows}}
         theta = "0x" + int(0.15 * 2 ** 64).to_bytes(16, "little").hex()
         return al.run_gate_pass(
@@ -1252,7 +1256,8 @@ class PanelSnapshotTests(unittest.TestCase):
 
     def run_pass(self, rows):
         def run_op(_conn, _config, _ledger, _op, **_kw):
-            return {"status": "ok", "values": {"subnets": rows}}
+            return {"status": "ok", "block_reference": FAKE_BLOCK,
+                    "values": {"subnets": rows}}
         theta = "0x" + int(0.15 * 2 ** 64).to_bytes(16, "little").hex()
         return al.run_gate_pass(
             self.conn, self.config, ledger=None,
@@ -1289,6 +1294,100 @@ class PanelSnapshotTests(unittest.TestCase):
         self.run_pass([rich_subnet(1, 0.30)])
         self.assertEqual(self.conn.execute(
             "SELECT COUNT(*) FROM panel_snapshot").fetchone()[0], 1)
+
+
+class PanelCheckTests(unittest.TestCase):
+    """The panel is checked against the chain before any snapshot row
+    (change: live-data-correctness, audit A14)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.conn = al.open_store(os.path.join(self.tmp.name, "live.db"))
+        self.addCleanup(self.conn.close)
+        self.config = make_config(panel_max_lag_blocks=300)
+
+    def run_pass(self, rows, panel_block, chain_subnets=None):
+        def run_op(*_a, **_kw):
+            out = {"status": "ok", "values": {"subnets": rows}}
+            if panel_block is not None:
+                out["block_reference"] = panel_block
+            return out
+        specs = chain_subnets or [(r["netuid"], r["moving_price_tao"], 0.0)
+                                  for r in rows if r["netuid"]]
+        theta = "0x" + int(0.15 * 2 ** 64).to_bytes(16, "little").hex()
+        return al.run_gate_pass(
+            self.conn, self.config, ledger=None,
+            rpc=fake_rpc({"0xbar": theta, "0xrank": rank_hex(2)}),
+            run_op=run_op, read_maps=maps_reader(chain_maps(specs)))
+
+    def snapshot_rows(self):
+        return self.conn.execute(
+            "SELECT netuid, block_number, panel_block, share "
+            "FROM panel_snapshot ORDER BY netuid").fetchall()
+
+    def categories(self):
+        return [r[0] for r in health_rows(self.conn)]
+
+    def test_current_complete_panel_stores_both_blocks_and_chain_share(self):
+        # The panel prices differ from the chain's: the share is the chain's.
+        rows = [subnet(1, 0.99), subnet(2, 0.01)]
+        summary = self.run_pass(rows, FAKE_BLOCK - 7,
+                                chain_subnets=[(1, 0.03, 0.0),
+                                               (2, 0.01, 0.0)])
+        self.assertEqual(summary["panel_lag_blocks"], 7)
+        got = self.snapshot_rows()
+        self.assertEqual([(r[0], r[1], r[2]) for r in got],
+                         [(1, FAKE_BLOCK, FAKE_BLOCK - 7),
+                          (2, FAKE_BLOCK, FAKE_BLOCK - 7)])
+        self.assertAlmostEqual(got[0][3], 0.75)
+
+    def test_lagging_panel_writes_nothing(self):
+        summary = self.run_pass([subnet(1, 0.3), subnet(2, 0.1)],
+                                FAKE_BLOCK - 301)
+        self.assertEqual(summary["panel"], "panel-lagging")
+        self.assertEqual(self.snapshot_rows(), [])
+        self.assertIn("panel-lagging", self.categories())
+
+    def test_panel_without_a_block_writes_nothing(self):
+        summary = self.run_pass([subnet(1, 0.3), subnet(2, 0.1)], None)
+        self.assertEqual(summary["panel"], "panel-lagging")
+        self.assertEqual(self.snapshot_rows(), [])
+
+    def test_short_panel_writes_nothing(self):
+        summary = self.run_pass([subnet(0, 1.0), subnet(1, 0.3)],
+                                FAKE_BLOCK, chain_subnets=[
+                                    (1, 0.3, 0.0), (2, 0.1, 0.0)])
+        self.assertEqual(summary["panel"], "panel-short")
+        self.assertEqual(self.snapshot_rows(), [])
+        self.assertIn("panel-short", self.categories())
+
+    def test_panel_check_does_not_stop_events(self):
+        summary = self.run_pass([subnet(1, 0.3)], None,
+                                chain_subnets=[(1, 0.3, 0.0),
+                                               (2, 0.1, 0.0)])
+        self.assertEqual(summary["status"], "ok")
+        self.assertIn("events_recorded", summary)
+
+    def test_snapshot_migration_is_idempotent(self):
+        path = os.path.join(self.tmp.name, "old.db")
+        old = sqlite3.connect(path)
+        old.execute("CREATE TABLE panel_snapshot (id INTEGER PRIMARY KEY, "
+                    "observed_at TEXT NOT NULL, block_number INTEGER, "
+                    "netuid INTEGER NOT NULL, share REAL)")
+        old.execute("INSERT INTO panel_snapshot (observed_at, netuid) "
+                    "VALUES ('2026-11-01', 1)")
+        old.commit()
+        old.close()
+        for _ in range(2):
+            conn = al.open_store(path)
+            cols = {r[1] for r in conn.execute(
+                "PRAGMA table_info(panel_snapshot)")}
+            kept = conn.execute(
+                "SELECT COUNT(*) FROM panel_snapshot").fetchone()[0]
+            conn.close()
+        self.assertIn("panel_block", cols)
+        self.assertEqual(kept, 1)
 
 
 class VitalsTests(unittest.TestCase):
