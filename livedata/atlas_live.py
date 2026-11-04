@@ -38,7 +38,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import secrets as secretsmod
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_MODULE_DIR)
@@ -509,9 +509,11 @@ class QuotaLedger:
     later succeeds (a call is a call)."""
 
     def __init__(self, connection: sqlite3.Connection,
-                 config: Dict[str, Any]):
+                 config: Dict[str, Any],
+                 sleep: Callable[[float], None] = time.sleep):
         self.connection = connection
         self.config = config
+        self.sleep = sleep
 
     def _quota(self, provider: str) -> Dict[str, Any]:
         return self.config["providers"][provider].get("quota", {})
@@ -559,14 +561,27 @@ class QuotaLedger:
         return usage
 
     def acquire(self, provider: str, interactive: bool = True,
-                now: Optional[float] = None) -> Optional[Dict[str, Any]]:
+                now: Optional[float] = None,
+                wait_spacing: bool = False) -> Optional[Dict[str, Any]]:
         """Return None when the call may proceed (and record it), or a
         structured refusal dict. The per-minute self-cap is strictly
-        below any provider limit — headroom by design."""
-        now = now if now is not None else time.time()
+        below any provider limit — headroom by design.
+
+        With `wait_spacing`, a call inside `min_spacing_seconds` of the last
+        one sleeps out the remainder instead of being refused. Scheduled
+        passes make back-to-back calls, and a refusal there drops the data
+        for the whole pass whenever the first call returns quickly."""
+        fixed_now = now is not None
+        now = now if fixed_now else time.time()
         quota = self._quota(provider)
         usage = self.usage(provider, now)
         spacing = quota.get("min_spacing_seconds")
+        if (wait_spacing and spacing and usage["last_call_ts"] is not None
+                and now - usage["last_call_ts"] < spacing):
+            remaining = spacing - (now - usage["last_call_ts"])
+            self.sleep(remaining)
+            now = now + remaining if fixed_now else time.time()
+            usage = self.usage(provider, now)
         if (spacing and usage["last_call_ts"] is not None
                 and now - usage["last_call_ts"] < spacing):
             return {"category": "paced",
@@ -1555,7 +1570,8 @@ def run_operation(connection: sqlite3.Connection, config: Dict[str, Any],
         and value is not None
     }
 
-    refusal = ledger.acquire(provider, interactive=interactive)
+    refusal = ledger.acquire(provider, interactive=interactive,
+                             wait_spacing=not interactive)
     if refusal is not None:
         audit_call(connection, provider, op_name, params, _utc_now(),
                    _utc_now(), None, operation["schema"], "not-attempted",
