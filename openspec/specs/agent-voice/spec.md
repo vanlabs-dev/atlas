@@ -7,6 +7,7 @@ is `telegram/docs/voice.md`; chat draws from it through `SOUL.md`, alerts
 through the lexicon and gloss maps in `telegram/config.json`.
 
 ## Requirements
+
 ### Requirement: Approved lexicon with one word per concept
 
 Atlas SHALL maintain an approved lexicon (canonical text in
@@ -179,3 +180,16 @@ preceded by a backup per repo convention.
 - **WHEN** the operator has applied the voice text
 - **THEN** a read-only check confirms `SOUL.md` and the Telegram platform
   hint match the canonical text in the repo, and a config backup exists
+
+### Requirement: No unvalidated mechanism claims in chat
+A chat response SHALL NOT state how the Bittensor protocol works (a rule,
+a default, a limit, a date, or which call does what) unless a
+`knowledge_search` or live-tool result in the current session supports
+it. Otherwise the response SHALL call a tool first or mark the claim "not
+verified". The canonical voice text and the device `SOUL.md` SHALL carry
+this rule.
+
+#### Scenario: Mechanism question answered from the knowledge base
+- **WHEN** a user asks how commit-reveal works
+- **THEN** the response follows a `knowledge_search` call in the session,
+  or marks its mechanism statements "not verified"
