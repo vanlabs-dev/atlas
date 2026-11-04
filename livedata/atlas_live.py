@@ -890,8 +890,16 @@ def _pp_subnets_taoswap(payload, params):
         if not rows:
             raise FatalLiveError("no subnet with id %s in the provider "
                                  "response" % netuid)
+    # Every row is kept (change: live-data-correctness): the list is bounded
+    # by the chain's subnet count, and a cut at a fixed length would make a
+    # complete panel look short. A row with no integer id cannot be placed,
+    # so it fails the panel instead of being skipped downstream.
     pruned = []
-    for row in rows[:130]:
+    for row in rows:
+        if not isinstance(row.get("id"), int) or isinstance(row.get("id"),
+                                                             bool):
+            raise FatalLiveError("subnet row without an integer id: %r"
+                                 % (row.get("id"),))
         conviction = row.get("conviction") or {}
         identity = row.get("identity") or {}
         dereg = row.get("dereg") or {}
