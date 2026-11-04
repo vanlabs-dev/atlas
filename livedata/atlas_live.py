@@ -2046,6 +2046,19 @@ CHAIN_READS: Tuple[ChainRead, ...] = tuple(
         ("NetworkImmunityPeriod", (), "u64"),
         ("NetworkLockReductionInterval", (), "u64"),
         ("NetworkRateLimit", (), "u64"),
+        # Plain values the corpus states as live (audit WP13): conviction
+        # rates, childkey rules and the commit-reveal version. Types and
+        # defaults confirmed against live metadata at spec 486, block
+        # 9434728.
+        ("MaturityRate", (), "u64"),
+        ("UnlockRate", (), "u64"),
+        ("StakeThreshold", (), "u64"),
+        ("PendingChildKeyCooldown", (), "u64"),
+        ("MaxChildkeyTake", (), "PerU16"),
+        ("MinChildkeyTake", (), "PerU16"),
+        ("TxChildkeyTakeRateLimit", (), "u64"),
+        ("CKBurn", (), "u64"),
+        ("CommitRevealWeightsVersion", (), "u16"),
         ("SubnetworkN", ("identity",), "u16"),
         ("Incentive", ("identity",), "Vec<PerU16>"),
         ("MinerBurned", ("identity",), "FixedU128<U32>"),
@@ -2149,6 +2162,15 @@ EXPECTED_DEFAULTS: Dict[Tuple[str, str], str] = {
     (SUBTENSOR_PALLET, "NetworkImmunityPeriod"): "80c6130000000000",
     (SUBTENSOR_PALLET, "NetworkLockReductionInterval"): "c089010000000000",
     (SUBTENSOR_PALLET, "NetworkRateLimit"): "201c000000000000",  # 7200
+    (SUBTENSOR_PALLET, "MaturityRate"): "d2430e0000000000",  # 934866
+    (SUBTENSOR_PALLET, "UnlockRate"): "d2430e0000000000",  # 934866
+    (SUBTENSOR_PALLET, "StakeThreshold"): "0000000000000000",  # 0
+    (SUBTENSOR_PALLET, "PendingChildKeyCooldown"): "201c000000000000",  # 7200
+    (SUBTENSOR_PALLET, "MaxChildkeyTake"): "142e",  # 11796 (18%)
+    (SUBTENSOR_PALLET, "MinChildkeyTake"): "0000",  # 0
+    (SUBTENSOR_PALLET, "TxChildkeyTakeRateLimit"): "c04b030000000000",  # 216000
+    (SUBTENSOR_PALLET, "CKBurn"): "0000000000000000",  # 0
+    (SUBTENSOR_PALLET, "CommitRevealWeightsVersion"): "0400",  # 4
     (SUBTENSOR_PALLET, "CollateralLockShare"): "0000",  # 0
     (SUBTENSOR_PALLET, "SubnetEmissionEnabled"): "01",  # true
     (SUBTENSOR_PALLET, "SubnetOwnerCut"): "142e",  # 11796
@@ -4539,6 +4561,15 @@ KNOB_ITEMS: Dict[str, str] = {
     "NetworkImmunityPeriod": "u64",
     "NetworkLockReductionInterval": "u64",
     "NetworkRateLimit": "u64",
+    "MaturityRate": "u64",
+    "UnlockRate": "u64",
+    "StakeThreshold": "u64",
+    "PendingChildKeyCooldown": "u64",
+    "MaxChildkeyTake": "u16",
+    "MinChildkeyTake": "u16",
+    "TxChildkeyTakeRateLimit": "u64",
+    "CKBurn": "u64",
+    "CommitRevealWeightsVersion": "u16",
 }
 
 
