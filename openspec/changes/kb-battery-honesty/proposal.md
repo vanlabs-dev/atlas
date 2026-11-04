@@ -12,7 +12,8 @@ The knowledge battery cannot catch the failures it exists for. Re-verified 2026-
   - "41" matches "spec 441".
   - KB-CF-5's markers have zero hits in the corpus.
   - KB-HI-3 and KB-UN-3 contradict each other on the dTAO date, which the corpus now states (2025-02-13).
-  - The battery claims its markers are "pinned by test", but no such test exists.
+  - The marker pin test (`test_expected_markers_pinned_against_corpus`) skips the conflict set, so KB-CF-5's dead markers pass. It also uses plain substring matching.
+- **The corpus contradicted itself** on what happens to registration TAO (recycled, burned, seeds the pool) and nothing would catch a repeat (audit A10, second half).
 - **No battery runs before activation.** The upgrade job activates corpus edits it wrote itself, and nothing checks that the battery's facts can still be retrieved.
 - **The honesty contract covers numbers only** (SOUL and `agent-voice`). Mechanism claims such as commit-reveal, Yuma 3 or childkey take may come from model memory. Telegram made 5 `knowledge_search` calls since 2026-10-01.
 - **The battery runner no longer matches the deployment.** Since WP10 we know a CLI `-z` session loads every enabled MCP server. A rerun therefore has `atlas-live`, and a correct live-sourced answer to "latest block" would be flagged.
@@ -27,7 +28,7 @@ The knowledge battery cannot catch the failures it exists for. Re-verified 2026-
   - The `ASOF_MARKERS` auto-pass is removed. **BREAKING** for the scorer verdicts: older runs will rescore with more flags.
 - **Markers.**
   - Markers match at word starts, and numeric markers also at word ends, so "41" no longer matches "441".
-  - A test pins every marker group to the corpus: at least one alternate of each group must appear in it.
+  - The pin test covers every grounded set, including conflict, with the scorer's boundary rule.
 - **Re-baselined battery** (`BATTERY_VERSION` 0.2.0):
   - KB-EX-1 and KB-PA-1 ask for the default split and its per-subnet override.
   - KB-PA-2 matches the corrected subnet-lock destination.
@@ -43,6 +44,7 @@ The knowledge battery cannot catch the failures it exists for. Re-verified 2026-
 - **Honesty contract covers mechanisms.**
   - `telegram/docs/voice.md` (canon for `~/.hermes/SOUL.md`): a statement of how the protocol works needs a `knowledge_search` or live-tool result in the session; otherwise it is marked "not verified".
   - The device SOUL.md is updated from canon, with a backup.
+- **Corpus polarity lint.** A test with a small checked-in rule file flags a fact unit that states a known-contradictory claim about one operation, for example subnet lock TAO "recycled" or UID registration TAO "burned". Negated phrasing and correction units (which quote wrong claims on purpose) are exempt.
 - **Grounding report.** A read-only command reports, for Telegram sessions in a window, how many Bittensor-topic answers made no Atlas knowledge or live call.
 
 ## Capabilities
@@ -55,7 +57,7 @@ None.
 
 - `knowledge-base`:
   - The Retrieval benchmark gate's refusal and marker rules.
-  - New requirements: markers pinned to the corpus; the pre-activation retrieval check; the grounding report.
+  - New requirements: markers pinned to the corpus; the pre-activation retrieval check; the corpus polarity lint; the grounding report.
 - `agent-voice`: a new requirement that mechanism claims need knowledge or live evidence in the session.
 - `runtime-upgrade`: the push gate list names the knowledge retrieval checks as part of the test gate.
 
