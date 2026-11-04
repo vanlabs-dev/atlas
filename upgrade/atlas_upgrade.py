@@ -42,6 +42,7 @@ import datetime
 import difflib
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -311,6 +312,44 @@ def test_dirs(tree: str) -> List[str]:
                    for name in files):
                 found.append(current)
     return sorted(found)
+
+
+def tested_facts(root: str) -> str:
+    """The corpus facts the knowledge suite tests, for the edit prompt
+    (change: kb-battery-honesty): every grounded battery marker group,
+    every retrieval evaluation marker, and every polarity rule. Read from
+    the live tree (operator code), never from the edit worktree."""
+    knowledge = os.path.join(root, "knowledge")
+    spec = importlib.util.spec_from_file_location(
+        "atlas_kb_battery_for_prompt",
+        os.path.join(knowledge, "benchmark", "atlas_kb_battery.py"))
+    battery = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(battery)  # type: ignore[union-attr]
+    lines = ["Battery facts (each group needs one of its alternatives in "
+             "the top 5 search results for the question):"]
+    for exchange in battery.battery():
+        if exchange["set"] not in battery.GROUNDED_SETS:
+            continue
+        groups = "; ".join("one of [%s]" % ", ".join(
+            '"%s"' % alternate for alternate in group)
+            for group in exchange["expected"])
+        lines.append("- %s %s: %s" % (
+            exchange["tag"], exchange["search_query"], groups))
+    with open(os.path.join(knowledge, "benchmark", "retrieval_eval.json"),
+              "r", encoding="utf-8") as handle:
+        evaluation = json.load(handle)
+    lines.append("Retrieval evaluation (the marker text must stay in a "
+                 "unit the query finds):")
+    for item in evaluation["queries"]:
+        lines.append('- "%s": "%s"' % (item["query"], item["marker"]))
+    with open(os.path.join(knowledge, "polarity-rules.json"), "r",
+              encoding="utf-8") as handle:
+        rules = json.load(handle)["rules"]
+    lines.append("Claims the source refutes (a fact line must never "
+                 "state them):")
+    for rule in rules:
+        lines.append("- %s (%s)" % (rule["id"], rule["source"]))
+    return "\n".join(lines)
 
 
 def regenerate_hashes(corpus_dir: str, grounded_spec: int,
@@ -1187,6 +1226,7 @@ class Job:
             anchor_kind=ctx["anchor_kind"],
             bump_log=ctx["bump_log"], diff_file=ctx["diff_file"],
             knobs=knobs.out.strip(), probe=self.preflight_probe,
+            tested_facts=tested_facts(self.root),
             allowed="\n".join("- `%s`" % p for p in allowed_paths.ALLOWED))
         cmd = ([self.claude, "-p", "--restricted", "--strict-mcp-config",
                 "--max-turns", str(MAX_TURNS), "--tools", MODEL_TOOLS,

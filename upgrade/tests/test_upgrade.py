@@ -22,6 +22,8 @@ sys.path.insert(0, os.path.join(au.ROOT, "knowledge"))
 import atlas_kb as akb  # noqa: E402
 tg = au.tg
 
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
 SOURCES = "| Grounded at | Finney `spec_version` **%d** |\n"
 BASE, COMMIT = "b" * 40, "c" * 40
 
@@ -41,6 +43,14 @@ def make_tree(root, grounded):
           json.dumps({"grounded_spec": grounded,
                       "files": {"ground-truth.md": "x"}}))
     write(os.path.join(root, "livedata", "tests", "test_x.py"), "")
+    # The edit prompt lists the tested corpus facts from the live tree
+    # (change: kb-battery-honesty): copy the real sources of that list.
+    for rel in ("knowledge/benchmark/atlas_kb_battery.py",
+                "knowledge/benchmark/retrieval_eval.json",
+                "knowledge/polarity-rules.json"):
+        target = os.path.join(root, rel)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copy(os.path.join(REPO, rel), target)
 
 
 class FakeJob(au.Job):
@@ -1048,3 +1058,34 @@ class HelpersTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestedFactsPromptTest(Base):
+    """change: kb-battery-honesty. The edit session is told which corpus
+    facts the knowledge suite tests."""
+
+    def test_lists_every_tested_fact(self):
+        sys.path.insert(0, os.path.join(REPO, "knowledge", "benchmark"))
+        import atlas_kb_battery as kbb
+        text = au.tested_facts(REPO)
+        for exchange in kbb.battery():
+            if exchange["set"] in kbb.GROUNDED_SETS:
+                self.assertIn(exchange["tag"], text)
+                for group in exchange["expected"]:
+                    for alternate in group:
+                        self.assertIn('"%s"' % alternate, text)
+        with open(os.path.join(REPO, "knowledge", "benchmark",
+                               "retrieval_eval.json"),
+                  encoding="utf-8") as handle:
+            for item in json.load(handle)["queries"]:
+                self.assertIn('"%s"' % item["marker"], text)
+        self.assertIn("subnet-lock-not-recycled", text)
+
+    def test_prompt_carries_the_list(self):
+        job = self.job()
+        job.run_once()
+        prompts = [call[-1] for call in self.claude_calls(job)]
+        self.assertTrue(prompts)
+        self.assertIn("Facts the test suite checks", prompts[0])
+        self.assertIn("KB-EX-15", prompts[0])
+        self.assertNotIn("$tested_facts", prompts[0])
