@@ -28,4 +28,4 @@
 ## 5. Integration
 
 - [x] 5.1 Run every Python suite (the README loop), and once inside the upgrade job's bwrap sandbox with no network. Verify that all pass.
-- [ ] 5.2 Deploy per design Migration Plan, each step with operator approval. After activation, verify read-only on the Pi: `status` shows `index_version 2`; a `knowledge_search` call through the server for "How does staking work?" returns a `Staking` unit under 8 KB.
+- [x] 5.2 Deploy per design Migration Plan, each step with operator approval. After activation, verify read-only on the Pi: `status` shows `index_version 2`; a `knowledge_search` call through the server for "How does staking work?" returns a `Staking` unit under 8 KB.

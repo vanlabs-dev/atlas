@@ -1333,3 +1333,29 @@ subtensor `v486` tag and Finney reads at finalized blocks 9434494 and
   alpha (effective only with Yuma 3 in spec 486), childkeys and take,
   per-subnet alpha halving.
 - `SOURCES.md` and `hashes.json` name this repo as the only corpus source.
+
+## Knowledge retrieval and battery deploy (2026-11-05, audit WP13)
+
+OpenSpec changes `knowledge-retrieval` and `kb-battery-honesty` deployed
+at `ac46887`, battery markers re-pinned at `f203097`.
+- Knowledge run `20261104T222228Z-e2f945a6` active: 315 block units,
+  all confirmed, `index_version` 2. "How does staking work?" returns
+  Staking units in a 1,771-byte payload.
+- `~/.hermes/SOUL.md` set to the canon in `telegram/docs/voice.md`
+  (backup `SOUL.md.bak-wp13-20261105`); `voice_canon.py check` matches.
+- Retrieval benchmark `20261104T234207Z-87ed9994` **accepted**, battery
+  0.2.0 against that run: correct-with-evidence 1.0, tool-call-rate 1.0,
+  refusals-correct 1.0, fabrications 0. This closes the deferred
+  ATLAS-HERMES-003 retrieval criterion; the MV-RI-4 re-test passes (all
+  11 refusal exchanges answered from a live tool or refused).
+- `hermes -z` loads only the toolsets it is given. A first run with
+  `atlas-kb` alone had no live tools and is not the acceptance run; the
+  battery now names all four Atlas MCP servers.
+- Three markers named retired root-weight terms or missed a correct
+  paraphrase (KB-EX-8, KB-PA-4, KB-CF-4). They were widened from the
+  corpus wording and checked to reject the wrong claims. The rescore
+  read the same sessions; no model calls were added.
+- Grounding report, 30 days: 14 Bittensor-topic Telegram turns, 11
+  grounded, 3 ungrounded (all before the deploy).
+- Open for WP15: Telegram answers are correct but too long (operator,
+  2026-11-05).
