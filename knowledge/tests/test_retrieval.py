@@ -330,6 +330,16 @@ class QueryTests(unittest.TestCase):
         result = self.store.search("How does staking work?", 5)
         self.assertEqual(result["results"][0]["heading_path"], "Staking")
 
+    def test_unknown_word_does_not_empty_ranking(self):
+        # "pie" is in no unit: ranking must use the AND of the held terms,
+        # which finds the split; the OR pass alone ranks conviction first
+        result = self.store.search("subnet rewards share pie", 5)
+        self.assertIn("distribution split", result["results"][0]["content"])
+
+    def test_single_letters_are_dropped(self):
+        self.assertNotIn('"s"', srv.KnowledgeStore.build_terms(
+            "subnet's emission"))
+
     def test_all_stopwords_is_invalid(self):
         result = self.store.search("what is the", 5)
         self.assertEqual(result["error"]["category"], "invalid")

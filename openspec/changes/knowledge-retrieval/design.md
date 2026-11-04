@@ -85,7 +85,8 @@ Alternative considered: a standalone `reindex` command. Rejected because it is o
 - Expand `SN<n>` / `sn<n>` / `SN <n>` to the group `("subnet <n>" OR "netuid <n>" OR "sn<n>" OR "<n>")`. The bare number is needed because the corpus also lists netuids plainly ("82 and 103 off").
 - Drop stopwords plus question words: `work`, `happen`, `mean`, `explain`, `tell`, `give`, `show`, `please`, `go`, `get`, and their inflections. Keep domain words even when they are common English words (`take`, `stake`, `long`).
 - If nothing is left, return the existing `invalid` error.
-- Cap the query at 12 terms.
+- Cap the query at 12 terms. Drop single letters (`subnet's` tokenizes to `subnet` and `s`).
+- Before ranking, keep only the terms the index holds (one `MATCH ... LIMIT 1` per term, at most 12). A user word the corpus never uses ("pie", "handed") would otherwise empty the AND pass and leave ranking to the OR pass (found during the `kb-battery-honesty` apply).
 - Run the AND query first. If it returns fewer than k units, run the OR query and append unseen units.
 - Rank with `bm25(units_fts, 8.0, 1.0)`.
 - Porter stems both the index and the quoted query terms, so `halve` matches `halving` and `staking` matches `stake`.
