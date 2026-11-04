@@ -47,6 +47,39 @@ class AdapterHarness(unittest.TestCase):
                                 self.ledger, op, env=ENV, **kwargs)
 
 
+class SpacingTests(AdapterHarness):
+    def test_non_interactive_back_to_back_calls_wait_not_refuse(self):
+        # Vitals call stats then price at once; with a 1 s spacing the
+        # price call was refused whenever stats answered in under 1 s.
+        import time
+        self.config["providers"]["taoswap"]["quota"][
+            "min_spacing_seconds"] = 0.3
+        slept = []
+
+        def sleep(seconds):
+            slept.append(seconds)
+            time.sleep(seconds)
+
+        self.ledger = al.QuotaLedger(self.connection, self.config,
+                                     sleep=sleep)
+        first = self.run_op("network_stats_taoswap", interactive=False)
+        second = self.run_op("price_daily_taoswap", interactive=False)
+        self.assertEqual(first["status"], "ok", first)
+        self.assertEqual(second["status"], "ok", second)
+        self.assertEqual(len(slept), 1)
+
+    def test_interactive_calls_are_still_refused(self):
+        self.config["providers"]["taoswap"]["quota"][
+            "min_spacing_seconds"] = 30.0
+        slept = []
+        self.ledger = al.QuotaLedger(self.connection, self.config,
+                                     sleep=slept.append)
+        self.assertEqual(self.run_op("network_stats_taoswap")["status"], "ok")
+        second = self.run_op("price_daily_taoswap")
+        self.assertNotEqual(second["status"], "ok")
+        self.assertEqual(slept, [])
+
+
 class HappyPathTests(AdapterHarness):
     def test_every_operation_returns_the_full_envelope(self):
         extras = {

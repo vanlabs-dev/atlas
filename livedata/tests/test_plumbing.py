@@ -56,6 +56,46 @@ class LedgerTests(unittest.TestCase):
             self.assertIsNone(ledger.acquire("taostats", now=base + 65))
             connection.close()
 
+    def test_wait_spacing_sleeps_out_the_remainder(self):
+        # A scheduled pass makes back-to-back calls; a refusal there lost
+        # whole days of network vitals (audit A18, 2026-11-04).
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            config["providers"]["taoswap"]["quota"][
+                "min_spacing_seconds"] = 1.0
+            connection = al.open_store(config["db"])
+            slept = []
+            ledger = al.QuotaLedger(connection, config, sleep=slept.append)
+            base = 1_800_000_000.0
+            self.assertIsNone(ledger.acquire("taoswap", now=base))
+            refusal = ledger.acquire("taoswap", now=base + 0.9)
+            self.assertEqual(refusal["category"], "paced")
+            self.assertEqual(slept, [])
+            self.assertIsNone(ledger.acquire("taoswap", now=base + 0.9,
+                                             wait_spacing=True))
+            self.assertEqual(len(slept), 1)
+            self.assertAlmostEqual(slept[0], 0.1, places=6)
+            # outside the spacing window nothing sleeps
+            self.assertIsNone(ledger.acquire("taoswap", now=base + 5.0,
+                                             wait_spacing=True))
+            self.assertEqual(len(slept), 1)
+            connection.close()
+
+    def test_wait_spacing_does_not_wait_out_the_minute_cap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = make_config(tmp)
+            connection = al.open_store(config["db"])
+            slept = []
+            ledger = al.QuotaLedger(connection, config, sleep=slept.append)
+            base = 1_800_000_000.0
+            ledger.acquire("taostats", now=base)
+            ledger.acquire("taostats", now=base + 1)
+            refusal = ledger.acquire("taostats", now=base + 2,
+                                     wait_spacing=True)
+            self.assertEqual(refusal["category"], "paced")
+            self.assertEqual(slept, [])
+            connection.close()
+
     def test_window_budget_and_interactive_reserve(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = make_config(tmp)
