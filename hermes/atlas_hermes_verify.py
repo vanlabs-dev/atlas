@@ -39,6 +39,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import getpass
+import hashlib
 import json
 import os
 import re
@@ -114,6 +115,15 @@ MAX_CONFIG_BYTES = 262144
 MAX_LOG_BYTES_PER_FILE = 5 * 1024 * 1024
 MAX_LOG_FILES = 64
 MAX_SECRET_FINDINGS = 50
+
+# Seed-phrase rule: a run of this many consecutive BIP39 words on one line.
+# 12 is the shortest standard mnemonic.
+BIP39_WORDLIST = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              "bip39-english.txt")
+BIP39_WORDLIST_SHA256 = (
+    "2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda")
+SEED_PHRASE_MIN_WORDS = 12
+_SEED_TOKEN = re.compile(r"[A-Za-z]+")
 JOURNAL_LINES = "5000"
 _EXCERPT_CHARS = 200
 
@@ -137,9 +147,25 @@ _KV_LINE = re.compile(
 # secrets"). Detection runs on raw text; report excerpts are always redacted.
 # Extended with OAuth shapes for the X OAuth provider decision (Q7).
 _SECRET_DETECTORS: Tuple[Tuple[re.Pattern, str], ...] = (
-    (re.compile(r"(?i)\b(api[_-]?key|apikey|secret|token|passwd|password"
+    # The key may carry a prefix joined by "_" or "-" (TAOSTATS_API_KEY,
+    # x-api-key): "_" is a word character, so a plain \b misses it.
+    (re.compile(r"(?i)(?<![A-Za-z0-9])(?:[A-Za-z0-9]+[_-])*"
+                r"(api[_-]?key|apikey|secret|token|passwd|password"
                 r"|credential|authorization)\b\s*[\"']?\s*[:=]\s*[\"']?"
-                r"(?P<v>[^\s\"']{8,})"), "credential assignment"),
+                r"(?P<v>[^\s\"'()\[\]{}<>,;]{8,})"
+                r"(?![^\s\"'()\[\]{}<>,;]|[(\[])"), "credential assignment"),
+    # Telegram bot token, bare or inside an api.telegram.org/bot<token> URL
+    (re.compile(r"(?<![A-Za-z0-9])(?:bot)?(?P<v>\d{8,10}:"
+                r"[A-Za-z0-9_-]{35})(?![A-Za-z0-9_-])"),
+     "Telegram bot token shape"),
+    (re.compile(r"\b(?P<v>gh[pousr]_[A-Za-z0-9]{36,})"),
+     "GitHub token shape"),
+    (re.compile(r"\b(?P<v>github_pat_[A-Za-z0-9_]{22,})"),
+     "GitHub token shape"),
+    (re.compile(r"\b(?P<v>AKIA[0-9A-Z]{16})\b"), "AWS access key shape"),
+    (re.compile(r"\b(?P<v>xox[abprs]-[A-Za-z0-9-]{10,})"),
+     "Slack token shape"),
+    (re.compile(r"\b(?P<v>AIza[0-9A-Za-z_-]{35})"), "Google API key shape"),
     (re.compile(r"(?i)\bbearer\s+(?P<v>[A-Za-z0-9._~+/=-]{16,})"),
      "bearer token"),
     (re.compile(r"\b(?P<v>eyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{8,}"
@@ -149,6 +175,14 @@ _SECRET_DETECTORS: Tuple[Tuple[re.Pattern, str], ...] = (
     (re.compile(r"(?i)\b(access|refresh)[_-]?token\b\s*[\"']?\s*[:=]\s*"
                 r"[\"']?(?P<v>[^\s\"']{8,})"), "OAuth token field"),
 )
+
+# A PEM private key: the header plus a base64 body, on the same line (an
+# escaped "\\n" in JSON) or the next. A bare header is a test fixture or
+# documentation, not a key.
+_PEM_HEADER = re.compile(r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----")
+_PEM_BODY_SAME_LINE = re.compile(
+    r"PRIVATE KEY-----(?:\s|\\[rn])*[A-Za-z0-9+/=]{40,}")
+_PEM_BODY_LINE = re.compile(r"^\s*[A-Za-z0-9+/=]{40,}\s*$")
 
 _SYSTEMD_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
 
@@ -758,9 +792,57 @@ def _redacted_excerpt(line: str, span: Tuple[int, int]) -> str:
     return inv.redact(excerpt.strip())[:_EXCERPT_CHARS]
 
 
+def _load_bip39_words() -> frozenset:
+    """The BIP39 English wordlist (2048 words), shipped beside this module.
+    A missing or altered list raises: a scanner that silently lost its
+    seed-phrase rule would under-report."""
+    with open(BIP39_WORDLIST, "rb") as handle:
+        raw = handle.read()
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != BIP39_WORDLIST_SHA256:
+        raise RuntimeError("BIP39 wordlist %s has sha256 %s, expected %s"
+                           % (BIP39_WORDLIST, digest[:12],
+                              BIP39_WORDLIST_SHA256[:12]))
+    words = frozenset(raw.decode("ascii").split())
+    if len(words) != 2048:
+        raise RuntimeError("BIP39 wordlist holds %d words, expected 2048"
+                           % len(words))
+    return words
+
+
+_BIP39_WORDS: Optional[frozenset] = None
+
+
+def _seed_phrase_span(line: str) -> Optional[Tuple[int, int]]:
+    """Span of the first run of SEED_PHRASE_MIN_WORDS or more consecutive
+    BIP39 words on one line (whitespace, comma or quote separated), else
+    None. The run must be all lowercase: mnemonics are, prose rarely is."""
+    global _BIP39_WORDS
+    if _BIP39_WORDS is None:
+        _BIP39_WORDS = _load_bip39_words()
+    run_start = run_end = None
+    run = 0
+    for match in _SEED_TOKEN.finditer(line):
+        if match.group(0) in _BIP39_WORDS:
+            if run == 0:
+                run_start = match.start()
+            run += 1
+            run_end = match.end()
+            if run >= SEED_PHRASE_MIN_WORDS:
+                continue
+        else:
+            if run >= SEED_PHRASE_MIN_WORDS:
+                break
+            run = 0
+    if run >= SEED_PHRASE_MIN_WORDS:
+        return (run_start, run_end)
+    return None
+
+
 def _scan_for_secrets(text: str, origin: str,
                       findings: List[str]) -> None:
-    for number, line in enumerate(text.splitlines(), 1):
+    lines = text.splitlines()
+    for number, line in enumerate(lines, 1):
         if len(findings) >= MAX_SECRET_FINDINGS:
             findings.append("further matches suppressed after %d findings"
                             % MAX_SECRET_FINDINGS)
@@ -774,6 +856,21 @@ def _scan_for_secrets(text: str, origin: str,
                                 % (origin, number, label,
                                    _redacted_excerpt(line, span)))
                 break  # one finding per line is enough evidence
+        else:
+            header = _PEM_HEADER.search(line)
+            if header and (_PEM_BODY_SAME_LINE.search(line, header.start())
+                           or (number < len(lines)
+                               and _PEM_BODY_LINE.match(lines[number]))):
+                findings.append("%s:%d: %s — %s"
+                                % (origin, number, "PEM private key",
+                                   _redacted_excerpt(
+                                       line, (header.start(), len(line)))))
+                continue
+            span = _seed_phrase_span(line)
+            if span:
+                findings.append("%s:%d: %s — %s"
+                                % (origin, number, "seed phrase shape",
+                                   _redacted_excerpt(line, span)))
 
 
 def check_secret_free_logs(record: Dict[str, Any],
