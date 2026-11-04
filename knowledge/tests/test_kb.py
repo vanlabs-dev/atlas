@@ -38,6 +38,29 @@ class SplitterTests(unittest.TestCase):
             "June 2026 the model is price-based.")
         self.assertIn("November 2025 to June 2026", scope)
 
+    def test_iso_dates_are_temporal_scope(self):
+        # audit A19: ISO dates were never captured
+        scope = akb.extract_temporal_scope(
+            "Root lowered it on 2026-10-14. Ungated from 2026-07-16 to "
+            "2026-07-27; gated since 2026-07-27. Block 9,369,802.")
+        marks = scope.split("; ")
+        self.assertEqual(marks, ["2026-10-14",
+                                 "from 2026-07-16 to 2026-07-27",
+                                 "since 2026-07-27"])
+
+    def test_non_dates_are_not_temporal_scope(self):
+        self.assertIsNone(akb.extract_temporal_scope(
+            "spec 486, block 9369802, version 2026-13-40, id 2026-10-140"))
+
+    def test_real_corpus_units_carry_iso_scope(self):
+        corpus = akb.load_corpus()
+        text = corpus["files"]["ground-truth.md"]["text"]
+        scoped = [akb.extract_temporal_scope(unit["content"])
+                  for unit in akb.split_units("ground-truth.md", text)
+                  if "2026-10-14" in unit["content"]]
+        self.assertTrue(scoped)
+        self.assertTrue(all(scope and "2026-" in scope for scope in scoped))
+
     def test_preamble_unit(self):
         units = akb.split_units("x.md", "intro line\n\n## A\ncontent\n")
         self.assertEqual(units[0]["heading_path"], "(preamble)")
