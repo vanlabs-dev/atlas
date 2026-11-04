@@ -24,6 +24,8 @@ widened 2026-07-15 for rich TaoSwap surfaces):
                         cross-checks set ones
 - live_account        - TaoSwap ledger and transfers of one coldkey
 - live_events         - TaoSwap chain events, newest or for one block
+- live_chain_params   - network-wide watched chain parameters, latest stored
+                        hourly reading per item with block; no provider call
 - live_status         — integration health, per-provider quota, last calls
 
 Every success carries the full ATLAS-LIVE-003 metadata envelope; every
@@ -294,6 +296,20 @@ TOOLS: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "live_chain_params",
+        "description": (
+            "Network-wide chain parameters Atlas watches (emission gate "
+            "bar, subnet registration rules, conviction rates, childkey "
+            "rules, commit-reveal version, basket switches): the latest "
+            "value each hourly pass read from Finney storage, with its "
+            "block, read time and provenance (explicit = stored on chain; "
+            "assumed-default = not stored, the runtime default applies). "
+            "Makes NO provider calls. Cite the block. Per-subnet values "
+            "are in live_hyperparams."),
+        "inputSchema": {"type": "object", "properties": {},
+                        "additionalProperties": False},
+    },
+    {
         "name": "live_status",
         "description": (
             "Live-data integration health: recent health events (drift/"
@@ -503,6 +519,46 @@ class LiveTools:
             out["partial"] = True
             out["failed_parts"] = failed
         return out
+
+    def chain_params(self) -> Dict[str, Any]:
+        """Latest stored reading of every network-wide watched parameter
+        (change: kb-battery-honesty, WP13 option A). Read-only."""
+        config, connection, _ledger = self._context()
+        try:
+            watch = config.get("chain_params")
+            if not isinstance(watch, dict) or not watch.get("items"):
+                return structured_error(
+                    "unavailable", "no chain_params watch is configured",
+                    retry_safe=False)
+            items = [item for item in watch["items"]
+                     if item.get("source") in ("independent", "gate-poll")
+                     and "netuid" not in item]
+            params = []
+            for item in items:
+                row = connection.execute(
+                    "SELECT value, provenance, observed_at, block_number "
+                    "FROM chain_params WHERE item = ? ORDER BY id DESC "
+                    "LIMIT 1", (item["item"],)).fetchone()
+                entry: Dict[str, Any] = {"item": item["item"],
+                                         "governs": item.get("governs")}
+                if row is None:
+                    entry["status"] = "not-read-yet"
+                else:
+                    entry.update(status="ok", value=row[0],
+                                 provenance=row[1], observed_at=row[2],
+                                 block_number=row[3])
+                params.append(entry)
+            return {
+                "status": "ok",
+                "watch_enabled": bool(watch.get("enabled")),
+                "params": params,
+                "note": "Hourly readings from the local store, not a live "
+                        "call: cite each value's block and read time. "
+                        "Rates are in blocks; take values are u16 "
+                        "fractions of 65,535; stake is in rao.",
+            }
+        finally:
+            connection.close()
 
     def status(self) -> Dict[str, Any]:
         config, connection, ledger = self._context()
@@ -891,6 +947,8 @@ def handle_tool_call(tools: LiveTools, audit: AuditLog, name: str,
                     retry_safe=False)
             else:
                 payload = tools.hyperparams(netuid)
+        elif name == "live_chain_params":
+            payload = tools.chain_params()
         elif name == "live_status":
             payload = tools.status()
         else:

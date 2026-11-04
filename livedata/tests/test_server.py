@@ -72,10 +72,43 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(
             sorted(tool["name"] for tool in payloads[2]["tools"]),
             ["live_account", "live_burn_leaderboard", "live_chain_head",
+             "live_chain_params",
              "live_events", "live_hyperparams", "live_metagraph",
              "live_network_stats",
              "live_portfolio", "live_price", "live_status", "live_subnets",
              "live_validators"])
+
+    def test_chain_params_reads_the_store_only(self):
+        payloads = call_server(self.config_path,
+                               [tool_call(1, "live_chain_params")])
+        self.assertEqual(payloads[1]["error"]["category"], "unavailable")
+        config = dict(self.config)
+        config["chain_params"] = al.load_config()["chain_params"]
+        os.makedirs(os.path.join(self.tmp.name, "cp"), exist_ok=True)
+        config_path = write_config(os.path.join(self.tmp.name, "cp"),
+                                   config)
+        db = al.open_store(self.config["db"])
+        try:
+            db.execute("INSERT INTO chain_params (item, value, provenance, "
+                       "observed_at, block_number) VALUES ('MaturityRate', "
+                       "'311622', 'explicit', '2026-11-05T00:00:00+00:00', "
+                       "9434521)")
+            db.commit()
+        finally:
+            db.close()
+        before = len(self.fixture.requests) if hasattr(
+            self.fixture, "requests") else None
+        payloads = call_server(config_path,
+                               [tool_call(1, "live_chain_params")])
+        result = payloads[1]
+        self.assertEqual(result["status"], "ok")
+        by_item = {p["item"]: p for p in result["params"]}
+        self.assertEqual(by_item["MaturityRate"]["value"], "311622")
+        self.assertEqual(by_item["MaturityRate"]["block_number"], 9434521)
+        self.assertEqual(by_item["UnlockRate"]["status"], "not-read-yet")
+        self.assertNotIn("SubnetEmissionEnabled", by_item)
+        if before is not None:
+            self.assertEqual(len(self.fixture.requests), before)
 
     def test_price_two_providers_no_taostats(self):
         before = self.fixture.count("/api/price/latest/v1")

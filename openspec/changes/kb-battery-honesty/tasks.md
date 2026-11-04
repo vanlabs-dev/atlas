@@ -36,6 +36,12 @@
 - [x] 4.1 Add the mechanism-claim rule to `telegram/docs/voice.md` next to the numeric rule (design 6). Verify that any voice-canon tests still pass, and that the device-match check (read-only) reports a mismatch against the current Pi SOUL.md before deploy.
 - [x] 4.2 `knowledge/benchmark/atlas_kb_usage.py report --days N` (design 7). Verify with a test on a synthetic `state.db`: correct grounded and ungrounded counts, `mode=ro`, and no message text in the output. Then run it read-only against a copy of the Pi store for the last 30 days, and record the baseline counts in the change notes.
 
+## 4b. Corpus-stated chain values (operator decisions A and 3A)
+
+- [x] 4.3 Declare the nine values in `CHAIN_READS` with `EXPECTED_DEFAULTS` from live metadata and add them to `KNOB_ITEMS`. Verified: `test_corpus_stated_plain_values_are_read` fails on the old code; `atlas_probe.py check` ok at spec 486; `read-knobs` returns all nine.
+- [x] 4.4 Add them to the `chain_params` watch (`livedata/config.json`) with `governs` text in both configs. Verified: livedata and telegram suites pass.
+- [x] 4.5 `live_chain_params` tool. Verified: server test (unavailable without a watch; stored value, block and `not-read-yet`; no per-subnet map item).
+
 ## 5. Integration and deploy
 
 - [x] 5.1 Run every Python suite, and once in bwrap with no network. Verify that all pass.

@@ -161,6 +161,78 @@
         "codec": "u64",
         "default": 7200,
         "governs": "minimum blocks between two subnet registrations. 14,400 (2 days) at 2026-10-14. Default is the spec 478 runtime constant (1 day)."
+      },
+      {
+        "item": "MaturityRate",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf0555fee4fedba075f0cd6daea164181ed3cb",
+        "codec": "u64",
+        "default": 934866,
+        "governs": "conviction maturity time constant tau in blocks (half-life = tau x ln 2). Explicit 311,622 at 2026-11-05 (30-day half-life); code default 934,866 (90 days). The corpus states the live value."
+      },
+      {
+        "item": "UnlockRate",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf05554c758f6a2be5bef862df918db3e8cadb",
+        "codec": "u64",
+        "default": 934866,
+        "governs": "conviction unlock time constant tau in blocks for a decaying lock. Unset at 2026-11-05, so the code default 934,866 (90-day half-life) applies."
+      },
+      {
+        "item": "StakeThreshold",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf0555782d99ebaa64a1ba18b3e8cda1047327",
+        "codec": "u64",
+        "default": 0,
+        "governs": "minimum total stake (rao) a parent hotkey needs to set or keep childkeys, unless it is the subnet owner hotkey. 1,000 TAO at 2026-11-05."
+      },
+      {
+        "item": "PendingChildKeyCooldown",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf0555503e4fe5f139cae8b9d045e82e1c83a2",
+        "codec": "u64",
+        "default": 7200,
+        "governs": "blocks a childkey change waits before it applies. 7,200 (about 1 day) at 2026-11-05."
+      },
+      {
+        "item": "MaxChildkeyTake",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf0555dba018859cab7e989f77669457b394be",
+        "codec": "u16",
+        "default": 11796,
+        "governs": "maximum childkey take as a u16 fraction of 65,535. Unset at 2026-11-05: code default 11,796 (18%)."
+      },
+      {
+        "item": "MinChildkeyTake",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf0555f14f14d903e9994045ff1902b3e513dc",
+        "codec": "u16",
+        "default": 0,
+        "governs": "minimum childkey take as a u16 fraction of 65,535 (a per-subnet floor can raise it). Unset at 2026-11-05: 0."
+      },
+      {
+        "item": "TxChildkeyTakeRateLimit",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf05551684e004c1990c7884dd94647ee74705",
+        "codec": "u64",
+        "default": 216000,
+        "governs": "blocks between two childkey take increases (decreases are free). Unset at 2026-11-05: code default 216,000 (about 30 days)."
+      },
+      {
+        "item": "CKBurn",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf05551581e6f1d9b162dd3e2b0f2fee9c6bd0",
+        "codec": "u64",
+        "default": 0,
+        "governs": "share of a parent's childkey dividends recycled before the parent is paid. 0 at 2026-11-05."
+      },
+      {
+        "item": "CommitRevealWeightsVersion",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf055570d1da21926e4e8efdfb497ee508d611",
+        "codec": "u16",
+        "default": 4,
+        "governs": "global timelocked commit-reveal format version; a commit with another version fails. Unset at 2026-11-05: code default 4."
       }
     ]
   },

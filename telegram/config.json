@@ -122,7 +122,16 @@
         "CollateralLockShare": "The share of a miner's registration price that is staked and locked as collateral instead of burned. The lock is released only as the hotkey earns emission on that subnet. At 0% the whole price is burned.",
         "NetworkImmunityPeriod": "How long a newly registered subnet cannot be deregistered. After it, the subnet can be pruned when a new one registers",
         "NetworkLockReductionInterval": "How fast the subnet registration price falls. It doubles at each registration, halves over one interval, and reaches the floor after two",
-        "NetworkRateLimit": "The minimum gap between two subnet registrations"
+        "NetworkRateLimit": "The minimum gap between two subnet registrations",
+        "MaturityRate": "Conviction maturity time constant tau in blocks (half-life = tau x ln 2). Explicit 311,622 at 2026-11-05 (30-day half-life); code default 934,866 (90 days). The corpus states the live value.",
+        "UnlockRate": "Conviction unlock time constant tau in blocks for a decaying lock. Unset at 2026-11-05, so the code default 934,866 (90-day half-life) applies.",
+        "StakeThreshold": "Minimum total stake (rao) a parent hotkey needs to set or keep childkeys, unless it is the subnet owner hotkey. 1,000 TAO at 2026-11-05.",
+        "PendingChildKeyCooldown": "Blocks a childkey change waits before it applies. 7,200 (about 1 day) at 2026-11-05.",
+        "MaxChildkeyTake": "Maximum childkey take as a u16 fraction of 65,535. Unset at 2026-11-05: code default 11,796 (18%).",
+        "MinChildkeyTake": "Minimum childkey take as a u16 fraction of 65,535 (a per-subnet floor can raise it). Unset at 2026-11-05: 0.",
+        "TxChildkeyTakeRateLimit": "Blocks between two childkey take increases (decreases are free). Unset at 2026-11-05: code default 216,000 (about 30 days).",
+        "CKBurn": "Share of a parent's childkey dividends recycled before the parent is paid. 0 at 2026-11-05.",
+        "CommitRevealWeightsVersion": "Global timelocked commit-reveal format version; a commit with another version fails. Unset at 2026-11-05: code default 4."
       },
       "display": {
         "_comment": "Plain labels and units for chain-parameter alerts (change: registration-knob-watch). unit blocks renders block counts as days at 7,200 blocks a day.",
