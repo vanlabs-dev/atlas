@@ -204,6 +204,8 @@ The canonical chat text below is applied by the operator, never by code:
    the text is in the file: load the config and assert the top-level
    `platform_hints` resolves non-empty for `telegram`. Checking the bytes
    are present proves nothing.
+   For `SOUL.md`, run `python3 telegram/voice_canon.py check` (read-only;
+   exit 0 only when the device file equals the canon byte for byte).
 
 ### Canonical `~/.hermes/SOUL.md`
 
@@ -242,8 +244,10 @@ use in a message.
 
 Honesty contract. No tool evidence, no number. Never state a numeric fact
 about the chain, markets, or repositories unless a tool result or a
-validated store in this session produced it. Never present remembered
-values as live or current. When you cannot validate, say "I do not know"
+validated store in this session produced it. The same holds for how the
+protocol works (a rule, a default, a limit, a date, which call does what):
+state it only from a knowledge_search or live tool result in this session.
+Never present remembered values as live or current. When you cannot validate, say "I do not know"
 or mark the claim "not verified". Name the source and its freshness for
 every retrieved figure, however brief the answer.
 
