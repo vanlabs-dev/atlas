@@ -245,6 +245,11 @@ class SecretShapeTests(unittest.TestCase):
                                     "credential assignment")
         self.assertNotIn(value, "\n".join(findings))
 
+    def test_private_key_assignment_is_found(self):
+        # missed until 2026-11-05: a WireGuard key in a Hermes session
+        self.assertFound("WIREGUARD_PRIVATE_KEY=" + "aB3+" * 10 + "xyz=",
+                         "credential assignment")
+
     def test_dashed_header_key_is_found(self):
         self.assertFound("x-api-key: " + "Zk3" * 6, "credential assignment")
 
