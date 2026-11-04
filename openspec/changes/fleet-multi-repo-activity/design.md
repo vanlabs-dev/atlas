@@ -89,6 +89,11 @@ repositories; an authenticated GitHub token; org-only identities.
 - Signals do not read activity directly; they reach it only through
   `report()`. subnt's `SUM(c7 > 0)` reads the single column directly; its
   publisher timer is masked, so it is left as is.
+- Live check from the workstation (2026-11-04): chutesai lists 7 eligible
+  repositories (2 API calls); `sek8s` and `epigenesis` cloned in 1.8 s,
+  75 KB and 6 KB. GitHub put one annotated-tag object (`v0.2.0`) in the
+  `sek8s` pack although `--no-tags` was set. No tag ref is written and the
+  object holds no tree or file, so it is left as is.
 - Readers tolerate an unmigrated store (read-only MCP or export before the
   first new pass): the combined columns read as null.
 
