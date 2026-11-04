@@ -51,6 +51,18 @@ Why a test and not a job step:
 
 Trade-off: a legitimate corpus change that retires a battery fact blocks the job until the operator re-baselines the battery. That is the intended per-spec re-baseline (audit A8).
 
+Measured fit with the `knowledge-retrieval` design (prototype `battery_fit.py`, current battery, corpus at `e95a369` plus fixes): 23 of 25 grounded exchanges are satisfied by the top 5 blocks, and k = 8 changes nothing. The two misses:
+- KB-CF-5's markers are not in the corpus. The re-baseline fixes this.
+- KB-PA-4 ("kicked off the network") is a paraphrase the corpus has no words for. The fix is corpus wording (name the common terms "deregistered, pruned, removed" in the Subnets dissolution line), not a larger k, because a user's search fails the same way.
+
+So k stays 5, and the check uses search results only, not section context.
+
+**8. The edit session is told which facts are tested.**
+- `upgrade/prompt.md` (operator code, outside the job's edit scope) gains a `$tested_facts` block.
+- That block lists, per grounded battery exchange and per retrieval-evaluation query, the expected marker text. It is generated at run time from the battery module and `retrieval_eval.json`.
+- The instruction: keep these facts retrievable unless the `v<live>` source changes them. If the source changes one, say so in the decision record; the run then blocks on the knowledge suite for the operator to re-baseline.
+- Without this, the first upgrade that rewords a tested sentence fails the test gate on every attempt, with no hint why.
+
 **5. Runner toolset.**
 - Run with the production Atlas set, so the battery measures what Telegram users get.
 - The scorer's tool-call evidence for grounded sets stays "a knowledge tool was called".
