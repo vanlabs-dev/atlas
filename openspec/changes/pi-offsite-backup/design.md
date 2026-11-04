@@ -63,7 +63,11 @@ The project is standard-library Python only. Units are user-level, as
 
 5. **Retention `forget --keep-daily 3 --prune` every run.** The
    repository is small, so a nightly prune is cheap. `restic check`
-   (metadata only) runs after prune.
+   (metadata only) runs after prune. Snapshots are grouped by
+   `host,tags`, not the default `host,paths`, so a change in which
+   include roots exist does not leave an old group unpruned (found in
+   the Pi test with real restic, 2026-11-04). Until 3 days exist, restic
+   0.18 also keeps the oldest snapshot as a filler.
 
 6. **Drive remote: `scope=drive.file`, `use_trash=false`.** `drive.file`
    limits the token to files rclone created. Without `use_trash=false`,

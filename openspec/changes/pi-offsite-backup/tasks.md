@@ -18,7 +18,7 @@
 
 ## 4. Pi setup (operator approval for each step)
 
-- [ ] 4.1 Operator installs `restic` and `rclone`. Verify: `restic version`, `rclone version` on the Pi.
+- [x] 4.1 Operator installs `restic` and `rclone`. Verify: `restic version`, `rclone version` on the Pi.
 - [ ] 4.2 Create rclone remote `gdrive` with `scope=drive.file`, `use_trash=false` through a guided authorize step; nothing printed. Verify: `rclone lsd gdrive:` succeeds; `rclone config show gdrive` checked for scope and trash without printing the token.
 - [ ] 4.3 Generate `~/.config/atlas-backup/restic-password` (mode 600) on the Pi without printing it; operator copies it to a password manager; `restic init` at `rclone:gdrive:atlas-backup`. Verify: `restic cat config` succeeds.
 - [ ] 4.4 Push, Pi `git pull` (state the commits pulled), install the units, run `atlas-backup.service` once by hand, enable the timer. Verify: unit exit 0, `last.json` present, `systemctl --user list-timers` shows the next run.
