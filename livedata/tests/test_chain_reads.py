@@ -105,6 +105,29 @@ class ChainReadCoverageTest(unittest.TestCase):
                           al.CHAIN_READS)
             self.assertEqual(al.KNOB_ITEMS[name], "u64")
 
+    def test_corpus_stated_plain_values_are_read(self):
+        # audit WP13: every plain value the corpus states as live is a
+        # declared read with a pinned default, and read-knobs reads it.
+        expected = {"MaturityRate": ("u64", "d2430e0000000000"),
+                    "UnlockRate": ("u64", "d2430e0000000000"),
+                    "StakeThreshold": ("u64", "0000000000000000"),
+                    "PendingChildKeyCooldown": ("u64", "201c000000000000"),
+                    "MaxChildkeyTake": ("PerU16", "142e"),
+                    "MinChildkeyTake": ("PerU16", "0000"),
+                    "TxChildkeyTakeRateLimit": ("u64", "c04b030000000000"),
+                    "CKBurn": ("u64", "0000000000000000"),
+                    "CommitRevealWeightsVersion": ("u16", "0400")}
+        for name, (type_name, default) in expected.items():
+            self.assertIn(al.ChainRead(al.SUBTENSOR_PALLET, name, (),
+                                       type_name), al.CHAIN_READS, name)
+            self.assertEqual(al.EXPECTED_DEFAULTS[(al.SUBTENSOR_PALLET,
+                                                   name)], default, name)
+            self.assertIn(name, al.KNOB_ITEMS)
+            raw = "0x" + default
+            self.assertEqual(al.decode_by_codec(al.KNOB_ITEMS[name], raw),
+                             int.from_bytes(bytes.fromhex(default),
+                                            "little"), name)
+
     def test_every_table_driven_read_is_declared(self):
         # Dynamic call sites take their items from these tables.
         config = al.load_config()
