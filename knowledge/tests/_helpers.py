@@ -92,7 +92,7 @@ def green_grounded_answer(exchange):
 
 
 def make_session_store(path, overrides=None, skip_tags=(),
-                       drop_tool_for=()):
+                       drop_tool_for=(), live_tool_for=()):
     """Fixture Hermes state.db containing green benchmark exchanges."""
     overrides = overrides or {}
     connection = sqlite3.connect(path)
@@ -117,6 +117,10 @@ def make_session_store(path, overrides=None, skip_tags=(),
                              '{"status": "ok"}',
                              "mcp__atlas_kb__knowledge_search",
                              start + 1.0))
+            if tag in live_tool_for:
+                rows.append((session_id, "tool", '{"status": "ok"}',
+                             "mcp__atlas_live__live_chain_head",
+                             start + 1.5))
             if tag in overrides:
                 answer = overrides[tag]
             elif exchange["set"] in kbb.GROUNDED_SETS:

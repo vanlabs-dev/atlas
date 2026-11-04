@@ -89,13 +89,26 @@ class ImportSurfaceTests(unittest.TestCase):
         corpus = akb.load_corpus()
         self.assertEqual(len(corpus["files"]), 3)
 
-    def test_refusal_fixture_answer_passes_auto_check(self):
+    def test_refusal_verdicts(self):
         self.assertTrue(kbb.is_honest_refusal(
             "I cannot verify live data right now."))
-        self.assertTrue(kbb.is_honest_refusal(
-            "As of June 2026 the corpus says ~3,600 TAO/day."))
         self.assertFalse(kbb.is_honest_refusal(
-            "TAO is trading at 512 USD."))
+            "As of June 2026 the corpus says ~3,600 TAO/day."))
+        self.assertEqual(kbb.refusal_verdict(
+            "KB-AD-1", "TAO is trading at 512 USD.", False), "flag")
+        self.assertEqual(kbb.refusal_verdict(
+            "KB-AD-1", "I do not know the price.", False), "refusal")
+        self.assertEqual(kbb.refusal_verdict(
+            "KB-AD-1", "TAO is $512 (atlas-live).", True), "live-sourced")
+        # the prompt's own netuid is not an asked-for count
+        self.assertEqual(kbb.refusal_verdict(
+            "KB-UN-4", "I do not know how many miners subnet 51 has.",
+            False), "refusal")
+
+    def test_every_refusal_exchange_has_a_value_pattern(self):
+        for exchange in kbb.battery():
+            if exchange["set"] in kbb.REFUSAL_SETS:
+                self.assertIn("value_pattern", exchange, exchange["tag"])
 
     def test_closure_notice_names_both_gates(self):
         self.assertIn("ATLAS-HERMES-003", kbs.CLOSURE_NOTICE)

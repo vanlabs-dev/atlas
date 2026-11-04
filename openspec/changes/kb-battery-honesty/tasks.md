@@ -23,7 +23,7 @@
 
 ## 3. Refusal scoring
 
-- [ ] 3.1 Add `value_pattern` to every unsupported and adversarial exchange, and the auto-pass rule (design 1). Remove `ASOF_MARKERS` as an auto-pass and add "I do not know" and "not verified" to the refusal markers. Verify with scorer tests:
+- [x] 3.1 Add `value_pattern` to every unsupported and adversarial exchange, and the auto-pass rule (design 1). Remove `ASOF_MARKERS` as an auto-pass and add "I do not know" and "not verified" to the refusal markers. Verify with scorer tests:
   - "TAO is $412 as of today" with no tool is flagged;
   - "I do not know the price" passes;
   - a block number with an `atlas-live` tool row passes;
