@@ -1,3 +1,16 @@
+## ADDED Requirements
+
+### Requirement: The edit session knows the tested corpus facts
+The edit session's prompt SHALL list every corpus fact the knowledge suite
+tests (battery marker groups and retrieval evaluation markers), generated
+at run time, with the instruction to keep them retrievable unless the live
+release's source changes them.
+
+#### Scenario: Prompt lists tested facts
+- **WHEN** the job builds the edit-session prompt
+- **THEN** the prompt contains every grounded battery marker group and
+  every retrieval evaluation marker
+
 ## MODIFIED Requirements
 
 ### Requirement: Nothing reaches main unless every gate passes
