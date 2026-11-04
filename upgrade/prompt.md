@@ -59,6 +59,17 @@ Follow the re-sync rules in `knowledge/corpus/SOURCES.md`:
    item Atlas reads in a way the probe cannot see, say so in your final
    message for the operator.
 
+## Facts the test suite checks
+
+The knowledge suite runs before the push and fails if any of these is no
+longer true of the corpus. Keep each one retrievable. Change one only when
+the spec $live_spec source changes the fact itself; then say which, and
+why, in your final message, because the operator must update the test.
+
+```
+$tested_facts
+```
+
 Do not edit `knowledge/corpus/hashes.json`: the job regenerates it.
 Do not create, rename or delete files: only edit existing ones.
 

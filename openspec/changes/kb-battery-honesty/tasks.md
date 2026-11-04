@@ -19,7 +19,7 @@
 
   Verify that the pin test passes and `tags_by_set` counts match the README and the threshold sheet rationale.
 - [x] 2.2 Pre-activation retrieval check (design 4): a test ingests and activates the real corpus, searches each grounded prompt with 5 results, and asserts the markers. Add the dissolution synonyms to the corpus for KB-PA-4. Verify that all grounded exchanges pass (baseline before the re-baseline: 23 of 25), and that the test fails when one fact line is removed from a temp copy of the corpus.
-- [ ] 2.3 Tested facts in the edit prompt (design 8): add `$tested_facts` to `upgrade/prompt.md`, generated from the battery and `retrieval_eval.json`. Verify with an upgrade test that the substituted prompt lists every grounded marker group and every evaluation marker.
+- [x] 2.3 Tested facts in the edit prompt (design 8): add `$tested_facts` to `upgrade/prompt.md`, generated from the battery and `retrieval_eval.json`. Verify with an upgrade test that the substituted prompt lists every grounded marker group and every evaluation marker.
 
 ## 3. Refusal scoring
 
