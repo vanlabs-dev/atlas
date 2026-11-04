@@ -29,3 +29,7 @@
 - [ ] 5.2 After the second nightly run, measure `restic stats --mode raw-data` and the Drive usage. Verify: numbers recorded; 3 days fits in 10 GB with headroom, else report to the operator.
 - [ ] 5.3 Add a `docs/decisions.md` entry: backup set, 3-day retention (operator choice), Drive with `drive.file` and trash off, restore check result, measured sizes, password location and that the in-backup copy is not a recovery copy. Verify: entry committed.
 - [ ] 5.4 With operator approval, delete the old `.bak` stores and the 2026-09-09 copy on the Pi. Verify: `du` shows about 2.8 GB freed.
+
+## Paused 2026-11-04 (operator decision)
+
+The first run failed: rclone's shared Google OAuth client is rate-limited (403 `RATE_LIMIT_EXCEEDED`, 2.5 min per small read). An own Google Cloud client was too much setup, and the workstation is not on at fixed times, so it is no target either. Units removed from the Pi, rclone remote deleted, timer never enabled. Code stays in the repo, not installed. Resume with a destination that needs no browser sign-in; the repository URL in `atlas-backup.service` is the only change needed.
