@@ -4,7 +4,7 @@
   "coverage_date": "2026-11-05",
   "grounded_spec": 486,
   "files": {
-    "ground-truth.md": "9162cd36321cca353d74c50fd353d81ecc44a59bf63634484ad58c5b216a3723",
+    "ground-truth.md": "e4cedbcc2a851de2f2f2a603062a8d67851d1d1fe63d5b4ab3ad4e125fef0eb9",
     "fact-patterns.md": "0eae62e93a8f0d5ea524a9fb5075e76c8e84b6c3bb17bd3e8653eb0067230559",
     "negative-claim-rules.md": "7b008af1b1cfe2441b520d2b66164dd5b0ba85c1fca71456c5466872727330de"
   },

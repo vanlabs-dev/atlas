@@ -33,8 +33,9 @@ Verified 2026-11-05 against Finney RPC, workstation reads (audit WP13):
   immunity and pruning; commit-reveal, bonds, Yuma 3 and liquid alpha;
   childkeys and take; per-subnet alpha halving; subnet lock and UID
   registration TAO destination; emit-to set normalization; conviction
-  rates as time constants. dTAO launch date 2025-02-13 from the subtensor
-  `v2.0.0 DTAO` GitHub release.
+  rates as time constants. dTAO first block 4920351 (docs) at 2025-02-13
+  21:41:24 UTC, from that block's `timestamp.set` inherent (block hash
+  `0x31a7917b1773378fa5706dc24e244efe4212be186441497c8a3f031f374a9efd`).
 
 
 Verified 2026-10-27 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
