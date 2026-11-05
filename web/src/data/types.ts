@@ -84,7 +84,7 @@ export interface Fleet {
   activity: SubnetActivity[];
 }
 
-// Network pulse: daily vitals, the emission gate, root rotation, chain params.
+// Network pulse: daily vitals, the emission gate, gate crossings, emission share, chain params.
 export interface Vitals {
   date: string;
   totalStakedTao: number | null;
@@ -104,12 +104,25 @@ export interface Gate {
   barMode: string | null;
 }
 
-export interface RotationEvent {
+/** A subnet's demand share crossing the emission gate bar. */
+export interface GateCrossing {
   observedAt: Iso;
   netuid: number;
+  /** "rose-above" or "fell-below". */
   direction: string;
-  newShare: number | null;
-  validatorCount: number | null;
+  /** The subnet's demand share at the crossing, 0 to 1. */
+  share: number | null;
+  /** The bar at the crossing, 0 to 1. */
+  theta: number | null;
+  /** "reversed" when the subnet crossed back within the durability window. */
+  eligibility: string | null;
+}
+
+/** A subnet's share of emission now and about 30 days earlier, in percent. */
+export interface EmissionShare {
+  netuid: number;
+  pct: number | null;
+  pctThen: number | null;
 }
 
 export interface ParamEvent {
@@ -123,7 +136,10 @@ export interface ParamEvent {
 export interface Network {
   vitals: Vitals[];
   gate: Gate | null;
-  rotations: RotationEvent[];
+  crossings: GateCrossing[];
+  emission: EmissionShare[];
+  /** When the "then" emission reading was taken. */
+  emissionSince: Iso | null;
   params: ParamEvent[];
 }
 

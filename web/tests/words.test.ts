@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { APART_AT, COLD, gapText, lastCommitText, whyText } from "../src/lib/fleet.ts";
 import { mean, num, pct, signed } from "../src/lib/format.ts";
-import { BAR_MODE, paramRows, seriesTitle, usd } from "../src/lib/network.ts";
+import { BAR_MODE, CROSSING, emissionMovers, paramRows, seriesTitle, usd } from "../src/lib/network.ts";
 
 const p = (item: string, prevValue: string | null, newValue: string | null) => ({ item, prevValue, newValue, observedAt: "2026-11-01T00:00:00Z", block: 1 });
 
@@ -73,4 +73,20 @@ test("sparse readings are not called daily", () => {
 test("dollars are whole, not false cents", () => {
   assert.equal(usd(257.2), "$257");
   assert.equal(usd(null), "-");
+});
+
+test("emission movers rank by points and skip flat or missing rows", () => {
+  const { up, down } = emissionMovers(
+    [
+      { netuid: 51, pct: 16.2, pctThen: 12.4 },
+      { netuid: 28, pct: 4, pctThen: 2.2 },
+      { netuid: 38, pct: 0.2, pctThen: 2.4 },
+      { netuid: 7, pct: 1, pctThen: 1 },
+      { netuid: 9, pct: null, pctThen: 1 },
+    ],
+    1,
+  );
+  assert.deepEqual(up.map((m) => m.netuid), [51]);
+  assert.deepEqual(down.map((m) => m.netuid), [38]);
+  assert.equal(CROSSING["fell-below"], "Fell below the bar");
 });

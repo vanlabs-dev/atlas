@@ -5,7 +5,7 @@ import { BarChart } from "@/components/boards/bar-chart";
 import { getMining } from "@/data/mining";
 import { getNetwork } from "@/data/network";
 import { day, num, polarity, signed } from "@/lib/format";
-import { BAR_MODE, paramRows, seriesTitle, usd } from "@/lib/network";
+import { BAR_MODE, CROSSING, emissionMovers, type Mover, paramRows, seriesTitle, usd } from "@/lib/network";
 
 export const metadata: Metadata = { title: "Network pulse" };
 
@@ -16,7 +16,7 @@ const tdWrap = td.replace("whitespace-nowrap", "whitespace-normal");
 export default async function NetworkPage() {
   const [{ generatedAt, data }, mining] = await Promise.all([getNetwork(), getMining()]);
   const names = new Map(mining.data.map((m) => [m.netuid, m.name]));
-  const { vitals, gate, rotations, params } = data;
+  const { vitals, gate, crossings, emission, emissionSince, params } = data;
   const first = vitals[0] ?? null;
   const last = vitals[vitals.length - 1] ?? null;
   const since = first ? day(first.date) : "-";
@@ -36,7 +36,26 @@ export default async function NetworkPage() {
     { label: "TAO in USD", value: usd(last?.taoUsd ?? null), d: delta(first?.taoUsd, last?.taoUsd), digits: 0, unit: "" },
   ];
   const shownParams = paramRows(params).slice(0, SHOWN);
-  const lastRotation = rotations[0] ?? null;
+  const movers = emissionMovers(emission, 5);
+  const nameOf = (n: number) => names.get(n) ?? "unnamed";
+  const moverList = (title: string, list: Mover[]) => (
+    <div className="min-w-0">
+      <h3 className="text-body text-ink-2">{title}</h3>
+      <ul className="mt-4">
+        {list.map((m) => (
+          <li key={m.netuid} className="flex items-baseline justify-between gap-4 border-t border-rule py-4">
+            <div className="min-w-0">
+              <div>{nameOf(m.netuid)}</div>
+              <div className="num text-small text-ink-3">
+                SN {m.netuid} · {num(m.then, 2)}% to {num(m.now, 2)}%
+              </div>
+            </div>
+            <div className={`num text-lead ${polarity(m.change)}`}>{signed(m.change, 2, " pt")}</div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 
   return (
     <>
@@ -93,6 +112,24 @@ export default async function NetworkPage() {
         </Panel>
       </div>
 
+      <section aria-labelledby="emission-title" className="mt-[clamp(72px,9vw,120px)]">
+        <h2 id="emission-title" className="font-display text-sub leading-none">
+          Emission share, last 30 days
+        </h2>
+        <p className="mt-4 max-w-[60ch] text-body text-ink-2">
+          Each subnet&apos;s share of all new emission, {emissionSince ? day(emissionSince) : "-"} against {day(generatedAt)}. Shares add up to
+          100%, so one subnet&apos;s gain is spread as losses across the rest.
+        </p>
+        {movers.up.length || movers.down.length ? (
+          <div className="mt-8 grid gap-12 lg:grid-cols-2">
+            {moverList("Gained most", movers.up)}
+            {moverList("Lost most", movers.down)}
+          </div>
+        ) : (
+          <p className="mt-8 text-ink-2">No emission readings 30 days apart yet.</p>
+        )}
+      </section>
+
       <div className="mt-[clamp(72px,9vw,120px)] grid gap-16 lg:grid-cols-[8fr_4fr] lg:gap-12">
         <section aria-labelledby="params-title" className="min-w-0">
           <h2 id="params-title" className="font-display text-sub leading-none">
@@ -135,17 +172,30 @@ export default async function NetworkPage() {
           </div>
           <p className="mt-4 text-small text-ink-3">The {shownParams.length} most recently changed settings.</p>
         </section>
-        <section aria-labelledby="rotation-title" className="min-w-0">
-          <h2 id="rotation-title" className="font-display text-sub leading-none">
-            Root rotation, retired
+        <section aria-labelledby="crossings-title" className="min-w-0">
+          <h2 id="crossings-title" className="font-display text-sub leading-none">
+            Gate crossings
           </h2>
           <p className="mt-4 text-body text-ink-2">
-            Root validators used to set weights that steered root dividends between subnets. Runtime spec 464 switched that off on 17 Sept,
-            and spec 469 removed it on 22 Sept. Root dividends now stay on the subnet they arrive on, so there is no rotation left to read.
+            Subnets whose demand share crossed the emission bar. Below the bar, a subnet earns no emission while the gate is on.
           </p>
-          <p className="mt-4 text-small text-ink-3">
-            {lastRotation ? `Atlas stopped recording it after ${day(lastRotation.observedAt)}. Older entries stay in the store.` : "No entries recorded."}
-          </p>
+          <ul className="mt-8">
+            {crossings.map((c, i) => (
+              <li key={i} className="border-t border-rule py-4">
+                <div className="flex items-baseline justify-between gap-4">
+                  <div>{nameOf(c.netuid)}</div>
+                  <div className="num text-small text-ink-3">{day(c.observedAt)}</div>
+                </div>
+                <div className={c.direction === "fell-below" ? "text-down" : "text-up"}>{CROSSING[c.direction] ?? c.direction}</div>
+                <div className="num text-small text-ink-3">
+                  SN {c.netuid} · share {c.share === null ? "-" : `${num(c.share * 100, 2)}%`}, bar {c.theta === null ? "-" : `${num(c.theta * 100, 2)}%`}
+                  {c.eligibility === "reversed" ? " · crossed back within 2 days" : ""}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {crossings.length ? null : <p className="mt-8 text-ink-2">No crossings recorded.</p>}
+          <p className="mt-4 text-small text-ink-3">The {crossings.length} newest crossings.</p>
         </section>
       </div>
     </>

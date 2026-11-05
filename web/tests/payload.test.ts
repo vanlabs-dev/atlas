@@ -15,7 +15,7 @@ test("banned-field guard catches a planted rent field", () => {
 });
 
 test("allowlist and site field lists name the same fields", () => {
-  for (const kind of ["mining", "fleet", "fleetCounts", "signal", "activity", "vitals", "gate", "rotation", "param", "upgrade", "upgradeJob"] as const) {
+  for (const kind of ["mining", "fleet", "fleetCounts", "signal", "activity", "vitals", "gate", "crossing", "emission", "param", "upgrade", "upgradeJob"] as const) {
     assert.deepEqual(Object.keys(ALLOWLIST[kind]).sort(), [...FIELDS[kind]].sort(), kind);
   }
 });
