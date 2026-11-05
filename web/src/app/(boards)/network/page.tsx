@@ -2,16 +2,20 @@ import type { Metadata } from "next";
 import { Panel, row, table, td, th } from "@/components/board-shell";
 import { BoardHeader } from "@/components/board-header";
 import { BarChart } from "@/components/boards/bar-chart";
+import { getMining } from "@/data/mining";
 import { getNetwork } from "@/data/network";
 import { day, num, polarity, signed } from "@/lib/format";
-import { BAR_MODE, paramText, ROTATION, seriesTitle, usd } from "@/lib/network";
+import { BAR_MODE, paramRows, seriesTitle, usd } from "@/lib/network";
 
 export const metadata: Metadata = { title: "Network pulse" };
 
 const SHOWN = 10;
+// Setting text is prose: let it wrap on a phone instead of scrolling the table.
+const tdWrap = td.replace("whitespace-nowrap", "whitespace-normal");
 
 export default async function NetworkPage() {
-  const { generatedAt, data } = await getNetwork();
+  const [{ generatedAt, data }, mining] = await Promise.all([getNetwork(), getMining()]);
+  const names = new Map(mining.data.map((m) => [m.netuid, m.name]));
   const { vitals, gate, rotations, params } = data;
   const first = vitals[0] ?? null;
   const last = vitals[vitals.length - 1] ?? null;
@@ -31,8 +35,8 @@ export default async function NetworkPage() {
     { label: "Subnet registration, TAO", value: num(last?.regCostTao, 1), d: delta(first?.regCostTao, last?.regCostTao), digits: 1, unit: "" },
     { label: "TAO in USD", value: usd(last?.taoUsd ?? null), d: delta(first?.taoUsd, last?.taoUsd), digits: 0, unit: "" },
   ];
-  const shownParams = params.slice(0, SHOWN);
-  const shownRotations = rotations.slice(0, SHOWN);
+  const shownParams = paramRows(params).slice(0, SHOWN);
+  const lastRotation = rotations[0] ?? null;
 
   return (
     <>
@@ -89,65 +93,59 @@ export default async function NetworkPage() {
         </Panel>
       </div>
 
-      <div className="mt-[clamp(72px,9vw,120px)] grid gap-16 lg:grid-cols-2 lg:gap-12">
+      <div className="mt-[clamp(72px,9vw,120px)] grid gap-16 lg:grid-cols-[8fr_4fr] lg:gap-12">
         <section aria-labelledby="params-title" className="min-w-0">
           <h2 id="params-title" className="font-display text-sub leading-none">
             Chain parameter changes
           </h2>
+          <p className="mt-4 max-w-[60ch] text-body text-ink-2">
+            Settings the chain changed for one subnet or for the whole network, newest first. TAO injection off means the chain stops adding
+            TAO to that subnet&apos;s pool; its alpha emission continues. One row per setting, with every change Atlas saw.
+          </p>
           <div className="mt-8 overflow-x-auto">
-            <table className={`${table} min-w-[460px]`}>
-              <caption className="sr-only">Chain parameter changes, newest first</caption>
-              <thead>
-                <tr>
-                  <th scope="col" className={th}>Parameter</th>
-                  <th scope="col" className={th}>Change</th>
-                  <th scope="col" className={`${th} text-right`}>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shownParams.map((p, i) => {
-                  const t = paramText(p);
-                  return (
-                    <tr key={i} className={row}>
-                      <td className={td}>{t.name}</td>
-                      <td className={`${td} text-ink-2`}>{t.change}</td>
-                      <td className={`${td} num text-right text-ink-2`}>{day(p.observedAt)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-4 text-small text-ink-3">The {shownParams.length} newest changes.</p>
-        </section>
-        <section aria-labelledby="rotation-title" className="min-w-0">
-          <h2 id="rotation-title" className="font-display text-sub leading-none">
-            Root rotation
-          </h2>
-          <div className="mt-8 overflow-x-auto">
-            <table className={`${table} min-w-[420px]`}>
-              <caption className="sr-only">Subnets entering or leaving root validator weights</caption>
+            <table className={table}>
+              <caption className="sr-only">Chain parameter changes, one row per setting, newest first</caption>
               <thead>
                 <tr>
                   <th scope="col" className={th}>Subnet</th>
-                  <th scope="col" className={th}>Change</th>
-                  <th scope="col" className={`${th} text-right`}>Share of root weight</th>
-                  <th scope="col" className={`${th} text-right`}>Date</th>
+                  <th scope="col" className={th}>Setting and what it means now</th>
+                  <th scope="col" className={`${th} hidden text-right sm:table-cell`}>Last change</th>
                 </tr>
               </thead>
               <tbody>
-                {shownRotations.map((r, i) => (
-                  <tr key={i} className={row}>
-                    <td className={`${td} num`}>SN{r.netuid}</td>
-                    <td className={`${td} text-ink-2`}>{ROTATION[r.direction] ?? r.direction}</td>
-                    <td className={`${td} num text-right`}>{r.newShare === null ? "-" : `${num(r.newShare * 100, 3)}%`}</td>
-                    <td className={`${td} num text-right text-ink-2`}>{day(r.observedAt)}</td>
+                {shownParams.map((r) => (
+                  <tr key={`${r.netuid}-${r.setting}`} className={row}>
+                    <td className={`${tdWrap} align-top`}>
+                      <div>{r.netuid === null ? "Whole network" : (names.get(r.netuid) ?? "unnamed")}</div>
+                      <div className="num text-small text-ink-3">
+                        {r.netuid === null ? null : `SN ${r.netuid}`}
+                        <span className="sm:hidden">{r.netuid === null ? "" : " · "}{day(r.observedAt)}</span>
+                      </div>
+                    </td>
+                    <td className={`${tdWrap} align-top`}>
+                      <div>{r.setting}</div>
+                      <div className="text-ink-2">{r.means}</div>
+                      {r.history ? <div className="mt-1 text-small text-ink-3">{r.history}</div> : null}
+                    </td>
+                    <td className={`${td} num hidden align-top text-right text-ink-2 sm:table-cell`}>{day(r.observedAt)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p className="mt-4 text-small text-ink-3">The {shownRotations.length} newest events.</p>
+          <p className="mt-4 text-small text-ink-3">The {shownParams.length} most recently changed settings.</p>
+        </section>
+        <section aria-labelledby="rotation-title" className="min-w-0">
+          <h2 id="rotation-title" className="font-display text-sub leading-none">
+            Root rotation, retired
+          </h2>
+          <p className="mt-4 text-body text-ink-2">
+            Root validators used to set weights that steered root dividends between subnets. Runtime spec 464 switched that off on 17 Sept,
+            and spec 469 removed it on 22 Sept. Root dividends now stay on the subnet they arrive on, so there is no rotation left to read.
+          </p>
+          <p className="mt-4 text-small text-ink-3">
+            {lastRotation ? `Atlas stopped recording it after ${day(lastRotation.observedAt)}. Older entries stay in the store.` : "No entries recorded."}
+          </p>
         </section>
       </div>
     </>

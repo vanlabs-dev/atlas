@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { APART_AT, COLD, gapText, lastCommitText, whyText } from "../src/lib/fleet.ts";
 import { mean, num, pct, signed } from "../src/lib/format.ts";
-import { BAR_MODE, ROTATION, paramText, seriesTitle, usd } from "../src/lib/network.ts";
+import { BAR_MODE, paramRows, seriesTitle, usd } from "../src/lib/network.ts";
 
 const p = (item: string, prevValue: string | null, newValue: string | null) => ({ item, prevValue, newValue, observedAt: "2026-11-01T00:00:00Z", block: 1 });
 
@@ -41,12 +41,27 @@ test("missing values print as a bare dash", () => {
 });
 
 test("chain parameters in plain words", () => {
-  assert.deepEqual(paramText(p("SubnetEmissionEnabled[103]", "true", "false")), { name: "SN103 emission", change: "switched off" });
-  assert.deepEqual(paramText(p("CollateralLockShare[24]", "0", "32768")), { name: "SN24 registration collateral share", change: "0.0% to 50.0%" });
-  assert.equal(paramText(p("BasketConcentrationCap", "4096", "7865")).change, "6.3% to 12.0%");
-  assert.deepEqual(paramText(p("NewThing", "1", "2")), { name: "NewThing (chain parameter)", change: "1 to 2" });
+  const at = (e: ReturnType<typeof p>, d: string) => ({ ...e, observedAt: `2026-10-${d}T00:00:00Z` });
+  const rows = paramRows([
+    at(p("SubnetEmissionEnabled[82]", "true", "false"), "30"),
+    at(p("CollateralLockShare[24]", "0", "32768"), "30"),
+    at(p("SubnetEmissionEnabled[82]", "false", "true"), "29"),
+    at(p("SubnetEmissionEnabled[82]", "true", "false"), "19"),
+    at(p("CollateralLockShare[65]", "39321", "0"), "01"),
+    at(p("BasketConcentrationCap", "4096", "7865"), "01"),
+    at(p("NewThing", "1", "2"), "01"),
+  ]);
+  assert.deepEqual(rows.map((r) => r.netuid), [82, 24, 65, null, null]);
+  assert.equal(rows[0].setting, "TAO injection");
+  assert.equal(rows[0].means, "Off: the chain adds no TAO to the pool. Alpha still flows.");
+  assert.equal(rows[0].history, "3 changes since 19 Oct: off, on, off");
+  assert.equal(rows[0].observedAt, "2026-10-30T00:00:00Z");
+  assert.equal(rows[1].means, "50.0% of a miner's registration price is now locked, not burned (was 0.0%).");
+  assert.equal(rows[1].history, null);
+  assert.equal(rows[2].means, "0%: the whole registration price is burned again (was 60.0%).");
+  assert.equal(rows[3].means, "6.3% to 12.0%: the largest share one holding may reach in a fund buy.");
+  assert.deepEqual([rows[4].setting, rows[4].means], ["NewThing (chain parameter)", "1 to 2"]);
   assert.equal(BAR_MODE.rank, "A fixed number of subnets, by demand share");
-  assert.equal(ROTATION.entered, "Entered root weights");
 });
 
 test("sparse readings are not called daily", () => {
