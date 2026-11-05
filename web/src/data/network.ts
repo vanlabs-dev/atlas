@@ -11,7 +11,9 @@ export async function getNetwork(): Promise<Board<Network>> {
     data: {
       vitals: onlyAll(FIELDS.vitals, d.vitals),
       gate: d.gate ? only<Gate>(FIELDS.gate, d.gate) : null,
-      rotations: onlyAll(FIELDS.rotation, d.rotations),
+      crossings: onlyAll(FIELDS.crossing, d.crossings),
+      emission: onlyAll(FIELDS.emission, d.emission),
+      emissionSince: typeof d.emissionSince === "string" ? d.emissionSince : null,
       params: onlyAll(FIELDS.param, d.params),
     },
   };

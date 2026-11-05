@@ -72,12 +72,18 @@ export const ALLOWLIST = {
     aboveCount: "above_count",
     barMode: "bar_mode",
   },
-  rotation: {
+  crossing: {
     observedAt: "observed_at",
     netuid: "netuid",
     direction: "direction",
-    newShare: "new_share",
-    validatorCount: "validator_count",
+    share: "share",
+    theta: "theta",
+    eligibility: "eligibility",
+  },
+  emission: {
+    netuid: "netuid",
+    pct: "emission_pct",
+    pctThen: "emission_pct_then",
   },
   param: {
     item: "item",

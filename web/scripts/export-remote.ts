@@ -98,7 +98,24 @@ vitals = rows(live, "SELECT * FROM network_vitals ORDER BY date")
 gate = rows(live, "SELECT * FROM gate_state ORDER BY id DESC LIMIT 1")
 for g in gate:
     g["gate_active"] = bool(g["gate_active"])
-rotations = rows(live, "SELECT * FROM rotation_events ORDER BY id DESC LIMIT 30")
+crossings = rows(live, "SELECT * FROM gate_events ORDER BY id DESC LIMIT 12")
+
+# Emission share per subnet: the latest panel pass against the last pass at
+# least 30 days before it. Panel rows are hourly; one pass shares a timestamp.
+emission_now = live.execute("SELECT max(observed_at) FROM panel_snapshot").fetchone()[0]
+emission_since = None
+emission = []
+if emission_now:
+    target = (datetime.datetime.fromisoformat(emission_now) - datetime.timedelta(days=30)).isoformat()
+    passes = [r[0] for r in live.execute("SELECT DISTINCT observed_at FROM panel_snapshot")]
+    emission_since = max((p for p in passes if p <= target), default=None)
+    then = {r["netuid"]: r["emission_percent"] for r in rows(
+        live, "SELECT netuid, emission_percent FROM panel_snapshot WHERE observed_at = ?",
+        emission_since)} if emission_since else {}
+    emission = [{"netuid": r["netuid"], "emission_pct": r["emission_percent"],
+                 "emission_pct_then": then.get(r["netuid"])}
+                for r in rows(live, "SELECT netuid, emission_percent FROM panel_snapshot "
+                              "WHERE observed_at = ? ORDER BY netuid", emission_now)]
 params = rows(live, "SELECT * FROM chain_param_events ORDER BY id DESC LIMIT 30")
 upgrades = rows(live, "SELECT * FROM spec_upgrades ORDER BY id")
 with open("var/upgrade/state.json") as handle:
@@ -113,7 +130,8 @@ print(json.dumps({
     "network_at": gate[0]["observed_at"] if gate else now,
     "mining": econ, "fleet": fleet_rows, "counts": board["counts"],
     "activity": activity, "signals": signals, "vitals": vitals,
-    "gate": gate[0] if gate else None, "rotations": rotations,
+    "gate": gate[0] if gate else None, "crossings": crossings,
+    "emission": emission, "emission_since": emission_since,
     "params": params, "upgrades": upgrades, "job": job,
 }))
 `;

@@ -99,3 +99,27 @@ export function seriesTitle(dates: string[]): string {
 export function usd(v: number | null): string {
   return v === null || !Number.isFinite(v) ? "-" : `$${Math.round(v).toLocaleString("en-GB")}`;
 }
+
+export const CROSSING: Record<string, string> = {
+  "rose-above": "Rose above the bar",
+  "fell-below": "Fell below the bar",
+};
+
+export interface Mover {
+  netuid: number;
+  then: number;
+  now: number;
+  /** Percentage points, now minus then. */
+  change: number;
+}
+
+/** The n subnets whose emission share rose most and fell most. Zero changes are left out. */
+export function emissionMovers(rows: { netuid: number; pct: number | null; pctThen: number | null }[], n: number): { up: Mover[]; down: Mover[] } {
+  const all = rows
+    .filter((r) => r.pct !== null && r.pctThen !== null)
+    .map((r) => ({ netuid: r.netuid, then: r.pctThen as number, now: r.pct as number, change: (r.pct as number) - (r.pctThen as number) }));
+  return {
+    up: all.filter((m) => m.change > 0).sort((a, b) => b.change - a.change).slice(0, n),
+    down: all.filter((m) => m.change < 0).sort((a, b) => a.change - b.change).slice(0, n),
+  };
+}

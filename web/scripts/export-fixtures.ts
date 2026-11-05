@@ -45,7 +45,9 @@ const fixtures = {
   network: board(src.network_at, {
     vitals: all("vitals", src.vitals),
     gate: src.gate ? pick("gate", src.gate) : null,
-    rotations: all("rotation", src.rotations),
+    crossings: all("crossing", src.crossings),
+    emission: all("emission", src.emission),
+    emissionSince: src.emission_since,
     params: all("param", src.params),
   }),
   upgrades: board(src.now, {
