@@ -13,37 +13,79 @@ const u16pct = (v: string | null) => {
   return Number.isFinite(n) ? `${((100 * n) / U16_MAX).toFixed(1)}%` : (v ?? "-");
 };
 
-export interface ParamText {
-  name: string;
-  change: string;
+const dayOf = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+
+/** One setting in words: its label, a short state for history, and what the latest value means. */
+interface Wording {
+  setting: string;
+  state: (v: string | null) => string;
+  means: (p: ParamEvent) => string;
 }
 
-export function paramText(p: ParamEvent): ParamText {
-  const m = /^(\w+)(?:\[(\d+)\])?$/.exec(p.item);
-  const key = m?.[1] ?? p.item;
-  const sn = m?.[2] ? `SN${m[2]} ` : "";
-  switch (key) {
-    case "SubnetEmissionEnabled":
-      return { name: `${sn}emission`, change: `switched ${onOff(p.newValue)}` };
-    case "CollateralLockShare":
-      return { name: `${sn}registration collateral share`, change: `${u16pct(p.prevValue)} to ${u16pct(p.newValue)}` };
-    case "RootWeightSettingEnabled":
-      return { name: "Root weight setting", change: `switched ${onOff(p.newValue)}` };
-    case "BasketConcentrationCap":
-      return { name: "Largest share one holding may reach in a fund", change: `${u16pct(p.prevValue)} to ${u16pct(p.newValue)}` };
-    default:
-      return { name: `${p.item} (chain parameter)`, change: `${p.prevValue ?? "-"} to ${p.newValue ?? "-"}` };
-  }
+const WORDING: Record<string, Wording> = {
+  SubnetEmissionEnabled: {
+    setting: "TAO injection",
+    state: onOff,
+    means: (p) => (p.newValue === "false" ? "Off: the chain adds no TAO to the pool. Alpha still flows." : "On: the chain adds TAO to the pool."),
+  },
+  CollateralLockShare: {
+    setting: "Registration collateral",
+    state: u16pct,
+    means: (p) =>
+      Number(p.newValue) === 0
+        ? `0%: the whole registration price is burned again (was ${u16pct(p.prevValue)}).`
+        : `${u16pct(p.newValue)} of a miner's registration price is now locked, not burned (was ${u16pct(p.prevValue)}).`,
+  },
+  RootWeightSettingEnabled: {
+    setting: "Root weight setting",
+    state: onOff,
+    means: (p) => (p.newValue === "false" ? "Off: validators can no longer set root weights." : "On: validators can set root weights."),
+  },
+  BasketConcentrationCap: {
+    setting: "Fund holding cap",
+    state: u16pct,
+    means: (p) => `${u16pct(p.prevValue)} to ${u16pct(p.newValue)}: the largest share one holding may reach in a fund buy.`,
+  },
+};
+
+export interface ParamRow {
+  /** The subnet the setting belongs to, or null for a network-wide setting. */
+  netuid: number | null;
+  setting: string;
+  means: string;
+  /** "5 changes since 27 Sept: off, on, off, on, off", or null for a single change. */
+  history: string | null;
+  observedAt: string;
+}
+
+/** One row per setting, newest change first. Events arrive newest first. */
+export function paramRows(events: ParamEvent[]): ParamRow[] {
+  const groups = new Map<string, ParamEvent[]>();
+  for (const e of events) groups.set(e.item, [...(groups.get(e.item) ?? []), e]);
+  return [...groups.entries()].map(([item, evs]) => {
+    const latest = evs[0];
+    const m = /^(\w+)(?:\[(\d+)\])?$/.exec(item);
+    const key = m?.[1] ?? item;
+    const w: Wording = WORDING[key] ?? {
+      setting: `${key} (chain parameter)`,
+      state: (v) => v ?? "-",
+      means: (p) => `${p.prevValue ?? "-"} to ${p.newValue ?? "-"}`,
+    };
+    const oldest = evs[evs.length - 1];
+    const states = [...evs].reverse().map((e) => w.state(e.newValue));
+    return {
+      netuid: m?.[2] ? Number(m[2]) : null,
+      setting: w.setting,
+      means: w.means(latest),
+      history: evs.length > 1 ? `${evs.length} changes since ${dayOf(oldest.observedAt)}: ${states.join(", ")}` : null,
+      observedAt: latest.observedAt,
+    };
+  });
 }
 
 export const BAR_MODE: Record<string, string> = {
   rank: "A fixed number of subnets, by demand share",
   "q-mass": "A share of total demand",
-};
-
-export const ROTATION: Record<string, string> = {
-  entered: "Entered root weights",
-  left: "Left root weights",
 };
 
 /** "45 readings over 53 days": the chart is not daily when days are missing. */
