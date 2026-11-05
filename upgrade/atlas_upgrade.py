@@ -667,7 +667,7 @@ class Job:
             # a pre-push one only through `clear`.
             if (state.get("spec") == spec
                     and state.get("status") in ("waiting", "retrying")):
-                state["status"] = "idle"
+                state.update(status="idle", last_error=None)
                 changed = True
             if changed:
                 self.save_state(state)

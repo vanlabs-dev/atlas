@@ -673,6 +673,20 @@ class WaitingTest(Base):
         self.assertEqual(job.state()["status"], "updated")
 
 
+class MootTest(Base):
+    def test_corpus_catching_up_clears_the_stale_error(self):
+        # A retry made moot by a current corpus goes idle with no error left
+        # behind: `status` must not report a failure the job no longer has.
+        job = self.job(live=470, corpus=470)
+        job.save_state({"status": "retrying", "spec": 470, "attempt": 1,
+                        "last_error": "pull: diverging branches",
+                        "next_attempt_at": job.clock + 3600, "reported": []})
+        self.assertEqual(job.run_once(), 0)
+        state = job.state()
+        self.assertEqual(state["status"], "idle")
+        self.assertIsNone(state.get("last_error"))
+
+
 class InterruptTest(Base):
     def test_interrupted_run_reports_stalled_once(self):
         job = self.job()
