@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-05T05:26:20.944130+00:00",
+  "generatedAt": "2026-11-05T17:30:16.155816+00:00",
   "data": [
     {
       "netuid": 1,
@@ -11,12 +11,12 @@
       "gpuMentionFiles": null,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 69.44,
+      "minerBurnPct": 70.14,
       "earnerCount": 3,
-      "top1SharePct": 63.68,
+      "top1SharePct": 66.31,
       "top10SharePct": 100,
-      "regCostTao": 0.00054,
-      "blockRef": 9437747
+      "regCostTao": 0.001502,
+      "blockRef": 9441369
     },
     {
       "netuid": 2,
@@ -33,7 +33,7 @@
       "top1SharePct": null,
       "top10SharePct": null,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 3,
@@ -47,10 +47,10 @@
       "unratedReason": null,
       "minerBurnPct": 0,
       "earnerCount": 7,
-      "top1SharePct": 25,
+      "top1SharePct": 25.15,
       "top10SharePct": 100,
-      "regCostTao": 1,
-      "blockRef": 9437747
+      "regCostTao": 1.365,
+      "blockRef": 9441369
     },
     {
       "netuid": 4,
@@ -67,7 +67,7 @@
       "top1SharePct": 61.55,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 5,
@@ -80,16 +80,16 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 243,
-      "top1SharePct": 0.4907,
-      "top10SharePct": 4.585,
-      "regCostTao": 0.3078,
-      "blockRef": 9437747
+      "earnerCount": 241,
+      "top1SharePct": 0.465,
+      "top10SharePct": 4.584,
+      "regCostTao": 0.3016,
+      "blockRef": 9441369
     },
     {
       "netuid": 6,
       "name": "Numinous",
-      "rank": 55,
+      "rank": 58,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -101,7 +101,7 @@
       "top1SharePct": 7.191,
       "top10SharePct": 60.42,
       "regCostTao": 0.2,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 7,
@@ -118,12 +118,12 @@
       "top1SharePct": null,
       "top10SharePct": null,
       "regCostTao": 0.15,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 8,
       "name": "Vanta",
-      "rank": 53,
+      "rank": 56,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -132,10 +132,10 @@
       "unratedReason": null,
       "minerBurnPct": 0,
       "earnerCount": 19,
-      "top1SharePct": 93.29,
+      "top1SharePct": 89.54,
       "top10SharePct": 99.98,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 9,
@@ -152,7 +152,7 @@
       "top1SharePct": 80.01,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 10,
@@ -164,12 +164,12 @@
       "gpuMentionFiles": null,
       "cutReason": "winner-take-all",
       "unratedReason": null,
-      "minerBurnPct": 61.14,
+      "minerBurnPct": 61.85,
       "earnerCount": 1,
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 11,
@@ -185,8 +185,8 @@
       "earnerCount": 1,
       "top1SharePct": 100,
       "top10SharePct": 100,
-      "regCostTao": 0.02,
-      "blockRef": 9437747
+      "regCostTao": 0.02083,
+      "blockRef": 9441369
     },
     {
       "netuid": 12,
@@ -200,32 +200,32 @@
       "unratedReason": null,
       "minerBurnPct": 99.37,
       "earnerCount": 3,
-      "top1SharePct": 50.61,
+      "top1SharePct": 39.51,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 13,
       "name": "Data Universe",
-      "rank": 47,
+      "rank": 52,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": 0,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 70.67,
-      "earnerCount": 237,
-      "top1SharePct": 0.4996,
-      "top10SharePct": 4.996,
-      "regCostTao": 0.03525,
-      "blockRef": 9437747
+      "minerBurnPct": 70.32,
+      "earnerCount": 241,
+      "top1SharePct": 0.4911,
+      "top10SharePct": 4.911,
+      "regCostTao": 0.03385,
+      "blockRef": 9441369
     },
     {
       "netuid": 14,
       "name": "Cacheon",
-      "rank": 12,
+      "rank": 9,
       "verdict": "unknown",
       "gpuFloor": null,
       "vramGb": null,
@@ -234,10 +234,10 @@
       "unratedReason": null,
       "minerBurnPct": 0,
       "earnerCount": 3,
-      "top1SharePct": 80.49,
+      "top1SharePct": 68.19,
       "top10SharePct": 100,
-      "regCostTao": 0.002043,
-      "blockRef": 9437747
+      "regCostTao": 0.00247,
+      "blockRef": 9441369
     },
     {
       "netuid": 15,
@@ -250,11 +250,11 @@
       "cutReason": "winner-take-all",
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 67,
-      "top1SharePct": 96.23,
-      "top10SharePct": 97.2,
-      "regCostTao": 0.1343,
-      "blockRef": 9437747
+      "earnerCount": 71,
+      "top1SharePct": 96.03,
+      "top10SharePct": 96.99,
+      "regCostTao": 0.2047,
+      "blockRef": 9441369
     },
     {
       "netuid": 16,
@@ -271,7 +271,7 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 17,
@@ -287,30 +287,30 @@
       "earnerCount": 1,
       "top1SharePct": 100,
       "top10SharePct": 100,
-      "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "regCostTao": 0.0005901,
+      "blockRef": 9441369
     },
     {
       "netuid": 18,
       "name": "Zeus",
-      "rank": 46,
+      "rank": 50,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": 1,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 1.077,
+      "minerBurnPct": 9.731,
       "earnerCount": 28,
-      "top1SharePct": 38.33,
-      "top10SharePct": 97.11,
+      "top1SharePct": 27.98,
+      "top10SharePct": 97.09,
       "regCostTao": 1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 19,
       "name": "blockmachine",
-      "rank": 49,
+      "rank": 53,
       "verdict": "unknown",
       "gpuFloor": null,
       "vramGb": null,
@@ -322,7 +322,7 @@
       "top1SharePct": 21.74,
       "top10SharePct": 78.03,
       "regCostTao": 1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 20,
@@ -339,12 +339,12 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.2,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 21,
       "name": "AdTAO",
-      "rank": 37,
+      "rank": 39,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -356,24 +356,24 @@
       "top1SharePct": 40.29,
       "top10SharePct": 93.98,
       "regCostTao": 0.1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 22,
       "name": "Desearch",
-      "rank": 42,
+      "rank": 45,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": 0,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 30.24,
-      "earnerCount": 242,
-      "top1SharePct": 0.5521,
-      "top10SharePct": 5.278,
-      "regCostTao": 0.008841,
-      "blockRef": 9437747
+      "minerBurnPct": 30.16,
+      "earnerCount": 240,
+      "top1SharePct": 0.535,
+      "top10SharePct": 5.288,
+      "regCostTao": 0.0107,
+      "blockRef": 9441369
     },
     {
       "netuid": 23,
@@ -390,7 +390,7 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 24,
@@ -407,12 +407,12 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 25,
       "name": "UR",
-      "rank": 23,
+      "rank": 24,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -424,7 +424,7 @@
       "top1SharePct": 45,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 26,
@@ -441,7 +441,7 @@
       "top1SharePct": null,
       "top10SharePct": null,
       "regCostTao": 0.1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 27,
@@ -457,25 +457,25 @@
       "earnerCount": 0,
       "top1SharePct": null,
       "top10SharePct": null,
-      "regCostTao": 0.0005901,
-      "blockRef": 9437747
+      "regCostTao": 0.0005474,
+      "blockRef": 9441369
     },
     {
       "netuid": 28,
       "name": "SayGM",
-      "rank": 60,
+      "rank": 66,
       "verdict": "unknown",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": null,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 0.09679,
-      "earnerCount": 148,
-      "top1SharePct": 38.12,
-      "top10SharePct": 75.08,
-      "regCostTao": 0.1973,
-      "blockRef": 9437747
+      "minerBurnPct": 0.08362,
+      "earnerCount": 115,
+      "top1SharePct": 29.84,
+      "top10SharePct": 82.97,
+      "regCostTao": 0.2079,
+      "blockRef": 9441369
     },
     {
       "netuid": 29,
@@ -491,13 +491,13 @@
       "earnerCount": 1,
       "top1SharePct": 100,
       "top10SharePct": 100,
-      "regCostTao": 0.0005889,
-      "blockRef": 9437747
+      "regCostTao": 0.0005369,
+      "blockRef": 9441369
     },
     {
       "netuid": 30,
       "name": "Endure Network",
-      "rank": 51,
+      "rank": 54,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -509,12 +509,12 @@
       "top1SharePct": 2.85,
       "top10SharePct": 28.03,
       "regCostTao": 1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 31,
       "name": "rec4ll",
-      "rank": 16,
+      "rank": 17,
       "verdict": null,
       "gpuFloor": null,
       "vramGb": null,
@@ -525,13 +525,13 @@
       "earnerCount": 6,
       "top1SharePct": 16.73,
       "top10SharePct": 100,
-      "regCostTao": 0.5819,
-      "blockRef": 9437747
+      "regCostTao": 0.5427,
+      "blockRef": 9441369
     },
     {
       "netuid": 32,
       "name": "ItsAI",
-      "rank": 61,
+      "rank": 63,
       "verdict": "needs-gpu",
       "gpuFloor": "24 GB VRAM (min_vram)",
       "vramGb": 24,
@@ -540,32 +540,32 @@
       "unratedReason": null,
       "minerBurnPct": 0,
       "earnerCount": 239,
-      "top1SharePct": 0.5105,
-      "top10SharePct": 4.951,
-      "regCostTao": 0.03708,
-      "blockRef": 9437747
+      "top1SharePct": 0.4981,
+      "top10SharePct": 4.846,
+      "regCostTao": 0.05653,
+      "blockRef": 9441369
     },
     {
       "netuid": 33,
       "name": "ReadyAI",
-      "rank": 62,
+      "rank": 64,
       "verdict": "needs-gpu",
       "gpuFloor": "8 GB VRAM (min_vram)",
       "vramGb": 8,
       "gpuMentionFiles": null,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 25.3,
+      "minerBurnPct": 25.31,
       "earnerCount": 244,
-      "top1SharePct": 0.6002,
-      "top10SharePct": 5.766,
-      "regCostTao": 0.04899,
-      "blockRef": 9437747
+      "top1SharePct": 0.6022,
+      "top10SharePct": 5.797,
+      "regCostTao": 0.04704,
+      "blockRef": 9441369
     },
     {
       "netuid": 34,
       "name": "Yugos",
-      "rank": 11,
+      "rank": 13,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -577,7 +577,7 @@
       "top1SharePct": 85,
       "top10SharePct": 100,
       "regCostTao": 0.5,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 35,
@@ -594,24 +594,24 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 36,
       "name": "Weir",
-      "rank": null,
+      "rank": 12,
       "verdict": "unknown",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": null,
-      "cutReason": "winner-take-all",
+      "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 1,
-      "top1SharePct": 100,
+      "earnerCount": 7,
+      "top1SharePct": 31.69,
       "top10SharePct": 100,
       "regCostTao": 0.3,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 37,
@@ -623,17 +623,17 @@
       "gpuMentionFiles": 0,
       "cutReason": "winner-take-all",
       "unratedReason": null,
-      "minerBurnPct": 72.2,
+      "minerBurnPct": 72.08,
       "earnerCount": 1,
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 38,
       "name": "ChronoLLM",
-      "rank": 39,
+      "rank": 41,
       "verdict": "needs-gpu",
       "gpuFloor": null,
       "vramGb": null,
@@ -645,7 +645,7 @@
       "top1SharePct": 52.03,
       "top10SharePct": 100,
       "regCostTao": 0.74,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 39,
@@ -662,7 +662,7 @@
       "top1SharePct": null,
       "top10SharePct": null,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 40,
@@ -679,12 +679,12 @@
       "top1SharePct": null,
       "top10SharePct": null,
       "regCostTao": 0.99,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 41,
       "name": "Almanac",
-      "rank": 52,
+      "rank": 55,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -692,11 +692,11 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 177,
-      "top1SharePct": 5.102,
-      "top10SharePct": 22.45,
+      "earnerCount": 176,
+      "top1SharePct": 4.353,
+      "top10SharePct": 21.98,
       "regCostTao": 0.1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 42,
@@ -712,30 +712,30 @@
       "earnerCount": 0,
       "top1SharePct": null,
       "top10SharePct": null,
-      "regCostTao": 0.0005923,
-      "blockRef": 9437747
+      "regCostTao": 0.0005369,
+      "blockRef": 9441369
     },
     {
       "netuid": 43,
       "name": "Graphite",
-      "rank": 30,
+      "rank": 34,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": 1,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 79.93,
-      "earnerCount": 4,
-      "top1SharePct": 57.9,
+      "minerBurnPct": 80,
+      "earnerCount": 5,
+      "top1SharePct": 56.62,
       "top10SharePct": 100,
       "regCostTao": 0.1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 44,
       "name": "Score",
-      "rank": 9,
+      "rank": 10,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -744,27 +744,27 @@
       "unratedReason": null,
       "minerBurnPct": 0,
       "earnerCount": 13,
-      "top1SharePct": 36.21,
-      "top10SharePct": 93.72,
-      "regCostTao": 0.07196,
-      "blockRef": 9437747
+      "top1SharePct": 36.76,
+      "top10SharePct": 93.62,
+      "regCostTao": 0.1232,
+      "blockRef": 9441369
     },
     {
       "netuid": 45,
       "name": "AlphaRidge.ai",
-      "rank": 48,
+      "rank": 51,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": 2,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 45.65,
+      "minerBurnPct": 44.44,
       "earnerCount": 239,
-      "top1SharePct": 0.7092,
-      "top10SharePct": 6.499,
-      "regCostTao": 0.01486,
-      "blockRef": 9437747
+      "top1SharePct": 0.7549,
+      "top10SharePct": 6.639,
+      "regCostTao": 0.02854,
+      "blockRef": 9441369
     },
     {
       "netuid": 46,
@@ -777,11 +777,11 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 50.25,
-      "earnerCount": 9,
-      "top1SharePct": 13.29,
+      "earnerCount": 8,
+      "top1SharePct": 15.29,
       "top10SharePct": 100,
       "regCostTao": 0.1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 47,
@@ -798,12 +798,12 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.05,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 48,
       "name": "Quantum Compute",
-      "rank": 8,
+      "rank": 7,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -811,16 +811,16 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 4,
-      "top1SharePct": 31.62,
+      "earnerCount": 3,
+      "top1SharePct": 33.53,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 49,
       "name": "Nepher Robotics",
-      "rank": 31,
+      "rank": 32,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -829,32 +829,32 @@
       "unratedReason": null,
       "minerBurnPct": 0,
       "earnerCount": 5,
-      "top1SharePct": 66.98,
+      "top1SharePct": 68.6,
       "top10SharePct": 100,
       "regCostTao": 0.05,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 50,
       "name": "Synth",
-      "rank": 44,
+      "rank": 49,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": 1,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 22,
+      "minerBurnPct": 22.01,
       "earnerCount": 244,
-      "top1SharePct": 1.748,
-      "top10SharePct": 14.91,
+      "top1SharePct": 1.724,
+      "top10SharePct": 14.56,
       "regCostTao": 0.8,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 51,
       "name": "lium.io",
-      "rank": 56,
+      "rank": 59,
       "verdict": "needs-gpu",
       "gpuFloor": null,
       "vramGb": null,
@@ -862,11 +862,11 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 64,
-      "top1SharePct": 83.91,
-      "top10SharePct": 94.73,
+      "earnerCount": 62,
+      "top1SharePct": 82.23,
+      "top10SharePct": 94.56,
       "regCostTao": 0.5,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 52,
@@ -883,7 +883,7 @@
       "top1SharePct": null,
       "top10SharePct": null,
       "regCostTao": 1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 53,
@@ -897,27 +897,27 @@
       "unratedReason": null,
       "minerBurnPct": 0,
       "earnerCount": 31,
-      "top1SharePct": 20.52,
+      "top1SharePct": 20.51,
       "top10SharePct": 83.07,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 54,
       "name": "Yanez",
-      "rank": 69,
+      "rank": 72,
       "verdict": "needs-gpu",
       "gpuFloor": "16 GB VRAM (min_vram)",
       "vramGb": 16,
       "gpuMentionFiles": null,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 0.1517,
-      "earnerCount": 170,
-      "top1SharePct": 50.37,
-      "top10SharePct": 95.9,
-      "regCostTao": 0.0007984,
-      "blockRef": 9437747
+      "minerBurnPct": 0.2475,
+      "earnerCount": 139,
+      "top1SharePct": 50.45,
+      "top10SharePct": 96.03,
+      "regCostTao": 0.0005766,
+      "blockRef": 9441369
     },
     {
       "netuid": 55,
@@ -929,17 +929,17 @@
       "gpuMentionFiles": 0,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 1.007,
-      "earnerCount": 10,
-      "top1SharePct": 30,
+      "minerBurnPct": 1.246,
+      "earnerCount": 9,
+      "top1SharePct": 37.5,
       "top10SharePct": 100,
-      "regCostTao": 0.0009601,
-      "blockRef": 9437747
+      "regCostTao": 0.01859,
+      "blockRef": 9441369
     },
     {
       "netuid": 56,
       "name": "Gradients",
-      "rank": 20,
+      "rank": 21,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -951,7 +951,7 @@
       "top1SharePct": 50.59,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 57,
@@ -967,25 +967,25 @@
       "earnerCount": 0,
       "top1SharePct": null,
       "top10SharePct": null,
-      "regCostTao": 0.0005958,
-      "blockRef": 9437747
+      "regCostTao": 0.0005307,
+      "blockRef": 9441369
     },
     {
       "netuid": 58,
       "name": "Attune",
-      "rank": 18,
+      "rank": 15,
       "verdict": "unknown",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": null,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 70.19,
-      "earnerCount": 4,
-      "top1SharePct": 40,
+      "minerBurnPct": 0,
+      "earnerCount": 5,
+      "top1SharePct": 67.66,
       "top10SharePct": 100,
       "regCostTao": 0.3,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 59,
@@ -1001,13 +1001,13 @@
       "earnerCount": 1,
       "top1SharePct": 100,
       "top10SharePct": 100,
-      "regCostTao": 0.000601,
-      "blockRef": 9437747
+      "regCostTao": 0.000538,
+      "blockRef": 9441369
     },
     {
       "netuid": 60,
       "name": "Bitsec.ai",
-      "rank": 17,
+      "rank": 19,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -1019,12 +1019,12 @@
       "top1SharePct": 77,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 61,
       "name": "RedTeam",
-      "rank": 57,
+      "rank": 61,
       "verdict": "unknown",
       "gpuFloor": null,
       "vramGb": null,
@@ -1032,16 +1032,16 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 124,
-      "top1SharePct": 60.17,
+      "earnerCount": 131,
+      "top1SharePct": 60.4,
       "top10SharePct": 63.97,
-      "regCostTao": 0.08824,
-      "blockRef": 9437747
+      "regCostTao": 0.06725,
+      "blockRef": 9441369
     },
     {
       "netuid": 62,
       "name": "Ridges",
-      "rank": 32,
+      "rank": 31,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -1053,7 +1053,7 @@
       "top1SharePct": 21.65,
       "top10SharePct": 75.64,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 63,
@@ -1065,17 +1065,17 @@
       "gpuMentionFiles": 2,
       "cutReason": "winner-take-all",
       "unratedReason": null,
-      "minerBurnPct": 0.003178,
+      "minerBurnPct": 0.003384,
       "earnerCount": 11,
       "top1SharePct": 99.97,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 64,
       "name": "Chutes",
-      "rank": 10,
+      "rank": 11,
       "verdict": "unknown",
       "gpuFloor": null,
       "vramGb": null,
@@ -1084,10 +1084,10 @@
       "unratedReason": null,
       "minerBurnPct": 0,
       "earnerCount": 16,
-      "top1SharePct": 21.18,
-      "top10SharePct": 91.65,
+      "top1SharePct": 20.5,
+      "top10SharePct": 91.57,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 65,
@@ -1104,12 +1104,12 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.2,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 66,
       "name": "conjectures",
-      "rank": 27,
+      "rank": 38,
       "verdict": "unknown",
       "gpuFloor": null,
       "vramGb": null,
@@ -1117,28 +1117,28 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 4,
-      "top1SharePct": 80.27,
+      "earnerCount": 5,
+      "top1SharePct": 80.28,
       "top10SharePct": 100,
-      "regCostTao": 0.0008513,
-      "blockRef": 9437747
+      "regCostTao": 0.000508,
+      "blockRef": 9441369
     },
     {
       "netuid": 67,
       "name": "Harnyx",
-      "rank": 43,
+      "rank": 47,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": 0,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 3.96,
-      "earnerCount": 141,
-      "top1SharePct": 26.64,
-      "top10SharePct": 37.79,
-      "regCostTao": 0.05217,
-      "blockRef": 9437747
+      "minerBurnPct": 2.279,
+      "earnerCount": 131,
+      "top1SharePct": 32.9,
+      "top10SharePct": 45.28,
+      "regCostTao": 0.03976,
+      "blockRef": 9441369
     },
     {
       "netuid": 68,
@@ -1154,8 +1154,8 @@
       "earnerCount": 1,
       "top1SharePct": 100,
       "top10SharePct": 100,
-      "regCostTao": 0.04651,
-      "blockRef": 9437747
+      "regCostTao": 0.1126,
+      "blockRef": 9441369
     },
     {
       "netuid": 69,
@@ -1171,13 +1171,13 @@
       "earnerCount": 0,
       "top1SharePct": null,
       "top10SharePct": null,
-      "regCostTao": 0.0006004,
-      "blockRef": 9437747
+      "regCostTao": 0.0005411,
+      "blockRef": 9441369
     },
     {
       "netuid": 70,
       "name": "Fugal",
-      "rank": 35,
+      "rank": 37,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -1185,11 +1185,11 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 60,
-      "top1SharePct": 4.685,
-      "top10SharePct": 41.21,
-      "regCostTao": 0.1215,
-      "blockRef": 9437747
+      "earnerCount": 68,
+      "top1SharePct": 4.684,
+      "top10SharePct": 37.81,
+      "regCostTao": 0.1852,
+      "blockRef": 9441369
     },
     {
       "netuid": 71,
@@ -1206,7 +1206,7 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 72,
@@ -1222,8 +1222,8 @@
       "earnerCount": 0,
       "top1SharePct": null,
       "top10SharePct": null,
-      "regCostTao": 0.0006121,
-      "blockRef": 9437747
+      "regCostTao": 0.0005411,
+      "blockRef": 9441369
     },
     {
       "netuid": 73,
@@ -1240,7 +1240,7 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.5,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 74,
@@ -1257,7 +1257,7 @@
       "top1SharePct": null,
       "top10SharePct": null,
       "regCostTao": 0.15,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 75,
@@ -1274,7 +1274,7 @@
       "top1SharePct": 99.77,
       "top10SharePct": 99.81,
       "regCostTao": 1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 76,
@@ -1283,20 +1283,20 @@
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
-      "gpuMentionFiles": 0,
+      "gpuMentionFiles": 1,
       "cutReason": "owner-capture",
       "unratedReason": null,
-      "minerBurnPct": 100,
-      "earnerCount": 0,
-      "top1SharePct": null,
-      "top10SharePct": null,
+      "minerBurnPct": 99.95,
+      "earnerCount": 2,
+      "top1SharePct": 96.77,
+      "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 77,
       "name": "Liquidity",
-      "rank": 29,
+      "rank": 30,
       "verdict": "unknown",
       "gpuFloor": null,
       "vramGb": null,
@@ -1304,16 +1304,16 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 15,
-      "top1SharePct": 21.17,
-      "top10SharePct": 92.05,
+      "earnerCount": 16,
+      "top1SharePct": 21.22,
+      "top10SharePct": 94.08,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 78,
       "name": "Umi",
-      "rank": 40,
+      "rank": 43,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -1325,12 +1325,12 @@
       "top1SharePct": 5.873,
       "top10SharePct": 41.65,
       "regCostTao": 0.375,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 79,
       "name": "MVTRX",
-      "rank": 63,
+      "rank": 65,
       "verdict": "needs-gpu",
       "gpuFloor": "0 GB VRAM (min_vram)",
       "vramGb": 0,
@@ -1338,16 +1338,16 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 247,
-      "top1SharePct": 0.9756,
-      "top10SharePct": 8.105,
-      "regCostTao": 0.09507,
-      "blockRef": 9437747
+      "earnerCount": 249,
+      "top1SharePct": 1.209,
+      "top10SharePct": 8.32,
+      "regCostTao": 0.115,
+      "blockRef": 9441369
     },
     {
       "netuid": 80,
       "name": "OpenRoboto",
-      "rank": 13,
+      "rank": 14,
       "verdict": "needs-gpu",
       "gpuFloor": null,
       "vramGb": null,
@@ -1359,7 +1359,7 @@
       "top1SharePct": 15.14,
       "top10SharePct": 95.5,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 81,
@@ -1371,12 +1371,12 @@
       "gpuMentionFiles": null,
       "cutReason": "owner-capture",
       "unratedReason": null,
-      "minerBurnPct": 99.21,
-      "earnerCount": 27,
-      "top1SharePct": 14.29,
-      "top10SharePct": 73.67,
+      "minerBurnPct": 99.04,
+      "earnerCount": 14,
+      "top1SharePct": 16.01,
+      "top10SharePct": 90.52,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 82,
@@ -1392,13 +1392,13 @@
       "earnerCount": 64,
       "top1SharePct": 1.731,
       "top10SharePct": 17.25,
-      "regCostTao": 8.141,
-      "blockRef": 9437747
+      "regCostTao": 7.594,
+      "blockRef": 9441369
     },
     {
       "netuid": 83,
       "name": "CliqueAI",
-      "rank": 58,
+      "rank": 60,
       "verdict": "needs-gpu",
       "gpuFloor": "8 GB VRAM (min_vram)",
       "vramGb": 8,
@@ -1406,11 +1406,11 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 237,
-      "top1SharePct": 1.491,
-      "top10SharePct": 12.56,
+      "earnerCount": 241,
+      "top1SharePct": 2.218,
+      "top10SharePct": 13.21,
       "regCostTao": 0.1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 84,
@@ -1427,12 +1427,12 @@
       "top1SharePct": null,
       "top10SharePct": null,
       "regCostTao": 0.9,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 85,
       "name": "Vidaio",
-      "rank": 34,
+      "rank": 35,
       "verdict": "needs-gpu",
       "gpuFloor": null,
       "vramGb": null,
@@ -1444,7 +1444,7 @@
       "top1SharePct": 89.56,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 86,
@@ -1461,7 +1461,7 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 87,
@@ -1477,13 +1477,13 @@
       "earnerCount": 0,
       "top1SharePct": null,
       "top10SharePct": null,
-      "regCostTao": 0.001208,
-      "blockRef": 9437747
+      "regCostTao": 0.001082,
+      "blockRef": 9441369
     },
     {
       "netuid": 88,
       "name": "Investing",
-      "rank": 68,
+      "rank": 71,
       "verdict": "needs-gpu",
       "gpuFloor": null,
       "vramGb": null,
@@ -1491,28 +1491,28 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 50,
-      "top1SharePct": 28.09,
-      "top10SharePct": 85.48,
-      "regCostTao": 0.01185,
-      "blockRef": 9437747
+      "earnerCount": 55,
+      "top1SharePct": 30.53,
+      "top10SharePct": 87.17,
+      "regCostTao": 0.01,
+      "blockRef": 9441369
     },
     {
       "netuid": 89,
       "name": "InfiniteQuant",
-      "rank": 45,
+      "rank": 48,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": 0,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 49.99,
-      "earnerCount": 16,
-      "top1SharePct": 23.12,
-      "top10SharePct": 95.71,
+      "minerBurnPct": 50.08,
+      "earnerCount": 17,
+      "top1SharePct": 24.77,
+      "top10SharePct": 95.01,
       "regCostTao": 0.025,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 90,
@@ -1524,46 +1524,46 @@
       "gpuMentionFiles": null,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 7.63,
+      "minerBurnPct": 0,
       "earnerCount": 2,
-      "top1SharePct": 83.57,
+      "top1SharePct": 82.55,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 91,
       "name": "cascade",
-      "rank": 15,
+      "rank": 16,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": 1,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 47.46,
+      "minerBurnPct": 47.47,
       "earnerCount": 2,
-      "top1SharePct": 89.97,
+      "top1SharePct": 89.96,
       "top10SharePct": 100,
       "regCostTao": 0.1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 92,
       "name": "REAX",
-      "rank": 64,
+      "rank": 68,
       "verdict": "unknown",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": null,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 19.5,
+      "minerBurnPct": 41.1,
       "earnerCount": 200,
-      "top1SharePct": 13.98,
-      "top10SharePct": 59.93,
+      "top1SharePct": 25.44,
+      "top10SharePct": 45.15,
       "regCostTao": 0.5,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 93,
@@ -1575,12 +1575,12 @@
       "gpuMentionFiles": 0,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 1.655,
+      "minerBurnPct": 1.753,
       "earnerCount": 2,
       "top1SharePct": 91.46,
       "top10SharePct": 100,
       "regCostTao": 0.005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 94,
@@ -1596,8 +1596,8 @@
       "earnerCount": 0,
       "top1SharePct": null,
       "top10SharePct": null,
-      "regCostTao": 0.0009754,
-      "blockRef": 9437747
+      "regCostTao": 0.000935,
+      "blockRef": 9441369
     },
     {
       "netuid": 95,
@@ -1614,12 +1614,12 @@
       "top1SharePct": null,
       "top10SharePct": null,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 96,
       "name": "Verathos",
-      "rank": 65,
+      "rank": 67,
       "verdict": "needs-gpu",
       "gpuFloor": "24 GB VRAM (min_vram)",
       "vramGb": 24,
@@ -1628,15 +1628,15 @@
       "unratedReason": null,
       "minerBurnPct": 85,
       "earnerCount": 17,
-      "top1SharePct": 17.81,
-      "top10SharePct": 91.47,
+      "top1SharePct": 19.9,
+      "top10SharePct": 91.52,
       "regCostTao": 0.1,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 97,
       "name": "Ingot",
-      "rank": 7,
+      "rank": 8,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -1647,8 +1647,8 @@
       "earnerCount": 5,
       "top1SharePct": 20,
       "top10SharePct": 100,
-      "regCostTao": 0.09145,
-      "blockRef": 9437747
+      "regCostTao": 0.08033,
+      "blockRef": 9441369
     },
     {
       "netuid": 98,
@@ -1665,12 +1665,12 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.05,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 99,
       "name": "Thirty Spokes",
-      "rank": 21,
+      "rank": 23,
       "verdict": null,
       "gpuFloor": null,
       "vramGb": null,
@@ -1682,7 +1682,7 @@
       "top1SharePct": 85,
       "top10SharePct": 100,
       "regCostTao": 0.5,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 100,
@@ -1699,12 +1699,12 @@
       "top1SharePct": null,
       "top10SharePct": null,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 101,
       "name": "Tag101",
-      "rank": 59,
+      "rank": 62,
       "verdict": "unknown",
       "gpuFloor": "0 GB VRAM (min_vram)",
       "vramGb": 0,
@@ -1712,16 +1712,16 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 241,
-      "top1SharePct": 0.6461,
-      "top10SharePct": 5.089,
-      "regCostTao": 0.03531,
-      "blockRef": 9437747
+      "earnerCount": 242,
+      "top1SharePct": 0.6528,
+      "top10SharePct": 5.056,
+      "regCostTao": 0.03391,
+      "blockRef": 9441369
     },
     {
       "netuid": 102,
       "name": "ConnitoAI",
-      "rank": 19,
+      "rank": 20,
       "verdict": "needs-gpu",
       "gpuFloor": null,
       "vramGb": null,
@@ -1730,15 +1730,15 @@
       "unratedReason": null,
       "minerBurnPct": 25.01,
       "earnerCount": 5,
-      "top1SharePct": 31.47,
+      "top1SharePct": 44.46,
       "top10SharePct": 100,
-      "regCostTao": 0.05494,
-      "blockRef": 9437747
+      "regCostTao": 0.06648,
+      "blockRef": 9441369
     },
     {
       "netuid": 103,
       "name": "Terza Inference",
-      "rank": 14,
+      "rank": 18,
       "verdict": "unknown",
       "gpuFloor": null,
       "vramGb": null,
@@ -1747,10 +1747,10 @@
       "unratedReason": null,
       "minerBurnPct": 0,
       "earnerCount": 5,
-      "top1SharePct": 39.6,
+      "top1SharePct": 33.29,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 104,
@@ -1763,16 +1763,16 @@
       "cutReason": "winner-take-all",
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 1,
-      "top1SharePct": 100,
+      "earnerCount": 2,
+      "top1SharePct": 99.57,
       "top10SharePct": 100,
       "regCostTao": 0.5,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 105,
       "name": "Beam",
-      "rank": 67,
+      "rank": 70,
       "verdict": null,
       "gpuFloor": null,
       "vramGb": null,
@@ -1780,16 +1780,16 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 214,
-      "top1SharePct": 5.638,
-      "top10SharePct": 47.97,
-      "regCostTao": 0.009403,
-      "blockRef": 9437747
+      "earnerCount": 219,
+      "top1SharePct": 2.065,
+      "top10SharePct": 18.96,
+      "regCostTao": 0.01301,
+      "blockRef": 9441369
     },
     {
       "netuid": 106,
       "name": "Nodexo",
-      "rank": 41,
+      "rank": 44,
       "verdict": "needs-gpu",
       "gpuFloor": null,
       "vramGb": null,
@@ -1798,15 +1798,15 @@
       "unratedReason": null,
       "minerBurnPct": 0,
       "earnerCount": 10,
-      "top1SharePct": 44.78,
+      "top1SharePct": 46.55,
       "top10SharePct": 100,
-      "regCostTao": 0.0005901,
-      "blockRef": 9437747
+      "regCostTao": 0.000539,
+      "blockRef": 9441369
     },
     {
       "netuid": 107,
       "name": "Minos",
-      "rank": 24,
+      "rank": 26,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -1818,7 +1818,7 @@
       "top1SharePct": 80.01,
       "top10SharePct": 94.17,
       "regCostTao": 0.99,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 108,
@@ -1834,8 +1834,8 @@
       "earnerCount": 0,
       "top1SharePct": null,
       "top10SharePct": null,
-      "regCostTao": 0.05,
-      "blockRef": 9437747
+      "regCostTao": 0.05267,
+      "blockRef": 9441369
     },
     {
       "netuid": 109,
@@ -1852,7 +1852,7 @@
       "top1SharePct": null,
       "top10SharePct": null,
       "regCostTao": 0.5,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 110,
@@ -1869,12 +1869,12 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 111,
       "name": "Claims",
-      "rank": 38,
+      "rank": 40,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -1885,8 +1885,8 @@
       "earnerCount": 6,
       "top1SharePct": 90,
       "top10SharePct": 100,
-      "regCostTao": 0.05,
-      "blockRef": 9437747
+      "regCostTao": 0.06891,
+      "blockRef": 9441369
     },
     {
       "netuid": 112,
@@ -1903,7 +1903,7 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.99,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 113,
@@ -1920,12 +1920,12 @@
       "top1SharePct": null,
       "top10SharePct": null,
       "regCostTao": 0.001,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 114,
       "name": "SOMA",
-      "rank": 54,
+      "rank": 57,
       "verdict": "possible",
       "gpuFloor": null,
       "vramGb": null,
@@ -1933,11 +1933,11 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 22,
-      "top1SharePct": 64.98,
-      "top10SharePct": 99.98,
+      "earnerCount": 11,
+      "top1SharePct": 65,
+      "top10SharePct": 100,
       "regCostTao": 0.25,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 115,
@@ -1954,7 +1954,7 @@
       "top1SharePct": null,
       "top10SharePct": null,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 116,
@@ -1970,13 +1970,13 @@
       "earnerCount": 0,
       "top1SharePct": null,
       "top10SharePct": null,
-      "regCostTao": 0.001343,
-      "blockRef": 9437747
+      "regCostTao": 0.0008104,
+      "blockRef": 9441369
     },
     {
       "netuid": 117,
       "name": "everyframe.studio",
-      "rank": 50,
+      "rank": 46,
       "verdict": "unknown",
       "gpuFloor": null,
       "vramGb": null,
@@ -1984,11 +1984,11 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 22,
-      "top1SharePct": 54.25,
-      "top10SharePct": 94.81,
+      "earnerCount": 27,
+      "top1SharePct": 75.57,
+      "top10SharePct": 92.21,
       "regCostTao": 0.05,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 118,
@@ -2002,10 +2002,10 @@
       "unratedReason": null,
       "minerBurnPct": 0,
       "earnerCount": 11,
-      "top1SharePct": 28.01,
-      "top10SharePct": 98.08,
+      "top1SharePct": 27.89,
+      "top10SharePct": 98.07,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 119,
@@ -2022,7 +2022,7 @@
       "top1SharePct": null,
       "top10SharePct": null,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 120,
@@ -2038,8 +2038,8 @@
       "earnerCount": 10,
       "top1SharePct": 10,
       "top10SharePct": 100,
-      "regCostTao": 1.465,
-      "blockRef": 9437747
+      "regCostTao": 1.149,
+      "blockRef": 9441369
     },
     {
       "netuid": 121,
@@ -2049,14 +2049,14 @@
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": null,
-      "cutReason": "owner-capture",
+      "cutReason": "winner-take-all",
       "unratedReason": null,
-      "minerBurnPct": 100,
-      "earnerCount": 0,
-      "top1SharePct": null,
-      "top10SharePct": null,
-      "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "minerBurnPct": 60.65,
+      "earnerCount": 1,
+      "top1SharePct": 100,
+      "top10SharePct": 100,
+      "regCostTao": 0.0005505,
+      "blockRef": 9441369
     },
     {
       "netuid": 122,
@@ -2073,24 +2073,24 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 123,
       "name": "MANTIS",
-      "rank": 66,
+      "rank": 69,
       "verdict": "unknown",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": null,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 46.48,
-      "earnerCount": 250,
-      "top1SharePct": 6.223,
-      "top10SharePct": 24.93,
+      "minerBurnPct": 46.46,
+      "earnerCount": 249,
+      "top1SharePct": 5.952,
+      "top10SharePct": 23.78,
       "regCostTao": 0.15,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 124,
@@ -2103,62 +2103,62 @@
       "cutReason": null,
       "unratedReason": null,
       "minerBurnPct": 0,
-      "earnerCount": 15,
-      "top1SharePct": 31.22,
-      "top10SharePct": 96.03,
-      "regCostTao": 0.5,
-      "blockRef": 9437747
+      "earnerCount": 17,
+      "top1SharePct": 26.58,
+      "top10SharePct": 93.01,
+      "regCostTao": 0.5039,
+      "blockRef": 9441369
     },
     {
       "netuid": 125,
       "name": "Refinery",
-      "rank": 26,
+      "rank": 29,
       "verdict": "unknown",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": null,
       "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 44.41,
+      "minerBurnPct": 47.66,
       "earnerCount": 3,
-      "top1SharePct": 80.42,
+      "top1SharePct": 80.29,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 126,
       "name": "Attelier",
-      "rank": null,
+      "rank": 42,
       "verdict": null,
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": null,
-      "cutReason": "winner-take-all",
+      "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 95,
-      "earnerCount": 1,
-      "top1SharePct": 100,
+      "minerBurnPct": 95.14,
+      "earnerCount": 4,
+      "top1SharePct": 39.5,
       "top10SharePct": 100,
       "regCostTao": 0.2,
-      "blockRef": 9437747
+      "blockRef": 9441369
     },
     {
       "netuid": 127,
       "name": "Zils",
-      "rank": null,
+      "rank": 27,
       "verdict": "needs-gpu",
       "gpuFloor": null,
       "vramGb": null,
       "gpuMentionFiles": null,
-      "cutReason": "owner-capture",
+      "cutReason": null,
       "unratedReason": null,
-      "minerBurnPct": 99,
-      "earnerCount": 1,
-      "top1SharePct": 100,
+      "minerBurnPct": 87,
+      "earnerCount": 2,
+      "top1SharePct": 69.23,
       "top10SharePct": 100,
-      "regCostTao": 0.006649,
-      "blockRef": 9437747
+      "regCostTao": 0.01277,
+      "blockRef": 9441369
     },
     {
       "netuid": 128,
@@ -2175,7 +2175,7 @@
       "top1SharePct": 100,
       "top10SharePct": 100,
       "regCostTao": 0.0005,
-      "blockRef": 9437747
+      "blockRef": 9441369
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-05T06:18:12.746974+00:00",
+  "generatedAt": "2026-11-05T18:19:26.619401+00:00",
   "data": {
     "vitals": [
       {
@@ -554,13 +554,21 @@
       }
     ],
     "gate": {
-      "observedAt": "2026-11-05T06:18:12.746974+00:00",
+      "observedAt": "2026-11-05T18:19:26.619401+00:00",
       "active": true,
-      "theta": 0.008326,
+      "theta": 0.008351,
       "aboveCount": 32,
       "barMode": "rank"
     },
     "crossings": [
+      {
+        "observedAt": "2026-11-05T18:19:56.533876+00:00",
+        "netuid": 58,
+        "direction": "rose-above",
+        "share": 0.009814,
+        "theta": 0.008351,
+        "eligibility": "pending"
+      },
       {
         "observedAt": "2026-11-01T21:09:45.206531+00:00",
         "netuid": 41,
@@ -648,71 +656,63 @@
         "share": 0.008415,
         "theta": 0.007603,
         "eligibility": "eligible"
-      },
-      {
-        "observedAt": "2026-10-22T02:08:49.790380+00:00",
-        "netuid": 97,
-        "direction": "fell-below",
-        "share": 0.00507,
-        "theta": 0.007657,
-        "eligibility": "reversed"
       }
     ],
     "emission": [
       {
         "netuid": 1,
-        "pct": 0.002915,
-        "pctThen": 0.006037
+        "pct": 0.002554,
+        "pctThen": 0.005293
       },
       {
         "netuid": 2,
         "pct": 0,
-        "pctThen": 0.0000342
+        "pctThen": 0.0000282
       },
       {
         "netuid": 3,
-        "pct": 2.947,
-        "pctThen": 3.298
+        "pct": 2.937,
+        "pctThen": 3.318
       },
       {
         "netuid": 4,
-        "pct": 7.998,
-        "pctThen": 6.791
+        "pct": 8.021,
+        "pctThen": 6.838
       },
       {
         "netuid": 5,
-        "pct": 1.287,
-        "pctThen": 1.369
+        "pct": 1.273,
+        "pctThen": 1.385
       },
       {
         "netuid": 6,
-        "pct": 0.006002,
-        "pctThen": 0.007611
+        "pct": 0.005696,
+        "pctThen": 0.007891
       },
       {
         "netuid": 7,
         "pct": 0,
-        "pctThen": 0.007733
+        "pctThen": 0.006295
       },
       {
         "netuid": 8,
-        "pct": 4.46,
-        "pctThen": 3.84
+        "pct": 4.479,
+        "pctThen": 3.856
       },
       {
         "netuid": 9,
-        "pct": 3.099,
-        "pctThen": 3.201
+        "pct": 3.101,
+        "pctThen": 3.208
       },
       {
         "netuid": 10,
-        "pct": 0.002072,
+        "pct": 0.001767,
         "pctThen": 0
       },
       {
         "netuid": 11,
-        "pct": 0.2685,
-        "pctThen": 0.4991
+        "pct": 0.2804,
+        "pctThen": 0.5095
       },
       {
         "netuid": 12,
@@ -721,73 +721,73 @@
       },
       {
         "netuid": 13,
-        "pct": 0.00045,
-        "pctThen": 0.0009262
+        "pct": 0.0004402,
+        "pctThen": 0.0009042
       },
       {
         "netuid": 14,
-        "pct": 0.7514,
-        "pctThen": 0.6856
+        "pct": 0.7254,
+        "pctThen": 0.6946
       },
       {
         "netuid": 15,
-        "pct": 2.266,
-        "pctThen": 3.343
+        "pct": 2.282,
+        "pctThen": 3.255
       },
       {
         "netuid": 16,
-        "pct": 0.0000096,
-        "pctThen": 0.0003242
+        "pct": 0.0000468,
+        "pctThen": 0.00033
       },
       {
         "netuid": 17,
-        "pct": 0.3004,
-        "pctThen": 0.6266
+        "pct": 0.2897,
+        "pctThen": 0.6343
       },
       {
         "netuid": 18,
-        "pct": 0.03664,
-        "pctThen": 0.03429
+        "pct": 0.02484,
+        "pctThen": 0.05051
       },
       {
         "netuid": 19,
-        "pct": 0.6952,
-        "pctThen": 0.7332
+        "pct": 0.6678,
+        "pctThen": 0.7575
       },
       {
         "netuid": 20,
-        "pct": 0.006649,
-        "pctThen": 0.007517
+        "pct": 0.006459,
+        "pctThen": 0.00788
       },
       {
         "netuid": 21,
-        "pct": 0.1178,
-        "pctThen": 0.04433
+        "pct": 0.1139,
+        "pctThen": 0.04424
       },
       {
         "netuid": 22,
-        "pct": 0.00348,
-        "pctThen": 0.0001936
+        "pct": 0.00332,
+        "pctThen": 0.0001886
       },
       {
         "netuid": 23,
-        "pct": 0.000868,
-        "pctThen": 0.0004956
+        "pct": 0.0008332,
+        "pctThen": 0.0005526
       },
       {
         "netuid": 24,
-        "pct": 1.211,
+        "pct": 1.207,
         "pctThen": 0
       },
       {
         "netuid": 25,
-        "pct": 0.06726,
+        "pct": 0.06517,
         "pctThen": 0
       },
       {
         "netuid": 26,
         "pct": 0,
-        "pctThen": 0.008232
+        "pctThen": 0.008887
       },
       {
         "netuid": 27,
@@ -796,12 +796,12 @@
       },
       {
         "netuid": 28,
-        "pct": 4,
-        "pctThen": 2.225
+        "pct": 3.859,
+        "pctThen": 2.807
       },
       {
         "netuid": 29,
-        "pct": 0.009579,
+        "pct": 0.009205,
         "pctThen": 0
       },
       {
@@ -811,43 +811,43 @@
       },
       {
         "netuid": 31,
-        "pct": 0.06281,
+        "pct": 0.06171,
         "pctThen": 0
       },
       {
         "netuid": 32,
-        "pct": 0.009001,
-        "pctThen": 0.01426
+        "pct": 0.008609,
+        "pctThen": 0.01463
       },
       {
         "netuid": 33,
-        "pct": 0.007123,
-        "pctThen": 0.07154
+        "pct": 0.006894,
+        "pctThen": 0.0694
       },
       {
         "netuid": 34,
-        "pct": 1.285,
-        "pctThen": 1.234
+        "pct": 1.268,
+        "pctThen": 1.25
       },
       {
         "netuid": 35,
-        "pct": 0.0000368,
+        "pct": 0.000034,
         "pctThen": 0
       },
       {
         "netuid": 36,
-        "pct": 6e-7,
+        "pct": 0.0000478,
         "pctThen": 0
       },
       {
         "netuid": 37,
-        "pct": 0.0000742,
+        "pct": 0.01056,
         "pctThen": 0
       },
       {
         "netuid": 38,
-        "pct": 0.2437,
-        "pctThen": 2.358
+        "pct": 0.2061,
+        "pctThen": 2.338
       },
       {
         "netuid": 39,
@@ -857,12 +857,12 @@
       {
         "netuid": 40,
         "pct": 0,
-        "pctThen": 0.008873
+        "pctThen": 0.008913
       },
       {
         "netuid": 41,
-        "pct": 0.679,
-        "pctThen": 0.4582
+        "pct": 0.686,
+        "pctThen": 0.4633
       },
       {
         "netuid": 42,
@@ -871,48 +871,48 @@
       },
       {
         "netuid": 43,
-        "pct": 0.0000972,
-        "pctThen": 0.0001124
+        "pct": 0.0000952,
+        "pctThen": 0.0001396
       },
       {
         "netuid": 44,
-        "pct": 4.361,
-        "pctThen": 4.739
+        "pct": 4.389,
+        "pctThen": 4.761
       },
       {
         "netuid": 45,
-        "pct": 0.0004728,
-        "pctThen": 0.0004838
+        "pct": 0.0004092,
+        "pctThen": 0.0002918
       },
       {
         "netuid": 46,
-        "pct": 0.001756,
-        "pctThen": 0.002752
+        "pct": 0.00203,
+        "pctThen": 0.002819
       },
       {
         "netuid": 47,
-        "pct": 0.001472,
-        "pctThen": 0.002646
+        "pct": 0.001379,
+        "pctThen": 0.002618
       },
       {
         "netuid": 48,
-        "pct": 0.551,
-        "pctThen": 0.06416
+        "pct": 0.5255,
+        "pctThen": 0.06556
       },
       {
         "netuid": 49,
-        "pct": 0.187,
-        "pctThen": 0.6974
+        "pct": 0.1766,
+        "pctThen": 2e-7
       },
       {
         "netuid": 50,
-        "pct": 0.01414,
-        "pctThen": 0.1259
+        "pct": 0.01346,
+        "pctThen": 0.1177
       },
       {
         "netuid": 51,
-        "pct": 16.24,
-        "pctThen": 12.4
+        "pct": 16.58,
+        "pctThen": 12.48
       },
       {
         "netuid": 52,
@@ -921,23 +921,23 @@
       },
       {
         "netuid": 53,
-        "pct": 3.988,
-        "pctThen": 4.351
+        "pct": 3.894,
+        "pctThen": 4.526
       },
       {
         "netuid": 54,
-        "pct": 0.1165,
-        "pctThen": 0.07981
+        "pct": 0.113,
+        "pctThen": 0.08095
       },
       {
         "netuid": 55,
-        "pct": 0.005836,
-        "pctThen": 0.006224
+        "pct": 0.005551,
+        "pctThen": 0.006292
       },
       {
         "netuid": 56,
-        "pct": 1.728,
-        "pctThen": 1.73
+        "pct": 1.717,
+        "pctThen": 1.745
       },
       {
         "netuid": 57,
@@ -946,58 +946,58 @@
       },
       {
         "netuid": 58,
-        "pct": 0.01641,
+        "pct": 0.837,
         "pctThen": 0
       },
       {
         "netuid": 59,
-        "pct": 0.4368,
+        "pct": 0.4115,
         "pctThen": 0
       },
       {
         "netuid": 60,
-        "pct": 0.001136,
-        "pctThen": 0.01172
+        "pct": 0.001093,
+        "pctThen": 0.01221
       },
       {
         "netuid": 61,
-        "pct": 0.1547,
-        "pctThen": 1.055
+        "pct": 0.1493,
+        "pctThen": 1.117
       },
       {
         "netuid": 62,
-        "pct": 0.5752,
-        "pctThen": 0.907
+        "pct": 0.5546,
+        "pctThen": 0.8803
       },
       {
         "netuid": 63,
-        "pct": 0.09158,
-        "pctThen": 0.06207
+        "pct": 0.09473,
+        "pctThen": 0.06386
       },
       {
         "netuid": 64,
-        "pct": 9.308,
-        "pctThen": 9.382
+        "pct": 9.325,
+        "pctThen": 9.383
       },
       {
         "netuid": 65,
-        "pct": 0.0000592,
-        "pctThen": 0.0000188
+        "pct": 0.0000612,
+        "pctThen": 0.00002
       },
       {
         "netuid": 66,
-        "pct": 0.008642,
-        "pctThen": 0.03351
+        "pct": 0.007857,
+        "pctThen": 0.03194
       },
       {
         "netuid": 67,
-        "pct": 0.01232,
-        "pctThen": 0.03404
+        "pct": 0.01262,
+        "pctThen": 0.0365
       },
       {
         "netuid": 68,
-        "pct": 2.196,
-        "pctThen": 2.73
+        "pct": 2.183,
+        "pctThen": 2.759
       },
       {
         "netuid": 69,
@@ -1006,13 +1006,13 @@
       },
       {
         "netuid": 70,
-        "pct": 0.001012,
-        "pctThen": 0.0006248
+        "pct": 0.004161,
+        "pctThen": 0.0005818
       },
       {
         "netuid": 71,
-        "pct": 0.003409,
-        "pctThen": 0.0004482
+        "pct": 0.003303,
+        "pctThen": 0.0004962
       },
       {
         "netuid": 72,
@@ -1021,18 +1021,18 @@
       },
       {
         "netuid": 73,
-        "pct": 0.01071,
+        "pct": 0.009886,
         "pctThen": 0
       },
       {
         "netuid": 74,
         "pct": 0,
-        "pctThen": 0.001766
+        "pctThen": 0.001793
       },
       {
         "netuid": 75,
-        "pct": 2.236,
-        "pctThen": 1.922
+        "pct": 2.2,
+        "pctThen": 1.904
       },
       {
         "netuid": 76,
@@ -1041,28 +1041,28 @@
       },
       {
         "netuid": 77,
-        "pct": 0.09619,
-        "pctThen": 0.1455
+        "pct": 0.09267,
+        "pctThen": 0.1491
       },
       {
         "netuid": 78,
-        "pct": 0.002899,
-        "pctThen": 0.02177
+        "pct": 0.002555,
+        "pctThen": 0.01962
       },
       {
         "netuid": 79,
-        "pct": 0.01995,
-        "pctThen": 0.02511
+        "pct": 0.01829,
+        "pctThen": 0.02572
       },
       {
         "netuid": 80,
-        "pct": 1.695,
-        "pctThen": 3.029
+        "pct": 1.717,
+        "pctThen": 2.884
       },
       {
         "netuid": 81,
         "pct": 0,
-        "pctThen": 0.002823
+        "pctThen": 0.003161
       },
       {
         "netuid": 82,
@@ -1071,8 +1071,8 @@
       },
       {
         "netuid": 83,
-        "pct": 0.377,
-        "pctThen": 0.5657
+        "pct": 0.3643,
+        "pctThen": 0.5702
       },
       {
         "netuid": 84,
@@ -1081,12 +1081,12 @@
       },
       {
         "netuid": 85,
-        "pct": 0.09516,
-        "pctThen": 0.2227
+        "pct": 0.08876,
+        "pctThen": 0.2229
       },
       {
         "netuid": 86,
-        "pct": 0.002155,
+        "pct": 0.001886,
         "pctThen": 0
       },
       {
@@ -1096,33 +1096,33 @@
       },
       {
         "netuid": 88,
-        "pct": 0.007823,
-        "pctThen": 0.01844
+        "pct": 0.00763,
+        "pctThen": 0.01847
       },
       {
         "netuid": 89,
-        "pct": 0.001131,
-        "pctThen": 0.0218
+        "pct": 0.001077,
+        "pctThen": 0.02244
       },
       {
         "netuid": 90,
-        "pct": 1.779,
-        "pctThen": 2.622
+        "pct": 1.934,
+        "pctThen": 2.567
       },
       {
         "netuid": 91,
-        "pct": 0.004168,
-        "pctThen": 0.1274
+        "pct": 0.003726,
+        "pctThen": 0.1241
       },
       {
         "netuid": 92,
-        "pct": 1.417,
-        "pctThen": 0.001146
+        "pct": 0.7504,
+        "pctThen": 0.001156
       },
       {
         "netuid": 93,
-        "pct": 1.658,
-        "pctThen": 2.562
+        "pct": 1.666,
+        "pctThen": 2.486
       },
       {
         "netuid": 94,
@@ -1136,63 +1136,63 @@
       },
       {
         "netuid": 96,
-        "pct": 0.00001,
-        "pctThen": 0.02325
+        "pct": 0.0000094,
+        "pctThen": 0.02297
       },
       {
         "netuid": 97,
-        "pct": 1.184,
-        "pctThen": 1.868
+        "pct": 1.153,
+        "pctThen": 1.845
       },
       {
         "netuid": 98,
-        "pct": 0.005355,
-        "pctThen": 0.005902
+        "pct": 0.004988,
+        "pctThen": 0.006166
       },
       {
         "netuid": 99,
-        "pct": 0.000407,
-        "pctThen": 0.0003096
+        "pct": 0.0003594,
+        "pctThen": 0.0003232
       },
       {
         "netuid": 100,
         "pct": 0,
-        "pctThen": 0.009643
+        "pctThen": 0.005828
       },
       {
         "netuid": 101,
-        "pct": 0.0287,
-        "pctThen": 0.000003
+        "pct": 0.02716,
+        "pctThen": 0.0000034
       },
       {
         "netuid": 102,
-        "pct": 0.04498,
-        "pctThen": 0.07135
+        "pct": 0.04184,
+        "pctThen": 0.07124
       },
       {
         "netuid": 103,
-        "pct": 0.1652,
-        "pctThen": 0.0002404
+        "pct": 0.132,
+        "pctThen": 0.0002394
       },
       {
         "netuid": 104,
-        "pct": 0.05749,
+        "pct": 0.05529,
         "pctThen": 0
       },
       {
         "netuid": 105,
-        "pct": 0.179,
-        "pctThen": 0.2548
+        "pct": 0.1618,
+        "pctThen": 0.2602
       },
       {
         "netuid": 106,
-        "pct": 0.005595,
-        "pctThen": 0.006723
+        "pct": 0.005105,
+        "pctThen": 0.006957
       },
       {
         "netuid": 107,
-        "pct": 3.781,
-        "pctThen": 5.226
+        "pct": 3.778,
+        "pctThen": 5.136
       },
       {
         "netuid": 108,
@@ -1206,18 +1206,18 @@
       },
       {
         "netuid": 110,
-        "pct": 3.49,
-        "pctThen": 2.209
+        "pct": 3.488,
+        "pctThen": 2.28
       },
       {
         "netuid": 111,
-        "pct": 0.06036,
-        "pctThen": 0.07879
+        "pct": 0.05852,
+        "pctThen": 0.08028
       },
       {
         "netuid": 112,
-        "pct": 0.5785,
-        "pctThen": 0.000188
+        "pct": 0.5779,
+        "pctThen": 0.0001954
       },
       {
         "netuid": 113,
@@ -1226,8 +1226,8 @@
       },
       {
         "netuid": 114,
-        "pct": 2.21,
-        "pctThen": 2.567
+        "pct": 2.12,
+        "pctThen": 2.539
       },
       {
         "netuid": 115,
@@ -1241,13 +1241,13 @@
       },
       {
         "netuid": 117,
-        "pct": 0.3956,
+        "pct": 0.3808,
         "pctThen": 0
       },
       {
         "netuid": 118,
-        "pct": 0.04362,
-        "pctThen": 0.03262
+        "pct": 0.03846,
+        "pctThen": 0.04082
       },
       {
         "netuid": 119,
@@ -1256,33 +1256,33 @@
       },
       {
         "netuid": 120,
-        "pct": 5.868,
-        "pctThen": 6.122
+        "pct": 5.869,
+        "pctThen": 6.168
       },
       {
         "netuid": 121,
-        "pct": 0,
+        "pct": 0.0007598,
         "pctThen": 0
       },
       {
         "netuid": 122,
-        "pct": 0.0000982,
-        "pctThen": 0.07552
+        "pct": 0.000092,
+        "pctThen": 0.01719
       },
       {
         "netuid": 123,
-        "pct": 0.0005758,
-        "pctThen": 0.0006026
+        "pct": 0.000552,
+        "pctThen": 0.0006288
       },
       {
         "netuid": 124,
-        "pct": 0.6562,
-        "pctThen": 0.8323
+        "pct": 0.6282,
+        "pctThen": 0.873
       },
       {
         "netuid": 125,
-        "pct": 0.0007258,
-        "pctThen": 0.01516
+        "pct": 0.0005446,
+        "pctThen": 0.0156
       },
       {
         "netuid": 126,
@@ -1291,16 +1291,16 @@
       },
       {
         "netuid": 127,
-        "pct": 0,
-        "pctThen": 0.0000474
+        "pct": 0.000015,
+        "pctThen": 0.0000438
       },
       {
         "netuid": 128,
-        "pct": 0.01236,
-        "pctThen": 0.01632
+        "pct": 0.01263,
+        "pctThen": 0.01683
       }
     ],
-    "emissionSince": "2026-10-06T06:03:40.400911+00:00",
+    "emissionSince": "2026-10-06T18:04:38.248847+00:00",
     "params": [
       {
         "item": "SubnetEmissionEnabled[82]",
