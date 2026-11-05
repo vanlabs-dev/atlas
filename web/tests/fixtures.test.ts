@@ -101,5 +101,8 @@ test("mining rows come from a model-3 export", () => {
 
 test("fixtures carry no dropped or rent-bounding field", () => {
   const text = files.map((n) => readFileSync(join(DIR, n), "utf8")).join("\n");
-  assert.doesNotMatch(text, /cueKind|netTaoMonth|gateState|confidence|grossTaoMonth|priceTao|payback|requiredBand|rent/i);
+  assert.doesNotMatch(text, /cueKind|netTaoMonth|gateState|confidence|grossTaoMonth|priceTao|payback|requiredBand/i);
+  // Rent as a field or word ("rent", "net_rent", "rentBand", "netRent"), not inside
+  // words in public commit titles ("parents", "current").
+  assert.doesNotMatch(text, /(?<![a-z])rent|Rent|RENT/);
 });

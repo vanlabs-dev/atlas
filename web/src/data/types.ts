@@ -152,6 +152,34 @@ export interface SpecUpgrade {
   source: string | null;
 }
 
+/** What one chain upgrade shipped, from the subtensor repository. */
+export interface Release {
+  /** The chain spec it shipped as, or the repo spec when pending. */
+  spec: number;
+  /** Merged in the repository, not on chain yet. */
+  pending: boolean;
+  /** When Atlas first read code for this release. */
+  since: Iso;
+  /** Repo specs that never went live on their own, as "480" or "460, 461". */
+  bundled: string | null;
+  commits: number;
+  files: number;
+  adds: number;
+  dels: number;
+  /** A file or commit list was truncated: counts are lower bounds. */
+  partial: boolean;
+  headline: string | null;
+  headline2: string | null;
+  headline3: string | null;
+  filesRuntime: number;
+  filesPallets: number;
+  filesEvm: number;
+  filesNode: number;
+  filesSdk: number;
+  filesDocs: number;
+  filesTooling: number;
+}
+
 export interface UpgradeJob {
   spec: number | null;
   status: string | null;
@@ -159,5 +187,6 @@ export interface UpgradeJob {
 
 export interface Upgrades {
   events: SpecUpgrade[];
+  releases: Release[];
   job: UpgradeJob | null;
 }

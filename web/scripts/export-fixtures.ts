@@ -52,6 +52,7 @@ const fixtures = {
   }),
   upgrades: board(src.now, {
     events: all("upgrade", src.upgrades),
+    releases: all("release", src.releases),
     job: pick("upgradeJob", src.job),
   }),
 };

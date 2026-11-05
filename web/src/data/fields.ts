@@ -12,6 +12,7 @@ import type {
   Gate,
   MiningRow,
   ParamEvent,
+  Release,
   SignalEvent,
   SpecUpgrade,
   SubnetActivity,
@@ -48,6 +49,10 @@ export const FIELDS = {
   emission: keys<EmissionShare>()(["netuid", "pct", "pctThen"]),
   param: keys<ParamEvent>()(["item", "prevValue", "newValue", "observedAt", "block"]),
   upgrade: keys<SpecUpgrade>()(["observedAt", "prevSpec", "newSpec", "block", "source"]),
+  release: keys<Release>()([
+    "spec", "pending", "since", "bundled", "commits", "files", "adds", "dels", "partial", "headline", "headline2", "headline3",
+    "filesRuntime", "filesPallets", "filesEvm", "filesNode", "filesSdk", "filesDocs", "filesTooling",
+  ]),
   upgradeJob: keys<UpgradeJob>()(["spec", "status"]),
 };
 
