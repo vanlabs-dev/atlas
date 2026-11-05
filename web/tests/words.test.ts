@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { APART_AT, COLD, gapText, lastCommitText, whyText } from "../src/lib/fleet.ts";
 import { mean, num, pct, signed } from "../src/lib/format.ts";
+import { bundledText, heat } from "../src/lib/upgrades.ts";
 import { BAR_MODE, CROSSING, emissionMovers, paramRows, seriesTitle, usd } from "../src/lib/network.ts";
 
 const p = (item: string, prevValue: string | null, newValue: string | null) => ({ item, prevValue, newValue, observedAt: "2026-11-01T00:00:00Z", block: 1 });
@@ -89,4 +90,11 @@ test("emission movers rank by points and skip flat or missing rows", () => {
   assert.deepEqual(up.map((m) => m.netuid), [51]);
   assert.deepEqual(down.map((m) => m.netuid), [38]);
   assert.equal(CROSSING["fell-below"], "Fell below the bar");
+});
+
+test("upgrade heat steps and bundled specs read plainly", () => {
+  assert.deepEqual([0, 1, 9, 10, 39, 40, 99, 100, 865].map(heat), [0, 1, 1, 2, 2, 3, 3, 4, 4]);
+  assert.equal(bundledText(null), null);
+  assert.equal(bundledText("480"), "Includes spec 480, never live on its own");
+  assert.equal(bundledText("460, 461, 462"), "Includes specs 460, 461 and 462, never live on their own");
 });

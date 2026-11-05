@@ -12,10 +12,12 @@ export const SIGNAL_CLASSES = ["econ-code", "narrative-cluster", "signal-digest"
 export const DAYS = 90;
 
 export const REMOTE = String.raw`
-import datetime, json, sqlite3, sys
+import datetime, json, re, sqlite3, sys
 sys.path.insert(0, "fleet")
+sys.path.insert(0, "telegram")
 import atlas_fleet as fleet, atlas_fleet_dashboard as dash
 import atlas_fleet_metrics as metrics, atlas_fleet_mining as mining
+import atlas_telegram as tg
 
 DAYS = ${DAYS}
 SIGNAL_CLASSES = ${JSON.stringify(SIGNAL_CLASSES)}
@@ -107,8 +109,8 @@ emission_since = None
 emission = []
 if emission_now:
     target = (datetime.datetime.fromisoformat(emission_now) - datetime.timedelta(days=30)).isoformat()
-    passes = [r[0] for r in live.execute("SELECT DISTINCT observed_at FROM panel_snapshot")]
-    emission_since = max((p for p in passes if p <= target), default=None)
+    panel_passes = [r[0] for r in live.execute("SELECT DISTINCT observed_at FROM panel_snapshot")]
+    emission_since = max((p for p in panel_passes if p <= target), default=None)
     then = {r["netuid"]: r["emission_percent"] for r in rows(
         live, "SELECT netuid, emission_percent FROM panel_snapshot WHERE observed_at = ?",
         emission_since)} if emission_since else {}
@@ -118,6 +120,69 @@ if emission_now:
                               "WHERE observed_at = ? ORDER BY netuid", emission_now)]
 params = rows(live, "SELECT * FROM chain_param_events ORDER BY id DESC LIMIT 30")
 upgrades = rows(live, "SELECT * FROM spec_upgrades ORDER BY id")
+
+# Releases: what each chain upgrade shipped, from the subtensor repo ranges.
+# A range that bumps the spec ships in the first chain upgrade at or past
+# that spec. A range at an unchanged spec landed after that spec's release,
+# so it ships in the first chain upgrade after it was read. Ranges no chain
+# upgrade covers yet are merged and waiting. Files are counted once per
+# release, grouped into the areas the site's heat map shows.
+AREAS = {
+    "runtime": "runtime", "pallets": "pallets",
+    "precompiles": "evm", "chain-extensions": "evm", "ink-contract": "evm",
+    "node": "node", "primitives": "node", "common": "node", "support": "node",
+    "chainspecs": "node", "sdk": "sdk", "docs": "docs", "website": "docs",
+}
+AREA_COLS = ("runtime", "pallets", "evm", "node", "sdk", "docs", "tooling")
+RELEASE_TITLE = re.compile(r"^(?:release|v)[ -]?\d+\s*[-:–—]\s*(.+)$", re.I)
+NOISE = re.compile(r"^(?:(?:spec )?bump\b|release[ -]?\d+$|v?\d+ release\b|publish runtime)|\bCI\b|\bclippy\b", re.I)
+PR_REF = re.compile(r"\s*\(#\d+\)$")
+
+def headlines(commits):
+    subjects = [PR_REF.sub("", s) for s in tg._filter_commits(commits)]
+    titles = [m.group(1) for m in (RELEASE_TITLE.match(s) for s in subjects) if m]
+    rest = [t for t in (tg._tidy_subject(s) for s in subjects if not RELEASE_TITLE.match(s))
+            if not NOISE.search(t)]
+    return (titles + rest)[:3]
+
+repo = ro("var/repotrack/repotrack.db")
+chain = sorted(upgrades, key=lambda u: u["observed_at"])
+groups = {}
+for r in rows(repo, "SELECT retrieved_at, prev_spec, new_spec, commits_json, "
+                    "files_json FROM change_ranges ORDER BY id"):
+    if r["new_spec"] is None:
+        continue
+    bump = r["prev_spec"] is not None and r["prev_spec"] != r["new_spec"]
+    target = next((u for u in chain if u["new_spec"] >= r["new_spec"]
+                   and (bump or u["observed_at"] > r["retrieved_at"])), None)
+    groups.setdefault(target["new_spec"] if target else None, []).append((r, bump))
+
+releases = []
+for shipped, ranges in groups.items():
+    paths, adds, dels, commits, partial, bumps = {}, 0, 0, [], False, []
+    for r, bump in ranges:
+        cj, fj = json.loads(r["commits_json"]), json.loads(r["files_json"])
+        partial = partial or bool(cj["truncated"] or fj["truncated"])
+        commits += cj["commits"]
+        for e in fj["files"]:
+            paths[e["path"]] = True
+            adds += e.get("additions") or 0
+            dels += e.get("deletions") or 0
+        if bump:
+            bumps.append(r["new_spec"])
+    spec = shipped if shipped is not None else max(r["new_spec"] for r, _ in ranges)
+    area = dict.fromkeys(AREA_COLS, 0)
+    for p in paths:
+        area[AREAS.get(p.split("/", 1)[0] if "/" in p else "", "tooling")] += 1
+    heads = headlines(commits) + [None, None, None]
+    rel = {"spec": spec, "pending": shipped is None, "since": ranges[0][0]["retrieved_at"],
+           "bundled": ", ".join(str(b) for b in sorted(set(bumps)) if b < spec) or None,
+           "commits": len(commits), "files": len(paths), "adds": adds, "dels": dels,
+           "partial": partial, "headline": heads[0], "headline2": heads[1],
+           "headline3": heads[2]}
+    rel.update({"files_" + c: n for c, n in area.items()})
+    releases.append(rel)
+releases.sort(key=lambda x: x["spec"])
 with open("var/upgrade/state.json") as handle:
     job = json.load(handle)
 
@@ -132,6 +197,6 @@ print(json.dumps({
     "activity": activity, "signals": signals, "vitals": vitals,
     "gate": gate[0] if gate else None, "crossings": crossings,
     "emission": emission, "emission_since": emission_since,
-    "params": params, "upgrades": upgrades, "job": job,
+    "params": params, "upgrades": upgrades, "releases": releases, "job": job,
 }))
 `;

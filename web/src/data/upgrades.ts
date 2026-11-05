@@ -10,6 +10,7 @@ export async function getUpgrades(): Promise<Board<Upgrades>> {
     generatedAt: fixture.generatedAt,
     data: {
       events: onlyAll(FIELDS.upgrade, d.events),
+      releases: onlyAll(FIELDS.release, d.releases),
       job: d.job ? only<UpgradeJob>(FIELDS.upgradeJob, d.job) : null,
     },
   };
