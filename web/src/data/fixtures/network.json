@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-03T22:16:49.999239+00:00",
+  "generatedAt": "2026-11-05T06:18:12.746974+00:00",
   "data": {
     "vitals": [
       {
@@ -531,227 +531,776 @@
         "totalAccounts": 607053,
         "newAccountsToday": 905,
         "taoUsd": 223.5
+      },
+      {
+        "date": "2026-11-03",
+        "totalStakedTao": 7459000,
+        "rootStakeTao": 5472000,
+        "subnetsSharePct": 26.64,
+        "regCostTao": 402.2,
+        "totalAccounts": 607627,
+        "newAccountsToday": 985,
+        "taoUsd": 227.8
+      },
+      {
+        "date": "2026-11-04",
+        "totalStakedTao": 7461000,
+        "rootStakeTao": 5475000,
+        "subnetsSharePct": 26.62,
+        "regCostTao": 343.4,
+        "totalAccounts": 608108,
+        "newAccountsToday": 851,
+        "taoUsd": 233.7
       }
     ],
     "gate": {
-      "observedAt": "2026-11-03T22:16:49.999239+00:00",
+      "observedAt": "2026-11-05T06:18:12.746974+00:00",
       "active": true,
-      "theta": 0.008363,
+      "theta": 0.008326,
       "aboveCount": 32,
       "barMode": "rank"
     },
-    "rotations": [
+    "crossings": [
       {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 128,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
+        "observedAt": "2026-11-01T21:09:45.206531+00:00",
+        "netuid": 41,
+        "direction": "rose-above",
+        "share": 0.008853,
+        "theta": 0.008033,
+        "eligibility": "eligible"
       },
       {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 127,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
+        "observedAt": "2026-10-30T15:02:47.880040+00:00",
+        "netuid": 61,
+        "direction": "fell-below",
+        "share": 0.00731,
+        "theta": 0.008218,
+        "eligibility": "eligible"
       },
       {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 126,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
+        "observedAt": "2026-10-29T23:04:51.487174+00:00",
+        "netuid": 38,
+        "direction": "fell-below",
+        "share": 0.00733,
+        "theta": 0.00829,
+        "eligibility": "eligible"
       },
       {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 122,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
+        "observedAt": "2026-10-29T16:10:40.865530+00:00",
+        "netuid": 9,
+        "direction": "rose-above",
+        "share": 0.01882,
+        "theta": 0.008639,
+        "eligibility": "reversed"
       },
       {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 121,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
+        "observedAt": "2026-10-29T14:00:38.915653+00:00",
+        "netuid": 9,
+        "direction": "fell-below",
+        "share": 0.007353,
+        "theta": 0.008428,
+        "eligibility": "reversed"
       },
       {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 116,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
+        "observedAt": "2026-10-27T12:03:45.205314+00:00",
+        "netuid": 112,
+        "direction": "rose-above",
+        "share": 0.009256,
+        "theta": 0.008366,
+        "eligibility": "eligible"
       },
       {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 113,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
+        "observedAt": "2026-10-25T05:07:25.457299+00:00",
+        "netuid": 112,
+        "direction": "fell-below",
+        "share": 0.001711,
+        "theta": 0.008271,
+        "eligibility": "eligible"
       },
       {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 109,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
+        "observedAt": "2026-10-24T00:04:44.547873+00:00",
+        "netuid": 83,
+        "direction": "fell-below",
+        "share": 0.007373,
+        "theta": 0.008415,
+        "eligibility": "eligible"
       },
       {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 108,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
+        "observedAt": "2026-10-24T00:04:44.547873+00:00",
+        "netuid": 17,
+        "direction": "fell-below",
+        "share": 0.007318,
+        "theta": 0.008415,
+        "eligibility": "eligible"
       },
       {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 104,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
+        "observedAt": "2026-10-23T23:06:44.763847+00:00",
+        "netuid": 97,
+        "direction": "rose-above",
+        "share": 0.009821,
+        "theta": 0.008409,
+        "eligibility": "reversed"
       },
       {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 103,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
+        "observedAt": "2026-10-22T11:01:17.571009+00:00",
+        "netuid": 112,
+        "direction": "rose-above",
+        "share": 0.008415,
+        "theta": 0.007603,
+        "eligibility": "eligible"
       },
       {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 101,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 99,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 96,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 92,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 89,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 88,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 86,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 84,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 82,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 78,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 76,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 73,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 70,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 69,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 67,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 63,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 60,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 59,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
-      },
-      {
-        "observedAt": "2026-09-17T12:04:17.596920+00:00",
-        "netuid": 58,
-        "direction": "entered",
-        "newShare": 0.0002452,
-        "validatorCount": 21
+        "observedAt": "2026-10-22T02:08:49.790380+00:00",
+        "netuid": 97,
+        "direction": "fell-below",
+        "share": 0.00507,
+        "theta": 0.007657,
+        "eligibility": "reversed"
       }
     ],
+    "emission": [
+      {
+        "netuid": 1,
+        "pct": 0.002915,
+        "pctThen": 0.006037
+      },
+      {
+        "netuid": 2,
+        "pct": 0,
+        "pctThen": 0.0000342
+      },
+      {
+        "netuid": 3,
+        "pct": 2.947,
+        "pctThen": 3.298
+      },
+      {
+        "netuid": 4,
+        "pct": 7.998,
+        "pctThen": 6.791
+      },
+      {
+        "netuid": 5,
+        "pct": 1.287,
+        "pctThen": 1.369
+      },
+      {
+        "netuid": 6,
+        "pct": 0.006002,
+        "pctThen": 0.007611
+      },
+      {
+        "netuid": 7,
+        "pct": 0,
+        "pctThen": 0.007733
+      },
+      {
+        "netuid": 8,
+        "pct": 4.46,
+        "pctThen": 3.84
+      },
+      {
+        "netuid": 9,
+        "pct": 3.099,
+        "pctThen": 3.201
+      },
+      {
+        "netuid": 10,
+        "pct": 0.002072,
+        "pctThen": 0
+      },
+      {
+        "netuid": 11,
+        "pct": 0.2685,
+        "pctThen": 0.4991
+      },
+      {
+        "netuid": 12,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 13,
+        "pct": 0.00045,
+        "pctThen": 0.0009262
+      },
+      {
+        "netuid": 14,
+        "pct": 0.7514,
+        "pctThen": 0.6856
+      },
+      {
+        "netuid": 15,
+        "pct": 2.266,
+        "pctThen": 3.343
+      },
+      {
+        "netuid": 16,
+        "pct": 0.0000096,
+        "pctThen": 0.0003242
+      },
+      {
+        "netuid": 17,
+        "pct": 0.3004,
+        "pctThen": 0.6266
+      },
+      {
+        "netuid": 18,
+        "pct": 0.03664,
+        "pctThen": 0.03429
+      },
+      {
+        "netuid": 19,
+        "pct": 0.6952,
+        "pctThen": 0.7332
+      },
+      {
+        "netuid": 20,
+        "pct": 0.006649,
+        "pctThen": 0.007517
+      },
+      {
+        "netuid": 21,
+        "pct": 0.1178,
+        "pctThen": 0.04433
+      },
+      {
+        "netuid": 22,
+        "pct": 0.00348,
+        "pctThen": 0.0001936
+      },
+      {
+        "netuid": 23,
+        "pct": 0.000868,
+        "pctThen": 0.0004956
+      },
+      {
+        "netuid": 24,
+        "pct": 1.211,
+        "pctThen": 0
+      },
+      {
+        "netuid": 25,
+        "pct": 0.06726,
+        "pctThen": 0
+      },
+      {
+        "netuid": 26,
+        "pct": 0,
+        "pctThen": 0.008232
+      },
+      {
+        "netuid": 27,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 28,
+        "pct": 4,
+        "pctThen": 2.225
+      },
+      {
+        "netuid": 29,
+        "pct": 0.009579,
+        "pctThen": 0
+      },
+      {
+        "netuid": 30,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 31,
+        "pct": 0.06281,
+        "pctThen": 0
+      },
+      {
+        "netuid": 32,
+        "pct": 0.009001,
+        "pctThen": 0.01426
+      },
+      {
+        "netuid": 33,
+        "pct": 0.007123,
+        "pctThen": 0.07154
+      },
+      {
+        "netuid": 34,
+        "pct": 1.285,
+        "pctThen": 1.234
+      },
+      {
+        "netuid": 35,
+        "pct": 0.0000368,
+        "pctThen": 0
+      },
+      {
+        "netuid": 36,
+        "pct": 6e-7,
+        "pctThen": 0
+      },
+      {
+        "netuid": 37,
+        "pct": 0.0000742,
+        "pctThen": 0
+      },
+      {
+        "netuid": 38,
+        "pct": 0.2437,
+        "pctThen": 2.358
+      },
+      {
+        "netuid": 39,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 40,
+        "pct": 0,
+        "pctThen": 0.008873
+      },
+      {
+        "netuid": 41,
+        "pct": 0.679,
+        "pctThen": 0.4582
+      },
+      {
+        "netuid": 42,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 43,
+        "pct": 0.0000972,
+        "pctThen": 0.0001124
+      },
+      {
+        "netuid": 44,
+        "pct": 4.361,
+        "pctThen": 4.739
+      },
+      {
+        "netuid": 45,
+        "pct": 0.0004728,
+        "pctThen": 0.0004838
+      },
+      {
+        "netuid": 46,
+        "pct": 0.001756,
+        "pctThen": 0.002752
+      },
+      {
+        "netuid": 47,
+        "pct": 0.001472,
+        "pctThen": 0.002646
+      },
+      {
+        "netuid": 48,
+        "pct": 0.551,
+        "pctThen": 0.06416
+      },
+      {
+        "netuid": 49,
+        "pct": 0.187,
+        "pctThen": 0.6974
+      },
+      {
+        "netuid": 50,
+        "pct": 0.01414,
+        "pctThen": 0.1259
+      },
+      {
+        "netuid": 51,
+        "pct": 16.24,
+        "pctThen": 12.4
+      },
+      {
+        "netuid": 52,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 53,
+        "pct": 3.988,
+        "pctThen": 4.351
+      },
+      {
+        "netuid": 54,
+        "pct": 0.1165,
+        "pctThen": 0.07981
+      },
+      {
+        "netuid": 55,
+        "pct": 0.005836,
+        "pctThen": 0.006224
+      },
+      {
+        "netuid": 56,
+        "pct": 1.728,
+        "pctThen": 1.73
+      },
+      {
+        "netuid": 57,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 58,
+        "pct": 0.01641,
+        "pctThen": 0
+      },
+      {
+        "netuid": 59,
+        "pct": 0.4368,
+        "pctThen": 0
+      },
+      {
+        "netuid": 60,
+        "pct": 0.001136,
+        "pctThen": 0.01172
+      },
+      {
+        "netuid": 61,
+        "pct": 0.1547,
+        "pctThen": 1.055
+      },
+      {
+        "netuid": 62,
+        "pct": 0.5752,
+        "pctThen": 0.907
+      },
+      {
+        "netuid": 63,
+        "pct": 0.09158,
+        "pctThen": 0.06207
+      },
+      {
+        "netuid": 64,
+        "pct": 9.308,
+        "pctThen": 9.382
+      },
+      {
+        "netuid": 65,
+        "pct": 0.0000592,
+        "pctThen": 0.0000188
+      },
+      {
+        "netuid": 66,
+        "pct": 0.008642,
+        "pctThen": 0.03351
+      },
+      {
+        "netuid": 67,
+        "pct": 0.01232,
+        "pctThen": 0.03404
+      },
+      {
+        "netuid": 68,
+        "pct": 2.196,
+        "pctThen": 2.73
+      },
+      {
+        "netuid": 69,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 70,
+        "pct": 0.001012,
+        "pctThen": 0.0006248
+      },
+      {
+        "netuid": 71,
+        "pct": 0.003409,
+        "pctThen": 0.0004482
+      },
+      {
+        "netuid": 72,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 73,
+        "pct": 0.01071,
+        "pctThen": 0
+      },
+      {
+        "netuid": 74,
+        "pct": 0,
+        "pctThen": 0.001766
+      },
+      {
+        "netuid": 75,
+        "pct": 2.236,
+        "pctThen": 1.922
+      },
+      {
+        "netuid": 76,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 77,
+        "pct": 0.09619,
+        "pctThen": 0.1455
+      },
+      {
+        "netuid": 78,
+        "pct": 0.002899,
+        "pctThen": 0.02177
+      },
+      {
+        "netuid": 79,
+        "pct": 0.01995,
+        "pctThen": 0.02511
+      },
+      {
+        "netuid": 80,
+        "pct": 1.695,
+        "pctThen": 3.029
+      },
+      {
+        "netuid": 81,
+        "pct": 0,
+        "pctThen": 0.002823
+      },
+      {
+        "netuid": 82,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 83,
+        "pct": 0.377,
+        "pctThen": 0.5657
+      },
+      {
+        "netuid": 84,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 85,
+        "pct": 0.09516,
+        "pctThen": 0.2227
+      },
+      {
+        "netuid": 86,
+        "pct": 0.002155,
+        "pctThen": 0
+      },
+      {
+        "netuid": 87,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 88,
+        "pct": 0.007823,
+        "pctThen": 0.01844
+      },
+      {
+        "netuid": 89,
+        "pct": 0.001131,
+        "pctThen": 0.0218
+      },
+      {
+        "netuid": 90,
+        "pct": 1.779,
+        "pctThen": 2.622
+      },
+      {
+        "netuid": 91,
+        "pct": 0.004168,
+        "pctThen": 0.1274
+      },
+      {
+        "netuid": 92,
+        "pct": 1.417,
+        "pctThen": 0.001146
+      },
+      {
+        "netuid": 93,
+        "pct": 1.658,
+        "pctThen": 2.562
+      },
+      {
+        "netuid": 94,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 95,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 96,
+        "pct": 0.00001,
+        "pctThen": 0.02325
+      },
+      {
+        "netuid": 97,
+        "pct": 1.184,
+        "pctThen": 1.868
+      },
+      {
+        "netuid": 98,
+        "pct": 0.005355,
+        "pctThen": 0.005902
+      },
+      {
+        "netuid": 99,
+        "pct": 0.000407,
+        "pctThen": 0.0003096
+      },
+      {
+        "netuid": 100,
+        "pct": 0,
+        "pctThen": 0.009643
+      },
+      {
+        "netuid": 101,
+        "pct": 0.0287,
+        "pctThen": 0.000003
+      },
+      {
+        "netuid": 102,
+        "pct": 0.04498,
+        "pctThen": 0.07135
+      },
+      {
+        "netuid": 103,
+        "pct": 0.1652,
+        "pctThen": 0.0002404
+      },
+      {
+        "netuid": 104,
+        "pct": 0.05749,
+        "pctThen": 0
+      },
+      {
+        "netuid": 105,
+        "pct": 0.179,
+        "pctThen": 0.2548
+      },
+      {
+        "netuid": 106,
+        "pct": 0.005595,
+        "pctThen": 0.006723
+      },
+      {
+        "netuid": 107,
+        "pct": 3.781,
+        "pctThen": 5.226
+      },
+      {
+        "netuid": 108,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 109,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 110,
+        "pct": 3.49,
+        "pctThen": 2.209
+      },
+      {
+        "netuid": 111,
+        "pct": 0.06036,
+        "pctThen": 0.07879
+      },
+      {
+        "netuid": 112,
+        "pct": 0.5785,
+        "pctThen": 0.000188
+      },
+      {
+        "netuid": 113,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 114,
+        "pct": 2.21,
+        "pctThen": 2.567
+      },
+      {
+        "netuid": 115,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 116,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 117,
+        "pct": 0.3956,
+        "pctThen": 0
+      },
+      {
+        "netuid": 118,
+        "pct": 0.04362,
+        "pctThen": 0.03262
+      },
+      {
+        "netuid": 119,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 120,
+        "pct": 5.868,
+        "pctThen": 6.122
+      },
+      {
+        "netuid": 121,
+        "pct": 0,
+        "pctThen": 0
+      },
+      {
+        "netuid": 122,
+        "pct": 0.0000982,
+        "pctThen": 0.07552
+      },
+      {
+        "netuid": 123,
+        "pct": 0.0005758,
+        "pctThen": 0.0006026
+      },
+      {
+        "netuid": 124,
+        "pct": 0.6562,
+        "pctThen": 0.8323
+      },
+      {
+        "netuid": 125,
+        "pct": 0.0007258,
+        "pctThen": 0.01516
+      },
+      {
+        "netuid": 126,
+        "pct": 4e-7,
+        "pctThen": 0
+      },
+      {
+        "netuid": 127,
+        "pct": 0,
+        "pctThen": 0.0000474
+      },
+      {
+        "netuid": 128,
+        "pct": 0.01236,
+        "pctThen": 0.01632
+      }
+    ],
+    "emissionSince": "2026-10-06T06:03:40.400911+00:00",
     "params": [
       {
         "item": "SubnetEmissionEnabled[82]",
