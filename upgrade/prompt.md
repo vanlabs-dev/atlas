@@ -70,6 +70,8 @@ why, in your final message, because the operator must update the test.
 $tested_facts
 ```
 
+Keep each paragraph and each list item under 1,500 characters. The
+search index cannot split a longer one, and the test suite fails it.
 Do not edit `knowledge/corpus/hashes.json`: the job regenerates it.
 Do not create, rename or delete files: only edit existing ones.
 

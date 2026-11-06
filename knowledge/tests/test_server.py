@@ -80,7 +80,7 @@ class ServerTests(unittest.TestCase):
 
     def test_insufficient_evidence_is_structured(self):
         payloads = call_server(self.db, [tool_call(
-            1, "knowledge_search", {"query": "zzqx quantum spaghetti"})])
+            1, "knowledge_search", {"query": "zzqx vlorpt frabnitz"})])
         self.assertEqual(payloads[1]["status"], "insufficient-evidence")
 
     def test_get_evidence_roundtrip(self):
