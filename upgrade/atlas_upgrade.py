@@ -411,8 +411,8 @@ class Job:
             env: Optional[Dict[str, str]] = None) -> Result:
         try:
             proc = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True,
-                                  text=True, timeout=timeout,
-                                  stdin=subprocess.DEVNULL)
+                                  text=True, errors="replace",
+                                  timeout=timeout, stdin=subprocess.DEVNULL)
         except subprocess.TimeoutExpired:
             return Result(124, "", "timed out after %ds" % timeout)
         except OSError as exc:

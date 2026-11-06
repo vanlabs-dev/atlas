@@ -1018,6 +1018,14 @@ class DryRunTest(Base):
 
 
 class HelpersTest(unittest.TestCase):
+    def test_run_survives_output_that_is_not_utf8(self):
+        # A spec diff can carry Latin-1 bytes; one crashed every run.
+        cmd = [sys.executable, "-c",
+               "import sys; sys.stdout.buffer.write(b'a\\xca b')"]
+        result = au.Job.run(None, cmd, tempfile.gettempdir(), 10)
+        self.assertEqual(result.rc, 0)
+        self.assertEqual(result.out, "a\ufffd b")
+
     def test_allowed_paths(self):
         for path in ("knowledge/corpus/ground-truth.md",
                      "knowledge/corpus/hashes.json",
