@@ -78,7 +78,7 @@ DEPLOY_SSH = ("ssh -i %s -o IdentitiesOnly=yes -o BatchMode=yes "
               "-o StrictHostKeyChecking=yes" % DEPLOY_KEY)
 MAX_ATTEMPTS = 3
 BACKOFF_SECONDS = (3600, 4 * 3600)  # after attempt 1, after attempt 2
-MAX_TURNS = 60
+MAX_TURNS = 100
 TIMEOUT = {"git": 120, "rpc": 120, "repotrack": 600, "smoke": 120,
            "claude": 25 * 60, "suite": 5 * 60, "probe": 180, "ingest": 300,
            "export": 300, "canary": 60}
