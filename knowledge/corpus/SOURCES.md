@@ -6,12 +6,78 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | field | value |
 |---|---|
 | Source of truth | this directory, `knowledge/corpus/` in `vanlabs-dev/atlas` (the IntoOps copy is closed and never synced from) |
-| Sync date | 2026-11-05 |
-| Coverage date | 2026-11-05 |
-| Grounded at | Finney `spec_version` **486** |
+| Sync date | 2026-11-07 |
+| Coverage date | 2026-11-07 |
+| Grounded at | Finney `spec_version` **488** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
+
+Verified 2026-11-07 against Finney RPC by the runtime upgrade job:
+
+- Spec **488**. Knobs and the emission-switch map read together at
+  finalized block 9451247
+  (`0xdc850c0891b133858c4f69ce1fa875f81b9ed36e61faca46315f7f4fa1d8af2f`).
+  Chain-read probe clean at the same finalized block 9451247 (no failures:
+  every item Atlas reads keeps its name, shape and default). Source: the
+  subtensor `v488` tag (`b6a81d144078`, `runtime/src/lib.rs`
+  `spec_version: 488`); `spec-488.diff` runs from the 486 release through
+  Release 487 (`8b2a978a9`) and Release 488 (`b6a81d144`). Finney moved
+  from 486 to 488.
+- Knob values, all unchanged from the previous read: `EmissionBarRank`
+  unset (default 32), `EmissionBarQuantile` 0.75 explicit and inert,
+  `EmissionGateExponent` unset (default 3), `BasketConcentrationCap` 7865,
+  `BasketTradingEnabled` true, `MaturityRate` 311622 (explicit),
+  `UnlockRate` unset, `PendingChildKeyCooldown` 7200, `StakeThreshold`
+  1000 TAO, `CKBurn` 0, `NetworkImmunityPeriod` 432000,
+  `NetworkLockReductionInterval` 57600, `NetworkRateLimit` 14400 (all
+  explicit); `MaxChildkeyTake`, `MinChildkeyTake`,
+  `TxChildkeyTakeRateLimit`, `CommitRevealWeightsVersion` and the three
+  claim dust floors unset.
+- `SubnetEmissionEnabled`: 128 keys for 128 subnets, **only 82 off**.
+  SN103, off at the 2026-10-27 read, is on.
+- Spec 488 shipped (from the 487 and 488 releases):
+  - Emission vector burn and recycle slots are enabled: together at most
+    33% (`BurnRecycleEmissionAboveMaximum`; the old must-be-zero errors
+    stay only as deprecated indices). Burn destroys alpha, recycle lowers
+    `SubnetAlphaOut`. Neither enters `MinerBurned` or the emission share.
+  - Gamma: dollar-valued subnet service credit minted by burning alpha
+    (`mint_gamma` 158, `mint_gamma_with_stake` 159, `move_gamma` 160,
+    `close_gamma_deposit` 161, spender 162, daily cap 163, `spend_gamma`
+    164), priced at min(spot, `SubnetGammaPrice`) and a root-set TAO/USD
+    oracle (`feed_tao_usd_price` 157; AdminUtils 116). Gated by
+    `GammaEnabled` (AdminUtils 118) and `SubnetGammaEnabled` (117), both
+    default off and not read. Coldkey swaps move deposits (128 cap across
+    both keys); dissolution deletes them. `set_service` (165) publishes a
+    hotkey's service URL and spender (`Services`).
+  - Hashed and post-quantum wallet accounts (`HashedAccounts`, pallet
+    index 33: ML-DSA-65, Falcon-512/1024, rotating hashed SR/ED), behind
+    `HashedAccountsEnabled` (AdminUtils 115, default off, not read);
+    registration reserve root-set (AdminUtils 119, default 0.2 TAO).
+    Hotkey ownership changes and coldkey swaps refuse to weaken a
+    protected account (`HotkeyOwnerPolicyViolation`). Utility
+    `as_protected_derivative` (8) and `as_safe_derivative` (9); multisig
+    indices 5 to 9 for off-curve composite accounts; account-approved
+    limit orders.
+  - Proxy types `Lock` (21) and `GammaSpend` (22). `Staking` also admits
+    the two root-claim calls; `NonTransfer` and `NonCritical` lose basket
+    trading and gamma calls.
+  - Root dividend deposits: settle only inside the 2% fast-price band;
+    dust judged on the fast price; unsettled credits snapshot per root
+    stake (`DeferredBasketRates` and related items), convert later or are
+    redeemed directly; dissolution sells them into a reserve outside NAV.
+    Share mint priced at `N + fund_yield`. Calls that would change the
+    claimant base fail with `BasketDepositPending` until settled or
+    snapshotted.
+  - `SubnetMovingPrice` updates every block for every started dynamic
+    subnet, not only the emission set; before `start_call` only the fast
+    price moves.
+  - Fee schedules for stake calls keep their pre-487 weights by owner
+    decision (settlement work runs but is not charged). Not a chain
+    mechanic the corpus states.
+- Not read, so not stated as live: `GammaEnabled`, `SubnetGammaEnabled`,
+  `TaoUsdPriceOracle`, `HashedAccountsEnabled`,
+  `HashedAccountRegistrationDeposit`, `SubnetEmissionWeights`.
 
 Verified 2026-11-05 against Finney RPC, workstation reads (audit WP13):
 
@@ -38,7 +104,9 @@ Verified 2026-11-05 against Finney RPC, workstation reads (audit WP13):
   `0x31a7917b1773378fa5706dc24e244efe4212be186441497c8a3f031f374a9efd`).
 
 
-Verified 2026-10-27 against Finney RPC (`https://entrypoint-finney.opentensor.ai`):
+Verified 2026-10-27 against Finney RPC (`https://entrypoint-finney.opentensor.ai`).
+The knob values above supersede this read; the mechanics below are still
+live at 488 (the 488 diff leaves them as stated unless noted above):
 
 - Spec **486**. Knobs, emission-switch map, dust-floor storage and the
   subnet registration rules read together at finalized block 9369802
@@ -148,13 +216,10 @@ Verified 2026-10-27 against Finney RPC (`https://entrypoint-finney.opentensor.ai
     `ColdkeySwapReservedDestination`, `ColdkeySwapV2PolicySnapshots`) are
     not read. `ColdkeySwapDisputes` uses block 0 as the recovery-lock
     marker; Atlas does not read it.
-  - Open, outside the corpus: `livedata/atlas_live.py`
-    `SUBNET_PARAM_DEFAULTS` records an absent `SubnetEmissionEnabled` key
-    as `false`. The runtime's storage default is `DefaultTrue` (unchanged
-    at 486). Every live subnet has an explicit key (128 of 128), so no
-    reading is affected today. Fixing it means changing a livedata test
-    that pins the `false` default, which is outside the upgrade job's
-    scope.
+  - Resolved outside the corpus: `livedata/atlas_live.py`
+    `SUBNET_PARAM_DEFAULTS` now records an absent `SubnetEmissionEnabled`
+    key as `true`, matching the runtime's `DefaultTrue` (unchanged at
+    488). Every live subnet has an explicit key (128 of 128).
 - Carried from spec 482 and still live (not touched by the 483, 484 or
   486 diffs):
   - Yuma miner payouts apportion the accumulated miner budget in full by
@@ -167,8 +232,8 @@ Verified 2026-10-27 against Finney RPC (`https://entrypoint-finney.opentensor.ai
     at upgrade from each subnet's legacy owner-cut state
     (`migrate_seed_subnet_emission_weights`; default `[0, 0, 0.18, 0.41,
     0.41]`). The owner or root sets it with
-    `sudo_set_subnet_emission_weights` (call 114): burn and recycle 0,
-    owner at most 33% (lease-created subnets at least 18%), validator at
+    `sudo_set_subnet_emission_weights` (call 114): burn plus recycle at
+    most 33% (since 488; was 0), owner at most 33% (lease-created subnets at least 18%), validator at
     most 50%, miner at least 33%. Owners are limited to one change per
     50,400 blocks per subnet; the first change is free, root is exempt,
     dissolution clears the key. EVM subnet precompile
@@ -279,8 +344,8 @@ Verified 2026-10-27 against Finney RPC (`https://entrypoint-finney.opentensor.ai
 - Emission bar is **rank-pinned**: `EmissionBarRank` unset (default 32),
   `EmissionBarQuantile` 0.75 explicit and inert, `EmissionGateExponent`
   unset (default 3).
-- `SubnetEmissionEnabled` is live. 128 keys for 128 subnets; **82 and 103
-  off**; SN1 on.
+- `SubnetEmissionEnabled` is live. 128 keys for 128 subnets at finalized
+  block 9451247; **only 82 off** (103 back on); SN1 on.
 - `set_root_weights` is **retired** (`migrate_remove_root_weights`, spec
   469): `Weights[ROOT]` cleared, `RootWeightSettingEnabled` and
   `RootWeightsCap` removed. Dividends accumulate in place.
@@ -298,7 +363,7 @@ Verified 2026-10-27 against Finney RPC (`https://entrypoint-finney.opentensor.ai
 - The legacy `Alpha`, `TotalHotkeyShares` and `AlphaMapLastKey` storage
   items are gone from metadata (`migrate_alpha_v2_and_unstake_dust_v1`);
   stake shares live in `AlphaV2` / `TotalHotkeySharesV2`.
-- Subnet registration rules at finalized block 9369802:
+- Subnet registration rules at finalized block 9451247:
   `NetworkImmunityPeriod` **432,000** (60 days),
   `NetworkLockReductionInterval` **57,600** (8 days), `NetworkRateLimit`
   **14,400** (2 days), all explicit. Root set the first two on 2026-10-14
@@ -306,12 +371,15 @@ Verified 2026-10-27 against Finney RPC (`https://entrypoint-finney.opentensor.ai
   as 120 and 16 days. `NetworkMinLockCost` (1 TAO) and
   `NetworkLastLockCost` (884.38 TAO) are not in the knob read; those values
   are from a one-off read at finalized block 9,278,789 on 2026-10-14.
-- Claim dust floors are unset on chain. Code defaults apply: row floor
-  min(1 TAO, 10 bps of anchored NAV); slice floor 0.0001 TAO. Cash-first
-  claims are not live.
+- Claim dust floors are unset on chain at finalized block 9451247. Code
+  defaults apply: row floor min(1 TAO, 10 bps of anchored NAV); slice
+  floor 0.0001 TAO. Cash-first claims are not live.
 
-[../supersession-markers.json](../supersession-markers.json) is empty. Add
-a marker if a corpus claim goes stale before the next re-sync.
+[../supersession-markers.json](../supersession-markers.json) is empty,
+reviewed at the spec 488 re-sync: every claim the 488 diff made stale
+(burn/recycle slots pinned to zero, the `SubnetEmissionEnabled` off set,
+share mint at pre-deposit NAV) was rewritten in place. Add a marker if a
+corpus claim goes stale before the next re-sync.
 
 ## Re-sync procedure
 

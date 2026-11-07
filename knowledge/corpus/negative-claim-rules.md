@@ -217,3 +217,20 @@ Do not write that a team "left stakers stuck", "froze withdrawals" or
 "has not paid out" because a deregistered subnet still lists stake, and
 do not describe it as still operating. Pending cleanup is the protocol
 settling the subnet, not a decision by the team.
+
+---
+
+## A paused dividend deposit or a burning subnet is not misconduct
+
+Root dividend deposits wait while a fund's pools are outside a 2% band
+around their fast moving prices. Meanwhile basket trades, claims and root
+stake changes on that validator can fail with `BasketDepositPending`, and
+the earned alpha is kept for the stakers who earned it. Do not write that
+a validator is "withholding", "freezing" or "skimming" root dividends
+because of that error.
+
+A subnet owner may route up to 33% of its alpha emission to the burn and
+recycle slots of its emission vector. Do not describe that as the team
+"destroying holders' value" or "dumping" without evidence beyond the
+setting itself; it is a supported, bounded choice. Atlas does not read the
+vectors, so state a subnet's burn or recycle share only from a chain read.
