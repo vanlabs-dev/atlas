@@ -48,14 +48,26 @@ during apply:
   ingestion are **removed**, not disabled. Their tables and rows stay. The
   `root-rotation` promotion item due 2026-11-04 is void.
 
-## Live chain (2026-10-27)
+## Live chain (2026-11-07)
 
-Finney `spec_version` **486** (knob and emission-switch read at finalized
-block 9369802; chain-read probe clean at finalized block 9369804).
-Spec 486 meters the contracts chain extension's stake-availability query
-(one read plus the coldkey's actual `StakingHotkeys` walk); every other
-pallet, runtime and precompile source matches 484, and every knob value is
-unchanged.
+Finney `spec_version` **488** (knob and emission-switch read and chain-read
+probe both clean at finalized block 9451247). Every knob value is
+unchanged; `SubnetEmissionEnabled` is now off for netuid **82** only (103
+is on). Spec 488 (with the 487 release it includes) enables the emission
+vector's burn and recycle slots (together at most 33%; they destroy alpha
+and do not change emission share), adds gamma (a dollar-valued subnet
+service credit minted by burning alpha, gated by `GammaEnabled` and
+`SubnetGammaEnabled`, both off by default and not read) and `set_service`
+listings, adds hashed and post-quantum wallet accounts behind
+`HashedAccountsEnabled` (off by default, not read), adds the `Lock` (21)
+and `GammaSpend` (22) proxy types, and makes root dividend deposits wait
+for prices inside the 2% fast-price band, snapshotting earned alpha per
+root stake meanwhile (`BasketDepositPending` while unsettled).
+`SubnetMovingPrice` now updates for every started dynamic subnet, not only
+the emission set. No item Atlas reads was renamed, removed or reshaped
+(probe clean).
+Spec 486 metered the contracts chain extension's stake-availability query
+(one read plus the coldkey's actual `StakingHotkeys` walk).
 A reporting-only subnet lifecycle (`SubnetState`) is live: a
 dissolved subnet stays in the metagraph, dynamic-info, neuron and stake
 runtime APIs until its cleanup finishes, and each hotkey's stake reads
@@ -81,14 +93,15 @@ Each subnet has an emission weight vector
 `[burn, recycle, owner, validator, miner]` (`SubnetEmissionWeights`,
 seeded 0/0/18/41/41). The owner or root sets it with
 `sudo_set_subnet_emission_weights` (call 114, owner once per 50,400 blocks
-per subnet; owner at most 33%, validator at most 50%, miner at least 33%).
+per subnet; burn plus recycle at most 33%, owner at most 33%, validator at
+most 50%, miner at least 33%).
 Root is paid its baseline share (default 41% validator share and the
 global `TaoWeight`) off the top of the validator slot every block. There is
 no per-subnet TAO weight: the multiplier and spec 480's `SubnetTaoWeight`
 were dropped before 481 shipped. The legacy owner-cut setters return
 `Deprecated`; `SubnetOwnerCut` and `OwnerCutEnabled` stay in metadata but
 drive no emission. Atlas does not read the vectors.
-`SubnetEmissionEnabled` off netuids **82** and **103**. Emission bar
+`SubnetEmissionEnabled` off netuid **82** only. Emission bar
 is rank-pinned (N unset, default 32; q 0.75 explicit and inert; h unset,
 default 3). `set_root_weights` is retired (`Weights[ROOT]` cleared, the
 curation switch removed). `BasketTradingEnabled` is **true** (explicit).
@@ -120,16 +133,16 @@ growing that list (`HotkeySwapStakeRetained`, root credits in
 `HotkeySwapBasketCredits`). EIP-7702 authorization lists are capped at 255
 entries before signature recovery, and EVM nonces survive balance-account
 reaping (`EVM.AccountNonces`). Registration rules are unchanged at block
-9369802 (immunity 432,000, lock reduction 57,600, rate limit 14,400, all
-explicit). Spec 486 renamed, removed or reshaped no item Atlas reads, so no
+9451247 (immunity 432,000, lock reduction 57,600, rate limit 14,400, all
+explicit). Spec 488 renamed, removed or reshaped no item Atlas reads, so no
 reader changed. Still open: the mining screen's miner share
 (`fleet/atlas_fleet_mining.py`) still comes from `SubnetOwnerCut` and
 `OwnerCutEnabled`. That is correct only for subnets still on their seeded
-vector. The fix needs a `SubnetEmissionWeights` read and a `fleet/` change,
-both outside the upgrade job's scope. Also open: the livedata switch watch
-records an absent `SubnetEmissionEnabled` key as `false`, but the runtime
-default is `true`. No live reading is affected while every subnet has an
-explicit key (128 of 128). The fix needs a livedata test change.
+vector, and since 488 a subnet can also divert up to 33% to burn and
+recycle. The fix needs a `SubnetEmissionWeights` read and a `fleet/`
+change, both outside the upgrade job's scope. Resolved: the livedata
+switch watch now records an absent `SubnetEmissionEnabled` key as `true`,
+matching the runtime default.
 
 Runtime upgrades are automated; see the runtime-upgrade entry above.
 Web leads stay out of the confirmed knowledge base (ATLAS-WEB-003).
