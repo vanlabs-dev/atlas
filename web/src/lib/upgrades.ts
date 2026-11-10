@@ -1,5 +1,5 @@
 // Words and scales for the runtime-upgrades board. The areas group the
-// subtensor repository's top-level directories (scripts/export-remote.ts
+// subtensor repository's top-level directories (sitedata/compose.py
 // AREAS). Import-free of aliases so the node tests can load it.
 
 import type { Release } from "../data/types.ts";
