@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
-import { BLOCK_MS, type BlockAnchor } from "@/data/chain";
+import { BLOCK_MS, type BlockAnchor } from "@/data/block";
 
 // One clock for the header readout, the home field's today edge and the band. It is an
 // estimate from the last block Atlas saw, so the text says "est.".

@@ -14,7 +14,7 @@ const SHOWN = 10;
 const tdWrap = td.replace("whitespace-nowrap", "whitespace-normal");
 
 export default async function NetworkPage() {
-  const [{ generatedAt, data }, mining] = await Promise.all([getNetwork(), getMining()]);
+  const [{ generatedAt, readAt, data }, mining] = await Promise.all([getNetwork(), getMining()]);
   const names = new Map(mining.data.map((m) => [m.netuid, m.name]));
   const { vitals, gate, crossings, emission, emissionSince, params } = data;
   const first = vitals[0] ?? null;
@@ -59,7 +59,7 @@ export default async function NetworkPage() {
 
   return (
     <>
-      <BoardHeader title="Network pulse" finding={finding} at={generatedAt} />
+      <BoardHeader title="Network pulse" finding={finding} at={generatedAt} readAt={readAt} />
       <section aria-label="Chain vitals" className="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((k) => (
           <dl key={k.label}>

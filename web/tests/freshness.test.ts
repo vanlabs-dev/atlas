@@ -21,10 +21,10 @@ test("future timestamps read as now", () => {
   assert.equal(freshness(at, hoursLater(-2)).label, "under an hour ago");
 });
 
-test("stale at build only when past the bound at build time", async () => {
-  const { staleAtBuild } = await import("../src/data/freshness.ts");
-  assert.equal(staleAtBuild(at, hoursLater(49).toISOString()), true);
-  assert.equal(staleAtBuild(at, hoursLater(47).toISOString()), false);
-  assert.equal(staleAtBuild(at, undefined), false);
-  assert.equal(staleAtBuild(at, "not a date"), false);
+test("stale at read only when past the bound when the page read its data", async () => {
+  const { staleAtRead } = await import("../src/data/freshness.ts");
+  assert.equal(staleAtRead(at, hoursLater(49).toISOString()), true);
+  assert.equal(staleAtRead(at, hoursLater(47).toISOString()), false);
+  assert.equal(staleAtRead(at, undefined), false);
+  assert.equal(staleAtRead(at, "not a date"), false);
 });

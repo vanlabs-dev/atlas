@@ -120,19 +120,33 @@ applied once to the project.
 
 ### 5. The site reads in a cached server function with a fixture fallback
 
-Each `get<Board>()` keeps its signature. Inside:
+Each `get<Board>()` keeps its signature. Inside (`src/data/source.ts`,
+with the pure parts in `source-core.ts`):
 
-- A `'use cache'` function with `cacheLife({ revalidate: 900 })` fetches
+- A `'use cache'` function with
+  `cacheLife({ stale: 300, revalidate: 900, expire: 1 year })` fetches
   `GET /rest/v1/boards?name=eq.<board>&select=generated_at,data` with
-  the publishable key. It throws on any non-200 response or empty
-  result.
-- The outer function calls it. On a throw it falls back to the
-  committed fixture.
-- On a background refresh that throws, Next keeps serving the previous
-  cache entry, which gives the spec's "last good data" behaviour. A task
-  confirms this on the deployed version before go-live.
-- Without `SUPABASE_URL`, the fixture is used directly, so local builds
-  and tests need no network.
+  the publishable key. A non-200 response or a malformed row is a
+  failure. `stale` stays at 300 s: under 30 s Next leaves the cache out
+  of the prerender.
+- At run time a failure throws. Next then keeps serving the last good
+  page (stale-while-revalidate) and retries on the next request. If the
+  outer function caught the error and served the fixture, the refresh
+  would succeed with fixture data and replace the last good page.
+- During the build (`NEXT_PHASE=phase-production-build`), a throw inside
+  a cached function fails the prerender. So the cached function returns
+  a "read failed" marker instead, and the outer function serves the
+  committed fixture. The marker is cached with the normal lifetime, so
+  the first refresh after deploy retries the store.
+- Without `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`, the fixture is
+  used directly (cached with `max`), so local builds and tests need no
+  network.
+
+Verified 2026-11-10 with `next start` against a stub PostgREST and a
+20-second refresh: new data appeared without a rebuild; with the store
+down the page kept the last good data at HTTP 200; a build with the
+store down served the fixture with the stale label, and switched to live
+data on the first refresh after the store came back.
 
 Records still pass through `onlyAll(FIELDS.*)`.
 
@@ -164,19 +178,17 @@ publishes each pass within the hour.
 ## Risks / Trade-offs
 
 - [Supabase free projects pause after a period with no activity] →
-  Hourly writes should count as activity, but this is unconfirmed (see
-  Open Questions). If the project pauses anyway, the site serves the
-  last good copy, and then the fixtures, with their age and the stale
-  label.
+  Hourly writes are well above the documented threshold (see Open
+  Questions). If the project pauses anyway, the site serves the last
+  good copy with its age and the stale label.
 - [A scrub false positive blocks a board] → Only that board is skipped.
   The failure alert fires, and the site keeps the previous board.
 - [A schema mistake publishes a private field] → The allowlist is the
   only path a field can take. The banned-field tests run on the shared
   JSON, and the scrub runs on every board before upload.
-- [Next keeps an error, not the stale entry, after a failed refresh] →
-  Task 4.4 checks this on the deployed version. If it fails, the cached
-  function returns a fallback sentinel instead of throwing, and the
-  outer function serves the fixture.
+- [Vercel's cache behaves differently from `next start` after a failed
+  refresh] → Task 4.4 repeats the store-down check on a Vercel Preview
+  before go-live.
 - [The secret key is exposed on the Pi] → The file is 0600 in
   `~/.hermes/.env`, outside the repo. The key can only write this one
   low-value table, and it can be rotated in the Supabase dashboard.

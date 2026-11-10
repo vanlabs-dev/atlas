@@ -1,5 +1,5 @@
-// Data age. Pages render the ISO time at build and compute the age in the
-// browser, so a static page does not freeze it.
+// Data age. Pages render the ISO time when they read their data and
+// compute the age in the browser, so a cached page does not freeze it.
 
 export const STALE_AFTER_HOURS = 48;
 
@@ -22,11 +22,11 @@ function ageLabel(hours: number): string {
 }
 
 /**
- * Stale label for the server HTML. Age only grows, so data that is stale
- * when the page is built is stale for every later visitor too. Without a
- * build time the server shows no label and the browser decides.
+ * Stale label for the server HTML, from the time the page read its data
+ * (change: supabase-data-layer). The server copy is at most one refresh
+ * behind; the browser recomputes the label on load.
  */
-export function staleAtBuild(generatedAt: string, builtAt: string | undefined): boolean {
-  if (!builtAt || Number.isNaN(Date.parse(builtAt))) return false;
-  return freshness(generatedAt, new Date(builtAt)).stale;
+export function staleAtRead(generatedAt: string, readAt: string | undefined): boolean {
+  if (!readAt || Number.isNaN(Date.parse(readAt))) return false;
+  return freshness(generatedAt, new Date(readAt)).stale;
 }

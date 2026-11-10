@@ -12,10 +12,10 @@ const MAP_ROWS = 12;
 const HEAT = ["bg-s2", "bg-accent/20", "bg-accent/45", "bg-accent/70", "bg-accent"] as const;
 
 export default async function UpgradesPage() {
-  const { generatedAt, data } = await getUpgrades();
+  const { generatedAt, readAt, data } = await getUpgrades();
   const events = data.events;
   if (!events.length) {
-    return <BoardHeader title="Runtime upgrades" finding="No runtime upgrade is recorded in this window." at={generatedAt} />;
+    return <BoardHeader title="Runtime upgrades" finding="No runtime upgrade is recorded in this window." at={generatedAt} readAt={readAt} />;
   }
   const first = events[0];
   const last = events[events.length - 1];
@@ -44,7 +44,7 @@ export default async function UpgradesPage() {
 
   return (
     <>
-      <BoardHeader title="Runtime upgrades" finding={finding} at={generatedAt} />
+      <BoardHeader title="Runtime upgrades" finding={finding} at={generatedAt} readAt={readAt} />
 
       {pending ? (
         <section aria-labelledby="pending-title" className="grid gap-6 rounded-[10px] border-l-[3px] border-accent bg-s1 p-6 sm:grid-cols-[auto_1fr_auto] sm:items-center">

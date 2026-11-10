@@ -8,6 +8,8 @@ export type Iso = string;
 export interface Board<T> {
   /** When Atlas produced the data, not when the site was built. */
   generatedAt: Iso;
+  /** When the site read this copy: from the store, or the fixture at build. */
+  readAt: Iso;
   data: T;
 }
 

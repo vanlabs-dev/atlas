@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
-import type { BlockAnchor } from "@/data/chain";
+import type { BlockAnchor } from "@/data/block";
 import { useBlocks } from "@/components/block-clock";
 
 export interface FlightRow {

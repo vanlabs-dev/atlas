@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { BlockAnchor } from "@/data/chain";
+import type { BlockAnchor } from "@/data/block";
 import { HeaderClock } from "./block-clock";
 import { SiteNav } from "./site-nav";
 
