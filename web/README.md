@@ -74,6 +74,9 @@ data; the browser recomputes it on load.
 
 Vercel, project root `web/`, production from `main`. `vercel.json` runs `scripts/vercel-ignore.sh`,
 which skips the build when nothing under `web/` changed since the last
-deployed commit, and builds when that commit is unknown. Only code
+deployed commit, and builds when that commit is unknown or the commit
+message holds `[build]`. Vercel runs the step on dashboard redeploys
+too, so after changing only environment variables, push a commit with
+`[build]` in its message (an empty commit is fine). Only code
 changes deploy: data reaches the site through Supabase. Publisher
 changes under `sitedata/` do not trigger a build.
