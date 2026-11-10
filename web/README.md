@@ -22,7 +22,18 @@ and the runtime upgrade job may not edit it.
 ## Data
 
 Every page reads through `src/data/` (one module per board, types in
-`types.ts`).
+`types.ts`). Each module reads its board from Supabase at request time
+(`src/data/source.ts`): the Pi publisher uploads the boards hourly, and
+the site refreshes its cached copy every 15 minutes, so new data needs no
+commit, push or deploy. If a refresh fails, Next keeps serving the last
+good page. With no store settings, or when the store cannot be read
+during the build, the pages use the committed fixtures.
+
+| Variable | Where | Purpose |
+|---|---|---|
+| `SUPABASE_URL` | Vercel (Production, Preview) | Project URL, `https://<ref>.supabase.co` |
+| `SUPABASE_PUBLISHABLE_KEY` | Vercel (Production, Preview) | Read-only public key (`sb_publishable_...`); server-side only, never sent to the browser |
+| `SITEDATA_REVALIDATE_SECONDS` | Local tests only | Overrides the 15-minute refresh |
 
 Board data is built in one place: `sitedata/` at the repository root
 (see `sitedata/README.md`). It reads the latest stored pass of each input,
@@ -32,7 +43,8 @@ commits with the activity metric's own reader, bot patterns and window
 rule, so the last 7 and 30 bins sum to the board's counts.
 
 The committed fixtures in `src/data/fixtures/` are the fallback copy of
-those boards. Refresh them from the Pi (read-only; the Pi checkout must
+those boards. They do not carry the site's data, so they need refreshing
+only when the fallback should be newer. Refresh them from the Pi (read-only; the Pi checkout must
 have `sitedata/`):
 
 ```
@@ -52,12 +64,16 @@ fails if a dropped field reaches any served file. Each committed fixture
 change publishes through Vercel: get the operator's yes first.
 
 The data layer (`src/data/fields.ts`) passes each page only its typed
-fields, whatever a fixture holds.
+fields, whatever a stored board or fixture holds.
 
-Pages show when their data was produced, and a stale label past 48 hours.
+Pages show when their data was produced, and a stale label past 48
+hours. The server HTML computes the label from when the page read its
+data; the browser recomputes it on load.
 
 ## Deploy
 
 Vercel, project root `web/`, production from `main`. `vercel.json` runs `scripts/vercel-ignore.sh`,
 which skips the build when nothing under `web/` changed since the last
-deployed commit, and builds when that commit is unknown.
+deployed commit, and builds when that commit is unknown. Only code
+changes deploy: data reaches the site through Supabase. Publisher
+changes under `sitedata/` do not trigger a build.
