@@ -35,5 +35,5 @@
 
 ## 6. Go-live
 
-- [ ] 6.1 Set the Vercel Production environment variables, deploy `main`, then install and enable `atlas-sitedata.timer` on the Pi (operator approval). Verify that after the next `:25` run the home page shows the latest mining pass time, and Network shows the latest probe pass, with no new deploy.
+- [x] 6.1 Set the Vercel Production environment variables, deploy `main`, then install and enable `atlas-sitedata.timer` on the Pi (operator approval). Verify that after the next `:25` run the home page shows the latest mining pass time, and Network shows the latest probe pass, with no new deploy.
 - [x] 6.2 Verify the failure path end to end: stop the timer's network access for one run (or use a bad URL), check that the Telegram job-failure alert fires, and check that the site still serves the last boards.
