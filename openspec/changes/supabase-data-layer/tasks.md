@@ -2,11 +2,11 @@
 
 ## 1. Shared contract and composer
 
-- [ ] 1.1 Move the field allowlist from `web/scripts/allowlist.ts` to `sitedata/allowlist.json`, and the scrub patterns from `web/scripts/scrub.ts` to `sitedata/scrub.json`. Make both TS modules load the JSON. Verify that `npm test` in `web/` passes unchanged (banned fields, `FIELDS` parity, planted leaks).
-- [ ] 1.2 Move the Python program from `web/scripts/export-remote.ts` into `sitedata/compose.py`, returning the same raw rows. Port the export test's ban on age cutoffs (`cutoff|AGE_DAYS|<= ?`) to `sitedata/tests/test_compose.py`, and verify the test passes.
-- [ ] 1.3 Add `pick`, 4-significant-digit rounding, `binDaily` and the board assembly from `export-fixtures.ts` to `sitedata/atlas_sitedata.py` (`compose` command, prints the four boards as JSON). Verify it with a golden test: a fixed raw-row input gives byte-identical boards in Python and in the TS path.
-- [ ] 1.4 Add the scrub to `atlas_sitedata.py`, applied per board. Verify with unit tests that each planted leak from `web/tests/fixtures.test.ts` blocks its board, and that clean boards still pass.
-- [ ] 1.5 Add `sitedata/README.md` covering commands, inputs, the allowlist rule and the tests. Run `python3 -m unittest discover -s sitedata/tests` and verify it passes.
+- [x] 1.1 Move the field allowlist from `web/scripts/allowlist.ts` to `sitedata/allowlist.json`, and the scrub patterns from `web/scripts/scrub.ts` to `sitedata/scrub.json`. Make both TS modules load the JSON. Verify that `npm test` in `web/` passes unchanged (banned fields, `FIELDS` parity, planted leaks).
+- [x] 1.2 Move the Python program from `web/scripts/export-remote.ts` into `sitedata/compose.py`, returning the same raw rows. Port the export test's ban on age cutoffs (`cutoff|AGE_DAYS|<= ?`) to `sitedata/tests/test_compose.py`, and verify the test passes.
+- [x] 1.3 Add `pick`, 4-significant-digit rounding, `binDaily` and the board assembly from `export-fixtures.ts` to `sitedata/atlas_sitedata.py` (`compose` command, prints the four boards as JSON). Verify it with a golden test: a fixed raw-row input gives boards identical in value and number type in Python and in the TS path.
+- [x] 1.4 Add the scrub to `atlas_sitedata.py`, applied per board. Verify with unit tests that each planted leak from `web/tests/fixtures.test.ts` blocks its board, and that clean boards still pass.
+- [x] 1.5 Add `sitedata/README.md` covering commands, inputs, the allowlist rule and the tests. Run `python3 -m unittest discover -s sitedata/tests` and verify it passes.
 
 ## 2. Fixture refresh through the composer
 

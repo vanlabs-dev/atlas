@@ -1,0 +1,57 @@
+{
+  "//": "Second check on published site data, after the allowlist: anything shaped like a secret, a private address, an internal host detail, a dropped or rent-bounding field, or an em dash. The Pi publisher and the web tests read this file.",
+  "rules": [
+    {
+      "kind": "token",
+      "pattern": "\\b(?:sk|pk|rk|ghp|gho|ghs|github_pat|xox[abpr])[-_][A-Za-z0-9_-]{10,}",
+      "flags": ""
+    },
+    {
+      "kind": "token",
+      "pattern": "\\b\\d{8,10}:[A-Za-z0-9_-]{35}\\b",
+      "flags": ""
+    },
+    {
+      "kind": "token",
+      "pattern": "\\beyJ[\\w-]{8,}\\.[\\w-]{8,}\\.",
+      "flags": ""
+    },
+    {
+      "kind": "token",
+      "pattern": "\\b[A-Za-z0-9+/_-]{40,}={0,2}",
+      "flags": ""
+    },
+    {
+      "kind": "ip",
+      "pattern": "\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b",
+      "flags": ""
+    },
+    {
+      "kind": "host",
+      "pattern": "\\b(?:localhost|raspberrypi|[a-z0-9-]+\\.(?:local|lan|internal|home|arpa))\\b",
+      "flags": "i"
+    },
+    {
+      "kind": "host",
+      "pattern": "(?:\\/home\\/|~\\/atlas|\\bpi@)",
+      "flags": ""
+    },
+    {
+      "kind": "field",
+      "pattern": "cueKind|netTaoMonth|gateState|confidence|grossTaoMonth|priceTao|payback|requiredBand",
+      "flags": "i"
+    },
+    {
+      "kind": "field",
+      "pattern": "(?<![a-z])rent|Rent|RENT",
+      "flags": ""
+    },
+    {
+      "kind": "dash",
+      "pattern": "—",
+      "flags": ""
+    }
+  ],
+  "ss58": "\\b5[1-9A-HJ-NP-Za-km-z]{46,47}\\b",
+  "public_addresses": []
+}

@@ -1,0 +1,355 @@
+{
+ "now": "2026-11-10T02:00:00+00:00",
+ "mining_at": "2026-11-09T23:28:21+00:00",
+ "fleet_at": "2026-11-09T23:28:21+00:00",
+ "network_at": "2026-11-10T01:18:12+00:00",
+ "mining": [
+  {
+   "netuid": 1.0625,
+   "subnet_name": 0.125,
+   "rank": 257.16123,
+   "verdict": true,
+   "gpu_floor": "text — gpu_floor 0",
+   "vram_gb": 1.2345e-05,
+   "gpu_mention_files": 99995,
+   "cut_reason": 3,
+   "unrated_reason": "text — unrated_reason 0",
+   "miner_burn_pct": "text — miner_burn_pct 0",
+   "earner_count": 2.5e-07,
+   "top1_share_pct": 12.345,
+   "top10_share_pct": null,
+   "reg_cost_tao": true,
+   "block_ref": "text — block_ref 0",
+   "hotkey_private": "never published"
+  },
+  {
+   "netuid": 123456.7,
+   "subnet_name": -2.55555,
+   "rank": "text — rank 1",
+   "verdict": "text — verdict 1",
+   "gpu_floor": 3,
+   "vram_gb": 0.30000000000000004,
+   "gpu_mention_files": 0.3333333333333333,
+   "cut_reason": true,
+   "unrated_reason": "text — unrated_reason 1",
+   "miner_burn_pct": null,
+   "earner_count": 1.0625,
+   "top1_share_pct": 0.125,
+   "top10_share_pct": "text — top10_share_pct 1",
+   "reg_cost_tao": "text — reg_cost_tao 1",
+   "block_ref": -2.55555,
+   "hotkey_private": "never published"
+  },
+  {
+   "netuid": 99995,
+   "subnet_name": true,
+   "rank": "text — rank 2",
+   "verdict": 0.3333333333333333,
+   "gpu_floor": 2.5e-07,
+   "vram_gb": 12.345,
+   "gpu_mention_files": "text — gpu_mention_files 2",
+   "cut_reason": "text — cut_reason 2",
+   "unrated_reason": 0.125,
+   "miner_burn_pct": 257.16123,
+   "earner_count": 123456.7,
+   "top1_share_pct": true,
+   "top10_share_pct": "text — top10_share_pct 2",
+   "reg_cost_tao": 99995,
+   "block_ref": 3,
+   "hotkey_private": "never published"
+  },
+  {
+   "netuid": "text — netuid 3",
+   "subnet_name": "text — subnet_name 3",
+   "rank": 12.345,
+   "verdict": null,
+   "gpu_floor": 1.0625,
+   "vram_gb": true,
+   "gpu_mention_files": "text — gpu_mention_files 3",
+   "cut_reason": 123456.7,
+   "unrated_reason": -2.55555,
+   "miner_burn_pct": 1.2345e-05,
+   "earner_count": "text — earner_count 3",
+   "top1_share_pct": "text — top1_share_pct 3",
+   "top10_share_pct": 0.30000000000000004,
+   "reg_cost_tao": 0.3333333333333333,
+   "block_ref": 2.5e-07,
+   "hotkey_private": "never published"
+  }
+ ],
+ "fleet": [
+  {
+   "netuid": 1.0625,
+   "name": 0.125,
+   "tier": 257.16123,
+   "score": true,
+   "why": "text — why 0",
+   "div_signed": 1.2345e-05,
+   "cold": 99995,
+   "c7": 3,
+   "c30": "text — c30 0",
+   "a30": "text — a30 0",
+   "days_since": 2.5e-07,
+   "momentum_7d": 12.345,
+   "momentum_30d": null,
+   "activity_class": true,
+   "emission_opaque": "text — emission_opaque 0",
+   "hotkey_private": "never published"
+  },
+  {
+   "netuid": 123456.7,
+   "name": -2.55555,
+   "tier": "text — tier 1",
+   "score": "text — score 1",
+   "why": 3,
+   "div_signed": 0.30000000000000004,
+   "cold": 0.3333333333333333,
+   "c7": true,
+   "c30": "text — c30 1",
+   "a30": null,
+   "days_since": 1.0625,
+   "momentum_7d": 0.125,
+   "momentum_30d": "text — momentum_30d 1",
+   "activity_class": "text — activity_class 1",
+   "emission_opaque": -2.55555,
+   "hotkey_private": "never published"
+  },
+  {
+   "netuid": 99995,
+   "name": true,
+   "tier": "text — tier 2",
+   "score": 0.3333333333333333,
+   "why": 2.5e-07,
+   "div_signed": 12.345,
+   "cold": "text — cold 2",
+   "c7": "text — c7 2",
+   "c30": 0.125,
+   "a30": 257.16123,
+   "days_since": 123456.7,
+   "momentum_7d": true,
+   "momentum_30d": "text — momentum_30d 2",
+   "activity_class": 99995,
+   "emission_opaque": 3,
+   "hotkey_private": "never published"
+  }
+ ],
+ "counts": {
+  "diverging": 123456.7,
+  "emission": -2.55555,
+  "cold": "text — cold 1",
+  "quiet": "text — quiet 1",
+  "invisible": 3,
+  "hotkey_private": "never published"
+ },
+ "activity": [
+  {
+   "netuid": 1,
+   "ages": [
+    7.0,
+    7.000001,
+    0.2,
+    -0.1,
+    30,
+    30.5,
+    90,
+    90.1,
+    1.0
+   ]
+  },
+  {
+   "netuid": 2,
+   "ages": null
+  },
+  {
+   "netuid": 3,
+   "ages": []
+  }
+ ],
+ "signals": [
+  {
+   "class": 1.0625,
+   "tier": 0.125,
+   "netuid": 257.16123,
+   "created_at": true,
+   "hotkey_private": "never published"
+  },
+  {
+   "class": 123456.7,
+   "tier": -2.55555,
+   "netuid": "text — netuid 1",
+   "created_at": "text — created_at 1",
+   "hotkey_private": "never published"
+  }
+ ],
+ "vitals": [
+  {
+   "date": 1.0625,
+   "total_staked_tao": 0.125,
+   "root_stake_tao": 257.16123,
+   "subnets_share_pct": true,
+   "subnet_reg_cost_tao": "text — subnet_reg_cost_tao 0",
+   "total_accounts": 1.2345e-05,
+   "new_accounts_today": 99995,
+   "tao_usd": 3,
+   "hotkey_private": "never published"
+  },
+  {
+   "date": 123456.7,
+   "total_staked_tao": -2.55555,
+   "root_stake_tao": "text — root_stake_tao 1",
+   "subnets_share_pct": "text — subnets_share_pct 1",
+   "subnet_reg_cost_tao": 3,
+   "total_accounts": 0.30000000000000004,
+   "new_accounts_today": 0.3333333333333333,
+   "tao_usd": true,
+   "hotkey_private": "never published"
+  },
+  {
+   "date": 99995,
+   "total_staked_tao": true,
+   "root_stake_tao": "text — root_stake_tao 2",
+   "subnets_share_pct": 0.3333333333333333,
+   "subnet_reg_cost_tao": 2.5e-07,
+   "total_accounts": 12.345,
+   "new_accounts_today": "text — new_accounts_today 2",
+   "tao_usd": "text — tao_usd 2",
+   "hotkey_private": "never published"
+  }
+ ],
+ "gate": {
+  "observed_at": 99995,
+  "gate_active": true,
+  "theta": "text — theta 2",
+  "above_count": 0.3333333333333333,
+  "bar_mode": 2.5e-07,
+  "hotkey_private": "never published"
+ },
+ "crossings": [
+  {
+   "observed_at": 1.0625,
+   "netuid": 0.125,
+   "direction": 257.16123,
+   "share": true,
+   "theta": "text — theta 0",
+   "eligibility": 1.2345e-05,
+   "hotkey_private": "never published"
+  },
+  {
+   "observed_at": 123456.7,
+   "netuid": -2.55555,
+   "direction": "text — direction 1",
+   "share": "text — share 1",
+   "theta": 3,
+   "eligibility": 0.30000000000000004,
+   "hotkey_private": "never published"
+  }
+ ],
+ "emission": [
+  {
+   "netuid": 1.0625,
+   "emission_pct": 0.125,
+   "emission_pct_then": 257.16123,
+   "hotkey_private": "never published"
+  },
+  {
+   "netuid": 123456.7,
+   "emission_pct": -2.55555,
+   "emission_pct_then": "text — emission_pct_then 1",
+   "hotkey_private": "never published"
+  },
+  {
+   "netuid": 99995,
+   "emission_pct": true,
+   "emission_pct_then": "text — emission_pct_then 2",
+   "hotkey_private": "never published"
+  }
+ ],
+ "emission_since": "2026-10-11T01:09:19+00:00",
+ "params": [
+  {
+   "item": 1.0625,
+   "prev_value": 0.125,
+   "new_value": 257.16123,
+   "observed_at": true,
+   "block_number": "text — block_number 0",
+   "hotkey_private": "never published"
+  },
+  {
+   "item": 123456.7,
+   "prev_value": -2.55555,
+   "new_value": "text — new_value 1",
+   "observed_at": "text — observed_at 1",
+   "block_number": 3,
+   "hotkey_private": "never published"
+  }
+ ],
+ "upgrades": [
+  {
+   "observed_at": 1.0625,
+   "prev_spec": 0.125,
+   "new_spec": 257.16123,
+   "block_reference": true,
+   "source": "text — source 0",
+   "hotkey_private": "never published"
+  },
+  {
+   "observed_at": 123456.7,
+   "prev_spec": -2.55555,
+   "new_spec": "text — new_spec 1",
+   "block_reference": "text — block_reference 1",
+   "source": 3,
+   "hotkey_private": "never published"
+  }
+ ],
+ "releases": [
+  {
+   "spec": 1.0625,
+   "pending": 0.125,
+   "since": 257.16123,
+   "bundled": true,
+   "commits": "text — commits 0",
+   "files": 1.2345e-05,
+   "adds": 99995,
+   "dels": 3,
+   "partial": "text — partial 0",
+   "headline": "text — headline 0",
+   "headline2": 2.5e-07,
+   "headline3": 12.345,
+   "files_runtime": null,
+   "files_pallets": true,
+   "files_evm": "text — files_evm 0",
+   "files_node": 257.16123,
+   "files_sdk": 123456.7,
+   "files_docs": -2.55555,
+   "files_tooling": "text — files_tooling 0",
+   "hotkey_private": "never published"
+  },
+  {
+   "spec": 123456.7,
+   "pending": -2.55555,
+   "since": "text — since 1",
+   "bundled": "text — bundled 1",
+   "commits": 3,
+   "files": 0.30000000000000004,
+   "adds": 0.3333333333333333,
+   "dels": true,
+   "partial": "text — partial 1",
+   "headline": null,
+   "headline2": 1.0625,
+   "headline3": 0.125,
+   "files_runtime": "text — files_runtime 1",
+   "files_pallets": "text — files_pallets 1",
+   "files_evm": -2.55555,
+   "files_node": 1.2345e-05,
+   "files_sdk": 99995,
+   "files_docs": true,
+   "files_tooling": "text — files_tooling 1",
+   "hotkey_private": "never published"
+  }
+ ],
+ "job": {
+  "spec": 1.0625,
+  "status": 0.125,
+  "hotkey_private": "never published"
+ }
+}
