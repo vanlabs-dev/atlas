@@ -1,130 +1,13 @@
-// Field allowlist for the fixture export. Each record is built from these
+// Field allowlist for published site data. Each record is built from these
 // names only, so a field the stores add later cannot flow to the site.
-// Map: site field -> source field. Owner-specific data (holdings, hotkeys,
-// wallets, rotation decisions) is never listed. Addresses are never listed.
+// The list lives in sitedata/allowlist.json, which the Pi publisher reads
+// too (change: supabase-data-layer). Map: site field -> source field.
+// Owner-specific data (holdings, hotkeys, wallets, rotation decisions) is
+// never listed. Addresses are never listed.
 
-export const ALLOWLIST = {
-  mining: {
-    netuid: "netuid",
-    name: "subnet_name",
-    rank: "rank",
-    verdict: "verdict",
-    gpuFloor: "gpu_floor",
-    vramGb: "vram_gb",
-    gpuMentionFiles: "gpu_mention_files",
-    cutReason: "cut_reason",
-    unratedReason: "unrated_reason",
-    minerBurnPct: "miner_burn_pct",
-    earnerCount: "earner_count",
-    top1SharePct: "top1_share_pct",
-    top10SharePct: "top10_share_pct",
-    regCostTao: "reg_cost_tao",
-    blockRef: "block_ref",
-  },
-  fleet: {
-    netuid: "netuid",
-    name: "name",
-    tier: "tier",
-    score: "score",
-    why: "why",
-    divergence: "div_signed",
-    cold: "cold",
-    commits7: "c7",
-    commits30: "c30",
-    authors30: "a30",
-    daysSinceCommit: "days_since",
-    momentum7d: "momentum_7d",
-    momentum30d: "momentum_30d",
-    activityClass: "activity_class",
-    emissionOpaque: "emission_opaque",
-  },
-  fleetCounts: {
-    diverging: "diverging",
-    emission: "emission",
-    cold: "cold",
-    quiet: "quiet",
-    invisible: "invisible",
-  },
-  activity: {
-    netuid: "netuid",
-    daily: "daily",
-  },
-  signal: {
-    class: "class",
-    tier: "tier",
-    netuid: "netuid",
-    createdAt: "created_at",
-  },
-  vitals: {
-    date: "date",
-    totalStakedTao: "total_staked_tao",
-    rootStakeTao: "root_stake_tao",
-    subnetsSharePct: "subnets_share_pct",
-    regCostTao: "subnet_reg_cost_tao",
-    totalAccounts: "total_accounts",
-    newAccountsToday: "new_accounts_today",
-    taoUsd: "tao_usd",
-  },
-  gate: {
-    observedAt: "observed_at",
-    active: "gate_active",
-    theta: "theta",
-    aboveCount: "above_count",
-    barMode: "bar_mode",
-  },
-  crossing: {
-    observedAt: "observed_at",
-    netuid: "netuid",
-    direction: "direction",
-    share: "share",
-    theta: "theta",
-    eligibility: "eligibility",
-  },
-  emission: {
-    netuid: "netuid",
-    pct: "emission_pct",
-    pctThen: "emission_pct_then",
-  },
-  param: {
-    item: "item",
-    prevValue: "prev_value",
-    newValue: "new_value",
-    observedAt: "observed_at",
-    block: "block_number",
-  },
-  upgrade: {
-    observedAt: "observed_at",
-    prevSpec: "prev_spec",
-    newSpec: "new_spec",
-    block: "block_reference",
-    source: "source",
-  },
-  release: {
-    spec: "spec",
-    pending: "pending",
-    since: "since",
-    bundled: "bundled",
-    commits: "commits",
-    files: "files",
-    adds: "adds",
-    dels: "dels",
-    partial: "partial",
-    headline: "headline",
-    headline2: "headline2",
-    headline3: "headline3",
-    filesRuntime: "files_runtime",
-    filesPallets: "files_pallets",
-    filesEvm: "files_evm",
-    filesNode: "files_node",
-    filesSdk: "files_sdk",
-    filesDocs: "files_docs",
-    filesTooling: "files_tooling",
-  },
-  upgradeJob: {
-    spec: "spec",
-    status: "status",
-  },
-} as const satisfies Record<string, Record<string, string>>;
+import contract from "../../sitedata/allowlist.json" with { type: "json" };
+
+export const ALLOWLIST = contract.kinds;
 
 export type Kind = keyof typeof ALLOWLIST;
 
@@ -137,7 +20,7 @@ export type Kind = keyof typeof ALLOWLIST;
  * income figure beside the rank bounds the rent (rehearsal 2026-11-04:
  * 1.435 to 1.520 TAO a month).
  */
-export const BANNED_SOURCE = /^(net_|rent_|payback|required_band|band_assumed|cut_detail|cue|confidence|gate_state|baseline_|gross_|entrant_|parity_|indep_|incumbent_|miner_alpha|price_tao|haircut)/;
+export const BANNED_SOURCE = new RegExp(contract.banned_source);
 
 /** Source fields in the allowlist that match the banned pattern. */
 export function bannedFields(list: Record<string, Record<string, string>> = ALLOWLIST): string[] {
@@ -149,7 +32,7 @@ export function bannedFields(list: Record<string, Record<string, string>> = ALLO
 type Value = string | number | boolean | null | number[];
 
 /** Fields that hold a day series, oldest first. Every other field is scalar. */
-export const SERIES: Record<string, number> = { daily: 90 };
+export const SERIES: Record<string, number> = contract.series;
 
 /** Four significant digits: values are rounded, never exact live state. */
 export function round(value: number): number {
