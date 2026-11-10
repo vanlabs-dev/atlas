@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { APART_AT, COLD, gapText, lastCommitText, whyText } from "../src/lib/fleet.ts";
 import { mean, num, pct, signed } from "../src/lib/format.ts";
-import { bundledText, heat } from "../src/lib/upgrades.ts";
+import { bundledText, heat, pendingView } from "../src/lib/upgrades.ts";
 import { BAR_MODE, CROSSING, emissionMovers, paramRows, seriesTitle, usd } from "../src/lib/network.ts";
 
 const p = (item: string, prevValue: string | null, newValue: string | null) => ({ item, prevValue, newValue, observedAt: "2026-11-01T00:00:00Z", block: 1 });
@@ -97,4 +97,20 @@ test("upgrade heat steps and bundled specs read plainly", () => {
   assert.equal(bundledText(null), null);
   assert.equal(bundledText("480"), "Includes spec 480, never live on its own");
   assert.equal(bundledText("460, 461, 462"), "Includes specs 460, 461 and 462, never live on their own");
+});
+
+test("merged code after the live spec is not called that spec, waiting", () => {
+  // 2026-11-10: the chain ran 488, and one CI commit landed after 488
+  // shipped, with the repository still stating 488.
+  const after = pendingView({ spec: 488, commits: 1 }, 488, "6 Nov 2026");
+  assert.equal(after.label, "Next");
+  assert.equal(after.heading, "Merged since spec 488");
+  assert.equal(after.finding, "The chain runs spec 488; 1 commit merged since then is in no spec yet.");
+  assert.doesNotMatch(after.finding + after.note, /spec 488 is merged|waiting/);
+  assert.match(pendingView({ spec: 488, commits: 3 }, 488, "x").finding, /3 commits merged since then are in no spec yet/);
+  // A spec above the live one is merged and waiting, as before.
+  const ahead = pendingView({ spec: 488, commits: 5 }, 486, "27 Oct 2026");
+  assert.equal(ahead.label, "488");
+  assert.equal(ahead.heading, "Merged, waiting");
+  assert.equal(ahead.finding, "The chain runs spec 486; spec 488 is merged and waiting.");
 });

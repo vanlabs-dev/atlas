@@ -3,7 +3,7 @@ import { BoardHeader } from "@/components/board-header";
 import { getUpgrades } from "@/data/upgrades";
 import type { Release } from "@/data/types";
 import { day, mean as avg, num } from "@/lib/format";
-import { AREAS, bundledText, chainFiles, heat, HEAT_STEPS } from "@/lib/upgrades";
+import { AREAS, bundledText, chainFiles, heat, HEAT_STEPS, pendingView } from "@/lib/upgrades";
 
 export const metadata: Metadata = { title: "Runtime upgrades" };
 
@@ -26,17 +26,18 @@ export default async function UpgradesPage() {
 
   const bySpec = new Map(data.releases.filter((r) => !r.pending).map((r) => [r.spec, r]));
   const pending = data.releases.find((r) => r.pending) ?? null;
+  const waiting = pending ? pendingView(pending, last.newSpec, day(pending.since)) : null;
   const finding =
     `${events.length} runtime upgrades in ${Math.round(spanDays)} days${mean === null ? "" : `, one every ${num(mean, 1)} days on average`}. ` +
-    (pending ? `The chain runs spec ${last.newSpec}; spec ${pending.spec} is merged and waiting.` : `The latest is spec ${last.newSpec}, on ${day(last.observedAt)}.`);
+    (waiting ? waiting.finding : `The latest is spec ${last.newSpec}, on ${day(last.observedAt)}.`);
 
   const log = events
     .map((e, i) => ({ e, gap: i === 0 ? null : gaps[i - 1], r: bySpec.get(e.newSpec) ?? null }))
     .reverse();
   const maxChain = Math.max(1, ...data.releases.map(chainFiles));
-  const mapRows: { label: string; sub: string; r: Release }[] = [
-    ...(pending ? [{ label: String(pending.spec), sub: "waiting", r: pending }] : []),
-    ...log.filter((x) => x.r).map((x) => ({ label: String(x.e.newSpec), sub: day(x.e.observedAt), r: x.r as Release })),
+  const mapRows: { key: string; label: string; sub: string; r: Release }[] = [
+    ...(pending && waiting ? [{ key: "pending", label: waiting.label, sub: waiting.sub, r: pending }] : []),
+    ...log.filter((x) => x.r).map((x) => ({ key: String(x.e.newSpec), label: String(x.e.newSpec), sub: day(x.e.observedAt), r: x.r as Release })),
   ].slice(0, MAP_ROWS);
 
   const lines = (r: Release) => [r.headline2, r.headline3].filter((h): h is string => Boolean(h));
@@ -46,18 +47,18 @@ export default async function UpgradesPage() {
     <>
       <BoardHeader title="Runtime upgrades" finding={finding} at={generatedAt} readAt={readAt} />
 
-      {pending ? (
+      {pending && waiting ? (
         <section aria-labelledby="pending-title" className="grid gap-6 rounded-[10px] border-l-[3px] border-accent bg-s1 p-6 sm:grid-cols-[auto_1fr_auto] sm:items-center">
           <div>
             <h2 id="pending-title" className="text-small uppercase tracking-[0.08em] text-accent">
-              Merged, waiting
+              {waiting.heading}
             </h2>
-            <div className="num mt-1 font-display text-[clamp(40px,5vw,56px)] leading-none">{pending.spec}</div>
+            <div className="num mt-1 font-display text-[clamp(40px,5vw,56px)] leading-none">{waiting.label}</div>
           </div>
           <div className="min-w-0">
             <p className="text-lead">{pending.headline ?? "No feature or fix commits recorded"}</p>
             <p className="mt-1 text-small text-ink-3">
-              In the repository since {day(pending.since)}, not on chain yet.
+              {waiting.note}
               {pending.bundled ? ` Includes spec${pending.bundled.includes(",") ? "s" : ""} ${pending.bundled}.` : ""}
             </p>
             <ul className="mt-3 flex flex-wrap gap-1.5">
@@ -93,8 +94,8 @@ export default async function UpgradesPage() {
               ))}
               <div role="columnheader" className="pb-2 text-right text-small text-ink-3">Files</div>
             </div>
-            {mapRows.map(({ label, sub, r }) => (
-              <div key={label} role="row" className="contents">
+            {mapRows.map(({ key, label, sub, r }) => (
+              <div key={key} role="row" className="contents">
                 <div role="rowheader" className="num leading-tight">
                   {label}
                   <span className={`block text-small ${r.pending ? "text-accent" : "text-ink-3"}`}>{sub}</span>
