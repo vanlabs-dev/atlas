@@ -26,7 +26,11 @@ function repo() {
 }
 
 function step(root: string, env: Record<string, string>) {
-  return spawnSync("bash", [SCRIPT], { cwd: join(root, "web"), env: { PATH: process.env.PATH ?? "", ...env } }).status;
+  // The caller's environment minus any real Vercel values, plus the case's own.
+  const base = { ...process.env };
+  delete base.VERCEL_GIT_PREVIOUS_SHA;
+  delete base.VERCEL_GIT_COMMIT_MESSAGE;
+  return spawnSync("bash", [SCRIPT], { cwd: join(root, "web"), env: { ...base, ...env } }).status;
 }
 
 test("a push that changes nothing under web/ skips the build", () => {
