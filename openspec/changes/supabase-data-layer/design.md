@@ -221,5 +221,8 @@ then serves the committed fixtures. Disable the timer on the Pi.
   publisher (one read and up to four upserts) and the site's reads are
   well above that. A paused project can be resumed from the dashboard
   for 90 days.
-- Which Supabase region to use. Pick the one nearest the Vercel function
-  region when the project is created.
+- Answered 2026-11-10 (task 3.1): project `subnt-site`
+  (`kmatehulwoxqenfridtn`, `us-east-1`, Vercel's default function region),
+  a dedicated free project. Reusing `subnt-trader` was rejected: its
+  secret key bypasses row-level security on the owner's positions,
+  holdings, trades and wallet tables, and the Pi would hold it.
