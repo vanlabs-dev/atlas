@@ -27,7 +27,7 @@
 - [x] 4.2 Switch `mining.ts`, `fleet.ts`, `network.ts` and `upgrades.ts` to the reader, keeping their signatures and the `FIELDS` projection. Verify that `npm run typecheck` passes, that `npm run test:build` passes with no Supabase settings, and that the served payload test still finds no undeclared field.
 - [x] 4.3 Replace `SITE_BUILT_AT` and `staleAtBuild` with a read-time stale label in `data-age.tsx` and `freshness.ts`. Verify with `tests/freshness.test.ts`: a board older than 48 h at read time renders the stale label in server HTML.
 - [ ] 4.4 Set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in a Vercel Preview deployment. Verify that pages show the Supabase boards. Then point the reader at a bad URL in the Preview and verify that the page keeps the last good data, not an error or a blank. If Next does not keep the stale entry, apply the sentinel fallback from `design.md` and re-check.
-- [ ] 4.5 Update `web/README.md` (Data and Deploy sections) for the live source, the environment variables and the fallback. Verify that the README states no fixture-push workflow for data.
+- [x] 4.5 Update `web/README.md` (Data and Deploy sections) for the live source, the environment variables and the fallback. Verify that the README states no fixture-push workflow for data.
 
 ## 5. Upgrades board before go-live
 
