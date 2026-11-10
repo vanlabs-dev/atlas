@@ -222,8 +222,9 @@ settling the subnet, not a decision by the team.
 
 ## A paused dividend deposit or a burning subnet is not misconduct
 
-Root dividend deposits wait while a fund's pools are outside a 2% band
-around their fast moving prices. Meanwhile basket trades, claims and root
+Root dividend deposits wait while a batch's price impact against the
+fund's fast moving prices is over budget (out-of-band holdings may move
+fund NAV at most 0.1%; incoming credits at most 2%). Meanwhile basket trades, claims and root
 stake changes on that validator can fail with `BasketDepositPending`, and
 the earned alpha is kept for the stakers who earned it. Do not write that
 a validator is "withholding", "freezing" or "skimming" root dividends
@@ -234,3 +235,11 @@ recycle slots of its emission vector. Do not describe that as the team
 "destroying holders' value" or "dumping" without evidence beyond the
 setting itself; it is a supported, bounded choice. Atlas does not read the
 vectors, so state a subnet's burn or recycle share only from a chain read.
+
+A subnet owner may also pay gamma shares of the subnet's emission (up to
+16, at most 10% each) into other whitelisted subnets' gamma. Each epoch
+the subnet sells that alpha within a 2% price bound and the gamma is
+credited to the owner's deposit on the target. Do not describe that sale
+as the team "dumping" its alpha or "diverting" holders' emission without
+evidence beyond the setting. Atlas does not read the shares, so state
+them only from a chain read.

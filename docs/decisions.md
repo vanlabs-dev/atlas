@@ -48,24 +48,36 @@ during apply:
   ingestion are **removed**, not disabled. Their tables and rows stay. The
   `root-rotation` promotion item due 2026-11-04 is void.
 
-## Live chain (2026-11-07)
+## Live chain (2026-11-11)
 
-Finney `spec_version` **488** (knob and emission-switch read and chain-read
-probe both clean at finalized block 9451247). Every knob value is
-unchanged; `SubnetEmissionEnabled` is now off for netuid **82** only (103
-is on). Spec 488 (with the 487 release it includes) enables the emission
+Finney `spec_version` **490** (knob and emission-switch read and chain-read
+probe both clean at finalized block 9478248). Root lowered
+`NetworkLockReductionInterval` to **28,800** blocks (4 days, from 8) with
+no runtime upgrade; every other knob value is unchanged, and
+`SubnetEmissionEnabled` is off for netuid **82** only. Spec 490 (Release
+489 plus the version bump) adds gamma shares of emission: the owner or root
+sets the five slots plus up to 16 shares of at most 10% each to
+root-whitelisted subnets (`sudo_set_subnet_emission_weights_v2`, AdminUtils
+120; whitelist AdminUtils 121), converted at each epoch into the owner's
+gamma on the target within 2% price bounds. Root dividend deposits are now
+admitted by a price-impact budget (out-of-band holdings at most 0.1% of
+NAV, incoming credits at most 2%) instead of requiring every pool inside
+the 2% band. `terminate_lease` pays contributors in full, takes ownership
+once, and hands the residual stake and lock to the beneficiary. Gamma
+deposits can open at an unassociated hotkey. The runtime reads only the V2
+stake items, and the EVM coldkey-total views meter gas per scanned step.
+No item Atlas reads was renamed, removed or reshaped (probe clean).
+Spec 488 (with the 487 release it includes) enables the emission
 vector's burn and recycle slots (together at most 33%; they destroy alpha
 and do not change emission share), adds gamma (a dollar-valued subnet
 service credit minted by burning alpha, gated by `GammaEnabled` and
 `SubnetGammaEnabled`, both off by default and not read) and `set_service`
 listings, adds hashed and post-quantum wallet accounts behind
 `HashedAccountsEnabled` (off by default, not read), adds the `Lock` (21)
-and `GammaSpend` (22) proxy types, and makes root dividend deposits wait
-for prices inside the 2% fast-price band, snapshotting earned alpha per
-root stake meanwhile (`BasketDepositPending` while unsettled).
-`SubnetMovingPrice` now updates for every started dynamic subnet, not only
-the emission set. No item Atlas reads was renamed, removed or reshaped
-(probe clean).
+and `GammaSpend` (22) proxy types, and snapshots earned root dividend
+alpha per root stake while a deposit cannot settle (`BasketDepositPending`
+while unsettled). `SubnetMovingPrice` updates for every started dynamic
+subnet, not only the emission set.
 Spec 486 metered the contracts chain extension's stake-availability query
 (one read plus the coldkey's actual `StakingHotkeys` walk).
 A reporting-only subnet lifecycle (`SubnetState`) is live: a
@@ -132,14 +144,14 @@ leaves a delegator's stake on the old hotkey when it cannot follow without
 growing that list (`HotkeySwapStakeRetained`, root credits in
 `HotkeySwapBasketCredits`). EIP-7702 authorization lists are capped at 255
 entries before signature recovery, and EVM nonces survive balance-account
-reaping (`EVM.AccountNonces`). Registration rules are unchanged at block
-9451247 (immunity 432,000, lock reduction 57,600, rate limit 14,400, all
-explicit). Spec 488 renamed, removed or reshaped no item Atlas reads, so no
-reader changed. Still open: the mining screen's miner share
+reaping (`EVM.AccountNonces`). Registration rules at block 9478248:
+immunity 432,000, lock reduction 28,800, rate limit 14,400, all explicit.
+Spec 490 renamed, removed or reshaped no item Atlas reads, so no reader
+changed. Still open: the mining screen's miner share
 (`fleet/atlas_fleet_mining.py`) still comes from `SubnetOwnerCut` and
 `OwnerCutEnabled`. That is correct only for subnets still on their seeded
-vector, and since 488 a subnet can also divert up to 33% to burn and
-recycle. The fix needs a `SubnetEmissionWeights` read and a `fleet/`
+vector; a subnet can also divert up to 33% to burn and recycle, and since
+490 pay gamma shares out of the split. The fix needs a `SubnetEmissionWeights` read and a `fleet/`
 change, both outside the upgrade job's scope. Resolved: the livedata
 switch watch now records an absent `SubnetEmissionEnabled` key as `true`,
 matching the runtime default.
