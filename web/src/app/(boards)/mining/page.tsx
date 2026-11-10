@@ -8,7 +8,7 @@ import { headline, order, readBlock } from "@/lib/mining";
 export const metadata: Metadata = { title: "Mining triage" };
 
 export default async function MiningPage() {
-  const { generatedAt, data } = await getMining();
+  const { generatedAt, readAt, data } = await getMining();
   const rows = order(data);
   const block = readBlock(rows);
   const fullBurn = rows.filter((r) => (r.minerBurnPct ?? 0) >= 99.95).length;
@@ -23,7 +23,7 @@ export default async function MiningPage() {
 
   return (
     <>
-      <BoardHeader title="Mining triage" finding={headline(rows)} at={generatedAt} />
+      <BoardHeader title="Mining triage" finding={headline(rows)} at={generatedAt} readAt={readAt} />
       <MiningTable rows={rows} />
       <div className="mt-[clamp(72px,9vw,120px)] grid gap-12 lg:grid-cols-[4fr_8fr] lg:gap-16">
         <Figures

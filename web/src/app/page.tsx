@@ -144,7 +144,7 @@ export default async function Home() {
           Code, chain and market, all from one Raspberry Pi. In the last 30 days it read <strong>{num(total)} commits</strong> across{" "}
           <strong>{read.length} repositories</strong>.
         </p>
-        <DataAge at={at} />
+        <DataAge at={at} readAt={fleet.readAt} />
         <div className="acts">
           <Link className="btn" href="/fleet">
             Open the fleet board

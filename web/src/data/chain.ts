@@ -1,14 +1,8 @@
+import type { BlockAnchor } from "./block";
 import { getNetwork } from "./network";
 import { getUpgrades } from "./upgrades";
 
-/** A block Atlas saw, and when. The site estimates the current block from it. */
-export interface BlockAnchor {
-  block: number;
-  at: string;
-}
-
-// Bittensor seals a block every 12 seconds.
-export const BLOCK_MS = 12_000;
+export { BLOCK_MS, type BlockAnchor } from "./block";
 
 export async function getBlockAnchor(): Promise<BlockAnchor | null> {
   const [network, upgrades] = await Promise.all([getNetwork(), getUpgrades()]);

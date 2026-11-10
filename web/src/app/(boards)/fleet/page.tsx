@@ -10,7 +10,7 @@ import { SIGNAL } from "@/lib/words";
 export const metadata: Metadata = { title: "Fleet attention" };
 
 export default async function FleetPage() {
-  const { generatedAt, data } = await getFleet();
+  const { generatedAt, readAt, data } = await getFleet();
   const { rows, counts, signals, activity } = data;
   const byNetuid = new Map(rows.map((r) => [r.netuid, r]));
   const lead = rows[0];
@@ -21,7 +21,7 @@ export default async function FleetPage() {
 
   return (
     <>
-      <BoardHeader title="Fleet attention" finding={finding} at={generatedAt} />
+      <BoardHeader title="Fleet attention" finding={finding} at={generatedAt} readAt={readAt} />
       <dl className="grid grid-cols-2 gap-x-8 gap-y-10 lg:grid-cols-4">
         {[
           { value: counts.diverging, label: "code and price apart" },

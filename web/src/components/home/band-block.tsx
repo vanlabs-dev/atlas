@@ -1,6 +1,6 @@
 "use client";
 
-import type { BlockAnchor } from "@/data/chain";
+import type { BlockAnchor } from "@/data/block";
 import { useBlocks } from "@/components/block-clock";
 
 /** The estimated block in the band, from the same clock as the field's today edge. */
