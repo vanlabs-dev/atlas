@@ -11,10 +11,26 @@ Run from the repository root:
 
 ```
 python3 sitedata/atlas_sitedata.py compose   # print the four boards as JSON
+python3 sitedata/atlas_sitedata.py publish   # upload changed boards to Supabase
 ```
 
 `compose` is read-only. It opens every SQLite store with `mode=ro`, reads
 git logs only, and writes nothing.
+
+`publish` composes the boards, scrubs each one, and upserts every clean
+board whose data or generated time differs from the stored copy into the
+Supabase `boards` table (`supabase/001_boards.sql`). It reads
+`SUPABASE_URL` and `SUPABASE_SECRET_KEY` from `~/.hermes/.env`, or else the
+process environment, and never prints the key. It exits 1 when a
+credential is missing (before composing), when the store cannot be
+reached or rejects a write, or when any board fails the scrub. Clean
+boards still upload in that last case. It never deletes or blanks a
+stored board.
+
+On the Pi, `systemd/atlas-sitedata.timer` runs `publish` hourly at `:25`,
+after the hourly passes and the 6-hourly fleet pass at `:20`. A failed
+run triggers `atlas-notify-failure@`, the Telegram job-failure alert.
+Install steps are in the unit file.
 
 ## Files
 
@@ -24,6 +40,8 @@ git logs only, and writes nothing.
 | `atlas_sitedata.py` | `pick` (allowlist), 4-significant-digit rounding, daily commit bins, board assembly, scrub |
 | `allowlist.json` | Field allowlist (site field to source field), banned source-field pattern, day series, public signal classes |
 | `scrub.json` | Leak rules: tokens, IP addresses, hosts, private addresses, dropped or rent-bounding fields, em dashes |
+| `supabase/001_boards.sql` | The `boards` table: public `SELECT`, no public write (row-level security) |
+| `systemd/` | `atlas-sitedata.service` and `.timer` for the Pi |
 | `tests/golden/` | A synthetic raw input and the boards the TypeScript export built from it |
 
 ## Rules
@@ -43,4 +61,5 @@ git logs only, and writes nothing.
 python3 -m unittest discover -s sitedata/tests
 ```
 
-No test reaches the network or the Pi stores.
+No test reaches the network or the Pi stores: publish tests use a fake
+transport.
