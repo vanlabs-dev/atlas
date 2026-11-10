@@ -1,0 +1,22 @@
+# Atlas site-data publisher (change: supabase-data-layer). Builds the four
+# public subnt.dev boards from the Atlas stores (read-only), scrubs each,
+# and uploads the ones that changed to Supabase. A failed run exits
+# non-zero, so the job-failure alert fires; stored boards stay as they
+# were. SUPABASE_URL and SUPABASE_SECRET_KEY come from ~/.hermes/.env,
+# read by the publisher itself, so no EnvironmentFile.
+# Install (user-level, as pi):
+#   cp ~/atlas/sitedata/systemd/atlas-sitedata.{service,timer} \
+#     ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now atlas-sitedata.timer
+[Unit]
+Description=Atlas site-data publisher (user-level; no root)
+Wants=network-online.target
+After=network-online.target
+
+OnFailure=atlas-notify-failure@%n.service
+[Service]
+Type=oneshot
+WorkingDirectory=/home/pi/atlas
+ExecStart=/usr/bin/python3 /home/pi/atlas/sitedata/atlas_sitedata.py publish
+TimeoutStartSec=10min

@@ -201,9 +201,13 @@ then serves the committed fixtures. Disable the timer on the Pi.
 
 ## Open Questions
 
-- How long a free Supabase project may go without activity before it
-  pauses, and whether the publisher's REST writes count. Answer from
-  Supabase's current documentation during task 3.1. It does not change
-  the design, because the fallback covers a pause.
+- Answered 2026-11-10 (task 3.1): Supabase pauses a free project that
+  shows low database activity over a 7-day period, after a warning email
+  about a week ahead. "A few user requests to the database each day"
+  is enough to prevent it, and API calls count
+  (supabase.com/docs/guides/platform/free-project-pausing). The hourly
+  publisher (one read and up to four upserts) and the site's reads are
+  well above that. A paused project can be resumed from the dashboard
+  for 90 days.
 - Which Supabase region to use. Pick the one nearest the Vercel function
   region when the project is created.
