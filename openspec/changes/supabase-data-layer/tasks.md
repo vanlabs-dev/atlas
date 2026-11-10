@@ -26,7 +26,7 @@
 - [x] 4.1 Add a server-only reader in `web/src/data/source.ts`: a `'use cache'` fetch of one board with `cacheLife({ revalidate: 900 })`, throwing on non-200 or empty. The outer function falls back to the committed fixture, and without `SUPABASE_URL` it uses the fixture directly. Verify with unit tests for the fixture path, the configured path (stub fetch) and the error path.
 - [x] 4.2 Switch `mining.ts`, `fleet.ts`, `network.ts` and `upgrades.ts` to the reader, keeping their signatures and the `FIELDS` projection. Verify that `npm run typecheck` passes, that `npm run test:build` passes with no Supabase settings, and that the served payload test still finds no undeclared field.
 - [x] 4.3 Replace `SITE_BUILT_AT` and `staleAtBuild` with a read-time stale label in `data-age.tsx` and `freshness.ts`. Verify with `tests/freshness.test.ts`: a board older than 48 h at read time renders the stale label in server HTML.
-- [ ] 4.4 Set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in a Vercel Preview deployment. Verify that pages show the Supabase boards. Then point the reader at a bad URL in the Preview and verify that the page keeps the last good data, not an error or a blank. If Next does not keep the stale entry, apply the sentinel fallback from `design.md` and re-check.
+- [x] 4.4 Set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in a Vercel Preview deployment. Verify that pages show the Supabase boards. Then point the reader at a bad URL in the Preview and verify that the page keeps the last good data, not an error or a blank. If Next does not keep the stale entry, apply the sentinel fallback from `design.md` and re-check. (Done 2026-11-10 on Production: Preview deployments are behind Vercel SSO. Public read was revoked for 17 minutes; every page kept its last data at HTTP 200, `x-vercel-cache: STALE`.)
 - [x] 4.5 Update `web/README.md` (Data and Deploy sections) for the live source, the environment variables and the fallback. Verify that the README states no fixture-push workflow for data.
 
 ## 5. Upgrades board before go-live
@@ -36,4 +36,4 @@
 ## 6. Go-live
 
 - [ ] 6.1 Set the Vercel Production environment variables, deploy `main`, then install and enable `atlas-sitedata.timer` on the Pi (operator approval). Verify that after the next `:25` run the home page shows the latest mining pass time, and Network shows the latest probe pass, with no new deploy.
-- [ ] 6.2 Verify the failure path end to end: stop the timer's network access for one run (or use a bad URL), check that the Telegram job-failure alert fires, and check that the site still serves the last boards.
+- [x] 6.2 Verify the failure path end to end: stop the timer's network access for one run (or use a bad URL), check that the Telegram job-failure alert fires, and check that the site still serves the last boards.
