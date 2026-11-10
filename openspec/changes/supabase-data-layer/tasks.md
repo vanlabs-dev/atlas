@@ -31,7 +31,7 @@
 
 ## 5. Upgrades board before go-live
 
-- [ ] 5.1 Fix the unreleased-changes case: when the pending range's spec is not above the live spec, the board must not say "spec N is merged and waiting" and the heat map must not repeat the live spec's row. Label it as changes merged since spec N. Verify with a `words.test.ts` case built from the 2026-11-10 data (live 488, pending range at 488 with one CI commit).
+- [x] 5.1 Fix the unreleased-changes case: when the pending range's spec is not above the live spec, the board must not say "spec N is merged and waiting" and the heat map must not repeat the live spec's row. Label it as changes merged since spec N. Verify with a `words.test.ts` case built from the 2026-11-10 data (live 488, pending range at 488 with one CI commit).
 
 ## 6. Go-live
 

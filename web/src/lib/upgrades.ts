@@ -35,3 +35,42 @@ export function bundledText(bundled: string | null): string | null {
   if (specs.length === 1) return `Includes spec ${specs[0]}, never live on its own`;
   return `Includes specs ${specs.slice(0, -1).join(", ")} and ${specs[specs.length - 1]}, never live on their own`;
 }
+
+/** How the board names merged code no chain upgrade has shipped yet. */
+export interface PendingView {
+  /** Large label: the waiting spec, or "Next" for unreleased commits. */
+  label: string;
+  /** Heat-map row note under the label. */
+  sub: string;
+  heading: string;
+  /** Second sentence of the board's finding. */
+  finding: string;
+  /** Line under the headline in the banner. */
+  note: string;
+}
+
+/**
+ * Merged code waits in one of two ways. When the repository already
+ * states a spec above the live one, that spec is merged and waiting. When
+ * it does not, the commits landed after the live spec shipped and are in
+ * no spec yet; calling them "spec N, waiting" would name the live spec.
+ */
+export function pendingView(pending: Pick<Release, "spec" | "commits">, liveSpec: number, since: string): PendingView {
+  if (pending.spec > liveSpec) {
+    return {
+      label: String(pending.spec),
+      sub: "waiting",
+      heading: "Merged, waiting",
+      finding: `The chain runs spec ${liveSpec}; spec ${pending.spec} is merged and waiting.`,
+      note: `In the repository since ${since}, not on chain yet.`,
+    };
+  }
+  const commits = pending.commits === 1 ? "1 commit" : `${pending.commits} commits`;
+  return {
+    label: "Next",
+    sub: "unreleased",
+    heading: `Merged since spec ${liveSpec}`,
+    finding: `The chain runs spec ${liveSpec}; ${commits} merged since then ${pending.commits === 1 ? "is" : "are"} in no spec yet.`,
+    note: `Merged after spec ${liveSpec} shipped, from ${since}. No spec number yet.`,
+  };
+}
