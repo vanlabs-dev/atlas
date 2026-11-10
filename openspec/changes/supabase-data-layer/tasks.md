@@ -19,7 +19,7 @@
 - [x] 3.2 Write `sitedata/supabase/001_boards.sql` (the `boards` table, row-level security on, an anon `SELECT` policy, no write policies) and apply it. Verify that an insert with the publishable key is rejected and a select succeeds.
 - [x] 3.3 Add the `publish` command: read hashes in one GET, upsert only changed boards, exit non-zero on any upload error or missing `SUPABASE_URL` or `SUPABASE_SECRET_KEY`, and redact the key from all output. Verify with unit tests against a stub HTTP server: changed-only upload, store down leaves rows unchanged, missing key exits before composing, key absent from error text.
 - [x] 3.4 Add `sitedata/systemd/atlas-sitedata.{service,timer}` (`OnCalendar=*:25`, `Persistent=true`, `OnFailure=atlas-notify-failure@%n.service`). Verify with `systemd-analyze verify` on both files.
-- [ ] 3.5 With operator approval: add the secret key to `~/.hermes/.env` on the Pi, pull `main`, and run `atlas_sitedata.py publish` once by hand. Verify that the four rows exist in Supabase with the expected generated times.
+- [x] 3.5 With operator approval: add the secret key to `~/.hermes/.env` on the Pi, pull `main`, and run `atlas_sitedata.py publish` once by hand. Verify that the four rows exist in Supabase with the expected generated times.
 
 ## 4. Site data layer
 
