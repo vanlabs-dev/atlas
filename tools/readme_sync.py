@@ -45,6 +45,7 @@ COMPONENTS: Dict[str, str] = {
     "backup": "Nightly encrypted restic backup of the stores and Hermes state to Google Drive",
     "tools": "Repository tooling, including this README generator",
     "web": "The subnt.dev site: Next.js pages over a typed data layer",
+    "sitedata": "Builds the public subnt.dev boards from the stores and publishes them to Supabase hourly",
 }
 
 # Retired work stays in the tree but is labelled in the generated tables.
