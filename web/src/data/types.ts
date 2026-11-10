@@ -1,5 +1,5 @@
 // Shapes of the four boards. Fields mirror the Atlas stores they come
-// from; the export allowlist in scripts/allowlist.ts names the same fields.
+// from; the field allowlist in sitedata/allowlist.json names the same fields.
 // Every record is subnet-level. Nothing here describes the owner.
 
 /** ISO 8601 UTC timestamp. */
