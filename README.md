@@ -110,6 +110,7 @@ livedata stores, and deploys to Vercel from `main`.
 | [`backup/`](backup/README.md) | Nightly encrypted restic backup of the stores and Hermes state to Google Drive |
 | [`tools/`](tools/) | Repository tooling, including this README generator |
 | [`web/`](web/README.md) | The subnt.dev site: Next.js pages over a typed data layer |
+| [`sitedata/`](sitedata/README.md) | Builds the public subnt.dev boards from the stores and publishes them to Supabase hourly |
 <!-- END:components -->
 
 ## What it does
@@ -158,6 +159,7 @@ every change are in [`openspec/changes/archive/`](openspec/changes/archive/).
 | `atlas-poll-chain-head` | Every hour | Live chain-head poll |
 | `atlas-probe` | Every hour | Chain-read probe |
 | `atlas-repotrack-update` | Every hour | Subtensor repository update |
+| `atlas-sitedata` | `*:25` | Site-data publisher |
 | `atlas-subnt` | Every 6 hours, at :55 | Subnt public edition (retired, masked; replaced by `web/`) |
 | `atlas-alerts` | `*:15` | Alert scan |
 | `atlas-health` | Every 5 minutes | Health watch |
