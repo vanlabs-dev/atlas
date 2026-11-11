@@ -36,11 +36,42 @@ export const VERDICT: Record<string, string> = {
   stub: "Stub miner",
 };
 
+/**
+ * Where a subnet stands on the mining ladder. The order of the checks is the
+ * rule: a cut reason outranks a rank, and an unrated marker counts only
+ * without a rank.
+ * cut:      taken off the ladder, with a public reason.
+ * ranked:   on the ladder at its stored rank.
+ * unrated:  no rank, with a public reason.
+ * unlisted: no rank and no reason recorded.
+ */
+export type Standing = "cut" | "ranked" | "unrated" | "unlisted";
+
+export function standing(r: Pick<MiningRow, "rank" | "cutReason" | "unratedReason">): Standing {
+  if (r.cutReason) return "cut";
+  if (r.rank !== null) return "ranked";
+  return r.unratedReason ? "unrated" : "unlisted";
+}
+
 export function reason(r: MiningRow): string | null {
-  if (r.cutReason) return CUT[r.cutReason] ?? UNNAMED_CUT;
-  if (r.rank === null && r.unratedReason) return UNRATED[r.unratedReason] ?? UNNAMED_UNRATED;
+  const s = standing(r);
+  if (s === "cut") return CUT[r.cutReason as string] ?? UNNAMED_CUT;
+  if (s === "unrated") return UNRATED[r.unratedReason as string] ?? UNNAMED_UNRATED;
   return null;
 }
+
+/** The mining table's filter, by what the code scan found. */
+export type MiningFilter = "all" | "possible" | "needs-gpu" | "other";
+
+export const MINING_FILTERS: { value: MiningFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "possible", label: "No GPU code found" },
+  { value: "needs-gpu", label: "Needs a GPU" },
+  { value: "other", label: "Not readable or not scanned" },
+];
+
+export const inMiningFilter = (filter: MiningFilter) => (r: Pick<MiningRow, "verdict">) =>
+  filter === "all" ? true : filter === "other" ? r.verdict !== "possible" && r.verdict !== "needs-gpu" : r.verdict === filter;
 
 export function codeText(r: MiningRow): string {
   if (!r.verdict) return "Not scanned";
