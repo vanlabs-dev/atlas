@@ -67,6 +67,20 @@ The owner relaxed these house rules for this site:
   lists) carry `data-ui`: they are product fragments, and follow the
   app-screen rules inside. The boards are inspected with `--app`.
 
+Added 2026-11-12 with the phone composition (the owner asked for a
+phone-native site; these three follow from that and are open to a veto):
+
+- `covered-text` at 390px only: the phone's bottom bar is fixed, so a
+  heading passes under it while the page scrolls. The inspector exempts a
+  top bar and not a bottom one. `npm run check:browser` proves the two
+  bars are the only things that ever pass over large text, and that the
+  last line of every page clears the bottom bar.
+- the inspector's `side-scroll` warning on the home strip of statements:
+  the strip is the phone's flight, one statement per view, with a pager
+  that marks the position and steps it.
+- the inspector's `numeric-align` warning on the boards at 390px: a table
+  row is a list row there, and each figure sits under its own label.
+
 Every other house rule still holds.
 
 ## Never use (AI tells)
@@ -141,8 +155,9 @@ Every other house rule still holds.
 
 - Content runs to 1600px, centred, with a gutter of clamp(16px, 4vw,
   64px). The field and the bands run edge to edge.
-- Header: 76px from md up, one row; 92px on phones, with the wordmark
-  on its own row above the four links.
+- Header: one row at every width. 76px from md up, with the four links
+  and the block readout; 56px on a phone, with the wordmark and the
+  block readout, and the pages in the bottom bar.
 - Buttons: solid, radius 3px, 48px tall. Secondary actions: an
   underlined text link. Panels: no border, no shadow; surfaces separate
   by tone. Rules only in tables and lists.
@@ -162,8 +177,12 @@ Every other house rule still holds.
    front rows, naming the busiest subnet). Pointing lifts a row and a
    tag names it.
    Labels (dates, the today edge with "est. block N", names) are HTML
-   projected from 3D. Phones: copy first, the field as a figure with a
-   slow sway. Reduced motion: still. No WebGL: drawn flat.
+   projected from 3D. Phones: copy first, then the field as a figure,
+   then the three statements as a strip, one per view. A swipe through
+   the strip moves the camera between three views made for an upright
+   screen (the whole field, low enough to read a mark's height, along
+   the busiest rows), and the camera sways slowly on the view it rests
+   on. Reduced motion: still, statements stacked. No WebGL: drawn flat.
 2. **The band.** The month's commits as a large figure that counts up,
    a proportional bar of who wrote them (opens left to right), and four
    figures with the estimated block. On phones a legend replaces the
@@ -186,8 +205,8 @@ Every other house rule still holds.
 
 ## Motion list
 
-1. The flight: load rise, scroll camera, hover lift, phone sway, the
-   block clock.
+1. The flight: load rise, scroll camera, hover lift, the phone's swipe
+   camera and sway, the block clock.
 2. Once-on-arrival data motion: count-ups, the band bar, the lead
    chart, the squares, the sparklines, the upgrade gaps. Each is the
    data drawing itself, never a fade-up on a section.
@@ -202,9 +221,16 @@ sway and the flight.
 
 ## Engineering notes
 
-- The stage mode is decided in CSS (`min-width: 900px` and
-  `prefers-reduced-motion`), plus an inline head script that adds
-  `nogl` to `<html>` before first paint. No layout jump after hydration.
+- The stage mode (fly, overlay, swipe, still, flat) is decided once, by
+  an inline head script that writes `data-flight` on `<html>` before
+  first paint from the width (900px), `prefers-reduced-motion` and a
+  WebGL probe, and again when one of them changes. The styles and the
+  Flight component both read that attribute: no layout jump after
+  hydration, and a tablet that turns rebuilds the field in the new mode.
+  The rule is `src/state/flight-mode.ts`. Without script the page has no
+  mode: copy and statements, no field.
+- Every part with states has them named and tested: README, "State
+  machines".
 - Next 16 keeps pages alive in React Activity: effects re-run on the
   same DOM. The flight creates a fresh canvas per mount, disposes the
   renderer, geometries and materials, and releases the context on
@@ -213,6 +239,30 @@ sway and the flight.
   first bundle. Versions are pinned exactly.
 - Field colours come from `--field-*` CSS variables and repaint on a
   scheme change.
+
+## The phone
+
+Below md the site is its own composition, not the desktop squeezed.
+
+- The pages (Home and the four boards) are a bottom bar in thumb reach:
+  a plain bar one tone above the page (s2), text only, 56px plus the
+  home-bar inset, the 2px accent line over the page on show. No icons,
+  no glass, no pill. The page keeps the same room free at its end.
+- The page draws under the notch (`viewport-fit=cover`); the bars and
+  the gutters add the safe-area insets.
+- Hover is for pointers: every hover style sits behind `(hover: hover)`,
+  and every row, tab and button has an `:active` state for a thumb.
+  Touch targets are 44px or more.
+- Home: the main action is a full-width button, 52px. The lead panel
+  runs edge to edge with three equal tabs; a sideways drag across its
+  chart reads the days. "Next on the board" rows are two lines: the name
+  with its figure, then the last commit with the squares. "What it
+  reads" is a list.
+- Boards: below 640px a table is a list of rows. Every field stays: the
+  name with its key figure, a line of words, then a strip of labelled
+  figures. The filter is one row that scrolls sideways inside itself and
+  sticks to the top while the list scrolls. The network vitals are a
+  list with the figure on the right.
 
 ## Boards (mining, fleet, network, upgrades)
 
@@ -228,4 +278,9 @@ Lighthouse a11y of 95 or more in both schemes, AA contrast, the reduced
 motion check, the first-screen check at 1280x720 and 390x844, the
 inspector (home with the allowances above; boards with `--app`) on a
 production build, a client-navigation round trip with no WebGL errors,
-the fixture scrub and allowlist tests, and operator-free data.
+the fixture scrub and allowlist tests, and operator-free data. At 390px
+the inspector also takes `--allow covered-text` (see the rules relaxed).
+`npm run check:browser` covers the state machines in a real browser:
+the stage mode on a phone, a tablet that turns, reduced motion and a
+desktop; the lead panel cycle; links into the fleet board; the filter
+keys; and what the phone's bars pass over.
