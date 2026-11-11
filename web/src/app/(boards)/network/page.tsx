@@ -60,12 +60,13 @@ export default async function NetworkPage() {
   return (
     <>
       <BoardHeader title="Network pulse" finding={finding} at={generatedAt} readAt={readAt} />
-      <section aria-label="Chain vitals" className="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
+      {/* On a phone the vitals are a list: the name and its change on the left, the figure on the right. */}
+      <section aria-label="Chain vitals" className="grid grid-cols-1 gap-x-8 sm:grid-cols-2 sm:gap-y-10 lg:grid-cols-4">
         {kpis.map((k) => (
-          <dl key={k.label}>
+          <dl key={k.label} className="max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-4 max-sm:border-t max-sm:border-rule max-sm:py-4" /* taste-skill-ignore: list rules (DESIGN.md) */>
             <dt className="text-body text-ink-2">{k.label}</dt>
-            <dd className="num mt-2 font-display text-[clamp(44px,5vw,64px)] leading-none">{k.value}</dd>
-            <dd className="mt-2 text-small text-ink-3">
+            <dd className="num mt-2 font-display text-[clamp(44px,5vw,64px)] leading-none max-sm:col-start-2 max-sm:row-span-2 max-sm:row-start-1 max-sm:mt-0 max-sm:text-[32px]">{k.value}</dd>
+            <dd className="mt-2 text-small text-ink-3 max-sm:col-start-1 max-sm:mt-0.5">
               <span className={`num ${polarity(k.d)}`}>{signed(k.d, k.digits, k.unit)}</span> since {since}
             </dd>
           </dl>

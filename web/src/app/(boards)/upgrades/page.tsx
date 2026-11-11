@@ -151,9 +151,10 @@ export default async function UpgradesPage() {
         <ol className="mt-8">
           {log.map(({ e, gap, r }) => (
             <li key={e.newSpec} className="grid gap-x-6 gap-y-3 border-t border-rule py-6 sm:grid-cols-[120px_1fr_200px]">
-              <div>
+              {/* On a phone the spec, its date and the gap share one line. */}
+              <div className="max-sm:flex max-sm:items-baseline max-sm:gap-x-3">
                 <div className="num font-display text-[28px] leading-none">{e.newSpec}</div>
-                <div className="num mt-1.5 text-small text-ink-3">{day(e.observedAt)}</div>
+                <div className="num mt-1.5 text-small text-ink-3 max-sm:mt-0">{day(e.observedAt)}</div>
                 {gap === null ? null : <div className="num text-small text-ink-3">{num(gap, 1)} days later</div>}
               </div>
               <div className="min-w-0">

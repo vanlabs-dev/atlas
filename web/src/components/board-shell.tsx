@@ -10,7 +10,7 @@ export function Panel({ title, children, className = "" }: { title: string; chil
   );
 }
 
-/** Large Newsreader figures with a plain label, for a board's counts. */
+/** Large display figures with a plain label, for a board's counts. */
 export function Figures({ items }: { items: { value: ReactNode; label: string }[] }) {
   return (
     <dl className="grid gap-7">
@@ -27,4 +27,5 @@ export function Figures({ items }: { items: { value: ReactNode; label: string }[
 export const table = "w-full border-collapse text-body";
 export const th = "whitespace-nowrap px-3.5 pb-3.5 text-left text-small font-normal text-ink-3";
 export const td = "whitespace-nowrap border-t border-rule px-3.5 py-4 align-middle"; // taste-skill-ignore: rules only in real tables (DESIGN.md)
-export const row = "transition-colors duration-150 hover:bg-s1 target:bg-s2";
+// data-linked marks the row a link such as /fleet#sn20 names; :target alone can miss it (see FleetTable).
+export const row = "transition-colors duration-150 hover:bg-s1 target:bg-s2 data-linked:bg-s2";
