@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { freshness, STALE_AFTER_HOURS, staleAtRead } from "@/data/freshness";
+import { dataAge, STALE_AFTER_HOURS } from "@/data/freshness";
 
 // The page is cached, so the age is computed in the browser, to the minute.
 // The server and the first paint show the produced time, plus the stale
@@ -27,16 +27,16 @@ export function DataAge({ at, readAt }: { at: string; readAt: string }) {
     timeZone: "UTC",
     timeZoneName: "short",
   });
-  const f = now ? freshness(at, now) : null;
-  const stale = f ? f.stale : staleAtRead(at, readAt);
+  // "read" on the server and at first paint, "live" once the browser's clock is in (src/data/freshness.ts).
+  const view = dataAge(at, readAt, now);
 
   return (
-    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-small text-ink-3">
+    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-small text-ink-3" data-age={view.status} data-clock={view.clock}>
       <span>
         Data from <time dateTime={at}>{produced}</time>
-        {f ? `, ${f.label}` : null}
+        {view.label ? `, ${view.label}` : null}
       </span>
-      {stale ? (
+      {view.status === "stale" ? (
         <span
           className="rounded-[4px] bg-down px-1.5 font-medium text-ground"
           title={`Older than ${STALE_AFTER_HOURS} hours`}

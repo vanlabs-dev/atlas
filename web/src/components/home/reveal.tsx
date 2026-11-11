@@ -3,11 +3,17 @@
 import { useEffect, useRef, useState, type ElementType, type ReactNode } from "react";
 
 /**
- * Runs a part's motion once, as it enters the screen. The server markup is
- * the finished state; the client arms the start state (data-armed) only for a
- * part still below the fold, then sets data-go when it arrives. CSS in
- * home.css does the moving, and reduced motion keeps the finished state.
+ * Runs a part's motion once, as it enters the screen. Three states, on
+ * data-reveal:
+ *   (no attribute)  the server markup, which is the finished state;
+ *   "armed"         the start state, set only for a part still below the fold;
+ *   "shown"         set when it arrives; final.
+ * A part already on screen at load never arms. CSS in home.css does the
+ * moving, and reduced motion keeps the finished state.
  */
+export type RevealState = "armed" | "shown";
+const set = (el: HTMLElement, state: RevealState) => el.setAttribute("data-reveal", state);
+
 export function Reveal({
   as: Tag = "div",
   className,
@@ -23,13 +29,14 @@ export function Reveal({
   useEffect(() => {
     const el = ref.current;
     if (!el || !("IntersectionObserver" in window)) return;
-    if (el.getBoundingClientRect().top < innerHeight) return;
-    el.setAttribute("data-armed", "");
+    // "shown" is final: Next re-runs this effect when it brings the page back, and a part must not re-arm.
+    if (el.getAttribute("data-reveal") === "shown" || el.getBoundingClientRect().top < innerHeight) return;
+    set(el, "armed");
     const io = new IntersectionObserver(
       ([e]) => {
         if (!e.isIntersecting) return;
         io.disconnect();
-        el.setAttribute("data-go", "");
+        set(el, "shown");
       },
       { threshold },
     );
@@ -48,6 +55,7 @@ const ease = (t: number) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t));
 /** A figure that counts up once as it enters. The server renders the final value. */
 export function CountUp({ value, ms = 1200 }: { value: number; ms?: number }) {
   const ref = useRef<HTMLSpanElement>(null);
+  // Two states: resting on the final value (null), or counting (the number on show).
   const [shown, setShown] = useState<number | null>(null);
   useEffect(() => {
     const el = ref.current;

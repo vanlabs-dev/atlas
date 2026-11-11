@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useSyncExternalStore } from "react";
 import { signed } from "@/lib/format";
 import { gapPlaces, whyText } from "@/lib/fleet";
+import { CYCLE_MS, CYCLE_START, cyclePhase, cycleStep } from "@/state/lead-cycle";
 
 export interface LeadRow {
   n: number;
@@ -23,7 +24,6 @@ export interface LeadRow {
 const W = 900;
 const H = 220;
 const BW = W / 90;
-const CYCLE_MS = 8000;
 const short = (t: number) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
 const tone = (v: number | null) => (v === null || v === 0 ? "" : v < 0 ? "dn" : "up");
@@ -31,17 +31,18 @@ const arrow = (v: number | null) => (v === null || v === 0 ? "" : v < 0 ? "▼ "
 
 /**
  * The head of the fleet board, one tab per subnet. Tabs advance on their own
- * every 8 s while the panel is in view, until the visitor takes a tab, points
- * at the panel or focuses inside it. Pointing at the chart reads one day.
+ * every 8 s while the panel is in view, until the visitor takes a tab or
+ * focuses inside it; a pointer resting on the panel makes the timer wait.
+ * The rules are the reducer in src/state/lead-cycle.ts, and the phase it
+ * gives is on the panel as data-cycle (cycling, held, offscreen, taken,
+ * still). Pointing at the chart, or dragging a thumb across it, reads one day.
  */
 export function LeadPanel({ heads, generatedAt }: { heads: LeadRow[]; generatedAt: string }) {
-  const [cur, setCur] = useState(0);
-  const [auto, setAuto] = useState(true);
-  const [inView, setInView] = useState(false);
-  const [paused, setPaused] = useState(false);
+  const [cycle, send] = useReducer(cycleStep, CYCLE_START);
+  const cur = cycle.tab;
   const panel = useRef<HTMLElement>(null);
+  const chart = useRef<HTMLDivElement>(null);
   const bars = useRef<SVGGElement>(null);
-  const cum = useRef<SVGPathElement>(null);
   const readout = useRef<HTMLDivElement>(null);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   const end = Date.parse(generatedAt);
@@ -51,36 +52,34 @@ export function LeadPanel({ heads, generatedAt }: { heads: LeadRow[]; generatedA
   useEffect(() => {
     const el = panel.current;
     if (!el) return;
-    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { threshold: 0.35 });
+    const io = new IntersectionObserver(([e]) => send({ type: e.isIntersecting ? "enter" : "leave" }), { threshold: 0.35 });
     io.observe(el);
     return () => io.disconnect();
   }, []);
 
-  const reduce = useReducedMotion();
-  const running = auto && !reduce && inView && !paused;
+  const phase = cyclePhase(cycle, useReducedMotion());
   useEffect(() => {
-    if (!running) return;
-    const id = setTimeout(() => setCur((c) => (c + 1) % heads.length), CYCLE_MS);
+    if (phase !== "cycling") return;
+    const id = setTimeout(() => send({ type: "tick", tabs: heads.length }), CYCLE_MS);
     return () => clearTimeout(id);
-  }, [running, cur, heads.length]);
+  }, [phase, cur, heads.length]);
 
-  // Each switch: the bars rise and the running total draws. Layout effect, so the start state is set before paint.
+  // Each switch, and each return to the screen: the bars rise and the running total draws. The chart is
+  // put in its start state (data-draw="pre") before paint and released on the next frame.
   useLayoutEffect(() => {
-    const g = bars.current, p = cum.current;
-    if (!g || !p) return;
-    g.setAttribute("data-pre", "");
-    p.setAttribute("data-pre", "");
-    g.getBoundingClientRect();
-    const raf = requestAnimationFrame(() => {
-      g.removeAttribute("data-pre");
-      p.removeAttribute("data-pre");
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [cur, inView]);
+    const c = chart.current;
+    if (!c) return;
+    c.setAttribute("data-draw", "pre");
+    c.getBoundingClientRect();
+    const raf = requestAnimationFrame(() => c.removeAttribute("data-draw"));
+    return () => {
+      cancelAnimationFrame(raf);
+      c.removeAttribute("data-draw");
+    };
+  }, [cur, cycle.inView]);
 
   const take = useCallback((i: number, focus = false) => {
-    setAuto(false);
-    setCur(i);
+    send({ type: "take", tab: i });
     if (focus) tabs.current[i]?.focus();
   }, []);
 
@@ -123,11 +122,12 @@ export function LeadPanel({ heads, generatedAt }: { heads: LeadRow[]; generatedA
       className="leadp"
       data-ui=""
       aria-label="Head of the fleet board"
-      onPointerEnter={() => setPaused(true)}
-      onPointerLeave={() => setPaused(false)}
-      onFocus={() => setAuto(false)}
+      data-cycle={phase}
+      onPointerEnter={() => send({ type: "hold" })}
+      onPointerLeave={() => send({ type: "release" })}
+      onFocus={() => send({ type: "focus" })}
     >
-      <div className="tabs" role="tablist" aria-label="Head of the fleet board" data-auto={running ? "" : undefined}>
+      <div className="tabs" role="tablist" aria-label="Head of the fleet board">
         {heads.map((h, i) => (
           <button
             key={h.n}
@@ -146,8 +146,9 @@ export function LeadPanel({ heads, generatedAt }: { heads: LeadRow[]; generatedA
               take((cur + k + heads.length) % heads.length, true);
             }}
           >
-            {h.name} · score {h.score}
-            <i key={running ? `run-${cur}` : "still"} />
+            {h.name}
+            <span className="sc"> · score {h.score}</span>
+            <i key={phase === "cycling" ? `run-${cur}` : "rest"} />
           </button>
         ))}
       </div>
@@ -170,8 +171,17 @@ export function LeadPanel({ heads, generatedAt }: { heads: LeadRow[]; generatedA
             <span>alpha price in TAO, 7 days ({signed(s.m30, 1, "%")} over 30)</span>
           </div>
         </div>
-        <div className="chart">
-          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`Daily commits for ${s.name} over 90 days`} onPointerMove={onMove} onPointerLeave={onLeave}>
+        <div className="chart" ref={chart}>
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            preserveAspectRatio="none"
+            role="img"
+            aria-label={`Daily commits for ${s.name} over 90 days`}
+            onPointerDown={onMove}
+            onPointerMove={onMove}
+            onPointerLeave={onLeave}
+            onPointerCancel={onLeave}
+          >
             <g ref={bars} className="bars" key={`b-${s.n}`}>
               {d.map((c, i) => {
                 if (!c) return null;
@@ -190,8 +200,9 @@ export function LeadPanel({ heads, generatedAt }: { heads: LeadRow[]; generatedA
                 );
               })}
             </g>
-            <path ref={cum} key={`c-${s.n}`} className="cum" d={line} pathLength={1} />
+            <path key={`c-${s.n}`} className="cum" d={line} pathLength={1} />
           </svg>
+          {sum(d) === 0 ? <p className="none">No commits in the 90 days to {short(end)}.</p> : null}
           <div ref={readout} className="readout" aria-hidden="true" />
           <div className="ax">
             <span>{short(dateOf(0))}</span>

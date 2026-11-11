@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
-import { BLOCK_MS, type BlockAnchor } from "@/data/block";
+import { blockReading, blocksSince, blockText, type BlockAnchor, type BlockReading } from "@/data/block";
 
 // One clock for the header readout, the home field's today edge and the band. It is an
 // estimate from the last block Atlas saw, so the text says "est.".
@@ -25,23 +25,27 @@ function subscribe(cb: () => void) {
 export function useBlocks(anchor: BlockAnchor | null): number | null {
   return useSyncExternalStore(
     subscribe,
-    () => (anchor ? Math.floor(((Date.now() - Date.parse(anchor.at)) / BLOCK_MS) * 50) / 50 : null),
+    () => (anchor ? blocksSince(anchor, Date.now()) : null),
     () => null,
   );
 }
 
+/** The clock as a named state: none, pending or ticking (src/data/block.ts). */
+export function useBlockReading(anchor: BlockAnchor | null): BlockReading {
+  return blockReading(anchor, useBlocks(anchor));
+}
+
 export function BlockClock({ anchor }: { anchor: BlockAnchor | null }) {
-  const elapsed = useBlocks(anchor);
-  if (!anchor) return null;
-  const block = anchor.block + Math.floor(elapsed ?? 0);
+  const reading = useBlockReading(anchor);
+  if (reading.state === "none") return null;
   return (
-    <p className="flex items-baseline gap-2.5 text-small text-ink-3" aria-live="off">
+    <p className="flex items-baseline gap-2.5 text-small text-ink-3" aria-live="off" data-clock={reading.state}>
       est. block{" "}
-      <b className="num font-medium text-ink-2">{elapsed === null ? "-" : block.toLocaleString("en-GB")}</b>
+      <b className="num font-medium text-ink-2">{blockText(reading)}</b>
       <span aria-hidden="true" className="relative top-[-3px] inline-block h-0.5 w-[46px] overflow-hidden bg-rule motion-reduce:hidden">
         <span
           className="absolute inset-0 origin-left bg-accent"
-          style={{ transform: `scaleX(${elapsed === null ? 0 : elapsed % 1})` }}
+          style={{ transform: `scaleX(${reading.state === "ticking" ? reading.fraction : 0})` }}
         />
       </span>
     </p>

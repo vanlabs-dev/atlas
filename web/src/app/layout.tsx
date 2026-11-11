@@ -3,6 +3,8 @@ import { Archivo } from "next/font/google";
 import { getBlockAnchor } from "@/data/chain";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { SiteTabs } from "@/components/site-nav";
+import { FLIGHT_MODE_SCRIPT } from "@/state/flight-mode";
 import "./globals.css";
 
 // One family. The width axis carries the condensed figures and the hovers that widen a name.
@@ -14,10 +16,6 @@ const archivo = Archivo({
   display: "swap",
 });
 
-// Runs before first paint: a browser without WebGL gets the flat field and no flight, with no layout jump.
-// The probe releases its context at once, so it never holds one of the browser's few WebGL slots.
-const NOGL = `try{var c=document.createElement("canvas"),g=c.getContext("webgl2")||c.getContext("webgl");if(g){var x=g.getExtension("WEBGL_lose_context");if(x)x.loseContext()}else document.documentElement.classList.add("nogl")}catch(e){document.documentElement.classList.add("nogl")}`;
-
 export const metadata: Metadata = {
   title: { default: "subnt.dev: Atlas reads all 128 Bittensor subnets", template: "%s | subnt.dev" },
   description:
@@ -25,6 +23,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  // The page draws under the notch and the home bar; the bars and the gutters add the safe-area insets.
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#0a0a0b" },
     { media: "(prefers-color-scheme: light)", color: "#f2f2f0" },
@@ -36,10 +36,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={archivo.variable} suppressHydrationWarning>
       <body className="flex min-h-svh flex-col">
-        <script dangerouslySetInnerHTML={{ __html: NOGL }} />
+        {/* Before first paint: writes the home field's stage mode on <html> (src/state/flight-mode.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: FLIGHT_MODE_SCRIPT }} />
         <SiteHeader anchor={anchor} />
         <div className="flex-1">{children}</div>
         <SiteFooter />
+        <SiteTabs />
       </body>
     </html>
   );

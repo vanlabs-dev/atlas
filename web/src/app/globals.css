@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "./home.css";
+@import "./boards.css";
 
 /* Flight and instrument (comp D). Dark is the design target; light follows the system. See DESIGN.md. */
 @custom-variant dark (@media (prefers-color-scheme: dark));
@@ -95,6 +96,17 @@
   --field-lit: #ffffff;
   --scrim: 10, 10, 11;
   --radius: 3px;
+  /* The frame: one gutter, the top bar, and the phone's bottom bar (0 from md up). */
+  --gutter: clamp(16px, 4vw, 64px);
+  --header-h: 56px;
+  --tabbar-h: 56px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --header-h: 76px;
+    --tabbar-h: 0px;
+  }
 }
 
 @media (prefers-color-scheme: light) {
@@ -137,8 +149,14 @@
   html {
     @apply font-sans;
     -webkit-text-size-adjust: 100%;
+    /* Touch feedback is drawn by each control (:active), not by the browser's grey flash. */
+    -webkit-tap-highlight-color: transparent;
+    /* A link target or a focused control never lands under the phone's bottom bar. */
+    scroll-padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 16px);
   }
   body {
+    /* Room for the phone's bottom bar (SiteTabs); nothing from md up. */
+    padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
     background: var(--ground);
     color: var(--ink);
     font-size: var(--text-body);
@@ -182,7 +200,9 @@
   width: 100%;
   max-width: 1600px;
   margin-inline: auto;
-  padding-inline: clamp(16px, 4vw, 64px);
+  /* The gutter, or the notch inset when a phone lies on its side. */
+  padding-left: max(var(--gutter), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--gutter), env(safe-area-inset-right, 0px));
 }
 
 @media (prefers-reduced-motion: reduce) {
