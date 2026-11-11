@@ -10,7 +10,8 @@
     "lint": "eslint",
     "test": "node --test 'tests/*.test.ts'",
     "typecheck": "tsc --noEmit",
-    "test:build": "next build && node --test 'tests/served/*.test.ts'"
+    "test:build": "next build && node --test 'tests/served/*.test.ts'",
+    "check:browser": "node scripts/browser-checks.mjs"
   },
   "dependencies": {
     "cn": "^0.5.0",

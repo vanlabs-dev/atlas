@@ -14,6 +14,7 @@ npm test           # fixture scrub, allowlist, export args, data-age tests
 npm run test:build # build, then check every served file for dropped fields
 npm run typecheck
 npm run build
+npm run check:browser  # state and phone checks in a real Chromium; see the script's header
 ```
 
 Node 22 or newer. The Python side of the repo does not use this directory,
@@ -69,6 +70,46 @@ fields, whatever a stored board or fixture holds.
 Pages show when their data was produced, and a stale label past 48
 hours. The server HTML computes the label from when the page read its
 data; the browser recomputes it on load.
+
+## State machines
+
+Every part of the site that has states names them in one place. The rules
+are pure functions with tests (`tests/state.test.ts`), the components only
+send events and render the state, and the state on show is published in
+the DOM so a person, a test or an agent can read it.
+
+| Machine | States | Rule | Read it in the DOM |
+|---|---|---|---|
+| Field stage mode | `fly`, `overlay`, `swipe`, `still`, `flat` | `src/state/flight-mode.ts` (the head script and the rule are tested against each other) | `html[data-flight]` |
+| Field lifecycle | `loading`, `live`, `flat` | `src/components/home/flight.tsx` | `.figure[data-field]` |
+| Field story | `hero`, `rows`, `days`, `moving` | `src/state/flight-story.ts` | `.stage[data-scene]`, `.pager [aria-current]` |
+| Lead panel tab cycle | `cycling`, `held`, `offscreen`, `taken`, `still` | `src/state/lead-cycle.ts` (reducer) | `.leadp[data-cycle]` |
+| Lead chart draw | `pre`, then drawn | `src/components/home/lead-panel.tsx` | `.chart[data-draw]` |
+| Arrival motion | server markup, `armed`, `shown` | `src/components/home/reveal.tsx` | `[data-reveal]` |
+| Count-up figure | resting on the final value, counting | `src/components/home/reveal.tsx` (`CountUp`) | the figure's text |
+| Fleet tier tab | source `default`, `link`, `visitor` | `src/state/fleet-filter.ts` | `[data-filter]`, `[data-filter-source]`, `tr[data-linked]` |
+| Mining scan filter | `all`, `possible`, `needs-gpu`, `other` | `src/lib/mining.ts` (`inMiningFilter`) | `[data-filter]` |
+| Mining standing | `cut`, `ranked`, `unrated`, `unlisted` | `src/lib/mining.ts` (`standing`) | `tr[data-standing]` |
+| Block clock | `none`, `pending`, `ticking` | `src/data/block.ts` (`blockReading`) | `[data-clock]` on the header readout |
+| Data age | clock `read` or `live`; status `fresh` or `stale` | `src/data/freshness.ts` (`dataAge`) | `[data-age]`, `[data-clock]` |
+| Board read plan | `fixture`; `store` failing to `fixture` (build) or `throw` (serving) | `src/data/source-core.ts` (`readPlan`) | server only |
+| Pending upgrade | `waiting`, `unreleased` | `src/lib/upgrades.ts` (`pendingView`) | server only |
+| Vercel build step | build, skip | `scripts/vercel-ignore.sh` (`tests/vercel-ignore.test.ts`) | build log |
+
+To add a state: add it to the type, let the compiler show every place that
+must handle it, add a test line, then style it from the attribute. Do not
+add a boolean beside a machine: two booleans are four states, and one of
+them is usually a bug. Next keeps a visited page alive off screen, so state
+survives navigation and two pages can hold the same `id`: look a row up
+inside its own table, never by document id.
+
+## The phone
+
+Below `md` the site is its own composition (DESIGN.md, "The phone"): the
+boards are in a bottom bar, the top bar is one row, board tables are lists
+of rows, filters are one sticky row, and the home field's three statements
+are a strip that moves the camera. All of it is CSS on one markup, so a
+link to a row works at any width.
 
 ## Deploy
 
