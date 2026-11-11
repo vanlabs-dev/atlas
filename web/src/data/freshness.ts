@@ -30,3 +30,21 @@ export function staleAtRead(generatedAt: string, readAt: string | undefined): bo
   if (!readAt || Number.isNaN(Date.parse(readAt))) return false;
   return freshness(generatedAt, new Date(readAt)).stale;
 }
+
+/**
+ * How a page states its data age.
+ * read: server HTML and first paint. No age text; the stale label is judged at the time the page read its data.
+ * live: in the browser. The age is counted to the minute, and the stale label follows the visitor's clock.
+ */
+export interface DataAgeView {
+  clock: "read" | "live";
+  status: "fresh" | "stale";
+  /** "6 days ago"; null while the clock is "read". */
+  label: string | null;
+}
+
+export function dataAge(generatedAt: string, readAt: string | undefined, now: Date | null): DataAgeView {
+  if (!now) return { clock: "read", status: staleAtRead(generatedAt, readAt) ? "stale" : "fresh", label: null };
+  const f = freshness(generatedAt, now);
+  return { clock: "live", status: f.stale ? "stale" : "fresh", label: f.label };
+}

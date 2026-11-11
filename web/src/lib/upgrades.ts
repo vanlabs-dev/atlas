@@ -38,6 +38,8 @@ export function bundledText(bundled: string | null): string | null {
 
 /** How the board names merged code no chain upgrade has shipped yet. */
 export interface PendingView {
+  /** waiting: the repository states a spec above the live one. unreleased: merged commits in no spec yet. */
+  kind: "waiting" | "unreleased";
   /** Large label: the waiting spec, or "Next" for unreleased commits. */
   label: string;
   /** Heat-map row note under the label. */
@@ -58,6 +60,7 @@ export interface PendingView {
 export function pendingView(pending: Pick<Release, "spec" | "commits">, liveSpec: number, since: string): PendingView {
   if (pending.spec > liveSpec) {
     return {
+      kind: "waiting",
       label: String(pending.spec),
       sub: "waiting",
       heading: "Merged, waiting",
@@ -67,6 +70,7 @@ export function pendingView(pending: Pick<Release, "spec" | "commits">, liveSpec
   }
   const commits = pending.commits === 1 ? "1 commit" : `${pending.commits} commits`;
   return {
+    kind: "unreleased",
     label: "Next",
     sub: "unreleased",
     heading: `Merged since spec ${liveSpec}`,

@@ -1,5 +1,5 @@
 import { cacheLife } from "next/cache";
-import { fetchBoard, mayUseFixture, revalidateSeconds, storeConfig, type BoardName, type RawBoard } from "./source-core";
+import { fetchBoard, readPlan, revalidateSeconds, type BoardName, type RawBoard } from "./source-core";
 
 // The live board source (change: supabase-data-layer). Each board is read
 // from Supabase in a cached server function and refreshed in the
@@ -24,16 +24,16 @@ async function cachedBoard(name: BoardName): Promise<ReadBoard | FailedRead> {
   // stale stays at 5 minutes: under 30 seconds Next leaves the board out of
   // the prerender. It only sets how long a browser reuses a prefetch.
   cacheLife({ stale: 300, revalidate, expire: 365 * 86_400 });
-  const config = storeConfig(process.env);
+  const plan = readPlan(process.env);
   try {
-    if (!config) throw new Error("store not configured");
-    const board = await fetchBoard(name, config);
+    if (plan.from !== "store") throw new Error("store not configured");
+    const board = await fetchBoard(name, plan.config);
     return { ...board, readAt: new Date().toISOString() };
   } catch (error) {
     // A throw inside a cached function fails the prerender, so a build
     // records the failure instead. At run time it must throw: that keeps
     // the last good page rather than replacing it with the fixture.
-    if (!mayUseFixture(process.env)) throw error;
+    if (plan.from !== "store" || plan.onFailure === "throw") throw error;
     return { failed: (error as Error).message };
   }
 }
@@ -45,7 +45,7 @@ async function fixtureBoard(fixture: RawBoard): Promise<ReadBoard> {
 }
 
 export async function readBoard(name: BoardName, fixture: RawBoard): Promise<ReadBoard> {
-  if (!storeConfig(process.env)) return fixtureBoard(fixture);
+  if (readPlan(process.env).from === "fixture") return fixtureBoard(fixture);
   const board = await cachedBoard(name);
   if ("failed" in board) {
     console.warn(`subnt.dev build: ${name} board from the committed fixture (${board.failed})`);

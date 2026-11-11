@@ -61,3 +61,19 @@ export async function fetchBoard(name: BoardName, config: StoreConfig, fetchImpl
 export function mayUseFixture(env: Record<string, string | undefined>): boolean {
   return env.NEXT_PHASE === "phase-production-build";
 }
+
+/**
+ * Where a board comes from, decided once from the environment.
+ * fixture:            no store settings; the committed fixture is the data.
+ * store, else fixture: building; a failed read is recorded and the fixture stands in.
+ * store, else throw:   serving; a failed read throws, so Next keeps the last good page.
+ */
+export type ReadPlan =
+  | { from: "fixture"; why: "not-configured" }
+  | { from: "store"; config: StoreConfig; onFailure: "fixture" | "throw" };
+
+export function readPlan(env: Record<string, string | undefined>): ReadPlan {
+  const config = storeConfig(env);
+  if (!config) return { from: "fixture", why: "not-configured" };
+  return { from: "store", config, onFailure: mayUseFixture(env) ? "fixture" : "throw" };
+}
