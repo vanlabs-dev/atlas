@@ -17,7 +17,7 @@ const archivo = Archivo({
 });
 
 export const metadata: Metadata = {
-  title: { default: "subnt.dev: Atlas reads all 128 Bittensor subnets", template: "%s | subnt.dev" },
+  title: { default: "subnt.dev: Atlas reads every Bittensor subnet", template: "%s | subnt.dev" },
   description:
     "Atlas is a self-hosted system on a Raspberry Pi. It reads the code of every Bittensor subnet, the chain and the market, and shows what changed.",
 };

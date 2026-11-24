@@ -38,12 +38,12 @@ test("scrub catches planted leaks", () => {
   }
 });
 
-test("daily series cover 128 subnets and match the board counts", () => {
+test("daily series cover every subnet once, in netuid order, and match the board counts", () => {
   const fleet = JSON.parse(readFileSync(join(DIR, "fleet.json"), "utf8")).data;
-  assert.deepEqual(
-    fleet.activity.map((a: { netuid: number }) => a.netuid),
-    Array.from({ length: 128 }, (_, i) => i + 1),
-  );
+  // One series per registered subnet. The count is not fixed: root raised the limit 128 -> 160 on 2026-11-23.
+  const ids: number[] = fleet.activity.map((a: { netuid: number }) => a.netuid);
+  assert.ok(ids.length > 0);
+  assert.ok(ids.every((n, i) => Number.isInteger(n) && n > 0 && (i === 0 || n > ids[i - 1])), "netuids sorted, unique, root left out");
   const daily = new Map(fleet.activity.map((a: { netuid: number; daily: number[] | null }) => [a.netuid, a.daily]));
   const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
   for (const row of fleet.rows) {

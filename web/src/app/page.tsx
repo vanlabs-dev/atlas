@@ -34,9 +34,9 @@ export default async function Home() {
   const c30 = (d: number[] | null) => (d ? sum(d.slice(-30)) : null);
   const c7 = (d: number[]) => sum(d.slice(-7));
 
-  // All 128 slots, then the field's sediment order: no code at the back, then silent, then by 30-day commits.
-  const slots = Array.from({ length: 128 }, (_, i) => {
-    const n = i + 1;
+  // Every registered subnet, one activity row each (the count follows the chain's subnet limit, 160 since
+  // 2026-11-23), then the field's sediment order: no code at the back, then silent, then by 30-day commits.
+  const slots = activity.map(({ netuid: n }) => {
     const r = byRow.get(n);
     const daily = byDaily.get(n) ?? null;
     return { n, r, name: r?.name ?? names.get(n) ?? null, daily, c30: c30(daily), tot: daily ? sum(daily) : 0 };
@@ -112,7 +112,7 @@ export default async function Home() {
             <li className="stop">
               <h2>One row for every subnet</h2>
               <p>
-                128 rows, 90 days deep. <strong>{128 - read.length} subnets</strong> have no code Atlas can read; they lie at the back as dotted lines.
+                {slots.length} rows, 90 days deep. <strong>{slots.length - read.length} subnets</strong> have no code Atlas can read; they lie at the back as dotted lines.
               </p>
             </li>
             <li className="stop">
@@ -138,7 +138,7 @@ export default async function Home() {
         }
       >
         <h1 id="hero-title" className="font-display text-hero leading-[0.9] tracking-[-0.045em]">
-          Atlas reads all 128 Bittensor subnets.
+          Atlas reads all {slots.length} Bittensor subnets.
         </h1>
         <p className="lede">
           Code, chain and market, all from one Raspberry Pi. In the last 30 days it read <strong>{num(total)} commits</strong> across{" "}

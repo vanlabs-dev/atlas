@@ -56,6 +56,10 @@ import atlas_live as al  # noqa: E402
 SERVER_NAME = "atlas-live"
 SERVER_VERSION = "0.2.1"
 PROTOCOL_VERSION = "2025-06-18"
+# Largest leaderboard a call may ask for. A cap, not a subnet count: it sits
+# above the chain's SubnetLimit (128 until root raised it to 160 on
+# 2026-11-23), so a full list is never cut short.
+MAX_LIMIT = 256
 SUPPORTED_PROTOCOL_VERSIONS = ("2024-11-05", "2025-03-26", "2025-06-18")
 
 PARSE_ERROR = -32700
@@ -194,7 +198,7 @@ TOOLS: List[Dict[str, Any]] = [
             "type": "object",
             "properties": dict(_LAST_KNOWN, **{
                 "limit": {"type": "integer", "minimum": 1,
-                          "maximum": 128},
+                          "maximum": MAX_LIMIT},
                 "min_burn": {"type": "number", "minimum": 0,
                              "maximum": 100},
                 "max_burn": {"type": "number", "minimum": 0,
@@ -605,7 +609,7 @@ class LiveTools:
                            include_last_known=include_last_known)
         if result.get("status") != "ok":
             return result
-        limit = max(1, min(int(limit or 25), 128))
+        limit = max(1, min(int(limit or 25), MAX_LIMIT))
         min_burn = 0.0 if min_burn is None else float(min_burn)
         max_burn = 100.0 if max_burn is None else float(max_burn)
         rows = []
@@ -873,9 +877,9 @@ def handle_tool_call(tools: LiveTools, audit: AuditLog, name: str,
             if limit is not None and (
                     not isinstance(limit, int)
                     or isinstance(limit, bool)
-                    or not 1 <= limit <= 128):
+                    or not 1 <= limit <= MAX_LIMIT):
                 payload = structured_error(
-                    "invalid", "limit must be integer 1..128",
+                    "invalid", "limit must be integer 1..%d" % MAX_LIMIT,
                     retry_safe=False)
             else:
                 payload = tools.burn_leaderboard(

@@ -32,11 +32,11 @@ const PHONE_STOPS = [
   { pos: [22, 11, 84], look: [36, 1, 46], fov: 44, sway: 4 }, // moving: along the busiest rows to the today edge
 ] as const;
 const NO_ROW = -1;
-const FIELD_LABEL =
-  "90 days of commits for all 128 subnets, one row per subnet, one column per day, newest on the right. Quiet subnets sit at the back, the busiest at the front.";
+const fieldLabel = (n: number) =>
+  `90 days of commits for all ${n} subnets, one row per subnet, one column per day, newest on the right. Quiet subnets sit at the back, the busiest at the front.`;
 
 /**
- * The home hero: 128 subnets x 90 days of commits as a 3D field. Rows arrive
+ * The home hero: every subnet x 90 days of commits as a 3D field. Rows arrive
  * in sediment order: no code at the back, then silent, then by 30-day commits.
  *
  * What it does is set by the stage mode on <html data-flight>
@@ -83,7 +83,7 @@ export function Flight({
     const canvas = document.createElement("canvas");
     canvas.className = "field";
     canvas.setAttribute("role", "img");
-    canvas.setAttribute("aria-label", FIELD_LABEL);
+    canvas.setAttribute("aria-label", fieldLabel(rows.length));
     fig.prepend(canvas);
     const labels = el.querySelector<HTMLDivElement>(".labels")!;
     const todayEl = el.querySelector<HTMLDivElement>(".today")!;

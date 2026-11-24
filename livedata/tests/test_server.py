@@ -224,6 +224,17 @@ class ServerTests(unittest.TestCase):
         self.assertGreaterEqual(board[0]["emission_miner_burn"], 1)
         self.assertIn("zero_burn_high_emission", result["values"])
 
+    def test_burn_leaderboard_limit_covers_a_full_network(self):
+        # The subnet limit rose 128 -> 160 on 2026-11-23: a full list must
+        # not be refused, and the cap is reported in the error.
+        payloads = call_server(self.config_path, [
+            tool_call(1, "live_burn_leaderboard", {"limit": 160}),
+            tool_call(2, "live_burn_leaderboard", {"limit": 257}),
+        ])
+        self.assertEqual(payloads[1]["status"], "ok")
+        self.assertEqual(payloads[2]["error"]["category"], "invalid")
+        self.assertIn("1..256", payloads[2]["error"]["message"])
+
     def test_subnets_exposes_miner_burn(self):
         payloads = call_server(self.config_path, [
             tool_call(1, "live_subnets", {"netuid": 1}),

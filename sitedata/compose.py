@@ -107,7 +107,11 @@ def raw():
     passes = dict(f.execute("SELECT netuid, MAX(pass_ts) FROM metric_activity "
                             "GROUP BY netuid").fetchall())
     activity = []
-    for nid in range(1, 129):
+    # Every registered subnet: the fleet keeps one slot per netuid and
+    # deletes it on deregistration. Root (0) has no code to read. The
+    # count follows the chain's subnet limit (160 since 2026-11-23).
+    for nid in sorted(s["netuid"] for s in fleet.all_slots(f)
+                      if s["netuid"] > 0):
         ages = None
         if nid in passes:
             try:
