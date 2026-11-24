@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
+import { sitePath } from "@/state/site-path";
 import { blockReading, blocksSince, blockText, type BlockAnchor, type BlockReading } from "@/data/block";
 
 // One clock for the header readout, the home field's today edge and the band. It is an
@@ -54,5 +55,5 @@ export function BlockClock({ anchor }: { anchor: BlockAnchor | null }) {
 
 /** The header readout, on the boards only: the home field carries its own. */
 export function HeaderClock({ anchor }: { anchor: BlockAnchor | null }) {
-  return usePathname() === "/" ? null : <BlockClock anchor={anchor} />;
+  return sitePath(usePathname()) === "/" ? null : <BlockClock anchor={anchor} />;
 }

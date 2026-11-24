@@ -80,7 +80,8 @@ the DOM so a person, a test or an agent can read it.
 
 | Machine | States | Rule | Read it in the DOM |
 |---|---|---|---|
-| Field stage mode | `fly`, `overlay`, `swipe`, `still`, `flat` | `src/state/flight-mode.ts` (the head script and the rule are tested against each other) | `html[data-flight]` |
+| Field stage mode | `fly`, `overlay`, `swipe`, `still`, `flat` | `src/state/flight-mode.ts` (the head script and the rule are tested against each other; the script writes the mode again if it is cleared) | `html[data-flight]` |
+| Site path | the route as the browser shows it (`/index` is `/`) | `src/state/site-path.ts` (`sitePath`) | `aria-current` on the bars, the header clock |
 | Field lifecycle | `loading`, `live`, `flat` | `src/components/home/flight.tsx` | `.figure[data-field]` |
 | Field story | `hero`, `rows`, `days`, `moving` | `src/state/flight-story.ts` | `.stage[data-scene]`, `.pager [aria-current]` |
 | Lead panel tab cycle | `cycling`, `held`, `offscreen`, `taken`, `still` | `src/state/lead-cycle.ts` (reducer) | `.leadp[data-cycle]` |
@@ -95,6 +96,12 @@ the DOM so a person, a test or an agent can read it.
 | Board read plan | `fixture`; `store` failing to `fixture` (build) or `throw` (serving) | `src/data/source-core.ts` (`readPlan`) | server only |
 | Pending upgrade | `waiting`, `unreleased` | `src/lib/upgrades.ts` (`pendingView`) | server only |
 | Vercel build step | build, skip | `scripts/vercel-ignore.sh` (`tests/vercel-ignore.test.ts`) | build log |
+
+Server markup must not differ from the browser's first render. A mismatch
+makes React render `<html>` again, which clears `data-flight`. Vercel
+prerenders the home page as `/index`, so read the path only through
+`sitePath`, and run `npm run check:browser -- https://www.subnt.dev`
+after each deploy: a local build does not show this.
 
 To add a state: add it to the type, let the compiler show every place that
 must handle it, add a test line, then style it from the attribute. Do not

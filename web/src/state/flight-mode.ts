@@ -36,6 +36,9 @@ export function flightMode({ wide, reduced, gl }: FlightInputs): FlightMode {
  * again when the width or the motion setting changes. tests/state.test.ts runs
  * this text against flightMode for every input. The WebGL probe releases its
  * context at once, so it never holds one of the browser's few WebGL slots.
+ * If the attribute is removed, the script writes it again: when hydration
+ * fails, React renders <html> again on the client and clears every attribute
+ * it did not render, and without the mode the field never builds.
  */
 export const FLIGHT_MODE_SCRIPT =
   `(function(){var d=document.documentElement,gl=false;` +
@@ -43,7 +46,9 @@ export const FLIGHT_MODE_SCRIPT =
   `if(g){gl=true;var x=g.getExtension("WEBGL_lose_context");if(x)x.loseContext()}}catch(e){}` +
   `var w=matchMedia("${WIDE_QUERY}"),r=matchMedia("${REDUCED_QUERY}");` +
   `function set(){d.setAttribute("${FLIGHT_ATTR}",!gl?"flat":w.matches?(r.matches?"overlay":"fly"):(r.matches?"still":"swipe"))}` +
-  `set();if(w.addEventListener){w.addEventListener("change",set);r.addEventListener("change",set)}})()`;
+  `set();if(w.addEventListener){w.addEventListener("change",set);r.addEventListener("change",set)}` +
+  `if(typeof MutationObserver!="undefined")new MutationObserver(function(){if(!d.hasAttribute("${FLIGHT_ATTR}"))set()})` +
+  `.observe(d,{attributes:true,attributeFilter:["${FLIGHT_ATTR}"]})})()`;
 
 const isMode = (v: string | null): v is FlightMode => (FLIGHT_MODES as readonly string[]).includes(v ?? "");
 

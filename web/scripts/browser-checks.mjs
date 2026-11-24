@@ -4,6 +4,8 @@
 //
 //   npm run build && npm run start -- -p 3100     # in one shell
 //   npm run check:browser                         # in another; optional base URL argument
+//   npm run check:browser -- https://www.subnt.dev   # after each deploy: only Vercel's build
+//                                                 # shows some hydration faults
 //
 // Needs the CDP helper of the design-taste-frontend skill (override its path with CDP_LIB)
 // and an installed Chromium. It is not part of `npm test`, which needs no browser.
@@ -130,6 +132,9 @@ try {
   // ---- desktop flight ----
   const d = await browser.newPage({ width: 1280, height: 720 });
   await d.goto(base + "/", { settleMs: 2500 });
+  // A failed hydration renders <html> again and clears data-flight, and the field never builds.
+  const hydration = d.consoleErrors.filter((e) => /#418|#423|#425|hydrat/i.test(e));
+  check("desktop: the home page hydrates, no server/browser mismatch", hydration.length === 0, JSON.stringify(hydration));
   s = await state(d);
   check("desktop: fly mode at the hero", s.flight === "fly" && s.field === "live" && s.scene === "hero", JSON.stringify(s));
   const scenes = [];

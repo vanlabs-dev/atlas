@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { sitePath } from "@/state/site-path";
 import { BOARDS } from "./boards";
 
 /** The four boards in the top bar, from md up. */
 export function SiteNav() {
-  const pathname = usePathname();
+  const pathname = sitePath(usePathname());
   return (
     <nav aria-label="Boards">
       <ul className="flex gap-x-7 text-[15px] font-semibold">
@@ -38,7 +39,7 @@ const TABS = [{ href: "/", short: "Home" }, ...BOARDS];
  * top bar. Hidden from md up, where SiteNav takes over.
  */
 export function SiteTabs() {
-  const pathname = usePathname();
+  const pathname = sitePath(usePathname());
   return (
     <nav aria-label="Pages" className="fixed inset-x-0 bottom-0 z-30 bg-s2 pb-[env(safe-area-inset-bottom)] md:hidden">
       <ul className="mx-auto grid max-w-[560px] grid-cols-5 px-[max(10px,env(safe-area-inset-left))] text-[13px] font-semibold">

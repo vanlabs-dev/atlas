@@ -7,6 +7,7 @@ import { DEFAULT_FILTER, fleetFilter, hashNetuid, inFilter } from "../src/state/
 import { blockReading, blocksSince, blockText } from "../src/data/block.ts";
 import { dataAge } from "../src/data/freshness.ts";
 import { readPlan } from "../src/data/source-core.ts";
+import { sitePath } from "../src/state/site-path.ts";
 import { inMiningFilter, standing } from "../src/lib/mining.ts";
 
 // ---------- flight mode ----------
@@ -22,8 +23,12 @@ function runHeadScript({ wide, reduced, gl }: { wide: boolean; reduced: boolean;
     [WIDE_QUERY]: { matches: wide, fns: [] },
     [REDUCED_QUERY]: { matches: reduced, fns: [] },
   };
+  const observers: (() => void)[] = [];
   const document = {
-    documentElement: { setAttribute: (k: string, v: string) => { attrs[k] = v; } },
+    documentElement: {
+      setAttribute: (k: string, v: string) => { attrs[k] = v; },
+      hasAttribute: (k: string) => k in attrs,
+    },
     createElement: () => ({
       getContext: (kind: string) => (gl && kind === "webgl2" ? { getExtension: () => ({ loseContext: () => { lost++; } }) } : null),
     }),
@@ -32,9 +37,14 @@ function runHeadScript({ wide, reduced, gl }: { wide: boolean; reduced: boolean;
     get matches() { return media[q].matches; },
     addEventListener: (_: string, f: () => void) => { media[q].fns.push(f); },
   });
-  new Function("document", "matchMedia", FLIGHT_MODE_SCRIPT)(document, matchMedia);
+  function MutationObserver(fn: () => void) {
+    return { observe: () => { observers.push(fn); } };
+  }
+  new Function("document", "matchMedia", "MutationObserver", FLIGHT_MODE_SCRIPT)(document, matchMedia, MutationObserver);
   const change = (q: string, matches: boolean) => { media[q].matches = matches; media[q].fns.forEach((f) => f()); };
-  return { mode: () => attrs[FLIGHT_ATTR], lost: () => lost, change };
+  // What React does to <html> when it renders it again after a failed hydration.
+  const clear = () => { for (const k of Object.keys(attrs)) delete attrs[k]; observers.forEach((f) => f()); };
+  return { mode: () => attrs[FLIGHT_ATTR], lost: () => lost, change, clear };
 }
 
 test("flight mode: the five modes cover every browser", () => {
@@ -60,6 +70,14 @@ test("flight mode: the head script follows a width or motion change, and frees i
   assert.equal(page.mode(), "overlay");
   page.change(WIDE_QUERY, false);
   assert.equal(page.mode(), "still");
+});
+
+test("flight mode: the head script writes the mode again when <html> is cleared", () => {
+  for (const i of inputs) {
+    const page = runHeadScript(i);
+    page.clear();
+    assert.equal(page.mode(), flightMode(i), JSON.stringify(i));
+  }
 });
 
 test("flight mode: only motion modes move the camera, and only WebGL modes ask for it", () => {
@@ -236,4 +254,16 @@ test("mining: standing and the scan filter", () => {
   const verdicts = ["possible", "needs-gpu", "unknown", "closed", "stub", null] as const;
   const count = (f: Parameters<typeof inMiningFilter>[0]) => verdicts.filter((verdict) => inMiningFilter(f)({ verdict })).length;
   assert.deepEqual([count("all"), count("possible"), count("needs-gpu"), count("other")], [6, 1, 1, 4]);
+});
+
+// ---------- site path ----------
+
+test("site path: Vercel's /index for home reads as /, other paths unchanged", () => {
+  assert.equal(sitePath("/index"), "/");
+  assert.equal(sitePath("/"), "/");
+  assert.equal(sitePath(""), "/");
+  assert.equal(sitePath(null), "/");
+  assert.equal(sitePath("/fleet"), "/fleet");
+  assert.equal(sitePath("/fleet/"), "/fleet");
+  assert.equal(sitePath("/mining/index"), "/mining");
 });
