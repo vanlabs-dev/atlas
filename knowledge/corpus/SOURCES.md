@@ -6,14 +6,90 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | field | value |
 |---|---|
 | Source of truth | this directory, `knowledge/corpus/` in `vanlabs-dev/atlas` (the IntoOps copy is closed and never synced from) |
-| Sync date | 2026-11-24 |
-| Coverage date | 2026-11-24 |
-| Grounded at | Finney `spec_version` **494** |
+| Sync date | 2026-11-25 |
+| Coverage date | 2026-11-25 |
+| Grounded at | Finney `spec_version` **495** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
 
-Verified 2026-11-24 against Finney RPC by the runtime upgrade job:
+Verified 2026-11-25 against Finney RPC by the runtime upgrade job:
+
+- Spec **495** (transaction version 2). Knobs and the emission-switch map
+  read together at finalized block 9578564
+  (`0x02ee1644558b9808ca4f0b420907e44610034846b45fe125f085c359c426b474`).
+  Chain-read probe clean at the same finalized block 9578564 (no failures:
+  every item Atlas reads keeps its name, shape and default). Source: the
+  subtensor `v495` tag (`e536e6bf4bfa`, `runtime/src/lib.rs`
+  `spec_version: 495`); `spec-495.diff` runs from the 494 release to the
+  495 release merge (`e536e6bf4`, PR #3358, with the SDK fix PR #3359).
+  Finney moved from 494 to 495.
+- Knob values: none changed since the 2026-11-24 read. `EmissionBarRank`
+  **48** (explicit; code default 32), `EmissionBarQuantile` 0.75 explicit
+  and inert, `EmissionGateExponent` unset (default 3),
+  `BasketConcentrationCap` 7865, `BasketTradingEnabled` true,
+  `MaturityRate` 311622 (explicit), `UnlockRate` unset,
+  `PendingChildKeyCooldown` 7200, `StakeThreshold` 1000 TAO, `CKBurn` 0,
+  `NetworkImmunityPeriod` 432000, `NetworkLockReductionInterval` 28800,
+  `NetworkRateLimit` 10800 (all explicit); `MaxChildkeyTake`,
+  `MinChildkeyTake`, `TxChildkeyTakeRateLimit`,
+  `CommitRevealWeightsVersion` and the three claim dust floors unset.
+- `SubnetLimit` is **160** (explicit), now part of the knob read, at
+  finalized block 9578564. The code default is still 128 at spec 495
+  (`DefaultSubnetLimit`); spec 495 does not change the limit.
+- `SubnetEmissionEnabled`: 128 keys for 128 subnets, **82 and 110 off**
+  (unchanged).
+- Spec 495 shipped:
+  - Null mechanisms: a Null subnet's `MaxAllowedUids` may be up to 2,500
+    at any mechanism count (`ensure_max_uids_over_all_mechanisms`,
+    `do_set_epoch_consensus`); Yuma keeps `MaxAllowedUids` times the
+    mechanism count within its default UID cap. A Null weight row holds at
+    most `2500 / mechanism count` entries (`max_null_weights_per_row`,
+    minimum 1; error `TooManyWeightsForNullMechanism`), checked in the
+    `CheckWeights` guard for the set, reveal, batch and `*_for` calls and
+    in `internal_set_weights` for every applied row. `MinAllowedWeights`
+    is clamped to that cap on Null. `MaxMechanismCount` keeps its code
+    default 2 (hard maximum 16); the upgrade does not raise it.
+  - The Null epoch reads subnet-wide state once for all mechanisms
+    (`epoch/null_epoch.rs`), with the same storage, events and emissions
+    as the per-mechanism path, and each Null epoch adds its own weight to
+    the block-step hook.
+  - `claim_root_with_hotkey` (call 148) declares weight sized to the
+    validator's fund (`root_claim_hotkey_declared_weight_for`) and admits
+    258 claim units (`MAX_ROOT_CLAIM_HOTKEY_WORK`; was 130): one for the
+    validator, one per stored fund row, one per queued credit on a subnet
+    the fund does not hold. The quoted fee is the same for every fund
+    (4-unit allowance). It fails with `RootClaimTooHeavy` above the
+    ceiling, or when a basket trade buy, a hotkey swap or a coldkey swap
+    into the basket escrow gave that fund a new row earlier in the same
+    transaction. New items `BasketRowsOpenedAt` and `BasketRowsCountedAt`.
+    The claim also declares and reports the settlement of the claimant's
+    deferred-dividend debts. `claim_root` keeps its 256-unit budget.
+  - Deferred dividend credits are snapshotted and sold with storage work
+    linear in the number of credits. Payouts are unchanged.
+  - Gamma: a deposit that gamma emission opens for a subnet owner has no
+    daily spend cap (it opened with cap 0, paused, at 494); an existing
+    deposit keeps its cap. Deposits from a mint are unchanged.
+- Not live at 495: more than two mechanisms per subnet as a default.
+  The code allows 16, but `MaxMechanismCount` stays 2 until root calls
+  `sudo_set_max_mechanism_count`; the release proposes no value or time.
+  Also not live: a measured Null epoch weight (`null_epoch` reserves one
+  more legacy hook envelope for any mechanism and UID count), and the
+  5% spot-only basket band and 9830 concentration cap, which the release
+  page still lists as proposed sudo calls (the live cap is 7865).
+- Not read, so not stated as live: `MaxMechanismCount`,
+  `BasketRowsOpenedAt`, `BasketRowsCountedAt`, `PendingBasketDeposits`,
+  `SubnetEpochConsensus`, `GammaDeposits`.
+- Items Atlas reads whose meaning changed in a way the probe cannot see
+  (names, shapes and defaults are unchanged): `MaxAllowedUids` on a Null
+  subnet is no longer bounded by 2,500 divided by `MechanismCountCurrent`,
+  and `Weights` rows on a Null subnet are capped at 2,500 divided by the
+  mechanism count while `MinAllowedWeights` is clamped to that cap. The
+  readers (`livedata/`) are out of the re-sync's scope.
+
+Verified 2026-11-24 against Finney RPC by the runtime upgrade job. The
+knob values above supersede this read; its mechanics are still live at
+495 except where the 495 section above replaces them:
 
 - Spec **494** (transaction version 2). Knobs and the emission-switch map
   read together at finalized block 9573918
@@ -55,7 +131,8 @@ Verified 2026-11-24 against Finney RPC by the runtime upgrade job:
     166, `mint_gamma_with_stake` 167, `set_service` 169; indices 158, 159,
     162, 164 and 165 are retired. Spends, non-emptying moves and nonzero
     caps are at least 0.1 gamma. A hotkey swap moves the coldkey's deposit
-    (or pauses it); gamma emission opens the owner deposit with cap 0. The
+    (or pauses it); gamma emission opens the owner deposit with no cap
+    since 495 (cap 0 at 494). The
     `GammaSpend` proxy type is deprecated and admits nothing; only `Any`
     proxies a spend. `GammaRuntimeApi` is version 2.
   - Yuma timelocked commit cap is per subnet:
@@ -125,7 +202,7 @@ Verified 2026-11-24 against Finney RPC by the runtime upgrade job:
 
 Verified 2026-11-11 against Finney RPC by the runtime upgrade job. The
 knob values above supersede this read; its mechanics are still live at
-494 except where the 494 section above replaces them:
+495 except where the 494 and 495 sections above replace them:
 
 - Spec **490**. Knobs and the emission-switch map read together at
   finalized block 9478248
@@ -185,7 +262,7 @@ knob values above supersede this read; its mechanics are still live at
 
 Verified 2026-11-07 against Finney RPC by the runtime upgrade job. The
 knob values above supersede this read; its mechanics are still live at
-494 except where the 490 and 494 sections above replace them:
+495 except where the 490, 494 and 495 sections above replace them:
 
 - Spec **488**. Knobs and the emission-switch map read together at
   finalized block 9451247
@@ -278,8 +355,8 @@ Verified 2026-11-05 against Finney RPC, workstation reads (audit WP13):
 
 Verified 2026-10-27 against Finney RPC (`https://entrypoint-finney.opentensor.ai`).
 The knob values above supersede this read; the mechanics below are still
-live at 494 (the 488, 490 and 494 diffs leave them as stated unless noted
-above):
+live at 495 (the 488, 490, 494 and 495 diffs leave them as stated unless
+noted above):
 
 - Spec **486**. Knobs, emission-switch map, dust-floor storage and the
   subnet registration rules read together at finalized block 9369802
@@ -314,8 +391,9 @@ above):
     finishes. Once cleanup settles stake, each hotkey's stake reads as zero
     as soon as that hotkey has been paid out. While a subnet is pending or
     dissolving, the stake-availability API reports nothing available.
-  - `claim_root_with_hotkey` admission budget is 130 units (one validator,
-    128 subnet slots and the root slot; was 129).
+  - `claim_root_with_hotkey` admission ceiling is 258 units since 495
+    (one validator, 256 subnet slots and the root slot; 130 from 484 to
+    494), with weight sized to the fund.
   - EVM subnet precompile `getLiquidAlphaConsensusMode(uint16)` and
     `setLiquidAlphaConsensusMode(uint16,uint8)` (0 Current, 1 Previous,
     2 Auto). The setter dispatches `sudo_set_liquid_alpha_consensus_mode`
@@ -393,7 +471,7 @@ above):
   - Resolved outside the corpus: `livedata/atlas_live.py`
     `SUBNET_PARAM_DEFAULTS` now records an absent `SubnetEmissionEnabled`
     key as `true`, matching the runtime's `DefaultTrue` (unchanged at
-    494). Every live subnet has an explicit key (128 of 128).
+    495). Every live subnet has an explicit key (128 of 128).
 - Carried from spec 482 and still live (not touched by the 483, 484 or
   486 diffs):
   - Yuma miner payouts apportion the accumulated miner budget in full by
@@ -490,13 +568,15 @@ above):
   `min_difficulty` (call 4) and `difficulty` (call 24) under the admin
   window and per-parameter owner rate limits; the `Owner` proxy admits them
   and the PoW toggle; root can override the owner cooldown; netuid 0 stays
-  root-only. The `claim_root_with_hotkey` admission budget is 130 units on
-  every network since spec 484.
+  root-only. The `claim_root_with_hotkey` admission ceiling is 258 units on
+  every network since spec 495.
 - Carried from specs 474 and 475 and still live:
   - Per-subnet epoch consensus (`SubnetEpochConsensus`, Yuma default,
     owner/root `sudo_set_epoch_consensus` call 111). Null mode: one permit
     for the largest-stake hotkey, miner incentive from its weight row,
-    stake-proportional dividends, no bonds, 2,500-UID shared cap, bounded
+    stake-proportional dividends, no bonds, 2,500-UID cap (per subnet at
+    any mechanism count since 495, with the weight row capped at 2,500
+    divided by the mechanism count), bounded
     pruning via `sudo_trim_null_uids_batch` (call 112, 64 UIDs per call).
     Which subnets run Null was not read.
   - Owner-enabled fee-free PoW registration (`pow_register`, call 152;
@@ -516,11 +596,14 @@ above):
   the TAO paid; EIP-2537 BLS12-381 precompiles at `0x0b` to `0x11`;
   `StakingHotkeys` entries are kept until a pair's last alpha key and
   basket watermark are gone (`migrate_cleanup_staking_hotkeys_v3`).
+- `SubnetLimit` is **160** (explicit) at finalized block 9578564; root
+  set it from 128 by sudo at block 9570424 (2026-11-23), and the code
+  default is 128.
 - Emission bar is **rank-pinned**: `EmissionBarRank` explicit at **48**
   (code default 32), `EmissionBarQuantile` 0.75 explicit and inert,
-  `EmissionGateExponent` unset (default 3), at finalized block 9573918.
+  `EmissionGateExponent` unset (default 3), at finalized block 9578564.
 - `SubnetEmissionEnabled` is live. 128 keys for 128 subnets at finalized
-  block 9573918; **82 and 110 off** (103 on).
+  block 9578564; **82 and 110 off** (103 on).
 - `set_root_weights` is **retired** (`migrate_remove_root_weights`, spec
   469): `Weights[ROOT]` cleared, `RootWeightSettingEnabled` and
   `RootWeightsCap` removed. Dividends accumulate in place.
@@ -542,7 +625,7 @@ above):
   items are gone from metadata (`migrate_alpha_v2_and_unstake_dust_v1`);
   stake shares live in `AlphaV2` / `TotalHotkeySharesV2`, the only items
   the runtime reads since 490.
-- Subnet registration rules at finalized block 9573918:
+- Subnet registration rules at finalized block 9578564:
   `NetworkImmunityPeriod` **432,000** (60 days),
   `NetworkLockReductionInterval` **28,800** (4 days), `NetworkRateLimit`
   **10,800** (1.5 days), all explicit. Root set the first two on
@@ -553,18 +636,16 @@ above):
   2026-11-24 reads. `NetworkMinLockCost` (1 TAO) and
   `NetworkLastLockCost` (884.38 TAO) are not in the knob read; those values
   are from a one-off read at finalized block 9,278,789 on 2026-10-14.
-- Claim dust floors are unset on chain at finalized block 9573918. Code
+- Claim dust floors are unset on chain at finalized block 9578564. Code
   defaults apply: row floor min(1 TAO, 10 bps of anchored NAV); slice
   floor 0.0001 TAO. Cash-first claims are not live.
 
 [../supersession-markers.json](../supersession-markers.json) is empty,
-reviewed at the spec 494 re-sync: every claim the 494 diff or the new
-knob read made stale (a gamma deposit's spender and the batched spender
-`spend_gamma`, the `GammaSpend` proxy, the weekly emission-split rate
-limit, the fixed 2% basket band, the fixed 10-commit timelocked cap, the
-locked-alpha opt-out refusing a coldkey swap, the unset rank-32 emission
-bar, the 2-day subnet registration gap, SN82 as the only switched-off
-subnet) was rewritten in place. Add a marker if a
+reviewed at the spec 495 re-sync: every claim the 495 diff made stale
+(the Null 2,500-UID cap shared across mechanisms, a subnet owner's
+emission-funded gamma deposit opening paused with cap 0, the 130-unit
+`claim_root_with_hotkey` budget) was rewritten in place. The knob read
+changed no value. Add a marker if a
 corpus claim goes stale before the next re-sync.
 
 ## Re-sync procedure

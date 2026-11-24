@@ -48,15 +48,34 @@ during apply:
   ingestion are **removed**, not disabled. Their tables and rows stay. The
   `root-rotation` promotion item due 2026-11-04 is void.
 
-## Live chain (2026-11-24)
+## Live chain (2026-11-25)
 
-Finney `spec_version` **494**, transaction version 2 (knob and
+Finney `spec_version` **495**, transaction version 2 (knob and
 emission-switch read and chain-read probe both clean at finalized block
-9573918). Root changed three settings with no mechanic in the diff
-setting them: `EmissionBarRank` is explicit at **48** (was unset, default
-32), `NetworkRateLimit` is **10,800** blocks (1.5 days, from 14,400), and
-`SubnetEmissionEnabled` is off for netuids **82 and 110** (110 is new).
-Every other knob value is unchanged. Spec 494 (the 491 to 494 releases)
+9578564). No knob value changed since the 2026-11-24 read:
+`EmissionBarRank` is explicit at **48** (code default 32),
+`NetworkRateLimit` is **10,800** blocks (1.5 days), `SubnetLimit` is
+explicit at **160** (code default 128), and `SubnetEmissionEnabled` is off
+for netuids **82 and 110**. Spec 495 lets a Null subnet keep up to 2,500
+UIDs at any mechanism count (Yuma still bounds max UIDs times mechanisms)
+and caps a Null weight row at 2,500 divided by the mechanism count
+(`TooManyWeightsForNullMechanism`); the global `MaxMechanismCount` stays at
+its default 2 until root raises it, and is not read. The Null epoch reads
+subnet-wide state once, with equal results, and adds an interim weight to
+the block hook. `claim_root_with_hotkey` declares weight sized to the
+validator's fund and admits 258 claim units (was 130), so a fund with rows
+on 256 subnets is claimable; it fails with `RootClaimTooHeavy` when a
+basket buy, a hotkey swap or a coldkey swap into the escrow gave that fund
+a new row earlier in the same transaction (new items `BasketRowsOpenedAt`
+and `BasketRowsCountedAt`, not read). A gamma deposit that emission opens
+for a subnet owner has no daily spend cap (it opened paused at 494).
+Spec 495 renamed, removed or reshaped no item Atlas reads (probe clean),
+but it changes the bounds of three items the mining readers use on a Null
+subnet, which the probe cannot see: `MaxAllowedUids` is no longer limited
+by the mechanism count, `Weights` rows are capped at 2,500 divided by the
+mechanism count, and `MinAllowedWeights` is clamped to that cap. No reader
+changed; `livedata/` is outside the upgrade job's scope.
+Spec 494 (the 491 to 494 releases)
 makes a gamma deposit spendable only by its own hotkey: a fee-free
 `spend_gamma(service, netuid, amount)` (call 168) burns the amount and
 totals it in `GammaSpent`; deposits and services have no spender, the mint
@@ -106,8 +125,7 @@ Spec 486 metered the contracts chain extension's stake-availability query
 A reporting-only subnet lifecycle (`SubnetState`) is live: a
 dissolved subnet stays in the metagraph, dynamic-info, neuron and stake
 runtime APIs until its cleanup finishes, and each hotkey's stake reads
-zero once it is paid out. `NetworksAdded` still gates operations. The
-`claim_root_with_hotkey` budget is 130 units, and the EVM subnet precompile
+zero once it is paid out. `NetworksAdded` still gates operations. The EVM subnet precompile
 gets and sets the liquid-alpha consensus mode. Atlas does not read
 `SubnetState`.
 Coldkey swaps merge into an already-used destination
@@ -167,10 +185,11 @@ leaves a delegator's stake on the old hotkey when it cannot follow without
 growing that list (`HotkeySwapStakeRetained`, root credits in
 `HotkeySwapBasketCredits`). EIP-7702 authorization lists are capped at 255
 entries before signature recovery, and EVM nonces survive balance-account
-reaping (`EVM.AccountNonces`). Registration rules at block 9573918:
+reaping (`EVM.AccountNonces`). Registration rules at block 9578564:
 immunity 432,000, lock reduction 28,800, rate limit 10,800, all explicit.
-Spec 494 renamed, removed or reshaped no item Atlas reads, so no reader
-changed. Still open: the mining screen's miner share
+Still open: `livedata/config.json` describes `SubnetLimit` as "still 128
+at spec 494"; the default is unchanged at 495, but the text needs a
+`livedata/` edit. Also still open: the mining screen's miner share
 (`fleet/atlas_fleet_mining.py`) still comes from `SubnetOwnerCut` and
 `OwnerCutEnabled`. That is correct only for subnets still on their seeded
 vector; a subnet can also divert up to 33% to burn and recycle, and since

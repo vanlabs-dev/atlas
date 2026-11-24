@@ -269,5 +269,6 @@ the subnet, and the spent gamma is burned. A service holds no spending
 authority over its customers' deposits and is paid nothing on chain. Do
 not write that a service or subnet team "drained", "pulled" or "seized"
 customers' gamma. A deposit whose daily spend cap is 0 is paused by its
-own coldkey or by the protocol (a subnet owner's emission-funded deposit
-opens paused), not frozen by the team.
+own coldkey, not frozen by the team. A subnet owner's emission-funded
+deposit opens with no cap, so its owner hotkey can spend that gamma at
+once; that is the protocol's design, not a team bypassing a control.
