@@ -76,7 +76,7 @@ _EX = (
       ["SubnetEmissionWeights", "per subnet", "each subnet",
        "owner (or root)"]]),
     ("KB-EX-2", "How many subnet slots is the Bittensor network capped "
-     "at, and what is special about netuid 0?", [["128"], ["root"]]),
+     "at, and what is special about netuid 0?", [["160"], ["root"]]),
     ("KB-EX-3", "What is the daily TAO emission and the per-block "
      "reward after the first halving?", [["3,600", "3600"], ["0.5"]]),
     ("KB-EX-4", "What is the hard cap on total TAO supply?",

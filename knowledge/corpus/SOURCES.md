@@ -37,6 +37,11 @@ Verified 2026-11-24 against Finney RPC by the runtime upgrade job:
   (all explicit); `MaxChildkeyTake`, `MinChildkeyTake`,
   `TxChildkeyTakeRateLimit`, `CommitRevealWeightsVersion` and the three
   claim dust floors unset.
+- `SubnetLimit` is **160** (explicit), read 2026-11-24 at finalized block
+  9573855. Root set it from 128 by sudo at block 9570424 (2026-11-23),
+  between two runtime upgrades; the code default is 128 at spec 494
+  (`DefaultSubnetLimit`). `TotalNetworks` is 129 (root plus netuids 1 to
+  128). Atlas watches it as a chain parameter from 2026-11-24.
 - `SubnetEmissionEnabled`: 128 keys for 128 subnets, **82 and 110 off**
   (110 newly off).
 - Spec 494 shipped (from the 491 to 494 releases):
