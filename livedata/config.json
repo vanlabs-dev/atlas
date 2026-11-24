@@ -163,6 +163,14 @@
         "governs": "minimum blocks between two subnet registrations. 14,400 (2 days) at 2026-10-14. Default is the spec 478 runtime constant (1 day)."
       },
       {
+        "item": "SubnetLimit",
+        "source": "independent",
+        "key": "0x658faa385070e074c85bf6b568cf0555a336e39c4086c4d5f43b7e6dff8a04f6",
+        "codec": "u16",
+        "default": 128,
+        "governs": "most subnets the network holds, root excluded. A registration with every slot full deregisters the lowest-ranked non-immune subnet; below the limit it takes a free netuid. Root raised it 128 -> 160 at block 9,570,424 (2026-11-23); the code default is still 128 at spec 494."
+      },
+      {
         "item": "MaturityRate",
         "source": "independent",
         "key": "0x658faa385070e074c85bf6b568cf0555fee4fedba075f0cd6daea164181ed3cb",

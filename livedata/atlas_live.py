@@ -2046,6 +2046,8 @@ CHAIN_READS: Tuple[ChainRead, ...] = tuple(
         ("NetworkImmunityPeriod", (), "u64"),
         ("NetworkLockReductionInterval", (), "u64"),
         ("NetworkRateLimit", (), "u64"),
+        # Root raised it 128 -> 160 on 2026-11-23 with no runtime upgrade.
+        ("SubnetLimit", (), "u16"),
         # Plain values the corpus states as live (audit WP13): conviction
         # rates, childkey rules and the commit-reveal version. Types and
         # defaults confirmed against live metadata at spec 486, block
@@ -2162,6 +2164,7 @@ EXPECTED_DEFAULTS: Dict[Tuple[str, str], str] = {
     (SUBTENSOR_PALLET, "NetworkImmunityPeriod"): "80c6130000000000",
     (SUBTENSOR_PALLET, "NetworkLockReductionInterval"): "c089010000000000",
     (SUBTENSOR_PALLET, "NetworkRateLimit"): "201c000000000000",  # 7200
+    (SUBTENSOR_PALLET, "SubnetLimit"): "8000",  # 128
     (SUBTENSOR_PALLET, "MaturityRate"): "d2430e0000000000",  # 934866
     (SUBTENSOR_PALLET, "UnlockRate"): "d2430e0000000000",  # 934866
     (SUBTENSOR_PALLET, "StakeThreshold"): "0000000000000000",  # 0
@@ -4561,6 +4564,7 @@ KNOB_ITEMS: Dict[str, str] = {
     "NetworkImmunityPeriod": "u64",
     "NetworkLockReductionInterval": "u64",
     "NetworkRateLimit": "u64",
+    "SubnetLimit": "u16",
     "MaturityRate": "u64",
     "UnlockRate": "u64",
     "StakeThreshold": "u64",

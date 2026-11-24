@@ -675,6 +675,21 @@ class ChainParamWatchTests(unittest.TestCase):
         self.assertEqual(self.values("NetworkImmunityPeriod"),
                          ["864000", "432000"])
 
+    def test_subnet_limit_change_records_a_transition(self):
+        # The shipped item, read as a plain u16 on its pinned key: the
+        # 2026-11-23 root change, 128 -> 160.
+        shipped = {spec["item"]: spec for spec in
+                   al.load_config()["chain_params"]["items"]}
+        item = dict(shipped["SubnetLimit"])
+        self.config["chain_params"]["items"] = [item]
+        key = item["key"]
+        self.watch({key: "0x" + (128).to_bytes(2, "little").hex()})
+        result = self.watch({key: "0x" + (160).to_bytes(2, "little").hex()})
+        self.assertEqual(
+            [(t["item"], t["prev_value"], t["new_value"])
+             for t in result["transitions"]],
+            [("SubnetLimit", "128", "160")])
+
     def test_provenance_only_change_is_not_a_transition(self):
         # Governance pinning the switch to the value it already had by
         # default changes nothing economically.

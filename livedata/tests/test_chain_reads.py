@@ -105,6 +105,22 @@ class ChainReadCoverageTest(unittest.TestCase):
                           al.CHAIN_READS)
             self.assertEqual(al.KNOB_ITEMS[name], "u64")
 
+    def test_subnet_limit_key_is_the_plain_derivation(self):
+        # Root raised SubnetLimit 128 -> 160 on 2026-11-23 with no runtime
+        # upgrade; the watch reads it as a plain u16 on its pinned key.
+        items = {spec["item"]: spec
+                 for spec in al.load_config()["chain_params"]["items"]}
+        spec = items["SubnetLimit"]
+        self.assertEqual(spec["key"], "0x" + (al.twox128("SubtensorModule")
+                                              + al.twox128("SubnetLimit")).hex())
+        self.assertEqual((spec["codec"], spec["source"], spec["default"]),
+                         ("u16", "independent", 128))
+        self.assertIn(al.ChainRead(al.SUBTENSOR_PALLET, "SubnetLimit", (),
+                                   "u16"), al.CHAIN_READS)
+        self.assertEqual(al.KNOB_ITEMS["SubnetLimit"], "u16")
+        self.assertEqual(al.EXPECTED_DEFAULTS[(al.SUBTENSOR_PALLET,
+                                               "SubnetLimit")], "8000")
+
     def test_corpus_stated_plain_values_are_read(self):
         # audit WP13: every plain value the corpus states as live is a
         # declared read with a pinned default, and read-knobs reads it.
