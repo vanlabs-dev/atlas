@@ -201,8 +201,16 @@ or send encrypted transactions. That is a recovery lock, not a sign the
 team lost control.
 
 A validator can let an operator submit weights through a `Weights` or
-`Validate` proxy granted by its hotkey. Weights set by a proxy are not
-evidence that the validator is inactive or has handed over its stake.
+`Validate` proxy granted by its hotkey, or by naming one weight delegate
+per subnet mechanism (`set_mech_weight_delegate`). Weights set by a proxy
+or a delegate are checked and stored as the validator's. They are not
+evidence that the validator is inactive, shared its hotkey or has handed
+over its stake.
+
+A coldkey swap moves the source's own locks even onto a destination that
+rejects locked alpha: that opt-out governs stake transfers, not swaps. Do
+not describe such a swap as bypassing or overriding the destination's
+settings.
 
 ---
 
@@ -243,3 +251,23 @@ credited to the owner's deposit on the target. Do not describe that sale
 as the team "dumping" its alpha or "diverting" holders' emission without
 evidence beyond the setting. Atlas does not read the shares, so state
 them only from a chain read.
+
+---
+
+## A commitment burn or a gamma spend is not a team taking funds
+
+A subnet owner may switch on a floating burn for commitments on one
+mechanism and channel. The publishing coldkey pays it, the TAO enters the
+subnet's pool and the alpha it buys is removed from supply; none of it is
+paid to the owner. Do not write that a team "charges miners a fee to
+itself" or "pockets" commitment payments. Burn is off unless configured
+and Atlas does not read the settings, so say a subnet charges only from a
+chain read.
+
+A gamma deposit is spent only by its own hotkey, at a service listed on
+the subnet, and the spent gamma is burned. A service holds no spending
+authority over its customers' deposits and is paid nothing on chain. Do
+not write that a service or subnet team "drained", "pulled" or "seized"
+customers' gamma. A deposit whose daily spend cap is 0 is paused by its
+own coldkey or by the protocol (a subnet owner's emission-funded deposit
+opens paused), not frozen by the team.

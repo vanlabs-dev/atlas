@@ -48,14 +48,37 @@ during apply:
   ingestion are **removed**, not disabled. Their tables and rows stay. The
   `root-rotation` promotion item due 2026-11-04 is void.
 
-## Live chain (2026-11-11)
+## Live chain (2026-11-24)
 
-Finney `spec_version` **490** (knob and emission-switch read and chain-read
-probe both clean at finalized block 9478248). Root lowered
-`NetworkLockReductionInterval` to **28,800** blocks (4 days, from 8) with
-no runtime upgrade; every other knob value is unchanged, and
-`SubnetEmissionEnabled` is off for netuid **82** only. Spec 490 (Release
-489 plus the version bump) adds gamma shares of emission: the owner or root
+Finney `spec_version` **494**, transaction version 2 (knob and
+emission-switch read and chain-read probe both clean at finalized block
+9573918). Root changed three settings with no mechanic in the diff
+setting them: `EmissionBarRank` is explicit at **48** (was unset, default
+32), `NetworkRateLimit` is **10,800** blocks (1.5 days, from 14,400), and
+`SubnetEmissionEnabled` is off for netuids **82 and 110** (110 is new).
+Every other knob value is unchanged. Spec 494 (the 491 to 494 releases)
+makes a gamma deposit spendable only by its own hotkey: a fee-free
+`spend_gamma(service, netuid, amount)` (call 168) burns the amount and
+totals it in `GammaSpent`; deposits and services have no spender, the mint
+and service calls moved to 166, 167 and 169, and the `GammaSpend` proxy
+type admits nothing. It adds per-channel commitments
+(`Commitments.set_commitment_to`, coldkey-paid) with an optional
+owner-set floating burn that goes through the registration payment path
+(TAO into the pool, bought alpha removed from supply), and per-mechanism
+weight delegation (`set_mech_weight_delegate` 170 and the `*_for` calls
+171 to 174, checked against the validator). The basket trade band, its
+price reference and the refill period are root-settable storage whose
+defaults keep the former 2% strictest-of-EMAs-and-spot band and 7,200-block
+refill; the planned 5% spot-only band and 9830 concentration cap are
+separate sudo calls and are not live. The owner rate limit on emission
+split changes is storage with a 360-block default (was 50,400 blocks), and
+the Yuma timelocked commit cap is per subnet (default 10, root). Lock
+aggregates are one perpetual and one decaying bucket per hotkey
+(`OwnerLock` and `DecayingOwnerLock` removed). The locked-alpha opt-out no
+longer refuses a coldkey swap; a V2-announced swap is refused over locks
+only on a conflicting lock mode. None of the new or changed items is read
+by Atlas (probe clean), so their live values are not stated.
+Spec 490 (Release 489 plus the version bump) adds gamma shares of emission: the owner or root
 sets the five slots plus up to 16 shares of at most 10% each to
 root-whitelisted subnets (`sudo_set_subnet_emission_weights_v2`, AdminUtils
 120; whitelist AdminUtils 121), converted at each epoch into the owner's
@@ -74,7 +97,7 @@ service credit minted by burning alpha, gated by `GammaEnabled` and
 `SubnetGammaEnabled`, both off by default and not read) and `set_service`
 listings, adds hashed and post-quantum wallet accounts behind
 `HashedAccountsEnabled` (off by default, not read), adds the `Lock` (21)
-and `GammaSpend` (22) proxy types, and snapshots earned root dividend
+proxy type, and snapshots earned root dividend
 alpha per root stake while a deposit cannot settle (`BasketDepositPending`
 while unsettled). `SubnetMovingPrice` updates for every started dynamic
 subnet, not only the emission set.
@@ -104,8 +127,8 @@ first, and Yuma miners are paid the full funded miner budget.
 Each subnet has an emission weight vector
 `[burn, recycle, owner, validator, miner]` (`SubnetEmissionWeights`,
 seeded 0/0/18/41/41). The owner or root sets it with
-`sudo_set_subnet_emission_weights` (call 114, owner once per 50,400 blocks
-per subnet; burn plus recycle at most 33%, owner at most 33%, validator at
+`sudo_set_subnet_emission_weights` (call 114, owner rate limit a
+root-settable storage value, default 360 blocks; burn plus recycle at most 33%, owner at most 33%, validator at
 most 50%, miner at least 33%).
 Root is paid its baseline share (default 41% validator share and the
 global `TaoWeight`) off the top of the validator slot every block. There is
@@ -113,9 +136,9 @@ no per-subnet TAO weight: the multiplier and spec 480's `SubnetTaoWeight`
 were dropped before 481 shipped. The legacy owner-cut setters return
 `Deprecated`; `SubnetOwnerCut` and `OwnerCutEnabled` stay in metadata but
 drive no emission. Atlas does not read the vectors.
-`SubnetEmissionEnabled` off netuid **82** only. Emission bar
-is rank-pinned (N unset, default 32; q 0.75 explicit and inert; h unset,
-default 3). `set_root_weights` is retired (`Weights[ROOT]` cleared, the
+`SubnetEmissionEnabled` off netuids **82 and 110**. Emission bar
+is rank-pinned (N explicit at 48, code default 32; q 0.75 explicit and
+inert; h unset, default 3). `set_root_weights` is retired (`Weights[ROOT]` cleared, the
 curation switch removed). `BasketTradingEnabled` is **true** (explicit).
 `BasketConcentrationCap` is **7865** (explicit, about 12% of fund NAV; code
 default 4096). Claim dust floors are
@@ -144,9 +167,9 @@ leaves a delegator's stake on the old hotkey when it cannot follow without
 growing that list (`HotkeySwapStakeRetained`, root credits in
 `HotkeySwapBasketCredits`). EIP-7702 authorization lists are capped at 255
 entries before signature recovery, and EVM nonces survive balance-account
-reaping (`EVM.AccountNonces`). Registration rules at block 9478248:
-immunity 432,000, lock reduction 28,800, rate limit 14,400, all explicit.
-Spec 490 renamed, removed or reshaped no item Atlas reads, so no reader
+reaping (`EVM.AccountNonces`). Registration rules at block 9573918:
+immunity 432,000, lock reduction 28,800, rate limit 10,800, all explicit.
+Spec 494 renamed, removed or reshaped no item Atlas reads, so no reader
 changed. Still open: the mining screen's miner share
 (`fleet/atlas_fleet_mining.py`) still comes from `SubnetOwnerCut` and
 `OwnerCutEnabled`. That is correct only for subnets still on their seeded

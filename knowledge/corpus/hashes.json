@@ -1,12 +1,12 @@
 {
   "origin": "knowledge/corpus/ in vanlabs-dev/atlas (source of truth)",
-  "sync_date": "2026-11-10",
-  "coverage_date": "2026-11-10",
-  "grounded_spec": 490,
+  "sync_date": "2026-11-24",
+  "coverage_date": "2026-11-24",
+  "grounded_spec": 494,
   "files": {
-    "ground-truth.md": "3839ae0911a0f712e409eaa242f601202b1e75d8c5b3586db4c550ce86916150",
-    "fact-patterns.md": "d7387132cb4bdfcc8e0b59bba052a2fc5cfb8eb3b62b25348c35871fb491f9ef",
-    "negative-claim-rules.md": "e1af6b8c53d23c078089bca0b86e8c55ee531fc76858751d366420e0cab787c5"
+    "ground-truth.md": "1f174e7a3f13073f15d36530ca96ad71b0434ab6b21d1e7b6a7f8e9107a6a30c",
+    "fact-patterns.md": "f162b8ca340536c1a2e633e5dde5e006fc3cd51964ece6b9204802c63d272f40",
+    "negative-claim-rules.md": "0faca003cf0d92404930ff1fc36da9dfd17d94b53eb451cba50ee8653091939a"
   },
   "note": "sha256 over newline-normalized (LF) bytes; see load_corpus"
 }

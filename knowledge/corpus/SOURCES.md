@@ -6,14 +6,121 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | field | value |
 |---|---|
 | Source of truth | this directory, `knowledge/corpus/` in `vanlabs-dev/atlas` (the IntoOps copy is closed and never synced from) |
-| Sync date | 2026-11-11 |
-| Coverage date | 2026-11-11 |
-| Grounded at | Finney `spec_version` **490** |
+| Sync date | 2026-11-24 |
+| Coverage date | 2026-11-24 |
+| Grounded at | Finney `spec_version` **494** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
 
-Verified 2026-11-11 against Finney RPC by the runtime upgrade job:
+Verified 2026-11-24 against Finney RPC by the runtime upgrade job:
+
+- Spec **494** (transaction version 2). Knobs and the emission-switch map
+  read together at finalized block 9573918
+  (`0x6b345a6aaa2664a1e9c3bd6feba3dfb1adcd1e861ca44f7811c9c311722a9d9d`).
+  Chain-read probe clean at the same finalized block 9573918 (no failures:
+  every item Atlas reads keeps its name, shape and default). Source: the
+  subtensor `v494` tag (`a68c6e8c6541`, `runtime/src/lib.rs`
+  `spec_version: 494`); `spec-494.diff` runs from the 490 release through
+  Release 491 (`be3a11b1a`), Release v492 (`541a50d38`), release-493
+  (`8b407e409`) and the 494 release candidate merge (`a68c6e8c6`). Finney
+  moved from 490 to 494.
+- Knob values that changed since the previous read, all by root with no
+  mechanic in the diff setting them: `EmissionBarRank` is **48**
+  (explicit; unset, so default 32, before), `NetworkRateLimit` is
+  **10800** (1.5 days, explicit; 14400 before). Unchanged:
+  `EmissionBarQuantile` 0.75 explicit and inert, `EmissionGateExponent`
+  unset (default 3), `BasketConcentrationCap` 7865, `BasketTradingEnabled`
+  true, `MaturityRate` 311622 (explicit), `UnlockRate` unset,
+  `PendingChildKeyCooldown` 7200, `StakeThreshold` 1000 TAO, `CKBurn` 0,
+  `NetworkImmunityPeriod` 432000, `NetworkLockReductionInterval` 28800
+  (all explicit); `MaxChildkeyTake`, `MinChildkeyTake`,
+  `TxChildkeyTakeRateLimit`, `CommitRevealWeightsVersion` and the three
+  claim dust floors unset.
+- `SubnetEmissionEnabled`: 128 keys for 128 subnets, **82 and 110 off**
+  (110 newly off).
+- Spec 494 shipped (from the 491 to 494 releases):
+  - Gamma is spent by the deposit's own hotkey (493): `spend_gamma(service,
+    netuid, amount)` (call 168, `Pays::No`, validated before inclusion, one
+    pending spend per hotkey and subnet) burns the amount and adds it to
+    the new item `GammaSpent(netuid, service, hotkey)`; the service must be
+    listed (`ServiceDoesNotExist`). Deposits and services no longer carry
+    a spender (`migrate_drop_gamma_spenders`; an uncapped subnet-owner
+    deposit and a cap under 0.1 gamma are paused at upgrade). `mint_gamma`
+    166, `mint_gamma_with_stake` 167, `set_service` 169; indices 158, 159,
+    162, 164 and 165 are retired. Spends, non-emptying moves and nonzero
+    caps are at least 0.1 gamma. A hotkey swap moves the coldkey's deposit
+    (or pauses it); gamma emission opens the owner deposit with cap 0. The
+    `GammaSpend` proxy type is deprecated and admits nothing; only `Any`
+    proxies a spend. `GammaRuntimeApi` is version 2.
+  - Yuma timelocked commit cap is per subnet:
+    `MaxTimelockedCommitsPerHotkey` (default 10, root,
+    `sudo_set_max_timelocked_commits_per_hotkey`, AdminUtils 122); zero
+    pauses new commits. The hash path keeps its fixed 10.
+  - Channel commitments: `Commitments.set_commitment_to` (call 3, coldkey
+    signed and paid) per `(netuid, mechanism, channel)`, with an optional
+    floating burn per channel set by the owner or root (AdminUtils 123 to
+    127, `CommitBurnConfig`). The burn takes the registration payment
+    path (TAO into the pool, bought alpha removed from `SubnetAlphaOut`).
+    Burn on mechanism 0, channel 0 disables legacy `set_commitment`
+    (`FreeCommitmentDisabled`). Swap, deregistration and retirement
+    cleanup is bounded idle work (`ChannelMigrationPending` meanwhile).
+  - Per-mechanism weight delegation: `set_mech_weight_delegate` (170) and
+    the delegate calls `set_mechanism_weights_for` (171),
+    `commit_mechanism_weights_for` (172), `reveal_mechanism_weights_for`
+    (173), `commit_timelocked_mechanism_weights_for` (174); all rules are
+    checked against the validator, the delegate pays the fee
+    (`NotMechWeightDelegate`). The `Weights` and `Validate` proxy types
+    admit the four `*_for` calls. Hotkey swap, UID replacement,
+    deregistration, mechanism retirement and dissolution purge grants.
+  - Basket trade controls are storage, root only: `BasketTradeMaxSlippageBps`
+    (default 200; AdminUtils 128), `BasketTradeRefillBlocks` (default
+    7200; 129), `BasketTradePriceReferenceMode` (default
+    `StrictestEmaAndSpot`, or `SpotOnly`; 130). The defaults reproduce the
+    former constants. Dividend-deposit admission keeps its own fixed 2%
+    tolerance.
+  - `SubnetEmissionWeightsRateLimit` is storage (default 360 blocks, was
+    a 50,400-block constant; root, AdminUtils 131; zero disables).
+  - Conviction lock aggregates: one perpetual (`HotkeyLock`) and one
+    decaying (`DecayingHotkeyLock`) per hotkey; `OwnerLock` and
+    `DecayingOwnerLock` are removed
+    (`migrate_one_lock_bucket_per_hotkey` rebuilds the aggregates from the
+    individual locks). The owner-hotkey instant-maturity rule is kept; an
+    owner-hotkey change rolls the outgoing hotkey's locks forward first.
+  - Coldkey swaps: the locked-alpha opt-out no longer refuses a swap;
+    a V2-announced swap is refused (`AccountRejectsLockedAlpha`) only on a
+    conflicting destination lock mode with an active source lock. Locks on
+    dissolving subnets are not moved. Destination flags are kept when it
+    has non-balance state (stake, hotkeys, credits, flags, identity, gamma
+    deposits, proxy grants, foreign lineage); TAO alone is not state. A
+    coldkey with an announced or disputed swap can still call
+    `Proxy.remove_announcement`.
+  - The Operational transaction priority is given only to the sudo key;
+    any other signer of an Operational-class call gets normal priority.
+  - `try_state` asserts `CKBurn` is 0 (childkey dividend conservation);
+    the live read is 0.
+- Not live at 494: a 5% spot-only basket band as the default. A doc
+  comment on `swap_basket` still says "5% from spot by default", and the
+  release page lists the 5% band, `SpotOnly` and a 9830 concentration cap
+  as planned post-merge sudo calls. The storage defaults are 200 bps and
+  `StrictestEmaAndSpot`, and the live cap is 7865. Also not live:
+  carrying a weight-delegate grant across a hotkey swap
+  (`queue_mech_weight_delegate_move` has no caller outside tests; the swap
+  purges grants on both hotkeys). The basket governance guide's call
+  indices 122 to 124 for the three basket setters are wrong; the code has
+  128 to 130. New calls dispatch with aliased or unbenchmarked weights
+  (`set_mech_weight_delegate`, the `*_for` calls, `set_commitment_to`
+  payment weight).
+- Not read, so not stated as live: `BasketTradeMaxSlippageBps`,
+  `BasketTradeRefillBlocks`, `BasketTradePriceReferenceMode`,
+  `SubnetEmissionWeightsRateLimit`, `MaxTimelockedCommitsPerHotkey`,
+  `MechWeightDelegate`, `CommitBurnConfig` and channel commitments,
+  `GammaSpent`, `GammaDeposits`, `Services`, `HotkeyLock`,
+  `DecayingHotkeyLock`.
+
+Verified 2026-11-11 against Finney RPC by the runtime upgrade job. The
+knob values above supersede this read; its mechanics are still live at
+494 except where the 494 section above replaces them:
 
 - Spec **490**. Knobs and the emission-switch map read together at
   finalized block 9478248
@@ -39,7 +146,8 @@ Verified 2026-11-11 against Finney RPC by the runtime upgrade job:
 - Spec 490 shipped (from Release 489; the 490 commit only bumps the
   version):
   - Gamma shares of emission: `sudo_set_subnet_emission_weights_v2`
-    (AdminUtils 120, owner or root, rules and rate limit of call 114;
+    (AdminUtils 120, owner or root, rules and rate limit of call 114,
+    which is the 360-block default storage value since 494;
     proxy filter group `SubnetManagementCalls`) sets the five slots plus up to 16 gamma
     shares of at most 10% each to root-whitelisted targets
     (`sudo_set_subnet_gamma_emission_whitelisted`, AdminUtils 121, root
@@ -72,7 +180,7 @@ Verified 2026-11-11 against Finney RPC by the runtime upgrade job:
 
 Verified 2026-11-07 against Finney RPC by the runtime upgrade job. The
 knob values above supersede this read; its mechanics are still live at
-490 except where the 490 section above replaces them:
+494 except where the 490 and 494 sections above replace them:
 
 - Spec **488**. Knobs and the emission-switch map read together at
   finalized block 9451247
@@ -101,14 +209,14 @@ knob values above supersede this read; its mechanics are still live at
     stay only as deprecated indices). Burn destroys alpha, recycle lowers
     `SubnetAlphaOut`. Neither enters `MinerBurned` or the emission share.
   - Gamma: dollar-valued subnet service credit minted by burning alpha
-    (`mint_gamma` 158, `mint_gamma_with_stake` 159, `move_gamma` 160,
-    `close_gamma_deposit` 161, spender 162, daily cap 163, `spend_gamma`
-    164), priced at min(spot, `SubnetGammaPrice`) and a root-set TAO/USD
-    oracle (`feed_tao_usd_price` 157; AdminUtils 116). Gated by
-    `GammaEnabled` (AdminUtils 118) and `SubnetGammaEnabled` (117), both
-    default off and not read. Coldkey swaps move deposits (128 cap across
-    both keys); dissolution deletes them. `set_service` (165) publishes a
-    hotkey's service URL and spender (`Services`).
+    (`move_gamma` 160, `close_gamma_deposit` 161, daily cap 163; the mint,
+    spend and service calls were re-indexed and the spender removed at
+    494, see above), priced at min(spot, `SubnetGammaPrice`) and a
+    root-set TAO/USD oracle (`feed_tao_usd_price` 157; AdminUtils 116).
+    Gated by `GammaEnabled` (AdminUtils 118) and `SubnetGammaEnabled`
+    (117), both default off and not read. Coldkey swaps move deposits (128
+    cap across both keys); dissolution deletes them. `set_service`
+    publishes a hotkey's service URL (`Services`).
   - Hashed and post-quantum wallet accounts (`HashedAccounts`, pallet
     index 33: ML-DSA-65, Falcon-512/1024, rotating hashed SR/ED), behind
     `HashedAccountsEnabled` (AdminUtils 115, default off, not read);
@@ -118,9 +226,9 @@ knob values above supersede this read; its mechanics are still live at
     `as_protected_derivative` (8) and `as_safe_derivative` (9); multisig
     indices 5 to 9 for off-curve composite accounts; account-approved
     limit orders.
-  - Proxy types `Lock` (21) and `GammaSpend` (22). `Staking` also admits
-    the two root-claim calls; `NonTransfer` and `NonCritical` lose basket
-    trading and gamma calls.
+  - Proxy type `Lock` (21). `GammaSpend` (22) is deprecated since 494 and
+    admits nothing. `Staking` also admits the two root-claim calls;
+    `NonTransfer` and `NonCritical` lose basket trading and gamma calls.
   - Root dividend deposits (admission gate replaced at 490, see above):
     dust judged on the fast price; unsettled credits snapshot per root
     stake (`DeferredBasketRates` and related items), convert later or are
@@ -165,7 +273,8 @@ Verified 2026-11-05 against Finney RPC, workstation reads (audit WP13):
 
 Verified 2026-10-27 against Finney RPC (`https://entrypoint-finney.opentensor.ai`).
 The knob values above supersede this read; the mechanics below are still
-live at 490 (the 488 and 490 diffs leave them as stated unless noted above):
+live at 494 (the 488, 490 and 494 diffs leave them as stated unless noted
+above):
 
 - Spec **486**. Knobs, emission-switch map, dust-floor storage and the
   subnet registration rules read together at finalized block 9369802
@@ -217,14 +326,15 @@ live at 490 (the 488 and 490 diffs leave them as stated unless noted above):
     subnet registrations, their escrow, miner collateral and leases move
     with the coldkey. The destination keeps its identity, its decaying-lock
     choices and any auto-stake destination it set. It also keeps its
-    `AccountFlags` when it is in use or has flags set. The source's
-    auto-stake setting moves only onto a blank destination, and lineage is
-    recorded only onto a destination with no staking associations and no
-    lineage. Rate-limit clocks and hotkey-swap cooldowns keep the later
-    stamp. Proxy grants and `RealPaysFee` stay with the old coldkey. Still
-    refused: a hotkey destination, a destination with any lock holding mass
-    or residual conviction, a breached destination opt-out (locked alpha,
-    staking-list growth), and work above one call (256 hotkeys across both
+    `AccountFlags` when it has non-balance state of its own (see the 494
+    section). The source's auto-stake setting moves only onto a blank
+    destination, and lineage is recorded onto a destination that keeps no
+    flags of its own or on a reversal inside one lineage. Rate-limit
+    clocks and hotkey-swap cooldowns keep the later stamp. Proxy grants
+    and `RealPaysFee` stay with the old coldkey. Still refused: a hotkey
+    destination, a destination with any lock holding mass or residual
+    conviction, a breached staking-list growth opt-out, a conflicting
+    lock mode on a V2-announced swap (494), and work above one call (256 hotkeys across both
     lists, 1,024 positions, 128 destination lock rows, 32 owned queued
     registrations, a 256-entry registration queue).
   - `announce_coldkey_swap_v2` (call 155, EVM `announceColdkeySwapV2`)
@@ -278,7 +388,7 @@ live at 490 (the 488 and 490 diffs leave them as stated unless noted above):
   - Resolved outside the corpus: `livedata/atlas_live.py`
     `SUBNET_PARAM_DEFAULTS` now records an absent `SubnetEmissionEnabled`
     key as `true`, matching the runtime's `DefaultTrue` (unchanged at
-    490). Every live subnet has an explicit key (128 of 128).
+    494). Every live subnet has an explicit key (128 of 128).
 - Carried from spec 482 and still live (not touched by the 483, 484 or
   486 diffs):
   - Yuma miner payouts apportion the accumulated miner budget in full by
@@ -293,8 +403,9 @@ live at 490 (the 488 and 490 diffs leave them as stated unless noted above):
     0.41]`). The owner or root sets it with
     `sudo_set_subnet_emission_weights` (call 114): burn plus recycle at
     most 33% (since 488; was 0), owner at most 33% (lease-created subnets at least 18%), validator at
-    most 50%, miner at least 33%. Owners are limited to one change per
-    50,400 blocks per subnet; the first change is free, root is exempt,
+    most 50%, miner at least 33%. Owner changes are limited per subnet by
+    `SubnetEmissionWeightsRateLimit` (default 360 blocks since 494, was
+    50,400); the first change is free, root is exempt,
     dissolution clears the key. EVM subnet precompile
     `setSubnetEmissionWeights` / `getSubnetEmissionWeights`.
   - Root off the top: root is paid `min(V, r) x alpha_out` with
@@ -400,11 +511,11 @@ live at 490 (the 488 and 490 diffs leave them as stated unless noted above):
   the TAO paid; EIP-2537 BLS12-381 precompiles at `0x0b` to `0x11`;
   `StakingHotkeys` entries are kept until a pair's last alpha key and
   basket watermark are gone (`migrate_cleanup_staking_hotkeys_v3`).
-- Emission bar is **rank-pinned**: `EmissionBarRank` unset (default 32),
-  `EmissionBarQuantile` 0.75 explicit and inert, `EmissionGateExponent`
-  unset (default 3).
+- Emission bar is **rank-pinned**: `EmissionBarRank` explicit at **48**
+  (code default 32), `EmissionBarQuantile` 0.75 explicit and inert,
+  `EmissionGateExponent` unset (default 3), at finalized block 9573918.
 - `SubnetEmissionEnabled` is live. 128 keys for 128 subnets at finalized
-  block 9478248; **only 82 off** (103 on); SN1 on.
+  block 9573918; **82 and 110 off** (103 on).
 - `set_root_weights` is **retired** (`migrate_remove_root_weights`, spec
   469): `Weights[ROOT]` cleared, `RootWeightSettingEnabled` and
   `RootWeightsCap` removed. Dividends accumulate in place.
@@ -415,6 +526,9 @@ live at 490 (the 488 and 490 diffs leave them as stated unless noted above):
   still be frozen.
 - `swap_basket_many` (call index 151) is live: 1 to 64 atomic legs, one
   dividend flush and one valuation, every `swap_basket` check per leg.
+  The per-leg price band, its reference and the refill period are
+  root-settable storage since 494 (defaults 200 bps, strictest of both
+  moving prices and spot, 7200 blocks; not read).
 - Basket trade minimum: each leg's sell proceeds must be at least
   max(`DefaultMinStake`, `BasketMinTradeTao`). Transaction validation
   rejects a smaller leg before inclusion, including inside Utility
@@ -423,26 +537,29 @@ live at 490 (the 488 and 490 diffs leave them as stated unless noted above):
   items are gone from metadata (`migrate_alpha_v2_and_unstake_dust_v1`);
   stake shares live in `AlphaV2` / `TotalHotkeySharesV2`, the only items
   the runtime reads since 490.
-- Subnet registration rules at finalized block 9478248:
+- Subnet registration rules at finalized block 9573918:
   `NetworkImmunityPeriod` **432,000** (60 days),
   `NetworkLockReductionInterval` **28,800** (4 days), `NetworkRateLimit`
-  **14,400** (2 days), all explicit. Root set the first two on 2026-10-14
-  with no runtime upgrade (the subtensor announcement gives the old values
-  as 120 and 16 days), then lowered the lock reduction interval again from
-  8 days, also with no runtime upgrade, between the 2026-11-07 and
-  2026-11-11 reads. `NetworkMinLockCost` (1 TAO) and
+  **10,800** (1.5 days), all explicit. Root set the first two on
+  2026-10-14 with no runtime upgrade (the subtensor announcement gives the
+  old values as 120 and 16 days), lowered the lock reduction interval
+  again from 8 days between the 2026-11-07 and 2026-11-11 reads, and
+  lowered the rate limit from 14,400 between the 2026-11-11 and
+  2026-11-24 reads. `NetworkMinLockCost` (1 TAO) and
   `NetworkLastLockCost` (884.38 TAO) are not in the knob read; those values
   are from a one-off read at finalized block 9,278,789 on 2026-10-14.
-- Claim dust floors are unset on chain at finalized block 9478248. Code
+- Claim dust floors are unset on chain at finalized block 9573918. Code
   defaults apply: row floor min(1 TAO, 10 bps of anchored NAV); slice
   floor 0.0001 TAO. Cash-first claims are not live.
 
 [../supersession-markers.json](../supersession-markers.json) is empty,
-reviewed at the spec 490 re-sync: every claim the 490 diff or the new
-knob read made stale (five emission slots summing to one alone, root
-dividend deposits waiting on every pool inside the 2% band, gamma
-deposits only at an associated hotkey, the 8-day lock reduction
-interval) was rewritten in place. Add a marker if a
+reviewed at the spec 494 re-sync: every claim the 494 diff or the new
+knob read made stale (a gamma deposit's spender and the batched spender
+`spend_gamma`, the `GammaSpend` proxy, the weekly emission-split rate
+limit, the fixed 2% basket band, the fixed 10-commit timelocked cap, the
+locked-alpha opt-out refusing a coldkey swap, the unset rank-32 emission
+bar, the 2-day subnet registration gap, SN82 as the only switched-off
+subnet) was rewritten in place. Add a marker if a
 corpus claim goes stale before the next re-sync.
 
 ## Re-sync procedure
