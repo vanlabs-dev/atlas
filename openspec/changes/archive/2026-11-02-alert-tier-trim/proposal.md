@@ -2,7 +2,7 @@
 
 ## Why
 
-The pulse briefing has been off since 2026-10-19 (`aaa1f25`) because it was
+The pulse briefing has been off since 2026-10-19 (`85b1775`) because it was
 too noisy. Four classes still sat at the `briefing` tier, so their events
 were recorded as `briefed` and sent nowhere. In 14 days that was 50 econ-code
 events, including 13 `high` verdicts, plus 12 registry renames and 4 knowledge

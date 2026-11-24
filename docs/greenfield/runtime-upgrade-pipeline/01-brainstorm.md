@@ -1,6 +1,6 @@
 # runtime-upgrade-pipeline: brainstorm
 
-Session 1, 2026-09-24. Input: the workstation audit of atlas `19c5617`
+Session 1, 2026-09-24. Input: the workstation audit of atlas `85f5ca2`
 and subnt `ede5698` (see "Audit findings" below).
 
 ## Goal

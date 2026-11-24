@@ -1,7 +1,7 @@
 # runtime-upgrade-pipeline: outside-voice review
 
 Session 3, 2026-09-24. Inputs: `01-brainstorm.md`, `02-approval.md`, the
-OpenSpec change, the repo at `19c5617`, and read-only checks on the Pi.
+OpenSpec change, the repo at `85f5ca2`, and read-only checks on the Pi.
 
 Status: all findings resolved or accepted by the operator on 2026-09-24.
 Resolutions folded into the change with `/opsx:update` on 2026-09-24

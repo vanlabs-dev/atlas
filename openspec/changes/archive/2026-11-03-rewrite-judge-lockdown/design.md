@@ -68,7 +68,7 @@ toolset, or one-shot exits 2. Findings on the Pi (Hermes v0.22.5,
 Read-only check of all 510 `oneshot` sessions in `~/.hermes/state.db`
 found tool calls only in the 2026-09-24 knowledge battery, which uses the
 KB tools on purpose. No rewrite (121) or judge (350) session called a
-tool. Both calls were disabled (`7a9f412`) until this route shipped.
+tool. Both calls were disabled (`c1cee27`) until this route shipped.
 
 `--ignore-rules` and the `/tmp` cwd worked on the Hermes path (test
 session: no AGENTS.md text, about 5,000 prompt tokens against 10,000 to

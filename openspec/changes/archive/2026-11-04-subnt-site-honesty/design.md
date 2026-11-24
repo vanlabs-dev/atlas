@@ -3,7 +3,7 @@
 ## Context
 
 See proposal.md (Why). State on 2026-11-04, verified read-only against
-the code, the committed fixtures and the Pi at `3d7ce47`:
+the code, the committed fixtures and the Pi at `90bb04e`:
 
 - Committed fixtures date from 2026-10-22/29 and predate WP4 and WP8. They
   carry `cueKind` (47 up, 55 dn, 1 amb), `confidence`, `gateState`; every
@@ -61,7 +61,7 @@ the built page, subnt publisher fixed in place.
    operator; it also guarantees a stale badge at publish.
 3. **One activity reader.** The export's remote program imports
    `metrics._commit_log`, `compile_bot_patterns`, `is_bot_author` and the
-   config's `bot_author_patterns` (all present on the Pi at `3d7ce47`),
+   config's `bot_author_patterns` (all present on the Pi at `90bb04e`),
    and bins with `age <= w` semantics: bin index `ceil(age) - 1` clamped,
    so bin sums over the last 7 and 30 match `c7`/`c30`. The binning is a
    pure function in `scripts/bins.ts` mirrored by a Python helper inside

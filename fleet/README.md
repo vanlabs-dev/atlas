@@ -399,7 +399,7 @@ token-safe, per-slot fail-closed all verified against real data).
   effectiveness ledger; deployed + archived.
 - **fleet-rotation-metrics** — metrics + the ranked LAN dashboard;
   implemented, tested (full fleet suite 214 green off-device), committed
-  (`17f8e28`), delta specs synced into live specs, deployed + archived.
+  (`752140e`), delta specs synced into live specs, deployed + archived.
   On the Pi the metrics pass runs inline each fleet pass over all active
   clones (43 emission routes, e.g. SN54 = 35% partner) and the board renders;
   `atlas-dashboard.service` serves it at `http://192.168.0.150:8480/`

@@ -3,7 +3,7 @@
 Date: 2026-10-30. Session 4, third run, after the comp F rebuild ("Strata
 as an instrument"). This file replaces the two earlier runs, which
 verified the rejected "One motif" build and the first Strata build. All
-output below is from build `c11b301`, served with `next start` on port
+output below is from build `1ee6613`, served with `next start` on port
 3101.
 
 Result: PASS. `verify.sh` exits 0, every spec check passes, and the
@@ -282,7 +282,7 @@ Checked in a real browser at 1440 (dark and light), 768 and 390:
   labels or a tour, so it explains less there. The 7-day-old fixtures
   show the stale label on three boards until live data lands.
 
-## Final verify run (2026-10-31, after 46921cd and Vercel preview)
+## Final verify run (2026-10-31, after b44c00a and Vercel preview)
 
 Preview https://atlas-nine-gold.vercel.app/ returns 200 and serves the home page (task 6.3).
 

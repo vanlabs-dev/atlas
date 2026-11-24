@@ -45,4 +45,4 @@
 ## 7. Close-out
 
 - [x] 7.1 Update `telegram/README.md` and any operator-setup docs describing the alert body format
-- [x] 7.2 On-device acceptance on the Pi (2026-07-14): `git pull` fast-forwarded to 9b6861c, 51 tests green via `python3 -m unittest`, and a read-only dry render against the live `repotrack.db` confirmed the interpreted body (verdict, signal/noise split, both-clocks Δ+6, filtered commits) renders correctly with real data
+- [x] 7.2 On-device acceptance on the Pi (2026-07-14): `git pull` fast-forwarded to 3faf359, 51 tests green via `python3 -m unittest`, and a read-only dry render against the live `repotrack.db` confirmed the interpreted body (verdict, signal/noise split, both-clocks Δ+6, filtered commits) renders correctly with real data
