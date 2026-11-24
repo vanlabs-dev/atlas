@@ -99,7 +99,9 @@ Every other house rule still holds.
 
 ## Copy
 
-- h1: "Atlas reads all 128 Bittensor subnets."
+- h1: "Atlas reads all N Bittensor subnets.", N being the registered
+  subnets in the fleet board (128 until the limit rose to 160 on
+  2026-11-23; it grows by one as each new subnet registers).
 - Under it, one sentence with real figures from the data layer: "Code,
   chain and market, all from one Raspberry Pi. In the last 30 days
   it read {commits30} commits across {repos} repositories."
@@ -164,7 +166,7 @@ Every other house rule still holds.
 
 ## The home page, in order
 
-1. **The flight.** A Three.js field (one `InstancedMesh`): 128 rows in
+1. **The flight.** A Three.js field (one `InstancedMesh`): one row per registered subnet, in
    sediment order (no code at the back as dotted lines, then silent,
    then by 30-day commits, busiest at the front) by 90 days, newest on
    the right. Box height and tone follow `log1p(commits)`; head-tier

@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -11,7 +12,20 @@ with open(os.path.join(SITEDATA, "compose.py"), encoding="utf-8") as handle:
     SOURCE = handle.read()
 
 
+sys.path.insert(0, SITEDATA)
+import compose  # noqa: E402
+
+
 class ComposeTest(unittest.TestCase):
+    def test_netuids_follow_registrations_not_a_fixed_count(self):
+        # A new subnet registers as netuid 129, then 130: each one joins the
+        # list as it appears, root never does, and no count is assumed.
+        slots = [{"netuid": n} for n in (0, 2, 1, 129, 128)]
+        self.assertEqual(compose.registered_netuids(slots), [1, 2, 128, 129])
+        slots.append({"netuid": 130})
+        self.assertEqual(compose.registered_netuids(slots)[-2:], [129, 130])
+        self.assertNotRegex(SOURCE, r"range\(1, 1[2-6]\d\)")
+
     def test_no_age_cutoff(self):
         # The latest stored pass of each input, never an age window
         # (change: subnt-site-honesty).

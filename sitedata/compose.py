@@ -56,6 +56,14 @@ def headlines(commits):
     return (titles + rest)[:3]
 
 
+def registered_netuids(slots):
+    """Every registered subnet, in netuid order. The fleet keeps one slot
+    per netuid and deletes it on deregistration, so the list grows by one
+    as each new subnet registers (the limit is 160 since 2026-11-23, but
+    only registered netuids count). Root (0) has no code to read."""
+    return sorted(slot["netuid"] for slot in slots if slot["netuid"] > 0)
+
+
 def raw():
     """Every raw row the four boards need, as one dict."""
     for sub in ("fleet", "telegram"):
@@ -107,11 +115,7 @@ def raw():
     passes = dict(f.execute("SELECT netuid, MAX(pass_ts) FROM metric_activity "
                             "GROUP BY netuid").fetchall())
     activity = []
-    # Every registered subnet: the fleet keeps one slot per netuid and
-    # deletes it on deregistration. Root (0) has no code to read. The
-    # count follows the chain's subnet limit (160 since 2026-11-23).
-    for nid in sorted(s["netuid"] for s in fleet.all_slots(f)
-                      if s["netuid"] > 0):
+    for nid in registered_netuids(fleet.all_slots(f)):
         ages = None
         if nid in passes:
             try:

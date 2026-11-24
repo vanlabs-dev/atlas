@@ -44,6 +44,16 @@ class GoldenTest(unittest.TestCase):
         self.assertEqual(strict_diff(load("boards.json"),
                                      s.boards(load("raw.json"))), [])
 
+    def test_a_newly_registered_netuid_reaches_the_board(self):
+        # The limit is 160 since 2026-11-23; a netuid above 128 must flow
+        # through to the fleet board like any other.
+        with open(os.path.join(HERE, "golden", "raw.json"),
+                  encoding="utf-8") as handle:
+            raw = json.load(handle)
+        raw["activity"].append({"netuid": 129, "ages": [1.0]})
+        netuids = [a["netuid"] for a in s.boards(raw)["fleet"]["data"]["activity"]]
+        self.assertEqual(netuids[-1], 129)
+
     def test_unlisted_source_field_never_appears(self):
         text = json.dumps(s.boards(load("raw.json")))
         self.assertIn("hotkey_private", json.dumps(load("raw.json")))

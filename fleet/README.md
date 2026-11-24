@@ -25,8 +25,8 @@ repo URL (a re-registration is a different project with a different repo).
 Provenance is **TaoStats-reported chain identity**, not chain-verified.
 
 The automatic source is built and working: a bare `reconcile` pages the
-identity map to completion (the whole ~129-subnet map is one call at
-`limit=200`) and reconciles. `reconcile --identity-file` still drives a
+identity map to completion (the whole map, every registered subnet up to the
+160-subnet limit, is one call at `limit=200`) and reconciles. `reconcile --identity-file` still drives a
 manual/seed pass from a bare list of
 `{netuid, github_repo, owner_ss58, subnet_name}` or a full live-result
 envelope.
