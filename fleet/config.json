@@ -14,8 +14,8 @@
     72,
     168
   ],
-  "update_interval_hours": 6,
-  "stale_multiplier": 3,
+  "update_interval_hours": 1,
+  "stale_multiplier": 18,
   "index": {
     "extensions": [
       ".rs",

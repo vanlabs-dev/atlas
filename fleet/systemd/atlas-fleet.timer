@@ -1,13 +1,15 @@
-# Atlas subnet-repo-fleet timer — every 6h (config update_interval_hours=6),
-# offset to :20 and independent of the hourly repotrack timer so 100+ blobless
-# fetches never crowd the subtensor update window. Staleness: 6h ×
-# stale_multiplier=3 → a slot reads stale after 18h without a successful fetch.
+# Atlas subnet-repo-fleet timer: hourly at :20 (config update_interval_hours=1),
+# offset from the hourly repotrack timer so 100+ blobless fetches never crowd
+# the subtensor update window. Hourly so a newly registered subnet reaches the
+# site within about 2h. A pass takes about 15 min and costs one TaoStats call.
+# Staleness: 1h x stale_multiplier=18 -> a slot reads stale after 18h without a
+# successful fetch.
 [Unit]
 Description=Atlas subnet-repo-fleet reconcile timer
 
 [Timer]
-OnCalendar=*-*-* 00/6:20:00
-RandomizedDelaySec=15m
+OnCalendar=*:20
+RandomizedDelaySec=5m
 Persistent=true
 
 [Install]

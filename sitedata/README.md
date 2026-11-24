@@ -28,7 +28,7 @@ boards still upload in that last case. It never deletes or blanks a
 stored board.
 
 On the Pi, `systemd/atlas-sitedata.timer` runs `publish` hourly at `:25`,
-after the hourly passes and the 6-hourly fleet pass at `:20`. A failed
+after the hourly passes and the hourly fleet pass at `:20`. A failed
 run triggers `atlas-notify-failure@`, the Telegram job-failure alert.
 Install steps are in the unit file.
 

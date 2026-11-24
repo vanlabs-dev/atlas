@@ -156,7 +156,7 @@ every change are in [`openspec/changes/archive/`](openspec/changes/archive/).
 | Timer | When | Does |
 |---|---|---|
 | `atlas-backup` | `*-*-* 03:40:00` | Nightly backup |
-| `atlas-fleet` | Every 6 hours, at :20 | Subnet-repo-fleet reconcile |
+| `atlas-fleet` | Hourly, at :20 | Subnet-repo-fleet reconcile |
 | `atlas-poll-chain-head` | Every hour | Live chain-head poll |
 | `atlas-probe` | Every hour | Chain-read probe |
 | `atlas-repotrack-update` | Every hour | Subtensor repository update |

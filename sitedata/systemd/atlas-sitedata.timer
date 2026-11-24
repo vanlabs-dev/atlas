@@ -1,5 +1,5 @@
 [Unit]
-Description=Atlas site-data publisher timer (hourly at :25, after the hourly passes and the 6-hourly fleet pass at :20)
+Description=Atlas site-data publisher timer (hourly at :25, after the hourly passes and the hourly fleet pass at :20)
 
 [Timer]
 OnCalendar=*:25

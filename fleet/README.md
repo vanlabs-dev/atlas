@@ -372,7 +372,7 @@ momentum needs ≥2 `signal_prices` snapshots, so divergence (the largest
 score driver) lights up over the first days; until then it ranks on
 emission / freshness / abandonment alone, honestly showing `n/a` momentum.
 
-## Scheduling — every 6h, independent of repotrack
+## Scheduling: hourly, independent of repotrack
 
 Unit files in [systemd/](systemd/). They are user-level units, installed
 as `pi` (linger is on):

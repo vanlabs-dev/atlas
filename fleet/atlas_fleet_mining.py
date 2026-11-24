@@ -331,7 +331,7 @@ DEFAULT_MINING_CFG: Dict[str, Any] = {
     # Bound on the excluded list a board view returns.
     "cut_limit": 30,
     # The board warns when its economics are older than this. The fleet pass
-    # runs every 6h; 18h is three missed passes, the fleet staleness rule.
+    # runs hourly; 18h is the fleet staleness rule.
     "stale_after_hours": 18,
     # Feasibility scan surface.
     "min_compute_names": ["min_compute.yml", "min_compute.yaml"],
