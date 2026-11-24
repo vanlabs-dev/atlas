@@ -613,7 +613,7 @@ class TestReport(CombinedBase):
     def test_activity_sources_lists_both_sets_and_repos(self):
         self.sync()
         met.run_activity(self.conn, self.config, pass_ts=NOW)
-        out = met.activity_sources(self.conn, self.config)
+        out = met.activity_sources(self.conn, self.config, now=NOW)
         self.assertEqual(out["mode"], "shadow")
         self.assertEqual(out["changed"], 1)
         row = out["subnets"][0]
@@ -627,7 +627,7 @@ class TestReport(CombinedBase):
 
     def test_report_names_left_out_repos(self):
         met.run_activity(self.conn, self.config, pass_ts=NOW)
-        row = met.activity_sources(self.conn, self.config)["subnets"][0]
+        row = met.activity_sources(self.conn, self.config, now=NOW)["subnets"][0]
         self.assertEqual(row["single_why"], "no-history")
         self.assertEqual(row["left_out"][0]["repo"], "chutesai/sek8s")
 

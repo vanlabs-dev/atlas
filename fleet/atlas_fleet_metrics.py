@@ -1230,7 +1230,8 @@ def _dashboard() -> Any:
 
 
 def activity_sources(connection: sqlite3.Connection,
-                     config: Dict[str, Any]) -> Dict[str, Any]:
+                     config: Dict[str, Any],
+                     now: Optional[str] = None) -> Dict[str, Any]:
     """Shadow report (change: fleet-multi-repo-activity): per subnet, both
     figure sets from its latest pass, the repositories counted with their
     own 30-day counts, why a subnet kept one repository, and repositories
@@ -1239,7 +1240,9 @@ def activity_sources(connection: sqlite3.Connection,
     org.ensure_schema(connection)
     history = org._history_rows(connection)
     listings = org._owner_rows(connection)
-    planned = org.plan(connection, config, _fleet().all_slots(connection))
+    # `now` decides which owner listings are fresh enough; None is the clock.
+    planned = org.plan(connection, config, _fleet().all_slots(connection),
+                       now=now)
     rows = connection.execute(
         "SELECT netuid, pass_ts, c7, c30, a30, days_since, c7_all, c30_all, "
         "a30_all, days_since_all, repos_counted, single_why FROM "
