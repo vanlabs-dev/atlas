@@ -48,15 +48,31 @@ during apply:
   ingestion are **removed**, not disabled. Their tables and rows stay. The
   `root-rotation` promotion item due 2026-11-04 is void.
 
-## Live chain (2026-11-25)
+## Live chain (2026-11-26)
 
-Finney `spec_version` **495**, transaction version 2 (knob and
+Finney `spec_version` **497**, transaction version 2 (knob and
 emission-switch read and chain-read probe both clean at finalized block
-9578564). No knob value changed since the 2026-11-24 read:
+9587117). No knob value changed since the 2026-11-25 read:
 `EmissionBarRank` is explicit at **48** (code default 32),
 `NetworkRateLimit` is **10,800** blocks (1.5 days), `SubnetLimit` is
 explicit at **160** (code default 128), and `SubnetEmissionEnabled` is off
-for netuids **82 and 110**. Spec 495 lets a Null subnet keep up to 2,500
+for netuids **82 and 110**. Spec 497 (with the 496 release it includes)
+changes no chain mechanic: the only runtime source change is the version
+bump, and both release notes state no new calls, storage migrations or
+parameter changes. The rest of the release is off chain: root parameters
+as code under `sudo/` (TOML files of 51 root settings per network,
+read-only export and diff tooling, a countersign verifier; merging a file
+applies nothing) and Python SDK 11.3.7 with pinned multisig approvals. No
+item Atlas reads changed in name, shape, default or meaning. The
+release's `sudo/mainnet.toml`, exported under spec 495, records values
+for settings Atlas does not read that differ from the code defaults the
+corpus quotes: `MaxMechanismCount` 8 (default 2),
+`BasketTradeMaxSlippageBps` 500 (default 200), `BasketMinTradeTao` 0.005
+TAO (default 0.5), `GammaEnabled` and `HashedAccountsEnabled` true
+(default off). The file can carry proposals and is not an Atlas read, so
+the corpus still states the defaults as defaults and asks for a chain
+read; confirming them needs new `livedata/` reads, outside the upgrade
+job's scope. Spec 495 lets a Null subnet keep up to 2,500
 UIDs at any mechanism count (Yuma still bounds max UIDs times mechanisms)
 and caps a Null weight row at 2,500 divided by the mechanism count
 (`TooManyWeightsForNullMechanism`); the global `MaxMechanismCount` stays at
@@ -185,10 +201,10 @@ leaves a delegator's stake on the old hotkey when it cannot follow without
 growing that list (`HotkeySwapStakeRetained`, root credits in
 `HotkeySwapBasketCredits`). EIP-7702 authorization lists are capped at 255
 entries before signature recovery, and EVM nonces survive balance-account
-reaping (`EVM.AccountNonces`). Registration rules at block 9578564:
+reaping (`EVM.AccountNonces`). Registration rules at block 9587117:
 immunity 432,000, lock reduction 28,800, rate limit 10,800, all explicit.
 Still open: `livedata/config.json` describes `SubnetLimit` as "still 128
-at spec 494"; the default is unchanged at 495, but the text needs a
+at spec 494"; the default is unchanged at 497, but the text needs a
 `livedata/` edit. Also still open: the mining screen's miner share
 (`fleet/atlas_fleet_mining.py`) still comes from `SubnetOwnerCut` and
 `OwnerCutEnabled`. That is correct only for subnets still on their seeded

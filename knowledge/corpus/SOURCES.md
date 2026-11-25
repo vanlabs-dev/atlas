@@ -6,14 +6,71 @@ The three grounding files Atlas retrieves from. Machine-readable hashes in
 | field | value |
 |---|---|
 | Source of truth | this directory, `knowledge/corpus/` in `vanlabs-dev/atlas` (the IntoOps copy is closed and never synced from) |
-| Sync date | 2026-11-25 |
-| Coverage date | 2026-11-25 |
-| Grounded at | Finney `spec_version` **495** |
+| Sync date | 2026-11-26 |
+| Coverage date | 2026-11-26 |
+| Grounded at | Finney `spec_version` **497** |
 | Files | `ground-truth.md`, `fact-patterns.md`, `negative-claim-rules.md` |
 
 ## Live facts this snapshot states
 
-Verified 2026-11-25 against Finney RPC by the runtime upgrade job:
+Verified 2026-11-26 against Finney RPC by the runtime upgrade job:
+
+- Spec **497** (transaction version 2). Knobs and the emission-switch map
+  read together at finalized block 9587117
+  (`0x284aebda484b44b79d8256992c694e867a1048abcf1a1cc7be5918c10851e42e`).
+  Chain-read probe clean at the same finalized block 9587117 (no failures:
+  every item Atlas reads keeps its name, shape and default). Source: the
+  subtensor `v497` tag (`24e1fc7b12ea`, `runtime/src/lib.rs`
+  `spec_version: 497`); `spec-497.diff` runs from the 495 release through
+  the 496 release (`a8db66106`, PR #3362) to the 497 release merge
+  (`24e1fc7b1`, PR #3367). Finney moved from 495 to 497.
+- Knob values: none changed since the 2026-11-25 read. `EmissionBarRank`
+  **48** (explicit; code default 32), `EmissionBarQuantile` 0.75 explicit
+  and inert, `EmissionGateExponent` unset (default 3),
+  `BasketConcentrationCap` 7865, `BasketTradingEnabled` true,
+  `MaturityRate` 311622 (explicit), `UnlockRate` unset,
+  `PendingChildKeyCooldown` 7200, `StakeThreshold` 1000 TAO, `CKBurn` 0,
+  `NetworkImmunityPeriod` 432000, `NetworkLockReductionInterval` 28800,
+  `NetworkRateLimit` 10800, `SubnetLimit` **160** (all explicit; the
+  `SubnetLimit` code default is still 128 at spec 497); `MaxChildkeyTake`,
+  `MinChildkeyTake`, `TxChildkeyTakeRateLimit`,
+  `CommitRevealWeightsVersion` and the three claim dust floors unset.
+- `SubnetEmissionEnabled`: 128 keys for 128 subnets, **82 and 110 off**
+  (unchanged).
+- Spec 497 shipped no chain mechanic. The only runtime source change in
+  the diff is `spec_version` 495 to 497 in `runtime/src/lib.rs`
+  (transaction version stays 2); no pallet, precompile, chain-extension or
+  `common/` file is touched. The release notes for 496 and 497 both say
+  the same: no new calls, storage migrations or parameter changes. Every
+  mechanic stated for 495 and earlier is live at 497 as stated below.
+- The rest of the diff is off chain: the `sudo/` root-parameters-as-code
+  tooling (per-network TOML files of 51 root settings, read-only export
+  and diff scripts, a countersign verifier, CI and Discord notices), the
+  Python SDK 11.3.7 and `bittensor-core` 0.1.14 (multisig approvals can
+  pin the call hash, the spec version and the timepoint; snapshots expose
+  `spec_version`), release-train CI and the release pages. Merging a
+  `sudo/` file applies nothing: a change is a proposal until signed and
+  executed on chain.
+- Not live at 497, and not an Atlas read: the values in the release's
+  `sudo/mainnet.toml`. The file is the release's own export of mainnet
+  root settings, taken under spec 495; it prints the effective value
+  (a code default where the key is unset) and a reviewed edit in it is
+  only a proposal. Where the knob read covers a setting the file agrees
+  with it. For settings Atlas does not read it records values that differ
+  from the code defaults the corpus quotes: `MaxMechanismCount` 8
+  (default 2), `BasketTradeMaxSlippageBps` 500 (default 200, with
+  `StrictestEmaAndSpot` kept), `BasketMinTradeTao` 0.005 TAO (the corpus
+  quotes a 0.5 TAO default), `GammaEnabled` true and
+  `HashedAccountsEnabled` true (both default off). None is confirmed by
+  an Atlas chain read, so the corpus still gives the defaults as defaults
+  and requires a chain read for the live values. Reading them needs a
+  `livedata/` change, outside the re-sync's scope.
+- Items Atlas reads whose meaning changed in a way the probe cannot see:
+  none at 497. The 495 note below still applies.
+
+Verified 2026-11-25 against Finney RPC by the runtime upgrade job. The
+knob values above supersede this read (none changed); its mechanics are
+still live at 497:
 
 - Spec **495** (transaction version 2). Knobs and the emission-switch map
   read together at finalized block 9578564
@@ -89,7 +146,7 @@ Verified 2026-11-25 against Finney RPC by the runtime upgrade job:
 
 Verified 2026-11-24 against Finney RPC by the runtime upgrade job. The
 knob values above supersede this read; its mechanics are still live at
-495 except where the 495 section above replaces them:
+497 except where the 495 section above replaces them:
 
 - Spec **494** (transaction version 2). Knobs and the emission-switch map
   read together at finalized block 9573918
@@ -202,7 +259,7 @@ knob values above supersede this read; its mechanics are still live at
 
 Verified 2026-11-11 against Finney RPC by the runtime upgrade job. The
 knob values above supersede this read; its mechanics are still live at
-495 except where the 494 and 495 sections above replace them:
+497 except where the 494 and 495 sections above replace them:
 
 - Spec **490**. Knobs and the emission-switch map read together at
   finalized block 9478248
@@ -262,7 +319,7 @@ knob values above supersede this read; its mechanics are still live at
 
 Verified 2026-11-07 against Finney RPC by the runtime upgrade job. The
 knob values above supersede this read; its mechanics are still live at
-495 except where the 490, 494 and 495 sections above replace them:
+497 except where the 490, 494 and 495 sections above replace them:
 
 - Spec **488**. Knobs and the emission-switch map read together at
   finalized block 9451247
@@ -355,8 +412,8 @@ Verified 2026-11-05 against Finney RPC, workstation reads (audit WP13):
 
 Verified 2026-10-27 against Finney RPC (`https://entrypoint-finney.opentensor.ai`).
 The knob values above supersede this read; the mechanics below are still
-live at 495 (the 488, 490, 494 and 495 diffs leave them as stated unless
-noted above):
+live at 497 (the 488, 490, 494, 495 and 497 diffs leave them as stated
+unless noted above):
 
 - Spec **486**. Knobs, emission-switch map, dust-floor storage and the
   subnet registration rules read together at finalized block 9369802
@@ -471,7 +528,7 @@ noted above):
   - Resolved outside the corpus: `livedata/atlas_live.py`
     `SUBNET_PARAM_DEFAULTS` now records an absent `SubnetEmissionEnabled`
     key as `true`, matching the runtime's `DefaultTrue` (unchanged at
-    495). Every live subnet has an explicit key (128 of 128).
+    497). Every live subnet has an explicit key (128 of 128).
 - Carried from spec 482 and still live (not touched by the 483, 484 or
   486 diffs):
   - Yuma miner payouts apportion the accumulated miner budget in full by
@@ -596,14 +653,14 @@ noted above):
   the TAO paid; EIP-2537 BLS12-381 precompiles at `0x0b` to `0x11`;
   `StakingHotkeys` entries are kept until a pair's last alpha key and
   basket watermark are gone (`migrate_cleanup_staking_hotkeys_v3`).
-- `SubnetLimit` is **160** (explicit) at finalized block 9578564; root
+- `SubnetLimit` is **160** (explicit) at finalized block 9587117; root
   set it from 128 by sudo at block 9570424 (2026-11-23), and the code
   default is 128.
 - Emission bar is **rank-pinned**: `EmissionBarRank` explicit at **48**
   (code default 32), `EmissionBarQuantile` 0.75 explicit and inert,
-  `EmissionGateExponent` unset (default 3), at finalized block 9578564.
+  `EmissionGateExponent` unset (default 3), at finalized block 9587117.
 - `SubnetEmissionEnabled` is live. 128 keys for 128 subnets at finalized
-  block 9578564; **82 and 110 off** (103 on).
+  block 9587117; **82 and 110 off** (103 on).
 - `set_root_weights` is **retired** (`migrate_remove_root_weights`, spec
   469): `Weights[ROOT]` cleared, `RootWeightSettingEnabled` and
   `RootWeightsCap` removed. Dividends accumulate in place.
@@ -625,7 +682,7 @@ noted above):
   items are gone from metadata (`migrate_alpha_v2_and_unstake_dust_v1`);
   stake shares live in `AlphaV2` / `TotalHotkeySharesV2`, the only items
   the runtime reads since 490.
-- Subnet registration rules at finalized block 9578564:
+- Subnet registration rules at finalized block 9587117:
   `NetworkImmunityPeriod` **432,000** (60 days),
   `NetworkLockReductionInterval` **28,800** (4 days), `NetworkRateLimit`
   **10,800** (1.5 days), all explicit. Root set the first two on
@@ -636,16 +693,14 @@ noted above):
   2026-11-24 reads. `NetworkMinLockCost` (1 TAO) and
   `NetworkLastLockCost` (884.38 TAO) are not in the knob read; those values
   are from a one-off read at finalized block 9,278,789 on 2026-10-14.
-- Claim dust floors are unset on chain at finalized block 9578564. Code
+- Claim dust floors are unset on chain at finalized block 9587117. Code
   defaults apply: row floor min(1 TAO, 10 bps of anchored NAV); slice
   floor 0.0001 TAO. Cash-first claims are not live.
 
 [../supersession-markers.json](../supersession-markers.json) is empty,
-reviewed at the spec 495 re-sync: every claim the 495 diff made stale
-(the Null 2,500-UID cap shared across mechanisms, a subnet owner's
-emission-funded gamma deposit opening paused with cap 0, the 130-unit
-`claim_root_with_hotkey` budget) was rewritten in place. The knob read
-changed no value. Add a marker if a
+reviewed at the spec 497 re-sync: the 497 diff changes no chain mechanic
+and the knob read changed no value, so no corpus claim went stale and no
+marker is needed. Add a marker if a
 corpus claim goes stale before the next re-sync.
 
 ## Re-sync procedure
