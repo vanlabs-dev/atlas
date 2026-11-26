@@ -1,0 +1,6059 @@
+{
+ "AdminUtils": {
+  "calls": [
+   {
+    "args": [
+     [
+      "new_authorities",
+      "BoundedVec<Public>"
+     ]
+    ],
+    "name": "swap_authorities"
+   },
+   {
+    "args": [
+     [
+      "default_take",
+      "PerU16"
+     ]
+    ],
+    "name": "sudo_set_default_take"
+   },
+   {
+    "args": [
+     [
+      "tx_rate_limit",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_tx_rate_limit"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "serving_rate_limit",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_serving_rate_limit"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "min_difficulty",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_min_difficulty"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "max_difficulty",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_max_difficulty"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "weights_version_key",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_weights_version_key"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "weights_set_rate_limit",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_weights_set_rate_limit"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "adjustment_interval",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_adjustment_interval"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "adjustment_alpha",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_adjustment_alpha"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "immunity_period",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_immunity_period"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "min_allowed_weights",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_min_allowed_weights"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "max_allowed_uids",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_max_allowed_uids"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "kappa",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_kappa"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "rho",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_rho"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "activity_cutoff",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_activity_cutoff"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "registration_allowed",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_network_registration_allowed"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "registration_allowed",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_network_pow_registration_allowed"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "target_registrations_per_interval",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_target_registrations_per_interval"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "min_burn",
+      "TaoBalance"
+     ]
+    ],
+    "name": "sudo_set_min_burn"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "max_burn",
+      "TaoBalance"
+     ]
+    ],
+    "name": "sudo_set_max_burn"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "difficulty",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_difficulty"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "max_allowed_validators",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_max_allowed_validators"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "bonds_moving_average",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_bonds_moving_average"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "max_registrations_per_block",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_max_registrations_per_block"
+   },
+   {
+    "args": [
+     [
+      "subnet_owner_cut",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_subnet_owner_cut"
+   },
+   {
+    "args": [
+     [
+      "rate_limit",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_network_rate_limit"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "tempo",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_tempo"
+   },
+   {
+    "args": [
+     [
+      "total_issuance",
+      "TaoBalance"
+     ]
+    ],
+    "name": "sudo_set_total_issuance"
+   },
+   {
+    "args": [
+     [
+      "immunity_period",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_network_immunity_period"
+   },
+   {
+    "args": [
+     [
+      "lock_cost",
+      "TaoBalance"
+     ]
+    ],
+    "name": "sudo_set_network_min_lock_cost"
+   },
+   {
+    "args": [
+     [
+      "max_subnets",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_subnet_limit"
+   },
+   {
+    "args": [
+     [
+      "interval",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_lock_reduction_interval"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "rao_recycled",
+      "TaoBalance"
+     ]
+    ],
+    "name": "sudo_set_rao_recycled"
+   },
+   {
+    "args": [
+     [
+      "min_stake",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_stake_threshold"
+   },
+   {
+    "args": [
+     [
+      "min_stake",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_nominator_min_required_stake"
+   },
+   {
+    "args": [
+     [
+      "tx_rate_limit",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_tx_delegate_take_rate_limit"
+   },
+   {
+    "args": [
+     [
+      "take",
+      "PerU16"
+     ]
+    ],
+    "name": "sudo_set_min_delegate_take"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_commit_reveal_weights_enabled"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_liquid_alpha_enabled"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "alpha_low",
+      "u16"
+     ],
+     [
+      "alpha_high",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_alpha_values"
+   },
+   {
+    "args": [
+     [
+      "duration",
+      "u32"
+     ]
+    ],
+    "name": "sudo_set_dissolve_network_schedule_duration"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "interval",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_commit_reveal_weights_interval"
+   },
+   {
+    "args": [
+     [
+      "chain_id",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_evm_chain_id"
+   },
+   {
+    "args": [
+     [
+      "next_authorities",
+      "Vec<(Public, u64)>"
+     ],
+     [
+      "in_blocks",
+      "u32"
+     ],
+     [
+      "forced",
+      "Option<u32>"
+     ]
+    ],
+    "name": "schedule_grandpa_change"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "bonds_penalty",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_bonds_penalty"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "toggle",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_toggle_transfer"
+   },
+   {
+    "args": [
+     [
+      "precompile_id",
+      "PrecompileEnum"
+     ],
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_toggle_evm_precompile"
+   },
+   {
+    "args": [
+     [
+      "alpha",
+      "FixedI128<U32>"
+     ]
+    ],
+    "name": "sudo_set_subnet_moving_alpha"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "ema_halving",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_ema_price_halving_period"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "subtoken_enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_subtoken_enabled"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "sudo_set_sn_owner_hotkey"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "steepness",
+      "i16"
+     ]
+    ],
+    "name": "sudo_set_alpha_sigmoid_steepness"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_yuma3_enabled"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_bonds_reset_enabled"
+   },
+   {
+    "args": [
+     [
+      "version",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_commit_reveal_version"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "immune_neurons",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_owner_immune_neuron_limit"
+   },
+   {
+    "args": [
+     [
+      "burn",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_ck_burn"
+   },
+   {
+    "args": [
+     [
+      "window",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_admin_freeze_window"
+   },
+   {
+    "args": [
+     [
+      "epochs",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_owner_hparam_rate_limit"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mechanism_count",
+      "MechId"
+     ]
+    ],
+    "name": "sudo_set_mechanism_count"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "maybe_split",
+      "Option<Vec<u16>>"
+     ]
+    ],
+    "name": "sudo_set_mechanism_emission_split"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "max_n",
+      "u16"
+     ]
+    ],
+    "name": "sudo_trim_to_max_allowed_uids"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "min_allowed_uids",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_min_allowed_uids"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "recycle_or_burn",
+      "RecycleOrBurnEnum"
+     ]
+    ],
+    "name": "sudo_set_recycle_or_burn"
+   },
+   {
+    "args": [
+     [
+      "flow_cutoff",
+      "FixedI128<U64>"
+     ]
+    ],
+    "name": "sudo_set_tao_flow_cutoff"
+   },
+   {
+    "args": [
+     [
+      "exponent",
+      "FixedU128<U64>"
+     ]
+    ],
+    "name": "sudo_set_tao_flow_normalization_exponent"
+   },
+   {
+    "args": [
+     [
+      "smoothing_factor",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_tao_flow_smoothing_factor"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "min",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_min_non_immune_uids"
+   },
+   {
+    "args": [
+     [
+      "delay",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_start_call_delay"
+   },
+   {
+    "args": [
+     [
+      "duration",
+      "u32"
+     ]
+    ],
+    "name": "sudo_set_coldkey_swap_announcement_delay"
+   },
+   {
+    "args": [
+     [
+      "duration",
+      "u32"
+     ]
+    ],
+    "name": "sudo_set_coldkey_swap_reannouncement_delay"
+   },
+   {
+    "args": [
+     [
+      "max_mechanism_count",
+      "MechId"
+     ]
+    ],
+    "name": "sudo_set_max_mechanism_count"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "burn_half_life",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_burn_half_life"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "burn_increase_mult",
+      "FixedU128<U64>"
+     ]
+    ],
+    "name": "sudo_set_burn_increase_mult"
+   },
+   {
+    "args": [
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_net_tao_flow_enabled"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_owner_cut_enabled"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "take",
+      "PerU16"
+     ]
+    ],
+    "name": "sudo_set_min_childkey_take_per_subnet"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_subnet_emission_enabled"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_owner_cut_auto_lock_enabled"
+   },
+   {
+    "args": [
+     [
+      "max_epochs_per_block",
+      "u8"
+     ]
+    ],
+    "name": "sudo_set_max_epochs_per_block"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "factor_milli",
+      "u32"
+     ]
+    ],
+    "name": "sudo_set_activity_cutoff_factor"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "lock_share",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_collateral_lock_share"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "drain_ratio",
+      "FixedU128<U64>"
+     ]
+    ],
+    "name": "sudo_set_collateral_drain_ratio"
+   },
+   {
+    "args": [
+     [
+      "quantile",
+      "FixedU128<U64>"
+     ]
+    ],
+    "name": "sudo_set_emission_bar_quantile"
+   },
+   {
+    "args": [
+     [
+      "exponent",
+      "FixedU128<U64>"
+     ]
+    ],
+    "name": "sudo_set_emission_gate_exponent"
+   },
+   {
+    "args": [
+     [
+      "rank",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_emission_bar_rank"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mode",
+      "ConsensusMode"
+     ]
+    ],
+    "name": "sudo_set_liquid_alpha_consensus_mode"
+   },
+   {
+    "args": [
+     [
+      "cap",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_basket_concentration_cap"
+   },
+   {
+    "args": [
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_basket_trading_enabled"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "frozen",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_basket_trading_frozen"
+   },
+   {
+    "args": [
+     [
+      "cap",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_basket_daily_turnover_cap"
+   },
+   {
+    "args": [
+     [
+      "cap",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_basket_liquidity_cap"
+   },
+   {
+    "args": [
+     [
+      "row_cap_rao",
+      "u64"
+     ],
+     [
+      "row_bps",
+      "u16"
+     ],
+     [
+      "slice_rao",
+      "u64"
+     ],
+     [
+      "forfeit_cap_rao",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_basket_claim_dust"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mode",
+      "EpochConsensus"
+     ]
+    ],
+    "name": "sudo_set_epoch_consensus"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "target",
+      "u16"
+     ]
+    ],
+    "name": "sudo_trim_null_uids_batch"
+   },
+   {
+    "args": [
+     [
+      "min_trade_rao",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_basket_min_trade_tao"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "uids",
+      "Vec<u16>"
+     ],
+     [
+      "values",
+      "Vec<u64>"
+     ]
+    ],
+    "name": "sudo_set_subnet_emission_weights"
+   },
+   {
+    "args": [
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_hashed_accounts_enabled"
+   },
+   {
+    "args": [
+     [
+      "oracle",
+      "Option<AccountId32>"
+     ]
+    ],
+    "name": "sudo_set_tao_usd_price_oracle"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_subnet_gamma_enabled"
+   },
+   {
+    "args": [
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_gamma_enabled"
+   },
+   {
+    "args": [
+     [
+      "value",
+      "TaoBalance"
+     ]
+    ],
+    "name": "sudo_set_hashed_account_registration_deposit"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "split",
+      "BoundedVec<(EmissionSlot, u64)>"
+     ]
+    ],
+    "name": "sudo_set_subnet_emission_weights_v2"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "whitelisted",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_subnet_gamma_emission_whitelisted"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "max_commits",
+      "u8"
+     ]
+    ],
+    "name": "sudo_set_max_timelocked_commits_per_hotkey"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "channel",
+      "u8"
+     ],
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "sudo_set_commit_burn_enabled"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "channel",
+      "u8"
+     ],
+     [
+      "value",
+      "TaoBalance"
+     ]
+    ],
+    "name": "sudo_set_commit_burn_min"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "channel",
+      "u8"
+     ],
+     [
+      "value",
+      "TaoBalance"
+     ]
+    ],
+    "name": "sudo_set_commit_burn_max"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "channel",
+      "u8"
+     ],
+     [
+      "value",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_commit_burn_half_life"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "channel",
+      "u8"
+     ],
+     [
+      "value",
+      "FixedU128<U64>"
+     ]
+    ],
+    "name": "sudo_set_commit_burn_increase_mult"
+   },
+   {
+    "args": [
+     [
+      "bps",
+      "u16"
+     ]
+    ],
+    "name": "sudo_set_basket_trade_max_slippage_bps"
+   },
+   {
+    "args": [
+     [
+      "blocks",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_basket_trade_refill_blocks"
+   },
+   {
+    "args": [
+     [
+      "reference",
+      "BasketTradePriceReference"
+     ]
+    ],
+    "name": "sudo_set_basket_trade_price_reference"
+   },
+   {
+    "args": [
+     [
+      "rate_limit",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_subnet_emission_weights_rate_limit"
+   }
+  ],
+  "storage": {
+   "HashedAccountsEnabled": {
+    "default": false,
+    "kind": "value",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "PrecompileEnable": {
+    "default": true,
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "PrecompileEnum",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   }
+  }
+ },
+ "SubtensorModule": {
+  "calls": [
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "dests",
+      "Vec<u16>"
+     ],
+     [
+      "weights",
+      "Vec<u16>"
+     ],
+     [
+      "version_key",
+      "u64"
+     ]
+    ],
+    "name": "set_weights"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "amount_staked",
+      "TaoBalance"
+     ]
+    ],
+    "name": "add_stake"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "amount_unstaked",
+      "AlphaBalance"
+     ]
+    ],
+    "name": "remove_stake"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "version",
+      "u32"
+     ],
+     [
+      "ip",
+      "u128"
+     ],
+     [
+      "port",
+      "u16"
+     ],
+     [
+      "ip_type",
+      "u8"
+     ],
+     [
+      "protocol",
+      "u8"
+     ],
+     [
+      "placeholder1",
+      "u8"
+     ],
+     [
+      "placeholder2",
+      "u8"
+     ]
+    ],
+    "name": "serve_axon"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "version",
+      "u32"
+     ],
+     [
+      "ip",
+      "u128"
+     ],
+     [
+      "port",
+      "u16"
+     ],
+     [
+      "ip_type",
+      "u8"
+     ]
+    ],
+    "name": "serve_prometheus"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "block_number",
+      "u64"
+     ],
+     [
+      "nonce",
+      "u64"
+     ],
+     [
+      "work",
+      "Vec<u8>"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "coldkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "register"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "burned_register"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "version",
+      "u32"
+     ],
+     [
+      "ip",
+      "u128"
+     ],
+     [
+      "port",
+      "u16"
+     ],
+     [
+      "ip_type",
+      "u8"
+     ],
+     [
+      "protocol",
+      "u8"
+     ],
+     [
+      "placeholder1",
+      "u8"
+     ],
+     [
+      "placeholder2",
+      "u8"
+     ],
+     [
+      "certificate",
+      "Vec<u8>"
+     ]
+    ],
+    "name": "serve_axon_tls"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "register_network"
+   },
+   {
+    "args": [
+     [
+      "coldkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ]
+    ],
+    "name": "dissolve_network"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "root_register"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "take",
+      "PerU16"
+     ]
+    ],
+    "name": "decrease_take"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "take",
+      "PerU16"
+     ]
+    ],
+    "name": "increase_take"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "children",
+      "Vec<(u64, AccountId32)>"
+     ]
+    ],
+    "name": "set_children"
+   },
+   {
+    "args": [
+     [
+      "name",
+      "Vec<u8>"
+     ],
+     [
+      "url",
+      "Vec<u8>"
+     ],
+     [
+      "github_repo",
+      "Vec<u8>"
+     ],
+     [
+      "image",
+      "Vec<u8>"
+     ],
+     [
+      "discord",
+      "Vec<u8>"
+     ],
+     [
+      "description",
+      "Vec<u8>"
+     ],
+     [
+      "additional",
+      "Vec<u8>"
+     ]
+    ],
+    "name": "set_identity"
+   },
+   {
+    "args": [
+     [
+      "tx_rate_limit",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_tx_childkey_take_rate_limit"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "new_hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "Option<NetUid>"
+     ]
+    ],
+    "name": "swap_hotkey"
+   },
+   {
+    "args": [
+     [
+      "old_coldkey",
+      "AccountId32"
+     ],
+     [
+      "new_coldkey",
+      "AccountId32"
+     ],
+     [
+      "swap_cost",
+      "TaoBalance"
+     ]
+    ],
+    "name": "swap_coldkey"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "new_hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "Option<NetUid>"
+     ],
+     [
+      "keep_stake",
+      "bool"
+     ]
+    ],
+    "name": "swap_hotkey_v2"
+   },
+   {
+    "args": [
+     [
+      "new_coldkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "schedule_swap_coldkey"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "take",
+      "PerU16"
+     ]
+    ],
+    "name": "set_childkey_take"
+   },
+   {
+    "args": [
+     [
+      "take",
+      "PerU16"
+     ]
+    ],
+    "name": "sudo_set_min_childkey_take"
+   },
+   {
+    "args": [
+     [
+      "take",
+      "PerU16"
+     ]
+    ],
+    "name": "sudo_set_max_childkey_take"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "subnet_name",
+      "Vec<u8>"
+     ],
+     [
+      "github_repo",
+      "Vec<u8>"
+     ],
+     [
+      "subnet_contact",
+      "Vec<u8>"
+     ],
+     [
+      "subnet_url",
+      "Vec<u8>"
+     ],
+     [
+      "discord",
+      "Vec<u8>"
+     ],
+     [
+      "description",
+      "Vec<u8>"
+     ],
+     [
+      "logo_url",
+      "Vec<u8>"
+     ],
+     [
+      "additional",
+      "Vec<u8>"
+     ]
+    ],
+    "name": "set_subnet_identity"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "identity",
+      "Option<SubnetIdentityV3>"
+     ]
+    ],
+    "name": "register_network_with_identity"
+   },
+   {
+    "args": [
+     [
+      "netuids",
+      "Vec<Compact<NetUid>>"
+     ],
+     [
+      "weights",
+      "Vec<Vec<(Compact<u16>, Compact<u16>)>>"
+     ],
+     [
+      "version_keys",
+      "Vec<Compact<u64>>"
+     ]
+    ],
+    "name": "batch_set_weights"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "unstake_all"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "unstake_all_alpha"
+   },
+   {
+    "args": [
+     [
+      "origin_hotkey",
+      "AccountId32"
+     ],
+     [
+      "destination_hotkey",
+      "AccountId32"
+     ],
+     [
+      "origin_netuid",
+      "NetUid"
+     ],
+     [
+      "destination_netuid",
+      "NetUid"
+     ],
+     [
+      "alpha_amount",
+      "AlphaBalance"
+     ]
+    ],
+    "name": "move_stake"
+   },
+   {
+    "args": [
+     [
+      "destination_coldkey",
+      "AccountId32"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "origin_netuid",
+      "NetUid"
+     ],
+     [
+      "destination_netuid",
+      "NetUid"
+     ],
+     [
+      "alpha_amount",
+      "AlphaBalance"
+     ]
+    ],
+    "name": "transfer_stake"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "origin_netuid",
+      "NetUid"
+     ],
+     [
+      "destination_netuid",
+      "NetUid"
+     ],
+     [
+      "alpha_amount",
+      "AlphaBalance"
+     ]
+    ],
+    "name": "swap_stake"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "amount_staked",
+      "TaoBalance"
+     ],
+     [
+      "limit_price",
+      "TaoBalance"
+     ],
+     [
+      "allow_partial",
+      "bool"
+     ]
+    ],
+    "name": "add_stake_limit"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "amount_unstaked",
+      "AlphaBalance"
+     ],
+     [
+      "limit_price",
+      "TaoBalance"
+     ],
+     [
+      "allow_partial",
+      "bool"
+     ]
+    ],
+    "name": "remove_stake_limit"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "origin_netuid",
+      "NetUid"
+     ],
+     [
+      "destination_netuid",
+      "NetUid"
+     ],
+     [
+      "alpha_amount",
+      "AlphaBalance"
+     ],
+     [
+      "limit_price",
+      "TaoBalance"
+     ],
+     [
+      "allow_partial",
+      "bool"
+     ]
+    ],
+    "name": "swap_stake_limit"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "try_associate_hotkey"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ]
+    ],
+    "name": "start_call"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "evm_key",
+      "H160"
+     ],
+     [
+      "block_number",
+      "u64"
+     ],
+     [
+      "signature",
+      "[u8; 65]"
+     ]
+    ],
+    "name": "associate_evm_key"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "commit_hash",
+      "H256"
+     ]
+    ],
+    "name": "commit_weights"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "uids",
+      "Vec<u16>"
+     ],
+     [
+      "values",
+      "Vec<u16>"
+     ],
+     [
+      "salt",
+      "Vec<u16>"
+     ],
+     [
+      "version_key",
+      "u64"
+     ]
+    ],
+    "name": "reveal_weights"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "uids_list",
+      "Vec<Vec<u16>>"
+     ],
+     [
+      "values_list",
+      "Vec<Vec<u16>>"
+     ],
+     [
+      "salts_list",
+      "Vec<Vec<u16>>"
+     ],
+     [
+      "version_keys",
+      "Vec<u64>"
+     ]
+    ],
+    "name": "batch_reveal_weights"
+   },
+   {
+    "args": [
+     [
+      "netuids",
+      "Vec<Compact<NetUid>>"
+     ],
+     [
+      "commit_hashes",
+      "Vec<H256>"
+     ]
+    ],
+    "name": "batch_commit_weights"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "amount",
+      "AlphaBalance"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ]
+    ],
+    "name": "recycle_alpha"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "amount",
+      "AlphaBalance"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ]
+    ],
+    "name": "burn_alpha"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "limit_price",
+      "Option<TaoBalance>"
+     ]
+    ],
+    "name": "remove_stake_full_limit"
+   },
+   {
+    "args": [
+     [
+      "cooldown",
+      "u64"
+     ]
+    ],
+    "name": "set_pending_childkey_cooldown"
+   },
+   {
+    "args": [
+     [
+      "emissions_share",
+      "Percent"
+     ],
+     [
+      "end_block",
+      "Option<u32>"
+     ]
+    ],
+    "name": "register_leased_network"
+   },
+   {
+    "args": [
+     [
+      "lease_id",
+      "u32"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "terminate_lease"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "symbol",
+      "Vec<u8>"
+     ]
+    ],
+    "name": "update_symbol"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "commit",
+      "BoundedVec<u8>"
+     ],
+     [
+      "reveal_round",
+      "u64"
+     ],
+     [
+      "commit_reveal_version",
+      "u16"
+     ]
+    ],
+    "name": "commit_timelocked_weights"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "set_coldkey_auto_stake_hotkey"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "commit_hash",
+      "H256"
+     ]
+    ],
+    "name": "commit_mechanism_weights"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "uids",
+      "Vec<u16>"
+     ],
+     [
+      "values",
+      "Vec<u16>"
+     ],
+     [
+      "salt",
+      "Vec<u16>"
+     ],
+     [
+      "version_key",
+      "u64"
+     ]
+    ],
+    "name": "reveal_mechanism_weights"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "commit",
+      "BoundedVec<u8>"
+     ],
+     [
+      "reveal_round",
+      "u64"
+     ]
+    ],
+    "name": "commit_crv3_mechanism_weights"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "commit",
+      "BoundedVec<u8>"
+     ],
+     [
+      "reveal_round",
+      "u64"
+     ],
+     [
+      "commit_reveal_version",
+      "u16"
+     ]
+    ],
+    "name": "commit_timelocked_mechanism_weights"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "dests",
+      "Vec<u16>"
+     ],
+     [
+      "weights",
+      "Vec<u16>"
+     ],
+     [
+      "version_key",
+      "u64"
+     ]
+    ],
+    "name": "set_mechanism_weights"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ]
+    ],
+    "name": "root_dissolve_network"
+   },
+   {
+    "args": [
+     [
+      "subnets",
+      "BTreeSet<NetUid>"
+     ]
+    ],
+    "name": "claim_root"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "new_value",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_root_claim_threshold"
+   },
+   {
+    "args": [
+     [
+      "new_coldkey_hash",
+      "H256"
+     ]
+    ],
+    "name": "announce_coldkey_swap"
+   },
+   {
+    "args": [
+     [
+      "new_coldkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "swap_coldkey_announced"
+   },
+   {
+    "args": [],
+    "name": "dispute_coldkey_swap"
+   },
+   {
+    "args": [
+     [
+      "coldkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "reset_coldkey_swap"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ]
+    ],
+    "name": "enable_voting_power_tracking"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ]
+    ],
+    "name": "disable_voting_power_tracking"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "alpha",
+      "u64"
+     ]
+    ],
+    "name": "sudo_set_voting_power_ema_alpha"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "amount",
+      "TaoBalance"
+     ],
+     [
+      "limit",
+      "Option<TaoBalance>"
+     ]
+    ],
+    "name": "add_stake_burn"
+   },
+   {
+    "args": [],
+    "name": "clear_coldkey_swap_announcement"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "limit_price",
+      "u64"
+     ]
+    ],
+    "name": "register_limit"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "set_auto_parent_delegation_enabled"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "amount",
+      "AlphaBalance"
+     ]
+    ],
+    "name": "lock_stake"
+   },
+   {
+    "args": [
+     [
+      "destination_hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ]
+    ],
+    "name": "move_lock"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "set_perpetual_lock"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "tempo",
+      "u16"
+     ]
+    ],
+    "name": "set_tempo"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "factor_milli",
+      "u32"
+     ]
+    ],
+    "name": "set_activity_cutoff_factor"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ]
+    ],
+    "name": "trigger_epoch"
+   },
+   {
+    "args": [
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "set_reject_locked_alpha"
+   },
+   {
+    "args": [
+     [
+      "destination_coldkey",
+      "AccountId32"
+     ],
+     [
+      "origin_hotkey",
+      "AccountId32"
+     ],
+     [
+      "destination_hotkey",
+      "AccountId32"
+     ],
+     [
+      "origin_netuid",
+      "NetUid"
+     ],
+     [
+      "destination_netuid",
+      "NetUid"
+     ],
+     [
+      "alpha_amount",
+      "AlphaBalance"
+     ]
+    ],
+    "name": "transfer_stake_and_hotkey"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "alpha",
+      "AlphaBalance"
+     ],
+     [
+      "limit_price",
+      "TaoBalance"
+     ]
+    ],
+    "name": "add_collateral"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "min_locked",
+      "AlphaBalance"
+     ]
+    ],
+    "name": "set_min_collateral"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "amount_staked",
+      "TaoBalance"
+     ]
+    ],
+    "name": "stake_into_basket"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "claim_root_with_hotkey"
+   },
+   {
+    "args": [
+     [
+      "origin_hotkey",
+      "AccountId32"
+     ],
+     [
+      "destination_hotkey",
+      "AccountId32"
+     ],
+     [
+      "origin_netuid",
+      "NetUid"
+     ],
+     [
+      "destination_netuid",
+      "NetUid"
+     ],
+     [
+      "alpha_amount",
+      "AlphaBalance"
+     ],
+     [
+      "limit_price",
+      "TaoBalance"
+     ],
+     [
+      "allow_partial",
+      "bool"
+     ]
+    ],
+    "name": "move_stake_limit"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "origin_netuid",
+      "NetUid"
+     ],
+     [
+      "destination_netuid",
+      "NetUid"
+     ],
+     [
+      "amount",
+      "AlphaBalance"
+     ],
+     [
+      "min_amount_out",
+      "u64"
+     ]
+    ],
+    "name": "swap_basket"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "legs",
+      "BoundedVec<(NetUid, NetUid, AlphaBalance, u64)>"
+     ]
+    ],
+    "name": "swap_basket_many"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "work_block",
+      "u64"
+     ],
+     [
+      "nonce",
+      "u64"
+     ],
+     [
+      "work",
+      "[u8; 32]"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "pow_register"
+   },
+   {
+    "args": [
+     [
+      "enabled",
+      "bool"
+     ]
+    ],
+    "name": "set_reject_staking_hotkey_growth"
+   },
+   {
+    "args": [],
+    "name": "release_own_coldkey_swap_destination_reservation"
+   },
+   {
+    "args": [
+     [
+      "new_coldkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "announce_coldkey_swap_v2"
+   },
+   {
+    "args": [
+     [
+      "coldkey",
+      "AccountId32"
+     ]
+    ],
+    "name": "reset_coldkey_swap_keep_locked"
+   },
+   {
+    "args": [
+     [
+      "price",
+      "u64"
+     ]
+    ],
+    "name": "feed_tao_usd_price"
+   },
+   {
+    "args": [
+     [
+      "origin_hotkey",
+      "AccountId32"
+     ],
+     [
+      "destination_hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "amount",
+      "GammaBalance"
+     ]
+    ],
+    "name": "move_gamma"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ]
+    ],
+    "name": "close_gamma_deposit"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "daily_spend_cap",
+      "Option<GammaBalance>"
+     ]
+    ],
+    "name": "set_gamma_deposit_daily_spend_cap"
+   },
+   {
+    "args": [
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "amount",
+      "TaoBalance"
+     ],
+     [
+      "min_amount_out",
+      "GammaBalance"
+     ],
+     [
+      "daily_spend_cap",
+      "Option<GammaBalance>"
+     ]
+    ],
+    "name": "mint_gamma"
+   },
+   {
+    "args": [
+     [
+      "origin_hotkey",
+      "AccountId32"
+     ],
+     [
+      "destination_hotkey",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "alpha_amount",
+      "AlphaBalance"
+     ],
+     [
+      "min_amount_out",
+      "GammaBalance"
+     ],
+     [
+      "daily_spend_cap",
+      "Option<GammaBalance>"
+     ]
+    ],
+    "name": "mint_gamma_with_stake"
+   },
+   {
+    "args": [
+     [
+      "service",
+      "AccountId32"
+     ],
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "amount",
+      "GammaBalance"
+     ]
+    ],
+    "name": "spend_gamma"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "url",
+      "BoundedVec<u8>"
+     ]
+    ],
+    "name": "set_service"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "delegate",
+      "Option<AccountId32>"
+     ]
+    ],
+    "name": "set_mech_weight_delegate"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "dests",
+      "Vec<u16>"
+     ],
+     [
+      "weights",
+      "Vec<u16>"
+     ],
+     [
+      "version_key",
+      "u64"
+     ]
+    ],
+    "name": "set_mechanism_weights_for"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "commit_hash",
+      "H256"
+     ]
+    ],
+    "name": "commit_mechanism_weights_for"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "uids",
+      "Vec<u16>"
+     ],
+     [
+      "values",
+      "Vec<u16>"
+     ],
+     [
+      "salt",
+      "Vec<u16>"
+     ],
+     [
+      "version_key",
+      "u64"
+     ]
+    ],
+    "name": "reveal_mechanism_weights_for"
+   },
+   {
+    "args": [
+     [
+      "netuid",
+      "NetUid"
+     ],
+     [
+      "mecid",
+      "MechId"
+     ],
+     [
+      "hotkey",
+      "AccountId32"
+     ],
+     [
+      "commit",
+      "BoundedVec<u8>"
+     ],
+     [
+      "reveal_round",
+      "u64"
+     ],
+     [
+      "commit_reveal_version",
+      "u16"
+     ]
+    ],
+    "name": "commit_timelocked_mechanism_weights_for"
+   }
+  ],
+  "storage": {
+   "AccountFlags": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u128"
+   },
+   "AccumulatedLeaseDividends": {
+    "default": 0,
+    "hashers": [
+     "twox64concat"
+    ],
+    "key": "u32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "Active": {
+    "default": [],
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<bool>"
+   },
+   "ActivityCutoff": {
+    "default": 5000,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "ActivityCutoffFactorMilli": {
+    "default": 13889,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u32"
+   },
+   "AdjustmentAlpha": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "AdjustmentInterval": {
+    "default": 100,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "AdminFreezeWindow": {
+    "default": 10,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "AlphaDividendsPerSubnet": {
+    "default": 0,
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "AlphaShareEpoch": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat",
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "AlphaSharePoolEpoch": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "AlphaSigmoidSteepness": {
+    "default": 1000,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "i16"
+   },
+   "AlphaV2": {
+    "default": {
+     "exponent": 0,
+     "mantissa": 0
+    },
+    "hashers": [
+     "blake2_128concat",
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "SafeFloat"
+   },
+   "AlphaV2MapLastKey": {
+    "default": null,
+    "kind": "value",
+    "modifier": "default",
+    "value": "Option<Vec<u8>>"
+   },
+   "AlphaValues": {
+    "default": [
+     45875,
+     58982
+    ],
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "(u16, u16)"
+   },
+   "AssociatedEvmAddress": {
+    "hashers": [
+     "twox64concat",
+     "twox64concat"
+    ],
+    "key": "(NetUid, u16)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "(H160, u64)"
+   },
+   "AssociatedUidsByEvmAddress": {
+    "default": [],
+    "hashers": [
+     "twox64concat",
+     "twox64concat"
+    ],
+    "key": "(NetUid, H160)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "BoundedVec<(u16, u64)>"
+   },
+   "AutoParentDelegationEnabled": {
+    "default": true,
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "AutoStakeDestination": {
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "AccountId32"
+   },
+   "AutoStakeDestinationColdkeys": {
+    "default": [],
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<AccountId32>"
+   },
+   "Axons": {
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "AxonInfo"
+   },
+   "BasketClaimForfeitCapTao": {
+    "default": 10000000,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "BasketClaimRowDustBps": {
+    "default": 10,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "BasketClaimRowDustCapTao": {
+    "default": 1000000000,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "BasketClaimSliceDustTao": {
+    "default": 100000,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "BasketClaimed": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat",
+     "blake2_128concat"
+    ],
+    "key": "(AccountId32, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "i128"
+   },
+   "BasketConcentrationCap": {
+    "default": 4096,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "BasketDailyTurnoverCap": {
+    "default": 6553,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "BasketDepositedTao": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "BasketLiquidityCap": {
+    "default": 6553,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "BasketLiquidityUsed": {
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "(u64, u64)"
+   },
+   "BasketMinTradeTao": {
+    "default": 500000000,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "BasketRate": {
+    "default": "0",
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "FixedI128<U32>"
+   },
+   "BasketRedeemedTao": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "BasketRowsCountedAt": {
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "(u64, u32, Option<RootClaimHotkeyWork>)"
+   },
+   "BasketRowsOpenedAt": {
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "(u64, u32)"
+   },
+   "BasketShares": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "BasketTradeBucket": {
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "(u64, u64)"
+   },
+   "BasketTradeMaxSlippageBps": {
+    "default": 200,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "BasketTradePriceReferenceMode": {
+    "default": "StrictestEmaAndSpot",
+    "kind": "value",
+    "modifier": "default",
+    "value": "BasketTradePriceReference"
+   },
+   "BasketTradeRefillBlocks": {
+    "default": 7200,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "BasketTradingEnabled": {
+    "default": false,
+    "kind": "value",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "BasketTradingFrozen": {
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "()"
+   },
+   "BasketTwr": {
+    "default": "1",
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "FixedU128<U64>"
+   },
+   "BetaBaseline": {
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "BetaBaselineOf"
+   },
+   "BetaIndexFundSample": {
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "BetaIndexFundSampleOf"
+   },
+   "BetaIndexSnapshot": {
+    "kind": "value",
+    "modifier": "optional",
+    "value": "BetaIndexSnapshotOf"
+   },
+   "BetaIndexSweep": {
+    "kind": "value",
+    "modifier": "optional",
+    "value": "BetaIndexSweepOf"
+   },
+   "BlockAtRegistration": {
+    "default": 0,
+    "hashers": [
+     "identity",
+     "identity"
+    ],
+    "key": "(NetUid, u16)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "BlockEmission": {
+    "default": 1000000000,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "BlocksSinceLastStep": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "Bonds": {
+    "default": [],
+    "hashers": [
+     "identity",
+     "identity"
+    ],
+    "key": "(NetUidStorageIndex, u16)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<(u16, u16)>"
+   },
+   "BondsMovingAverage": {
+    "default": 900000,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "BondsPenalty": {
+    "default": 65535,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "BondsResetOn": {
+    "default": false,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "Burn": {
+    "default": 100000000,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "BurnHalfLife": {
+    "default": 360,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "BurnIncreaseMult": {
+    "default": "1.26",
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "FixedU128<U64>"
+   },
+   "BurnRegistrationsThisInterval": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "CKBurn": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "CRV3WeightCommits": {
+    "default": [],
+    "hashers": [
+     "twox64concat",
+     "twox64concat"
+    ],
+    "key": "(NetUidStorageIndex, u64)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<(AccountId32, BoundedVec<u8>, u64)>"
+   },
+   "CRV3WeightCommitsV2": {
+    "default": [],
+    "hashers": [
+     "twox64concat",
+     "twox64concat"
+    ],
+    "key": "(NetUidStorageIndex, u64)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<(AccountId32, u64, BoundedVec<u8>, u64)>"
+   },
+   "ChildKeys": {
+    "default": [],
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<(u64, AccountId32)>"
+   },
+   "ChildkeyTake": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "PerU16"
+   },
+   "ChildkeyThresholdChecks": {
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "()"
+   },
+   "ChildkeyThresholdSuspended": {
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "()"
+   },
+   "ColdkeyCollateralHotkeys": {
+    "default": [],
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "BoundedVec<AccountId32>"
+   },
+   "ColdkeyGammaHotkeys": {
+    "default": [],
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "BoundedVec<AccountId32>"
+   },
+   "ColdkeyMinerCollateral": {
+    "default": 0,
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "ColdkeyRoot": {
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "AccountId32"
+   },
+   "ColdkeySuccessor": {
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "AccountId32"
+   },
+   "ColdkeySwapAnnouncementDelay": {
+    "default": 36000,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u32"
+   },
+   "ColdkeySwapAnnouncements": {
+    "hashers": [
+     "twox64concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "(u32, H256)"
+   },
+   "ColdkeySwapDestinationReservations": {
+    "hashers": [
+     "twox64concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "AccountId32"
+   },
+   "ColdkeySwapDisputes": {
+    "hashers": [
+     "twox64concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "u32"
+   },
+   "ColdkeySwapReannouncementDelay": {
+    "default": 7200,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u32"
+   },
+   "ColdkeySwapReservedDestination": {
+    "hashers": [
+     "twox64concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "AccountId32"
+   },
+   "ColdkeySwapV2PolicySnapshots": {
+    "hashers": [
+     "twox64concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "bool"
+   },
+   "CollateralDrainRatio": {
+    "default": "1",
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "FixedU128<U64>"
+   },
+   "CollateralLockShare": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "CommitRevealWeightsEnabled": {
+    "default": true,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "CommitRevealWeightsVersion": {
+    "default": 4,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "Consensus": {
+    "default": [],
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<PerU16>"
+   },
+   "ConsensusByMechanism": {
+    "default": [],
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUidStorageIndex",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<PerU16>"
+   },
+   "CurrentDissolveCleanupStatus": {
+    "kind": "value",
+    "modifier": "optional",
+    "value": "DissolveCleanupStatus"
+   },
+   "DecayingHotkeyLock": {
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "LockState"
+   },
+   "DecayingLock": {
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "bool"
+   },
+   "DeferredBasketCashClaimed": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat",
+     "blake2_128concat"
+    ],
+    "key": "(AccountId32, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "i128"
+   },
+   "DeferredBasketCashRate": {
+    "default": "0",
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "FixedI128<U64>"
+   },
+   "DeferredBasketCashReserve": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "DeferredBasketConversions": {
+    "hashers": [
+     "blake2_128concat",
+     "identity",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid, u64)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "DeferredBasketConversion"
+   },
+   "DeferredBasketDebts": {
+    "default": [],
+    "hashers": [
+     "blake2_128concat",
+     "blake2_128concat"
+    ],
+    "key": "(AccountId32, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "BoundedBTreeMap<NetUid, DeferredBasketDebt>"
+   },
+   "DeferredBasketGeneration": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "DeferredBasketRates": {
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "DeferredBasketState"
+   },
+   "Delegates": {
+    "default": 11796,
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "PerU16"
+   },
+   "Difficulty": {
+    "default": 10000000,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "DissolveCleanupQueue": {
+    "default": [],
+    "kind": "value",
+    "modifier": "default",
+    "value": "Vec<NetUid>"
+   },
+   "DissolveNetworkScheduleDuration": {
+    "default": 36000,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u32"
+   },
+   "Dividends": {
+    "default": [],
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<PerU16>"
+   },
+   "EMAPriceHalvingBlocks": {
+    "default": 201600,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "Emission": {
+    "default": [],
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<AlphaBalance>"
+   },
+   "EmissionBarQuantile": {
+    "default": "0.61",
+    "kind": "value",
+    "modifier": "default",
+    "value": "FixedU128<U64>"
+   },
+   "EmissionBarRank": {
+    "default": 32,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "EmissionGateBar": {
+    "default": "0",
+    "kind": "value",
+    "modifier": "default",
+    "value": "FixedU128<U64>"
+   },
+   "EmissionGateExponent": {
+    "default": "3",
+    "kind": "value",
+    "modifier": "default",
+    "value": "FixedU128<U64>"
+   },
+   "FirstEmissionBlockNumber": {
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "u64"
+   },
+   "FlowEmaSmoothingFactor": {
+    "default": 29597889189277,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "FlowNormExponent": {
+    "default": "1",
+    "kind": "value",
+    "modifier": "default",
+    "value": "FixedU128<U64>"
+   },
+   "GammaDeposits": {
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "GammaDeposit<AccountId32>"
+   },
+   "GammaEnabled": {
+    "default": false,
+    "kind": "value",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "GammaSpent": {
+    "default": 0,
+    "hashers": [
+     "identity",
+     "blake2_128concat",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "GammaBalance"
+   },
+   "HasMigrationRun": {
+    "default": false,
+    "hashers": [
+     "identity"
+    ],
+    "key": "Vec<u8>",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "HotkeyLock": {
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "LockState"
+   },
+   "HotkeyRoot": {
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "AccountId32"
+   },
+   "HotkeySuccessor": {
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "AccountId32"
+   },
+   "HotkeySwapBasketCredits": {
+    "hashers": [
+     "blake2_128concat",
+     "blake2_128concat"
+    ],
+    "key": "(AccountId32, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "()"
+   },
+   "IdentitiesV2": {
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "ChainIdentityV2"
+   },
+   "ImmuneOwnerUidsLimit": {
+    "default": 1,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "ImmunityPeriod": {
+    "default": 4096,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "Incentive": {
+    "default": [],
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUidStorageIndex",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<PerU16>"
+   },
+   "IsNetworkMember": {
+    "default": false,
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "Kappa": {
+    "default": 32767,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "Keys": {
+    "default": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "hashers": [
+     "identity",
+     "identity"
+    ],
+    "key": "(NetUid, u16)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AccountId32"
+   },
+   "LargestLocked": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "LastAdjustmentBlock": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "LastColdkeyHotkeyStakeBlock": {
+    "hashers": [
+     "twox64concat",
+     "twox64concat"
+    ],
+    "key": "(AccountId32, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "u64"
+   },
+   "LastEpochBlock": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "LastHotkeyEmissionOnNetuid": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "LastHotkeySwapOnNetuid": {
+    "default": 0,
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "LastMechansimStepBlock": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "LastPowRegistrationBlock": {
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "u64"
+   },
+   "LastRateLimitedBlock": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "RateLimitKey<AccountId32>",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "LastTxBlock": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "LastTxBlockChildKeyTake": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "LastTxBlockDelegateTake": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "LastUpdate": {
+    "default": [],
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUidStorageIndex",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<u64>"
+   },
+   "LastYumaStepBlock": {
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "u64"
+   },
+   "LiquidAlphaConsensusMode": {
+    "default": "Auto",
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "ConsensusMode"
+   },
+   "LiquidAlphaOn": {
+    "default": false,
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "LoadedEmission": {
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "Vec<(AccountId32, u64, u64)>"
+   },
+   "Lock": {
+    "hashers": [
+     "blake2_128concat",
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(AccountId32, NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "LockState"
+   },
+   "LockingColdkeys": {
+    "hashers": [
+     "identity",
+     "blake2_128concat",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "()"
+   },
+   "MaturityRate": {
+    "default": 934866,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "MaxAllowedUids": {
+    "default": 256,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "MaxAllowedValidators": {
+    "default": 128,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "MaxBurn": {
+    "default": 100000000000,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "MaxChildkeyTake": {
+    "default": 11796,
+    "kind": "value",
+    "modifier": "default",
+    "value": "PerU16"
+   },
+   "MaxDelegateTake": {
+    "default": 11796,
+    "kind": "value",
+    "modifier": "default",
+    "value": "PerU16"
+   },
+   "MaxDifficulty": {
+    "default": 4611686018427387903,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "MaxEpochsPerBlock": {
+    "default": 2,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u8"
+   },
+   "MaxMechanismCount": {
+    "default": 2,
+    "kind": "value",
+    "modifier": "default",
+    "value": "MechId"
+   },
+   "MaxRegistrationsPerBlock": {
+    "default": 1,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "MaxTimelockedCommitsPerHotkey": {
+    "default": 10,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u8"
+   },
+   "MaxWeightsLimit": {
+    "default": 65535,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "MechWeightDelegate": {
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUidStorageIndex, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "AccountId32"
+   },
+   "MechWeightDelegateMechanismMoves": {
+    "hashers": [
+     "identity",
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, MechId, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "()"
+   },
+   "MechWeightDelegateMoveOrigins": {
+    "hashers": [
+     "identity",
+     "blake2_128concat",
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(NetUid, AccountId32, AccountId32, MechId)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "()"
+   },
+   "MechWeightDelegateMoveQueue": {
+    "hashers": [
+     "identity",
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(NetUid, AccountId32, MechId)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "PendingMechWeightDelegateMove"
+   },
+   "MechWeightDelegatePurgeQueue": {
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "Option<u16>"
+   },
+   "MechWeightDelegateRetirementQueue": {
+    "hashers": [
+     "identity",
+     "identity"
+    ],
+    "key": "(NetUid, MechId)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "()"
+   },
+   "MechWeightDelegateTargets": {
+    "hashers": [
+     "identity",
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(NetUid, AccountId32, MechId)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "()"
+   },
+   "MechanismCountCurrent": {
+    "default": 1,
+    "hashers": [
+     "twox64concat"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "MechId"
+   },
+   "MechanismEmissionSplit": {
+    "hashers": [
+     "twox64concat"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "Vec<u16>"
+   },
+   "MinActivityCutoff": {
+    "default": 360,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "MinAllowedUids": {
+    "default": 64,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "MinAllowedWeights": {
+    "default": 1024,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "MinBurn": {
+    "default": 500000,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "MinChildkeyTake": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "PerU16"
+   },
+   "MinChildkeyTakePerSubnet": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "PerU16"
+   },
+   "MinDelegateTake": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "PerU16"
+   },
+   "MinDifficulty": {
+    "default": 10000000,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "MinNonImmuneUids": {
+    "default": 10,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "MinerBurned": {
+    "default": "0",
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "FixedU128<U32>"
+   },
+   "MinerCollateral": {
+    "hashers": [
+     "identity",
+     "blake2_128concat",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "MinerCollateralState"
+   },
+   "NetTaoFlowEnabled": {
+    "default": true,
+    "kind": "value",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "NetworkImmunityPeriod": {
+    "default": 1296000,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "NetworkLastLockCost": {
+    "default": 1000000000000,
+    "kind": "value",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "NetworkLockReductionInterval": {
+    "default": 100800,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "NetworkMinLockCost": {
+    "default": 1000000000000,
+    "kind": "value",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "NetworkPowRegistrationAllowed": {
+    "default": false,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "NetworkRateLimit": {
+    "default": 7200,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "NetworkRegisteredAt": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "NetworkRegistrationAllowed": {
+    "default": true,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "NetworkRegistrationEscrow": {
+    "hashers": [
+     "identity"
+    ],
+    "key": "u32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "(AccountId32, TaoBalance)"
+   },
+   "NetworkRegistrationLockId": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u32"
+   },
+   "NetworkRegistrationQueue": {
+    "default": [],
+    "kind": "value",
+    "modifier": "default",
+    "value": "Vec<NetworkRegistrationInfo<AccountId32>>"
+   },
+   "NetworkRegistrationStartBlock": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "NetworksAdded": {
+    "default": false,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "NeuronCertificates": {
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "NeuronCertificate"
+   },
+   "NextStakeJobId": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "NextSubnetLeaseId": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u32"
+   },
+   "NominatorMinRequiredStake": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "NullPruningTarget": {
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "u16"
+   },
+   "NumStakingColdkeys": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "OwnedHotkeys": {
+    "default": [],
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<AccountId32>"
+   },
+   "Owner": {
+    "default": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AccountId32"
+   },
+   "OwnerCutAutoLockEnabled": {
+    "default": false,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "OwnerCutEnabled": {
+    "default": true,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "OwnerHyperparamRateLimit": {
+    "default": 2,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "POWRegistrationsThisInterval": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "ParentKeys": {
+    "default": [],
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<(u64, AccountId32)>"
+   },
+   "PendingBasketDeposits": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "PendingBasketFlushCursor": {
+    "kind": "value",
+    "modifier": "optional",
+    "value": "Vec<u8>"
+   },
+   "PendingChildKeyCooldown": {
+    "default": 7200,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "PendingChildKeys": {
+    "default": [
+     [],
+     0
+    ],
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "(Vec<(u64, AccountId32)>, u64)"
+   },
+   "PendingEpochAt": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "PendingGammaEmission": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "PendingOwnerCut": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "PendingRootAlphaDivs": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "PendingServerEmission": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "PendingValidatorEmission": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "Prometheus": {
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "PrometheusInfo"
+   },
+   "RAORecycledForRegistration": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "RecycleOrBurn": {
+    "default": "Burn",
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "RecycleOrBurnEnum"
+   },
+   "RegisteredSubnetCounter": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "RegistrationsThisBlock": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "RegistrationsThisInterval": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "RevealPeriodEpochs": {
+    "default": 1,
+    "hashers": [
+     "twox64concat"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "Rho": {
+    "default": 10,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "RootAlphaDividendsPerSubnet": {
+    "default": 0,
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "RootClaimable": {
+    "default": [],
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "BTreeMap<NetUid, FixedI128<U32>>"
+   },
+   "RootClaimableThreshold": {
+    "default": "500000",
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "FixedI128<U32>"
+   },
+   "RootClaimed": {
+    "default": 0,
+    "hashers": [
+     "identity",
+     "blake2_128concat",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u128"
+   },
+   "RootProp": {
+    "default": "0",
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "FixedU128<U32>"
+   },
+   "RootStakeUnlockInterval": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "SavedYumaMaxAllowedValidators": {
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "u16"
+   },
+   "ScalingLawPower": {
+    "default": 50,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "Services": {
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "ServiceInfo"
+   },
+   "ServingRateLimit": {
+    "default": 50,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "StakeMoveCooldownUntil": {
+    "default": 0,
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "StakeThreshold": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "StakeWeight": {
+    "default": [],
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<u16>"
+   },
+   "StakingColdkeys": {
+    "hashers": [
+     "identity"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "u64"
+   },
+   "StakingColdkeysByIndex": {
+    "hashers": [
+     "identity"
+    ],
+    "key": "u64",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "AccountId32"
+   },
+   "StakingHotkeys": {
+    "default": [],
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "AccountId32",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<AccountId32>"
+   },
+   "StartCallDelay": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "SubnetAlphaIn": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "SubnetAlphaInEmission": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "SubnetAlphaOut": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "SubnetAlphaOutEmission": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "SubnetCreatedViaLease": {
+    "default": false,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "SubnetEmaProtocolFlow": {
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "(u64, FixedI128<U64>)"
+   },
+   "SubnetEmaTaoFlow": {
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "(u64, FixedI128<U64>)"
+   },
+   "SubnetEmissionEnabled": {
+    "default": true,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "SubnetEmissionWeights": {
+    "default": [
+     0,
+     0,
+     3320329489486196244,
+     7563207292111677685,
+     7563207292111677686
+    ],
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "BoundedVec<u64>"
+   },
+   "SubnetEmissionWeightsRateLimit": {
+    "default": 360,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "SubnetEpochConsensus": {
+    "default": "Yuma",
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "EpochConsensus"
+   },
+   "SubnetEpochIndex": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "SubnetExcessTao": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "SubnetFastMovingPrice": {
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "FixedU128<U64>"
+   },
+   "SubnetGammaEmission": {
+    "default": [],
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "BoundedVec<(NetUid, u64)>"
+   },
+   "SubnetGammaEmissionWhitelisted": {
+    "default": false,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "SubnetGammaEnabled": {
+    "default": false,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "SubnetGammaPrice": {
+    "default": "0",
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "FixedU128<U64>"
+   },
+   "SubnetIdentitiesV3": {
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "SubnetIdentityV3"
+   },
+   "SubnetLeaseShares": {
+    "default": "0",
+    "hashers": [
+     "twox64concat",
+     "identity"
+    ],
+    "key": "(u32, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "FixedU128<U64>"
+   },
+   "SubnetLeaseTerminationHotkey": {
+    "hashers": [
+     "twox64concat"
+    ],
+    "key": "u32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "AccountId32"
+   },
+   "SubnetLeaseUnpaidDividends": {
+    "default": 0,
+    "hashers": [
+     "twox64concat",
+     "identity"
+    ],
+    "key": "(u32, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "SubnetLeases": {
+    "hashers": [
+     "twox64concat"
+    ],
+    "key": "u32",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "SubnetLease<AccountId32, u32, TaoBalance>"
+   },
+   "SubnetLimit": {
+    "default": 128,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "SubnetLocked": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "SubnetMechanism": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "SubnetMovingAlpha": {
+    "default": "3.00002284348e-06",
+    "kind": "value",
+    "modifier": "default",
+    "value": "FixedI128<U32>"
+   },
+   "SubnetMovingPrice": {
+    "default": "0",
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "FixedI128<U32>"
+   },
+   "SubnetOwner": {
+    "default": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AccountId32"
+   },
+   "SubnetOwnerCut": {
+    "default": 11796,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "SubnetOwnerCutAccrued": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "SubnetOwnerHotkey": {
+    "default": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AccountId32"
+   },
+   "SubnetProtocolAlpha": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "SubnetProtocolFlow": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "i64"
+   },
+   "SubnetRootSellTao": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "SubnetState": {
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "SubnetLifecycleState"
+   },
+   "SubnetTAO": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "SubnetTaoFlow": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "i64"
+   },
+   "SubnetTaoInEmission": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "SubnetUidToLeaseId": {
+    "hashers": [
+     "twox64concat"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "u32"
+   },
+   "SubnetVolume": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u128"
+   },
+   "SubnetworkN": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "SubtokenEnabled": {
+    "default": false,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "TaoFlowCutoff": {
+    "default": "0",
+    "kind": "value",
+    "modifier": "default",
+    "value": "FixedI128<U64>"
+   },
+   "TaoInRefundDeploymentBlock": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "TaoUsdPrice": {
+    "kind": "value",
+    "modifier": "optional",
+    "value": "TaoUsdPriceState"
+   },
+   "TaoUsdPriceOracle": {
+    "kind": "value",
+    "modifier": "optional",
+    "value": "AccountId32"
+   },
+   "TaoWeight": {
+    "default": 971718665099567868,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "TargetRegistrationsPerInterval": {
+    "default": 2,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "Tempo": {
+    "default": 360,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "TimelockedWeightCommits": {
+    "default": [],
+    "hashers": [
+     "twox64concat",
+     "twox64concat"
+    ],
+    "key": "(NetUidStorageIndex, u64)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<(AccountId32, u64, BoundedVec<u8>, u64)>"
+   },
+   "TokenSymbol": {
+    "default": "0xf09d9c8f",
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<u8>"
+   },
+   "TotalAlphaStaked": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "TotalHotkeyAlpha": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "TotalHotkeyAlphaLastEpoch": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "TotalHotkeySharesV2": {
+    "default": {
+     "exponent": 0,
+     "mantissa": 0
+    },
+    "hashers": [
+     "blake2_128concat",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "SafeFloat"
+   },
+   "TotalIssuance": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "TotalNetworks": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u16"
+   },
+   "TotalStake": {
+    "default": 0,
+    "kind": "value",
+    "modifier": "default",
+    "value": "TaoBalance"
+   },
+   "TotalVotingPower": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "TransactionKeyLastBlock": {
+    "default": 0,
+    "hashers": [
+     "blake2_128concat",
+     "identity",
+     "identity"
+    ],
+    "key": "(AccountId32, NetUid, u16)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "TransferToggle": {
+    "default": true,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "TxChildkeyTakeRateLimit": {
+    "default": 216000,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "TxDelegateTakeRateLimit": {
+    "default": 216000,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "TxRateLimit": {
+    "default": 1000,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "Uids": {
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "u16"
+   },
+   "UnconvertedGammaEmission": {
+    "default": 0,
+    "hashers": [
+     "identity",
+     "identity"
+    ],
+    "key": "(NetUid, NetUid)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "AlphaBalance"
+   },
+   "UnlockRate": {
+    "default": 934866,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "UsedWork": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "Vec<u8>",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "ValidatorPermit": {
+    "default": [],
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<bool>"
+   },
+   "ValidatorPruneLen": {
+    "default": 1,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "ValidatorTrust": {
+    "default": [],
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<PerU16>"
+   },
+   "VotingPower": {
+    "default": 0,
+    "hashers": [
+     "identity",
+     "blake2_128concat"
+    ],
+    "key": "(NetUid, AccountId32)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "VotingPowerDisableAtBlock": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "VotingPowerEmaAlpha": {
+    "default": 3570000000000000,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "VotingPowerTrackingEnabled": {
+    "default": false,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   },
+   "WeightCommits": {
+    "hashers": [
+     "twox64concat",
+     "twox64concat"
+    ],
+    "key": "(NetUidStorageIndex, AccountId32)",
+    "kind": "map",
+    "modifier": "optional",
+    "value": "Vec<(H256, u64, u64, u64)>"
+   },
+   "Weights": {
+    "default": [],
+    "hashers": [
+     "identity",
+     "identity"
+    ],
+    "key": "(NetUidStorageIndex, u16)",
+    "kind": "map",
+    "modifier": "default",
+    "value": "Vec<(u16, u16)>"
+   },
+   "WeightsSetRateLimit": {
+    "default": 100,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "WeightsVersionKey": {
+    "default": 0,
+    "hashers": [
+     "identity"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "WeightsVersionKeyRateLimit": {
+    "default": 5,
+    "kind": "value",
+    "modifier": "default",
+    "value": "u64"
+   },
+   "Yuma3On": {
+    "default": false,
+    "hashers": [
+     "blake2_128concat"
+    ],
+    "key": "NetUid",
+    "kind": "map",
+    "modifier": "default",
+    "value": "bool"
+   }
+  }
+ }
+}

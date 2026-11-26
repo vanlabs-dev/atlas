@@ -1,0 +1,234 @@
+{
+ "AdminFreezeWindow": {
+  "state": "unset",
+  "value": 10
+ },
+ "BasketClaimForfeitCapTao": {
+  "state": "unset",
+  "value": 10000000
+ },
+ "BasketClaimRowDustBps": {
+  "state": "unset",
+  "value": 10
+ },
+ "BasketClaimRowDustCapTao": {
+  "state": "unset",
+  "value": 1000000000
+ },
+ "BasketClaimSliceDustTao": {
+  "state": "unset",
+  "value": 100000
+ },
+ "BasketConcentrationCap": {
+  "state": "explicit",
+  "value": 7865
+ },
+ "BasketDailyTurnoverCap": {
+  "state": "unset",
+  "value": 6553
+ },
+ "BasketLiquidityCap": {
+  "state": "unset",
+  "value": 6553
+ },
+ "BasketMinTradeTao": {
+  "state": "explicit",
+  "value": 5000000
+ },
+ "BasketTradeMaxSlippageBps": {
+  "state": "explicit",
+  "value": 500
+ },
+ "BasketTradePriceReferenceMode": {
+  "state": "unset",
+  "value": "StrictestEmaAndSpot"
+ },
+ "BasketTradeRefillBlocks": {
+  "state": "unset",
+  "value": 7200
+ },
+ "BasketTradingEnabled": {
+  "state": "explicit",
+  "value": true
+ },
+ "BlockEmission": {
+  "state": "explicit",
+  "value": 1000000000
+ },
+ "CKBurn": {
+  "state": "explicit",
+  "value": 0
+ },
+ "ColdkeySwapAnnouncementDelay": {
+  "state": "unset",
+  "value": 36000
+ },
+ "ColdkeySwapReannouncementDelay": {
+  "state": "unset",
+  "value": 7200
+ },
+ "CommitRevealWeightsVersion": {
+  "state": "unset",
+  "value": 4
+ },
+ "DissolveNetworkScheduleDuration": {
+  "state": "unset",
+  "value": 36000
+ },
+ "EmissionBarQuantile": {
+  "state": "explicit",
+  "value": "0.75"
+ },
+ "EmissionBarRank": {
+  "state": "explicit",
+  "value": 48
+ },
+ "EmissionGateBar": {
+  "state": "explicit",
+  "value": "0.00457346458832"
+ },
+ "EmissionGateExponent": {
+  "state": "unset",
+  "value": "3"
+ },
+ "FlowEmaSmoothingFactor": {
+  "state": "unset",
+  "value": 29597889189277
+ },
+ "FlowNormExponent": {
+  "state": "unset",
+  "value": "1"
+ },
+ "GammaEnabled": {
+  "state": "explicit",
+  "value": true
+ },
+ "MaturityRate": {
+  "state": "explicit",
+  "value": 311622
+ },
+ "MaxChildkeyTake": {
+  "state": "unset",
+  "value": 11796
+ },
+ "MaxDelegateTake": {
+  "state": "unset",
+  "value": 11796
+ },
+ "MaxEpochsPerBlock": {
+  "state": "unset",
+  "value": 2
+ },
+ "MaxMechanismCount": {
+  "state": "explicit",
+  "value": 8
+ },
+ "MinActivityCutoff": {
+  "state": "unset",
+  "value": 360
+ },
+ "MinChildkeyTake": {
+  "state": "unset",
+  "value": 0
+ },
+ "MinDelegateTake": {
+  "state": "unset",
+  "value": 0
+ },
+ "NetTaoFlowEnabled": {
+  "state": "unset",
+  "value": true
+ },
+ "NetworkImmunityPeriod": {
+  "state": "explicit",
+  "value": 432000
+ },
+ "NetworkLastLockCost": {
+  "state": "explicit",
+  "value": 159534847885
+ },
+ "NetworkLockReductionInterval": {
+  "state": "explicit",
+  "value": 28800
+ },
+ "NetworkMinLockCost": {
+  "state": "explicit",
+  "value": 1000000000
+ },
+ "NetworkRateLimit": {
+  "state": "explicit",
+  "value": 10800
+ },
+ "NetworkRegistrationLockId": {
+  "state": "explicit",
+  "value": 26
+ },
+ "NominatorMinRequiredStake": {
+  "state": "explicit",
+  "value": 10000000
+ },
+ "OwnerHyperparamRateLimit": {
+  "state": "unset",
+  "value": 2
+ },
+ "PendingChildKeyCooldown": {
+  "state": "explicit",
+  "value": 7200
+ },
+ "RootStakeUnlockInterval": {
+  "state": "unset",
+  "value": 0
+ },
+ "StakeThreshold": {
+  "state": "explicit",
+  "value": 1000000000000
+ },
+ "StartCallDelay": {
+  "state": "unset",
+  "value": 0
+ },
+ "SubnetEmissionWeightsRateLimit": {
+  "state": "unset",
+  "value": 360
+ },
+ "SubnetLimit": {
+  "state": "explicit",
+  "value": 160
+ },
+ "SubnetMovingAlpha": {
+  "state": "explicit",
+  "value": "0.000299999956042"
+ },
+ "SubnetOwnerCut": {
+  "state": "unset",
+  "value": 11796
+ },
+ "TaoFlowCutoff": {
+  "state": "unset",
+  "value": "0"
+ },
+ "TaoWeight": {
+  "state": "explicit",
+  "value": 3320413933267719290
+ },
+ "TxChildkeyTakeRateLimit": {
+  "state": "unset",
+  "value": 216000
+ },
+ "TxDelegateTakeRateLimit": {
+  "state": "unset",
+  "value": 216000
+ },
+ "TxRateLimit": {
+  "state": "explicit",
+  "value": 1
+ },
+ "UnlockRate": {
+  "state": "unset",
+  "value": 934866
+ },
+ "WeightsVersionKeyRateLimit": {
+  "state": "unset",
+  "value": 5
+ }
+}
