@@ -1,0 +1,16 @@
+#!/bin/sh
+# Secret scan of the staged changes (change: chain-grounding). Fails
+# closed: a missing gitleaks blocks the commit. ATLAS_GITLEAKS names the
+# binary; else gitleaks on PATH, else ~/.local/bin/gitleaks (systemd user
+# units do not put ~/.local/bin on PATH).
+bin=${ATLAS_GITLEAKS:-$(command -v gitleaks 2>/dev/null)}
+[ -n "$bin" ] || bin="$HOME/.local/bin/gitleaks"
+if [ ! -x "$bin" ]; then
+    echo "pre-commit: gitleaks not found; install it to ~/.local/bin." >&2
+    exit 1
+fi
+if ! "$bin" git --staged --redact --no-banner --log-level warn; then
+    echo "pre-commit: gitleaks found a possible secret in the staged changes." >&2
+    exit 1
+fi
+exit 0

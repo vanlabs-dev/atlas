@@ -3,6 +3,8 @@
 # personal identity. Installed on the Pi with
 #   git -C /home/pi/atlas config core.hooksPath /home/pi/atlas/tools/git-hooks
 # The value must match AUTHOR_IDENT in upgrade/atlas_upgrade.py.
+# It runs the gitleaks secret scan first (change: chain-grounding).
+"$(dirname "$0")/gitleaks-staged" || exit 1
 expected="vaNlabs <vanlabs@pm.me>"
 for kind in AUTHOR COMMITTER; do
     ident=$(git var "GIT_${kind}_IDENT" 2>/dev/null) || ident=""
