@@ -395,7 +395,7 @@ claims:
     watched_paths:
       - "pallets/subtensor/src/subnets/emission_weights.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review: null
   - id: "yuma-001"
     section: "yuma"
@@ -488,7 +488,7 @@ claims:
     watched_paths:
       - "pallets/subtensor/src/subnets/emission_weights.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review:
       reason: "critic: The formula for `[0, 0, owner, validator, miner]` is shown, but the runtime binding of `T::InitialSubnetOwnerCut` to `SubtensorInitialSubnetOwnerCut` is not in the cited lines."
       proposed: "`default_emission_weights` is `[0, 0, owner, validator, miner]`: owner from `InitialSubnetOwnerCut` (`SubtensorInitialSubnetOwnerCut` = 11_796), validator half the remainder, miner the rest."
@@ -546,7 +546,7 @@ claims:
       - "pallets/subtensor/src/epoch/run_epoch.rs"
       - "pallets/subtensor/src/epoch/math.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review:
       reason: "critic: The median, clip and normalized `clipped_weights × active_stake` are shown, but nothing cited links `get_float_kappa` (a per-subnet value) to the `SubtensorInitialKappa` constant."
       proposed: "Consensus is the active-stake-weighted median of weights at `get_float_kappa` (`SubtensorInitialKappa` = 32_767); weights are clipped to it, incentive is normalized clipped-weight × stake."
@@ -755,7 +755,7 @@ claims:
       - "pallets/swap/src/pallet/impls.rs"
       - "pallets/swap/src/pallet/swap_step.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review: null
   - id: "dtao-009"
     section: "dtao"
@@ -816,7 +816,7 @@ claims:
     watched_paths:
       - "pallets/swap/src/pallet/mod.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review: null
   - id: "dtao-013"
     section: "dtao"
@@ -974,7 +974,7 @@ claims:
     watched_paths:
       - "pallets/subtensor/src/staking/stake_utils.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review:
       reason: "critic: `get_tao_weight` calls `normalize_tao_weight`, whose body is not shown, so TaoWeight / u64::MAX is unverified, and nothing links `SubtensorInitialTaoWeight` to the `TaoWeight` default."
       proposed: "Stake weight per hotkey is inherited alpha plus inherited root TAO times `get_tao_weight` (`TaoWeight` / u64::MAX); default `SubtensorInitialTaoWeight` is 971_718_665_099_567_868 (~5.27%)."
@@ -1307,7 +1307,7 @@ claims:
     watched_paths:
       - "runtime/src/lib.rs"
       - "pallets/subtensor/src/lib.rs"
-    stale: false
+    stale: true
     review:
       reason: "critic: The default chain `Tempo` → `DefaultTempo` → `InitialTempo` → `INITIAL_SUBNET_TEMPO` is shown, but two parts rest on code that isn't cited: the `prod_or_fast!` definition that would make 360 the mainnet value, and any code enforcing `MIN_TEMPO`/`MAX_TEMPO` on owner-set tempo (only doc commen"
       proposed: "`Tempo` defaults to `INITIAL_SUBNET_TEMPO`, which is `prod_or_fast!(360, 10)`, so 360 blocks on mainnet; owner-set tempo is bounded by `MIN_TEMPO` 360 and `MAX_TEMPO` 50_400."
@@ -1408,7 +1408,7 @@ claims:
     watched_paths:
       - "pallets/subtensor/src/lib.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review: null
     item: "ImmunityPeriod"
     default: "4096"
@@ -1442,7 +1442,7 @@ claims:
     watched_paths:
       - "pallets/subtensor/src/lib.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review: null
     item: "MaxAllowedUids"
     default: "256"
@@ -1476,7 +1476,7 @@ claims:
     watched_paths:
       - "pallets/subtensor/src/lib.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review: null
     item: "MaxAllowedValidators"
     default: "128"
@@ -1510,7 +1510,7 @@ claims:
     watched_paths:
       - "pallets/subtensor/src/lib.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review: null
     item: "MaxDelegateTake"
     default: "11796"
@@ -1544,7 +1544,7 @@ claims:
     watched_paths:
       - "pallets/subtensor/src/lib.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review: null
     item: "MinBurn"
     default: "500000"
@@ -1578,7 +1578,7 @@ claims:
     watched_paths:
       - "pallets/subtensor/src/lib.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review: null
     item: "Kappa"
     default: "32767"
@@ -1639,7 +1639,7 @@ claims:
     watched_paths:
       - "pallets/subtensor/src/lib.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review: null
     item: "NetworkRateLimit"
     default: "7200"
@@ -1673,7 +1673,7 @@ claims:
     watched_paths:
       - "pallets/subtensor/src/lib.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review: null
     item: "MinAllowedWeights"
     default: "1024"
@@ -1701,7 +1701,7 @@ claims:
       - "pallets/subtensor/src/macros/dispatches.rs"
       - "runtime/src/lib.rs"
       - "pallets/subtensor/src/lib.rs"
-    stale: false
+    stale: true
     review:
       reason: "`announce_coldkey_swap_v2` is not in the cited lines"
       proposed: "`announce_coldkey_swap` and `announce_coldkey_swap_v2` set the earliest execution block to now + `ColdkeySwapAnnouncementDelay` (mainnet `5 * 24 * 60 * 60 / 12` blocks); earlier `swap_coldkey_announced` fails `ColdkeySwapTooEarly`."
@@ -1783,7 +1783,7 @@ claims:
     watched_paths:
       - "pallets/subtensor/src/swap/swap_hotkey.rs"
       - "runtime/src/lib.rs"
-    stale: false
+    stale: true
     review: null
   - id: "traps-002"
     section: "traps"

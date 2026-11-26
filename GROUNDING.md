@@ -42,7 +42,7 @@ with it, and code checked that every number in it appears in those lines.
 - **UNVERIFIED (pending review)** (critic: The excess-TAO chain buy itself puts TAO into the pool ("actual excess TAO that entered pool"), so it is wrong that only the price-active part enters...). never verified, proposed: `inject_and_maybe_swap` uses `excess_tao` for a chain buy through `swap_tao_for_alpha` and adds the bought alpha to `SubnetProtocolAlpha`; only the price-active part from `adjust_protocol_liquidity` enters the pool reserves. [v497 st/coinbase/run_coinbase.rs:109-142,193-221]
 - **UNVERIFIED (pending review)** (critic: The zeroing and redistribution are shown, but that the alpha_out path still runs is only asserted in a comment and depends on downstream code that is...). never verified, proposed: A subnet with `SubnetEmissionEnabled` false gets zero TAO-side emission and its share is redistributed to enabled subnets, but its alpha_out path still runs. [v497 st/coinbase/subnet_emissions.rs:34-76]
 - A subnet's `alpha_out` comes from `get_block_emission_for_issuance` on its own alpha issuance, not from its TAO share, and is split by the vector `[burn, recycle, owner, validator, miner]`. [v497 st/coinbase/run_coinbase.rs:248-263,313-342]
-- New subnets get `default_emission_weights`: owner `InitialSubnetOwnerCut` (11_796 on mainnet, 18 percent), validator half the remainder, miner the rest; the global `SubnetOwnerCut` is frozen legacy. [v497 st/subnets/emission_weights.rs:236-263,405-424; runtime/src/lib.rs:1057-1057]
+- **UNVERIFIED (pending review)** (re-check queued). last verified 2026-11-26: New subnets get `default_emission_weights`: owner `InitialSubnetOwnerCut` (11_796 on mainnet, 18 percent), validator half the remainder, miner the rest; the global `SubnetOwnerCut` is frozen legacy. [v497 st/subnets/emission_weights.rs:236-263,405-424; runtime/src/lib.rs:1057-1057]
 
 ## 2. Yuma consensus, weights, bonds and dividends
 
@@ -60,10 +60,10 @@ with it, and code checked that every number in it appears in those lines.
 - Swap `price_limit` is RAO per alpha, divided by 1_000_000_000 into a price; if the current price is already past the limit the swap fails `PriceLimitExceeded`, otherwise it fills only up to the limit and recomputes the fee. [v497 sw/pallet/impls.rs:460-478,319-340; sw/pallet/swap_step.rs:88-124]
 - `FeeRate` defaults to 33 parts of `u16::MAX`, taken from the input before the swap; `drop_fees` makes it zero and non-dynamic mechanisms pay none. [v497 sw/pallet/impls.rs:368-387; sw/pallet/mod.rs:89-97; sw/pallet/swap_step.rs:49-57]
 - All swap fees go to the block author (`fee_to_block_author`); alpha fees are swapped fee-free for TAO in `settle_alpha_fee_to_author`, and burned if no author is known. [v497 sw/pallet/swap_step.rs:126-151; st/staking/stake_utils.rs:1135-1162]
-- Net input above `MAX_SWAP_INPUT_RESERVE_MULTIPLIER` (1_000) times the input reserve fails `SwapInputTooLarge`; an output reserve below `MinimumReserve` (`SwapMinimumReserve` 1_000_000) fails `ReservesTooLow`. [v497 sw/pallet/swap_step.rs:10-10; sw/pallet/impls.rs:302-332; runtime/src/lib.rs:1170-1185]
+- **UNVERIFIED (pending review)** (re-check queued). last verified 2026-11-26: Net input above `MAX_SWAP_INPUT_RESERVE_MULTIPLIER` (1_000) times the input reserve fails `SwapInputTooLarge`; an output reserve below `MinimumReserve` (`SwapMinimumReserve` 1_000_000) fails `ReservesTooLow`. [v497 sw/pallet/swap_step.rs:10-10; sw/pallet/impls.rs:302-332; runtime/src/lib.rs:1170-1185]
 - User liquidity is permanently disabled: `add_liquidity`, `remove_liquidity`, `modify_position`, `toggle_user_liquidity` and `disable_lp` all return `Deprecated`. [v497 sw/pallet/mod.rs:213-270]
 - On a buy only the TAO that enters the reserve is added to `SubnetTAO` and `TotalStake`; the swap fee leaves the subnet account for the block author and is not counted. [v497 st/staking/stake_utils.rs:1021-1031]
-- `set_fee_rate` is root-only and capped by `MaxFeeRate`, which the runtime sets to `SwapMaxFeeRate` 10000. [v497 sw/pallet/mod.rs:189-210; runtime/src/lib.rs:1170-1185]
+- **UNVERIFIED (pending review)** (re-check queued). last verified 2026-11-26: `set_fee_rate` is root-only and capped by `MaxFeeRate`, which the runtime sets to `SwapMaxFeeRate` 10000. [v497 sw/pallet/mod.rs:189-210; runtime/src/lib.rs:1170-1185]
 - `SubnetFastMovingPrice` is an unclamped spot EMA with half-life `BASKET_FAST_EMA_HALF_LIFE_BLOCKS` 600, updated even before start_call; it anchors `swap_basket` price bounds. [v497 st/staking/stake_utils.rs:53-121; st/lib.rs:266-266]
 
 ## 4. Staking
@@ -94,22 +94,22 @@ with it, and code checked that every number in it appears in those lines.
 - **UNVERIFIED (pending review)** (critic: The default chain `Tempo` → `DefaultTempo` → `InitialTempo` → `INITIAL_SUBNET_TEMPO` is shown, but two parts rest on code that isn't cited: the `prod...). never verified, proposed: `Tempo` defaults to `INITIAL_SUBNET_TEMPO`, which is `prod_or_fast!(360, 10)`, so 360 blocks on mainnet; owner-set tempo is bounded by `MIN_TEMPO` 360 and `MAX_TEMPO` 50_400. [v497 runtime/src/lib.rs:996-1101; st/lib.rs:1294-1296,2658-2666]
 - `CommitRevealWeightsEnabled` defaults to true on every subnet. (live at snapshot: true on 92 of 129 subnets) [v497 st/lib.rs:1524-1528,2990-2994]
 - `WeightsSetRateLimit` defaults to 100 blocks per subnet; the value is hardcoded in the pallet, not set in runtime config. (live at snapshot: 100 on 123 of 129 subnets) [v497 st/lib.rs:1300-1302,2961-2964]
-- `ImmunityPeriod` defaults to 4096 blocks per subnet. (live at snapshot: 5000 on 69 of 129 subnets) [v497 runtime/src/lib.rs:1020-1106; st/lib.rs:1354-1356,2905-2908]
-- `MaxAllowedUids` defaults to 256 per subnet. (live at snapshot: 256 on 116 of 129 subnets) [v497 runtime/src/lib.rs:1008-1092; st/lib.rs:1342-1344,2900-2903]
-- `MaxAllowedValidators` defaults to 128 per subnet. (live at snapshot: 64 on 121 of 129 subnets) [v497 runtime/src/lib.rs:1014-1110; st/lib.rs:1377-1379,2936-2939]
-- `MaxDelegateTake` defaults to 11_796 (18%) and `MinDelegateTake` defaults to 0. (live at snapshot: 11796 (unset, default)) [v497 runtime/src/lib.rs:1027-1113; st/lib.rs:1007-1021,1806-1812]
-- `MinBurn` defaults to 500_000 RAO, `Burn` starts at 100_000_000 and `MaxBurn` defaults to 100_000_000_000. (live at snapshot: 500000 on 68 of 129 subnets) [v497 runtime/src/lib.rs:1036-1121; st/lib.rs:1120-1134,2996-3012]
-- `Kappa` defaults to 32_767 (0.5 of 65535) per subnet. (live at snapshot: 32767 on all 129 subnets) [v497 runtime/src/lib.rs:1007-1090; st/lib.rs:1330-1332,2876-2878]
+- **UNVERIFIED (pending review)** (re-check queued). last verified 2026-11-26: `ImmunityPeriod` defaults to 4096 blocks per subnet. [v497 runtime/src/lib.rs:1020-1106; st/lib.rs:1354-1356,2905-2908]
+- **UNVERIFIED (pending review)** (re-check queued). last verified 2026-11-26: `MaxAllowedUids` defaults to 256 per subnet. [v497 runtime/src/lib.rs:1008-1092; st/lib.rs:1342-1344,2900-2903]
+- **UNVERIFIED (pending review)** (re-check queued). last verified 2026-11-26: `MaxAllowedValidators` defaults to 128 per subnet. [v497 runtime/src/lib.rs:1014-1110; st/lib.rs:1377-1379,2936-2939]
+- **UNVERIFIED (pending review)** (re-check queued). last verified 2026-11-26: `MaxDelegateTake` defaults to 11_796 (18%) and `MinDelegateTake` defaults to 0. [v497 runtime/src/lib.rs:1027-1113; st/lib.rs:1007-1021,1806-1812]
+- **UNVERIFIED (pending review)** (re-check queued). last verified 2026-11-26: `MinBurn` defaults to 500_000 RAO, `Burn` starts at 100_000_000 and `MaxBurn` defaults to 100_000_000_000. [v497 runtime/src/lib.rs:1036-1121; st/lib.rs:1120-1134,2996-3012]
+- **UNVERIFIED (pending review)** (re-check queued). last verified 2026-11-26: `Kappa` defaults to 32_767 (0.5 of 65535) per subnet. [v497 runtime/src/lib.rs:1007-1090; st/lib.rs:1330-1332,2876-2878]
 - `LiquidAlphaOn` defaults to false; when it is enabled, `AlphaValues` default to (45875, 58982). (live at snapshot: false on 122 of 129 subnets) [v497 st/lib.rs:1536-1552,3068-3081]
-- `NetworkRateLimit` (blocks between subnet registrations) defaults to 7200, or 0 in `pow-faucet` builds. (live at snapshot: 10800) [v497 runtime/src/lib.rs:1059-1139; st/lib.rs:1232-1239,2625-2625]
-- `MinAllowedWeights` defaults to 1024 per subnet. (live at snapshot: 1 on all 129 subnets) [v497 runtime/src/lib.rs:1010-1097; st/lib.rs:1372-1374,2931-2934]
+- **UNVERIFIED (pending review)** (re-check queued). last verified 2026-11-26: `NetworkRateLimit` (blocks between subnet registrations) defaults to 7200, or 0 in `pow-faucet` builds. [v497 runtime/src/lib.rs:1059-1139; st/lib.rs:1232-1239,2625-2625]
+- **UNVERIFIED (pending review)** (re-check queued). last verified 2026-11-26: `MinAllowedWeights` defaults to 1024 per subnet. [v497 runtime/src/lib.rs:1010-1097; st/lib.rs:1372-1374,2931-2934]
 
 ## 7. Coldkey swap and other safety delays
 
 - **UNVERIFIED (pending review)** (`announce_coldkey_swap_v2` is not in the cited lines). never verified, proposed: `announce_coldkey_swap` and `announce_coldkey_swap_v2` set the earliest execution block to now + `ColdkeySwapAnnouncementDelay` (mainnet `5 * 24 * 60 * 60 / 12` blocks); earlier `swap_coldkey_announced` fails `ColdkeySwapTooEarly`. [v497 st/macros/dispatches.rs:2453-2483,2559-2600; runtime/src/lib.rs:1065-1066]
 - **UNVERIFIED (pending review)** (`CheckColdkeySwap` is not in the cited lines). never verified, proposed: While an announcement exists, `CheckColdkeySwap` rejects the coldkey's calls with `ColdkeySwapAnnounced` (stake, transfers, weights) except announce, `swap_coldkey_announced`, `dispute_coldkey_swap`, `submit_encrypted`, `clear_coldkey_swap_announcement`. [v497 st/guards/check_coldkey_swap.rs:41-82]
 - `clear_coldkey_swap_announcement` works only after when + `ColdkeySwapReannouncementDelay` (else `ColdkeySwapClearTooEarly`), so a victim cannot cancel a fresh malicious announcement; they must dispute. [v497 st/macros/dispatches.rs:2803-2830]
-- A coldkey can swap a hotkey on one subnet only once per `HotkeySwapOnSubnetInterval` (mainnet `24 * 60 * 60 / 12` blocks), tracked in `LastHotkeySwapOnNetuid`; otherwise the call fails `HotKeySwapOnSubnetIntervalNotPassed`. [v497 st/swap/swap_hotkey.rs:769-784; runtime/src/lib.rs:1073-1073]
+- **UNVERIFIED (pending review)** (re-check queued). last verified 2026-11-26: A coldkey can swap a hotkey on one subnet only once per `HotkeySwapOnSubnetInterval` (mainnet `24 * 60 * 60 / 12` blocks), tracked in `LastHotkeySwapOnNetuid`; otherwise the call fails `HotKeySwapOnSubnetIntervalNotPassed`. [v497 st/swap/swap_hotkey.rs:769-784; runtime/src/lib.rs:1073-1073]
 
 ## 8. Deprecated / common traps
 
