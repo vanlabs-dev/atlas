@@ -640,6 +640,7 @@ class VerifySectionTest(unittest.TestCase):
         return calls
 
     def test_agree_disagree_and_bad_citation(self):
+        self.data["meta"]["queued_items"] = {"emission": ["NewItem"]}
         ev = [{"path": "pallets/a.rs", "start": 1, "end": 2}]
         calls = self.fake(
             {"claims": [
@@ -681,6 +682,7 @@ class VerifySectionTest(unittest.TestCase):
         cfg = self.job.section_cfg("emission")
         self.addCleanup(cfg.__setitem__, "budget", cfg["budget"])
         cfg["budget"] = 1
+        self.data["meta"]["queued_items"] = {"emission": ["NewItem"]}
         ev = [{"path": "pallets/a.rs", "start": 1, "end": 2}]
         self.fake(
             {"claims": [
@@ -701,6 +703,44 @@ class VerifySectionTest(unittest.TestCase):
                          ["emission-001"])
         self.assertEqual(counts["removed"], 2)
         self.assertEqual(unverified, [])
+
+    def test_claims_that_are_not_stale_are_left_alone(self):
+        self.data["claims"].append(claim("emission-002",
+                                         statement="Untouched."))
+        ev = [{"path": "pallets/a.rs", "start": 1, "end": 2}]
+        calls = self.fake(
+            {"claims": [
+                {"id": "emission-001", "action": "keep",
+                 "statement": "`TEMPO` is 360.", "evidence": ev},
+                {"id": "emission-002", "action": "rewrite",
+                 "statement": "Rewritten.", "evidence": ev}]},
+            {"verdicts": [{"key": "c0", "verdict": "agree", "reason": "ok"}]})
+        self.job.verify_section({}, self.data, "emission", 497, "v497",
+                                "a" * 40, self.src, fresh=False)
+        untouched = ledger.find(self.data, "emission-002")
+        self.assertEqual(untouched["statement"], "Untouched.")
+        self.assertIsNone(untouched["review"])
+        self.assertNotIn("Rewritten", calls[1][-1])  # never sent to critic
+
+    def test_new_claims_only_for_queued_items(self):
+        ev = [{"path": "pallets/a.rs", "start": 1, "end": 2}]
+        worker = {"claims": [
+            {"id": "emission-001", "action": "keep",
+             "statement": "`TEMPO` is 360.", "evidence": ev},
+            {"id": None, "action": "new", "statement": "`KAPPA` is 32767.",
+             "evidence": ev}]}
+        both = {"verdicts": [{"key": "c0", "verdict": "agree"},
+                             {"key": "c1", "verdict": "agree"}]}
+        self.fake(worker, both)
+        self.job.verify_section({}, self.data, "emission", 497, "v497",
+                                "a" * 40, self.src, fresh=False)
+        self.assertEqual(len(self.data["claims"]), 1)
+        self.data["claims"][0]["stale"] = True
+        self.data["meta"]["queued_items"] = {"emission": ["KappaThing"]}
+        self.fake(worker, both)
+        self.job.verify_section({}, self.data, "emission", 497, "v497",
+                                "a" * 40, self.src, fresh=False)
+        self.assertEqual(len(self.data["claims"]), 2)
 
     def test_worker_failure_keeps_claims_stale(self):
         def run_model(cmd, cwd, timeout):

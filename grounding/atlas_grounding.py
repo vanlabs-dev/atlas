@@ -750,6 +750,26 @@ class Job:
 
         checked: List[Tuple[Dict[str, Any], List[Dict[str, Any]]]] = []
         seen = set()
+        if not fresh:
+            # Only stale claims are re-checked. The worker sees the whole
+            # section for context; a change it proposes to a claim that is
+            # not stale is ignored, so a release never churns claims whose
+            # watched paths it did not touch.
+            ignored = [p["id"] for p in proposals if p.get("id")
+                       and not existing[p["id"]].get("stale")]
+            if ignored:
+                print("%s: ignored proposals for claims that are not "
+                      "stale: %s" % (section, ", ".join(ignored)))
+            proposals = [p for p in proposals if not p.get("id")
+                         or existing[p["id"]].get("stale")]
+            # New claims only for new extrinsics or storage items the
+            # snapshot diff queued for this section.
+            if not (data["meta"].get("queued_items") or {}).get(section):
+                extra = [p for p in proposals if not p.get("id")]
+                if extra:
+                    print("%s: ignored %d new claims (no new items queued)"
+                          % (section, len(extra)))
+                proposals = [p for p in proposals if p.get("id")]
         for proposal in proposals:
             if proposal.get("id"):
                 seen.add(proposal["id"])
