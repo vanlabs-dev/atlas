@@ -1,0 +1,4 @@
+{
+  "_comment": "The model every Atlas `claude -p` call passes as --model: the upgrade job, the grounding job, the alert rewrite and the econ judge (change: chain-grounding, operator decision 2026-11-27). --restricted and --setting-sources \"\" make claude ignore the settings files, so a model set in ~/.claude/settings.json never applies. It lives in config, not in code, so the model-validation scan finds no hard-coded model id.",
+  "model": "claude-opus-5-5"
+}

@@ -44,8 +44,8 @@ VALID_DIRECTION = ("emissions_up", "emissions_down", "reshuffle",
                    "neutral", "unknown")
 UNJUDGED = "unjudged"
 
-# Provenance marker stored on verdict rows. NOT a model id (the CLI picks
-# its default model). It records only which local path made the call, so
+# Provenance marker stored on verdict rows. NOT a model id (the model is
+# passed from tools/claude-model.json). It records only which local path made the call, so
 # nothing here trips model-validation's no-hard-coded-id scan.
 JUDGE_PROVENANCE = "claude-oneshot"
 

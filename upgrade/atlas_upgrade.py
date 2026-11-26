@@ -119,6 +119,21 @@ GATE_PHRASES = {
 GATE_PHRASE_DEFAULT = "The %s step failed."
 RAW_ERROR_HINT = "The raw error is kept on the Pi: %s"
 MODEL_TOOLS = "Read,Grep,Glob,Edit,Write"
+# Pinned on every claude call: --restricted ignores the settings files, so
+# a model set there never applies (found 2026-11-27, change:
+# chain-grounding). One config file holds it for every Atlas claude call.
+MODEL_FILE = os.path.join(ROOT, "tools", "claude-model.json")
+
+
+def pinned_model(path: str = MODEL_FILE) -> str:
+    with open(path, "r", encoding="utf-8") as handle:
+        model = json.load(handle).get("model")
+    if not isinstance(model, str) or not model.strip():
+        raise ValueError("%s has no model" % path)
+    return model
+
+
+MODEL = pinned_model()
 GATEWAY_UNIT = "hermes-gateway"
 GATEWAY_FRESH_SECONDS = 600  # Hermes rewrites its state file about once a min
 RESTART_CONFIRM_TRIES, RESTART_CONFIRM_PAUSE = 6, 5
@@ -1050,7 +1065,8 @@ class Job:
             raise Waiting("diverged", "HEAD is not an ancestor of "
                           "origin/main")
         smoke = self.run([self.claude, "-p", "--restricted",
-                          "--strict-mcp-config", "--max-turns", "1",
+                          "--strict-mcp-config", "--model", MODEL,
+                          "--max-turns", "1",
                           "--tools", "", "--", "reply ok"],
                          self.root, TIMEOUT["smoke"])
         if smoke.rc != 0:
@@ -1229,6 +1245,7 @@ class Job:
             tested_facts=tested_facts(self.root),
             allowed="\n".join("- `%s`" % p for p in allowed_paths.ALLOWED))
         cmd = ([self.claude, "-p", "--restricted", "--strict-mcp-config",
+                "--model", MODEL,
                 "--max-turns", str(MAX_TURNS), "--tools", MODEL_TOOLS,
                 "--add-dir", ctx["source_dir"], self.var,
                 "--allowedTools"] + self.read_rules(ctx)

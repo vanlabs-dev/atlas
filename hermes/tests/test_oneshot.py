@@ -45,9 +45,11 @@ class CallShapeTests(unittest.TestCase):
         self.assertEqual(argv[argv.index("--output-format") + 1],
                          "stream-json")
         self.assertEqual(argv[-2:], ["--system-prompt", "sys"])
-        # no MCP config, no model id, no Hermes
+        # no MCP config, no Hermes, a pinned model id
         self.assertNotIn("--mcp-config", argv)
-        self.assertNotIn("--model", argv)
+        # The model is pinned: --restricted ignores the settings files.
+        self.assertEqual(argv[argv.index("--model") + 1],
+                         oneshot.pinned_model())
         self.assertFalse(any("hermes" in a for a in argv))
 
     def test_prompt_goes_on_stdin_outside_the_repo(self):

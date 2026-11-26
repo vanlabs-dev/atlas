@@ -22,8 +22,10 @@ job already uses:
 
 `stream-json` output carries an `init` event that lists the tools and MCP
 servers of that very call. `parse_stream` refuses the reply unless an
-event is present and every one has both lists empty. No model id is set: the CLI's
-default model is used.
+event is present and every one has both lists empty. The model is pinned
+with `--model`, read from `tools/claude-model.json`: `--restricted` and `--setting-sources ""` ignore the
+settings files, so a model set there never applies (found 2026-11-27,
+change: chain-grounding).
 
 Standard library only. Callers inject the runner, so tests touch no
 subprocess.
@@ -42,6 +44,21 @@ from typing import Any, Callable, List
 ONESHOT_CWD = tempfile.gettempdir()
 
 Runner = Callable[..., Any]
+
+# The model every Atlas `claude -p` call passes, from config, never code
+# (model-validation scans code for the model id).
+MODEL_FILE = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))), "tools", "claude-model.json")
+
+
+def pinned_model(path: str = MODEL_FILE) -> str:
+    """The `model` of tools/claude-model.json. Raises on a missing or empty
+    value: a call must never fall back to the account default."""
+    with open(path, "r", encoding="utf-8") as handle:
+        model = json.load(handle).get("model")
+    if not isinstance(model, str) or not model.strip():
+        raise ValueError("%s has no model" % path)
+    return model
 
 _FLAGS = ("-p", "--restricted", "--strict-mcp-config", "--tools", "",
           "--setting-sources", "", "--disable-slash-commands",
@@ -64,7 +81,7 @@ def new_nonce() -> str:
 
 def oneshot_argv(claude_path: str, system_prompt: str) -> List[str]:
     return ([os.path.expanduser(claude_path)] + list(_FLAGS)
-            + ["--system-prompt", system_prompt])
+            + ["--model", pinned_model(), "--system-prompt", system_prompt])
 
 
 def run_oneshot(prompt: str, claude_path: str, system_prompt: str,

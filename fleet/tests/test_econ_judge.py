@@ -181,7 +181,9 @@ class TestJudgeInvocation(unittest.TestCase):
         self.assertEqual(argv[argv.index("--setting-sources") + 1], "")
         self.assertEqual(argv[argv.index("--max-turns") + 1], "1")
         self.assertNotIn("--mcp-config", argv)
-        self.assertNotIn("--model", argv)
+        # The model is pinned: --restricted ignores the settings files.
+        self.assertEqual(argv[argv.index("--model") + 1],
+                         ej.oneshot.pinned_model())
         # the untrusted diff travels on stdin, outside the repository
         self.assertIn("+diff text", call["input"])
         self.assertFalse(any("+diff text" in a for a in argv))

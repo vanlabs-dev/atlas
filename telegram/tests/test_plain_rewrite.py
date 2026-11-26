@@ -396,7 +396,9 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(argv[argv.index("--setting-sources") + 1], "")
         self.assertEqual(argv[argv.index("--max-turns") + 1], "1")
         self.assertNotIn("--mcp-config", argv)
-        self.assertNotIn("--model", argv)
+        # The model is pinned: --restricted ignores the settings files.
+        self.assertEqual(argv[argv.index("--model") + 1],
+                         pr.oneshot.pinned_model())
         self.assertEqual(kwargs["timeout"], 25.0)
         self.assertNotIn("atlas", kwargs["cwd"])
         # the prompt travels on stdin, never in argv
