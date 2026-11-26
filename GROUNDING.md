@@ -4,8 +4,8 @@ subtensor_tag: "v497"
 subtensor_commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
 newest_tag: "v497"
 newest_tag_live: true
-last_updated: "2026-11-26T23:40:34Z"
-content_changed: "2026-11-26T23:40:34Z"
+last_updated: "2026-11-26T23:46:20Z"
+content_changed: "2026-11-26T23:46:20Z"
 pending_on_main: []
 ---
 
@@ -113,12 +113,12 @@ with it, and code checked that every number in it appears in those lines.
 
 ## 8. Deprecated / common traps
 
-- `set_root_weights` no longer applies (`RootWeightSettingDisabled` is kept only for index stability); now `Weights[ROOT]` is cleared, `RootWeightSettingEnabled` is killed, and basket composition changes only through `swap_basket`. (stopped applying at spec 464, 2026-09-17) [v497 st/macros/errors.rs:360-374; st/migrations/migrate_remove_root_weights.rs:26-64]
-- `SubnetOwnerCut` and `OwnerCutEnabled` no longer set the owner's emission, and their setters return `Error::Deprecated`; now the owner share is slot 2 of the per-subnet `SubnetEmissionWeights` vector, and zero disables it. (stopped applying at spec 481, 2026-10-19) [v497 st/lib.rs:2577-2610; au/lib.rs:1233-1243,2587-2599]
-- User liquidity positions no longer apply: `add_liquidity`, `remove_liquidity`, `modify_position`, `toggle_user_liquidity` and `disable_lp` always return `Deprecated`, and user liquidity is permanently disabled. (stopped applying at or before spec 430) [v497 sw/pallet/mod.rs:213-270]
-- SubtensorModule `set_tempo` (call 139) no longer changes tempo: it charges a fee and returns success without changing state; now use `AdminUtils::sudo_set_tempo`. (stopped applying at spec 431) [v497 st/macros/dispatches.rs:2953-2965]
-- `swap_hotkey` (call 70) is deprecated; now use `swap_hotkey_v2` (call 72), whose `keep_stake` flag can leave the stake on the old hotkey. (stopped applying at or before spec 430) [v497 st/macros/dispatches.rs:885-929]
-- The `BlockEmission` storage item is deprecated; now `calculate_block_emission()` derives each block's emission from total issuance. (stopped applying at or before spec 430) [v497 st/lib.rs:2046-2050; st/coinbase/block_emission.rs:31-45]
+- `set_root_weights` no longer applies (`RootWeightSettingDisabled` is kept only for index stability); now `Weights[ROOT]` is cleared, `RootWeightSettingEnabled` is killed, and basket composition changes only through `swap_basket`. (stopped applying at spec 461, live from spec 464 (2026-09-17)) [v497 st/macros/errors.rs:360-374; st/migrations/migrate_remove_root_weights.rs:26-64]
+- `SubnetOwnerCut` and `OwnerCutEnabled` no longer set the owner's emission, and their setters return `Error::Deprecated`; now the owner share is slot 2 of the per-subnet `SubnetEmissionWeights` vector, and zero disables it. (stopped applying at spec 480, live from spec 481 (2026-10-19)) [v497 st/lib.rs:2577-2610; au/lib.rs:1233-1243,2587-2599]
+- User liquidity positions no longer apply: `add_liquidity`, `remove_liquidity`, `modify_position`, `toggle_user_liquidity` and `disable_lp` always return `Deprecated`, and user liquidity is permanently disabled. (stopped applying at spec 423) [v497 sw/pallet/mod.rs:213-270]
+- SubtensorModule `set_tempo` (call 139) no longer changes tempo: it charges a fee and returns success without changing state; now use `AdminUtils::sudo_set_tempo`. (stopped applying at spec 431, live from spec 432 (2026-07-16)) [v497 st/macros/dispatches.rs:2953-2965]
+- `swap_hotkey` (call 70) is deprecated; now use `swap_hotkey_v2` (call 72), whose `keep_stake` flag can leave the stake on the old hotkey. (stopped applying at spec 391) [v497 st/macros/dispatches.rs:885-929]
+- The `BlockEmission` storage item is deprecated; now `calculate_block_emission()` derives each block's emission from total issuance. (stopped applying at spec 428, live from spec 432 (2026-07-16)) [v497 st/lib.rs:2046-2050; st/coinbase/block_emission.rs:31-45]
 - TAO-flow emission shares (`get_shares_flow`) no longer apply; now `get_subnet_block_emissions` takes shares from `get_shares`, which uses `get_shares_price_ema`, scales by `(1 - MinerBurned)` and applies the emission gate. (stopped applying at spec 421) [spec-419 st/coinbase/subnet_emissions.rs:332-336; v497 st/coinbase/subnet_emissions.rs:34-40,350-394]
 
 ## 9. Changelog of live spec bumps

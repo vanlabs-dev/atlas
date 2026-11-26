@@ -8,9 +8,9 @@ meta:
   subtensor_commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
   newest_tag: "v497"
   newest_tag_live: true
-  last_updated: "2026-11-26T23:40:34Z"
-  content_changed: "2026-11-26T23:40:34Z"
-  content_hash: "ab9ebd43c5cd30ae6482998737e9479db1daff93782873bd93a4c5f9487156fe"
+  last_updated: "2026-11-26T23:46:20Z"
+  content_changed: "2026-11-26T23:46:20Z"
+  content_hash: "b96404924d9e26ae38f4b9d969bf57ffd5384836ddf5438adf9445f5c48dd258"
   pending_on_main: []
   verified_through: null
   queued_items: {}
@@ -27,96 +27,142 @@ meta:
     - "spec 484 live 2026-10-23 (from 483): 8 PRs: #3279 #3281 #3101 #3277 #3253 #3276 (+2 more)"
   spec_dates:
     - spec: 432
+      prev: 424
       date: "2026-07-16"
     - spec: 437
+      prev: 432
       date: "2026-07-22"
     - spec: 438
+      prev: 437
       date: "2026-07-23"
     - spec: 439
+      prev: 438
       date: "2026-07-27"
     - spec: 440
+      prev: 439
       date: "2026-07-27"
     - spec: 441
+      prev: 440
       date: "2026-08-03"
     - spec: 442
+      prev: 441
       date: "2026-08-04"
     - spec: 443
+      prev: 442
       date: "2026-08-04"
     - spec: 445
+      prev: 443
       date: "2026-08-12"
     - spec: 446
+      prev: 445
       date: "2026-08-14"
     - spec: 447
+      prev: 446
       date: "2026-08-14"
     - spec: 448
+      prev: 447
       date: "2026-08-21"
     - spec: 450
+      prev: 448
       date: "2026-08-27"
     - spec: 452
+      prev: 450
       date: "2026-08-29"
     - spec: 453
+      prev: 452
       date: "2026-09-03"
     - spec: 454
+      prev: 453
       date: "2026-09-04"
     - spec: 455
+      prev: 454
       date: "2026-09-07"
     - spec: 456
+      prev: 455
       date: "2026-09-14"
     - spec: 457
+      prev: 456
       date: "2026-09-14"
     - spec: 458
+      prev: 457
       date: "2026-09-14"
     - spec: 459
+      prev: 458
       date: "2026-09-15"
     - spec: 464
+      prev: 459
       date: "2026-09-17"
     - spec: 466
+      prev: 464
       date: "2026-09-18"
     - spec: 467
+      prev: 466
       date: "2026-09-18"
     - spec: 468
+      prev: 467
       date: "2026-09-21"
     - spec: 469
+      prev: 468
       date: "2026-09-22"
     - spec: 470
+      prev: 469
       date: "2026-09-24"
     - spec: 472
+      prev: 470
       date: "2026-10-02"
     - spec: 473
+      prev: 472
       date: "2026-10-05"
     - spec: 475
+      prev: 473
       date: "2026-10-07"
     - spec: 477
+      prev: 475
       date: "2026-10-12"
     - spec: 478
+      prev: 477
       date: "2026-10-13"
     - spec: 479
+      prev: 478
       date: "2026-10-15"
     - spec: 481
+      prev: 479
       date: "2026-10-19"
     - spec: 482
+      prev: 481
       date: "2026-10-21"
     - spec: 483
+      prev: 482
       date: "2026-10-23"
     - spec: 484
+      prev: 483
       date: "2026-10-23"
     - spec: 486
+      prev: 484
       date: "2026-10-26"
     - spec: 488
+      prev: 486
       date: "2026-11-05"
     - spec: 490
+      prev: 488
       date: "2026-11-10"
     - spec: 491
+      prev: 490
       date: "2026-11-16"
     - spec: 492
+      prev: 491
       date: "2026-11-19"
     - spec: 493
+      prev: 492
       date: "2026-11-20"
     - spec: 494
+      prev: 493
       date: "2026-11-23"
     - spec: 495
+      prev: 494
       date: "2026-11-24"
     - spec: 497
+      prev: 495
       date: "2026-11-26"
 claims:
   - id: "emission-001"
@@ -1743,7 +1789,7 @@ claims:
       - "pallets/subtensor/src/migrations/migrate_remove_root_weights.rs"
     stale: false
     review: null
-    deprecated_since_spec: 464
+    deprecated_since_spec: 461
     deprecated_since_floor: false
     marker: "remove_root_weights_v1"
   - id: "traps-003"
@@ -1778,7 +1824,7 @@ claims:
       - "pallets/subtensor/src/subnets/emission_weights.rs"
     stale: false
     review: null
-    deprecated_since_spec: 481
+    deprecated_since_spec: 480
     deprecated_since_floor: false
     marker: "superseded by the owner slot of"
   - id: "traps-005"
@@ -1799,8 +1845,8 @@ claims:
       - "pallets/swap/src/pallet/mod.rs"
     stale: false
     review: null
-    deprecated_since_spec: 430
-    deprecated_since_floor: true
+    deprecated_since_spec: 423
+    deprecated_since_floor: false
     marker: "user liquidity is permanently disabled"
   - id: "traps-008"
     section: "traps"
@@ -1841,8 +1887,8 @@ claims:
       - "pallets/subtensor/src/macros/dispatches.rs"
     stale: false
     review: null
-    deprecated_since_spec: 430
-    deprecated_since_floor: true
+    deprecated_since_spec: 391
+    deprecated_since_floor: false
     marker: "Please use swap_hotkey_v2 instead"
   - id: "traps-011"
     section: "traps"
@@ -1869,8 +1915,8 @@ claims:
       - "pallets/subtensor/src/lib.rs"
     stale: false
     review: null
-    deprecated_since_spec: 430
-    deprecated_since_floor: true
+    deprecated_since_spec: 428
+    deprecated_since_floor: false
     marker: "Use calculate_block_emission() or the block emission RPC instead."
   - id: "traps-012"
     section: "traps"
