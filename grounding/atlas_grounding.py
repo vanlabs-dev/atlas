@@ -298,7 +298,8 @@ class Job:
         return self.locked(self._run)
 
     def _run(self, force: Optional[Tuple[str, str]] = None,
-             bootstrap: Optional[List[str]] = None) -> int:
+             bootstrap: Optional[List[str]] = None,
+             recheck: Optional[List[str]] = None) -> int:
         state = self.load_state()
         self.flush_pending(state)
         state["last_run"] = utc(self.now())
@@ -310,7 +311,7 @@ class Job:
         digest = "%d|%s|%s" % (spec, refs.get("refs/heads/main"), newest)
         heartbeat_due = (self.now() - float(state.get("last_commit_at") or 0)
                          >= self.config["heartbeat_seconds"])
-        quiet = (force is None and bootstrap is None
+        quiet = (force is None and bootstrap is None and not recheck
                  and digest == state.get("digest")
                  and not state.get("backlog") and not heartbeat_due
                  and not state.get("unpushed"))
@@ -320,7 +321,8 @@ class Job:
             print("no change (spec %d, %s)" % (spec, newest))
             return 0
         try:
-            outcome = self.work(state, spec, refs, newest, force, bootstrap)
+            outcome = self.work(state, spec, refs, newest, force, bootstrap,
+                                recheck)
         except Gate as exc:
             print("failed at %s: %s" % (exc.gate, exc.detail),
                   file=sys.stderr)
@@ -374,7 +376,8 @@ class Job:
 
     def work(self, state: Dict[str, Any], spec: int, refs: Dict[str, str],
              newest: str, force: Optional[Tuple[str, str]],
-             bootstrap: Optional[List[str]]) -> Dict[str, Any]:
+             bootstrap: Optional[List[str]],
+             recheck: Optional[List[str]] = None) -> Dict[str, Any]:
         self.prepare(state)
         self.refresh_clone(spec, refs)
         try:
@@ -408,6 +411,8 @@ class Job:
             marked += self.mark_from_diff(data, "v%d" % old_spec, tag)
         if force:
             marked += self.mark_from_diff(data, force[0], force[1])
+        if recheck:
+            marked += self.mark_recheck(data, recheck)
         meta.update(spec_version=spec, subtensor_tag=tag,
                     subtensor_commit=anchor, newest_tag=newest,
                     newest_tag_live=int(newest[1:]) <= spec)
@@ -421,7 +426,7 @@ class Job:
         # Verification (model), capped per run.
         source_dir = self.up.export_source(spec, anchor)
         sections = bootstrap or ledger.stale_sections(data)
-        cap = len(sections) if bootstrap or force else \
+        cap = len(sections) if bootstrap or force or recheck else \
             self.config["max_sections_per_run"]
         results: Dict[str, Dict[str, int]] = {}
         new_unverified: List[str] = []
@@ -583,6 +588,35 @@ class Job:
                 continue
             claim["live_value"] = live_value(claim["item"], chain, subnets)
 
+    def mark_recheck(self, data: Dict[str, Any],
+                     sections: List[str]) -> List[str]:
+        """Operator re-check: every UNVERIFIED claim in `sections` goes
+        stale, and the traps section queues every seed that has no
+        verified claim. Verified claims are not touched."""
+        marked = []
+        for claim in data["claims"]:
+            if claim["section"] in sections and claim.get("review"):
+                claim["stale"] = True
+                marked.append(claim["id"])
+        if "traps" in sections:
+            verified = {c.get("seed") for c in data["claims"]
+                        if c.get("seed") and not c.get("review")}
+            queue = (data["meta"].get("queued_items") or {})
+            wanted = ["seed:" + s["id"] for s in data.get("seeds") or []
+                      if s["id"] not in verified]
+            if wanted:
+                queue["traps"] = sorted(set(queue.get("traps", []))
+                                        | set(wanted))
+                data["meta"]["queued_items"] = queue
+                # A seed placeholder is replaced by the seed's real claim.
+                for claim in list(data["claims"]):
+                    if claim.get("seed") and not claim.get("last_verified") \
+                            and not claim.get("evidence"):
+                        data["claims"].remove(claim)
+        print("re-check of %s: %d UNVERIFIED claims stale: %s" % (
+            ", ".join(sections), len(marked), ", ".join(marked)))
+        return marked
+
     def mark_from_diff(self, data: Dict[str, Any], old_tag: str,
                        new_tag: str) -> List[str]:
         rc, _ = self.clone_git("rev-parse", "--verify", "--quiet", old_tag)
@@ -671,6 +705,9 @@ class Job:
                    "evidence": [{"path": e["path"], "lines": e["lines"]}
                                 for e in c.get("evidence") or []],
                    "watched_paths": c.get("watched_paths") or [],
+                   **({"last_check": (c.get("review") or {}).get("reason")}
+                      if c.get("stale") and c.get("review") else {}),
+                   **({"seed": c["seed"]} if c.get("seed") else {}),
                    **({"item": c.get("item"), "default": c.get("default")}
                       if section == "hyperparameters" else {})}
                   for c in ledger.by_section(data, section)]
@@ -690,8 +727,30 @@ class Job:
                      "current code that the change introduced. Code dates "
                      "the change from the git history of that string.\n")
             extra = ', "marker": "..."'
+        seeds = ""
+        if section == "traps" and data.get("seeds"):
+            info = getattr(self, "seed_info", {})
+            lines = []
+            for seed in data["seeds"]:
+                ref, since = info.get(seed["id"], (None, None))
+                lines.append("  - `%s`: %s Removed string: `%s`.%s" % (
+                    seed["id"], seed["topic"], seed.get("removed") or "none",
+                    "" if not ref else " Old code at `%s` (the last release "
+                    "before spec %s) is exported to `%s`. Cite the old "
+                    "lines that call or hold the removed string, with "
+                    "`\"ref\": \"%s\"`, next to the current code." % (
+                        ref, since, self.sources[ref][0], ref)))
+            seeds = ("\n- Seeds, the operator's list of mechanisms older "
+                     "docs still describe as current. Return exactly one "
+                     "claim per seed, with `\"seed\": \"<id>\"`. Code "
+                     "proves, and tells the checker, that the removed string "
+                     "is absent from the code at this tag; do not try to "
+                     "prove absence from cited lines. Cite the old code "
+                     "that used it and the current code that replaced it:\n"
+                     + "\n".join(lines))
         corpus = os.path.join(self.root, "knowledge", "corpus")
         return verify.template("worker.md").substitute(
+            seeds=seeds,
             title=cfg["title"], section=section, scope=cfg["scope"],
             tag=tag, commit=anchor[:12], spec=spec, source_dir=source_dir,
             corpus_dir=corpus, claims=json.dumps(claims, indent=1),
@@ -713,14 +772,20 @@ class Job:
         unverified: List[str] = []
         existing = {c["id"]: c for c in ledger.by_section(data, section)}
         fails = state.setdefault("worker_failures", {})
+        self.sources = {tag: (source_dir, anchor)}
+        if section == "traps":
+            self.sources.update(self.seed_sources(data, tag))
         prompt = self.worker_prompt(data, section, spec, tag, anchor,
                                     source_dir, fresh)
         corpus = os.path.join(self.root, "knowledge", "corpus")
+        old_dirs = tuple(d for ref, (d, _) in self.sources.items()
+                         if ref != tag)
         try:
             reply, usage = verify.run_claude(
                 self.run_model, verify.worker_cmd(
                     self.claude, self.model, prompt, source_dir,
-                    corpus, self.config["worker_max_turns"]), source_dir,
+                    corpus, self.config["worker_max_turns"], old_dirs),
+                source_dir,
                 int(min(self.config["worker_timeout_seconds"],
                         max(60, self.time_left() - PUSH_RESERVE))))
             self.log_usage(section, "worker", usage)
@@ -741,6 +806,15 @@ class Job:
                 fails[section] = 0
             return counts, unverified
         fails.pop(section, None)
+        # Seed fields belong to the operator's list, not the worker.
+        seed_list = {x["id"]: x for x in data.get("seeds") or []}
+        for proposal in proposals:
+            seed = seed_list.get(proposal.get("seed"))
+            if proposal.get("seed") and seed is None:
+                proposal.pop("seed")
+            proposal.pop("removed", None)
+            if seed is not None and seed.get("removed"):
+                proposal["removed"] = seed["removed"]
         snap = os.path.join(self.path("snapshots"), str(spec),
                             "pallets.json")
         pallets = None
@@ -764,12 +838,20 @@ class Job:
                          or existing[p["id"]].get("stale")]
             # New claims only for new extrinsics or storage items the
             # snapshot diff queued for this section.
-            if not (data["meta"].get("queued_items") or {}).get(section):
-                extra = [p for p in proposals if not p.get("id")]
-                if extra:
-                    print("%s: ignored %d new claims (no new items queued)"
-                          % (section, len(extra)))
-                proposals = [p for p in proposals if p.get("id")]
+            queue = (data["meta"].get("queued_items") or {}).get(section) \
+                or []
+            seeds_q = {q[5:] for q in queue if q.startswith("seed:")}
+            items_q = [q for q in queue if not q.startswith("seed:")]
+
+            def wanted(p: Dict[str, Any]) -> bool:
+                return bool(p.get("id")) or bool(items_q) or \
+                    p.get("seed") in seeds_q
+            extra = [p for p in proposals if not wanted(p)]
+            if extra:
+                print("%s: ignored %d new claims (no new item or seed "
+                      "queued for them)" % (section, len(extra)))
+            proposals = [p for p in proposals if wanted(p)]
+        judged: List[Dict[str, Any]] = []
         for proposal in proposals:
             if proposal.get("id"):
                 seen.add(proposal["id"])
@@ -783,16 +865,7 @@ class Job:
                 unverified.append(claim["id"])
                 counts["unverified"] += 1
                 continue
-            problems, cited = verify.check_claim(
-                proposal, source_dir, self.config["max_evidence_lines"],
-                pallets)
-            if problems:
-                unverified.append(self.mark_unverified(
-                    data, existing, proposal, "; ".join(problems[:2]), tag,
-                    anchor))
-                counts["unverified"] += 1
-                continue
-            checked.append((proposal, cited))
+            judged.append(proposal)
         for cid, claim in existing.items():
             if cid not in seen and claim.get("stale"):
                 claim["review"] = {"reason": "the checking run did not "
@@ -802,35 +875,33 @@ class Job:
                 unverified.append(cid)
                 counts["unverified"] += 1
 
-        if checked:
-            items = verify.critic_items(checked, tag)
-            prompt = verify.template("critic.md").substitute(
-                tag=tag, items=json.dumps(items, indent=1))
-            try:
-                reply, usage = verify.run_claude(
-                    self.run_model, verify.critic_cmd(self.claude,
-                                                      self.model,
-                                                      prompt),
-                    self.root, self.config["critic_timeout_seconds"])
-                self.log_usage(section, "critic", usage)
-                verdicts = verify.parse_verdicts(
-                    reply, [i["key"] for i in items])
-            except verify.ModelError as exc:
-                print("critic for %s failed: %s" % (section, exc),
-                      file=sys.stderr)
-                verdicts = {i["key"]: ("disagree", "the critic run failed")
-                            for i in items}
-            for index, (proposal, _) in enumerate(checked):
-                verdict, reason = verdicts["c%d" % index]
-                if verdict == "agree":
-                    self.apply_agreed(data, existing, proposal, tag, anchor,
-                                      section)
-                    counts["verified"] += 1
-                else:
-                    unverified.append(self.mark_unverified(
-                        data, existing, proposal, "critic: " + reason, tag,
-                        anchor))
-                    counts["unverified"] += 1
+        # Code check and critic; then one retry for the claims rejected
+        # only for a missing link (a binding, constant, caller or body the
+        # citation left out). A rejection on substance stays UNVERIFIED.
+        agreed, failed = self.judge(section, judged, source_dir, pallets,
+                                    tag)
+        retry = [(p, reason) for p, reason, kind in failed
+                 if kind == "missing_context"]
+        final = [(p, reason) for p, reason, kind in failed
+                 if kind != "missing_context"]
+        if retry:
+            extended = self.retry_citations(section, retry, tag, source_dir)
+            agreed2, failed2 = self.judge(section, extended, source_dir,
+                                          pallets, tag)
+            agreed += agreed2
+            final += [(p, "after one citation retry: " + reason)
+                      for p, reason, _ in failed2]
+            counts["retried"] = len(retry)
+            counts["retry_verified"] = len(agreed2)
+        for proposal in agreed:
+            self.apply_agreed(data, existing, proposal, tag, anchor, section)
+            counts["verified"] += 1
+        for proposal, reason in final:
+            unverified.append(self.mark_unverified(
+                data, existing, proposal, reason, tag, anchor))
+            counts["unverified"] += 1
+        if section == "traps":
+            unverified += self.cover_seeds(data)
         dropped = self.fit_budget(data, section, set(existing))
         counts["removed"] += len(dropped)
         unverified = [u for u in unverified if u and u not in dropped]
@@ -840,6 +911,175 @@ class Job:
         data["meta"]["queued_items"] = queued
         return counts, unverified
 
+    def judge(self, section: str, proposals: List[Dict[str, Any]],
+              source_dir: str, pallets: Optional[Dict[str, Any]], tag: str
+              ) -> Tuple[List[Dict[str, Any]],
+                         List[Tuple[Dict[str, Any], str, str]]]:
+        """(agreed, failed) for proposals: the code check, then one critic
+        run. Each failure carries (proposal, reason, kind); kind is
+        `missing_context` when only a link is missing, else `wrong`."""
+        dirs = {ref: d for ref, (d, _) in self.sources.items()}
+        checked: List[Tuple[Dict[str, Any], List[Dict[str, Any]]]] = []
+        failed: List[Tuple[Dict[str, Any], str, str]] = []
+        for proposal in proposals:
+            problems, cited = verify.check_claim(
+                proposal, source_dir, self.config["max_evidence_lines"],
+                pallets, dirs)
+            if problems:
+                failed.append((proposal, "; ".join(problems[:2]),
+                               verify.problem_kind(problems)))
+            else:
+                checked.append((proposal, cited))
+        agreed: List[Dict[str, Any]] = []
+        if not checked:
+            return agreed, failed
+        facts = {i: self.seed_facts(p, tag) for i, (p, _) in
+                 enumerate(checked) if p.get("removed")}
+        items = verify.critic_items(checked, tag,
+                                    {i: f for i, f in facts.items() if f})
+        prompt = verify.template("critic.md").substitute(
+            tag=tag, items=json.dumps(items, indent=1))
+        try:
+            reply, usage = verify.run_claude(
+                self.run_model, verify.critic_cmd(self.claude, self.model,
+                                                  prompt),
+                self.root, self.config["critic_timeout_seconds"])
+            self.log_usage(section, "critic", usage)
+            verdicts = verify.parse_verdicts(reply,
+                                             [i["key"] for i in items])
+        except verify.ModelError as exc:
+            print("critic for %s failed: %s" % (section, exc),
+                  file=sys.stderr)
+            verdicts = {i["key"]: ("disagree", "the critic run failed",
+                                   "wrong") for i in items}
+        for index, (proposal, _) in enumerate(checked):
+            verdict, reason, kind = verdicts["c%d" % index]
+            if verdict == "agree":
+                agreed.append(proposal)
+            else:
+                failed.append((proposal, "critic: " + reason, kind))
+        return agreed, failed
+
+    def seed_facts(self, proposal: Dict[str, Any], tag: str) -> List[str]:
+        """What git proves about a seed's removed string: absent from
+        `pallets/` at the tag, and since which release."""
+        removed = proposal["removed"]
+        rc, out = self.clone_git("grep", "-c", "-F", removed, tag, "--",
+                                 "pallets")
+        if rc == 0 and out.strip():
+            return []  # still present: nothing to state
+        since, floor = history.marker_since(self.clone_git, self.bumps(tag),
+                                            removed, False)
+        facts = ["`git grep -F` finds `%s` nowhere in `pallets/` at %s."
+                 % (removed, tag)]
+        if since is not None:
+            facts.append("It has been absent from every release %s spec %d "
+                         "on, and was present in the release before."
+                         % ("since at least" if floor else "from", since)
+                         if not floor else
+                         "It has been absent from every release back to "
+                         "spec %d." % since)
+        return facts
+
+    def retry_citations(self, section: str,
+                        retry: List[Tuple[Dict[str, Any], str]], tag: str,
+                        source_dir: str) -> List[Dict[str, Any]]:
+        """One worker run that extends the citations of claims rejected for
+        a missing link. It may narrow a statement, never widen it. Returns
+        the proposals with the new statement and evidence; a claim the run
+        did not return keeps its first-pass form (and fails again)."""
+        items = [{"key": "r%d" % i, "statement": p["statement"],
+                  "evidence": p.get("evidence"), "reason": reason}
+                 for i, (p, reason) in enumerate(retry)]
+        prompt = verify.template("retry.md").substitute(
+            tag=tag, source_dir=source_dir,
+            max_lines=self.config["max_evidence_lines"],
+            old_refs=", ".join("`%s` (%s)" % (ref, d) for ref, (d, _) in
+                               self.sources.items() if ref != tag) or "none",
+            items=json.dumps(items, indent=1))
+        corpus = os.path.join(self.root, "knowledge", "corpus")
+        old_dirs = tuple(d for ref, (d, _) in self.sources.items()
+                         if ref != tag)
+        try:
+            reply, usage = verify.run_claude(
+                self.run_model, verify.worker_cmd(
+                    self.claude, self.model, prompt, source_dir, corpus,
+                    self.config["worker_max_turns"], old_dirs), source_dir,
+                self.config["worker_timeout_seconds"])
+            self.log_usage(section, "retry", usage)
+        except verify.ModelError as exc:
+            print("citation retry for %s failed: %s" % (section, exc),
+                  file=sys.stderr)
+            return [p for p, _ in retry]
+        by_key = {c.get("key"): c for c in reply.get("claims") or []
+                  if isinstance(c, dict)}
+        out = []
+        for index, (proposal, _) in enumerate(retry):
+            new = by_key.get("r%d" % index)
+            if new and isinstance(new.get("statement"), str) and \
+                    isinstance(new.get("evidence"), list):
+                proposal = dict(proposal, statement=new["statement"],
+                                evidence=new["evidence"])
+            out.append(proposal)
+        return out
+
+    def seed_sources(self, data: Dict[str, Any],
+                     tag: str) -> Dict[str, Tuple[str, str]]:
+        """For each seed with a `removed` string: the files that held it,
+        exported at the last release that still had it, as
+        {"spec-<N>": (dir, commit)}. The worker and the critic read old
+        code only from these exports."""
+        out: Dict[str, Tuple[str, str]] = {}
+        self.seed_info: Dict[str, Tuple[str, int]] = {}
+        bumps = self.bumps(tag)
+        for seed in data.get("seeds") or []:
+            removed = seed.get("removed")
+            if not removed:
+                continue
+            since, floor = history.marker_since(self.clone_git, bumps,
+                                                removed, False)
+            before = [b for b in bumps if since is not None and b[0] < since]
+            if since is None or floor or not before:
+                continue
+            spec, commit = before[-1]
+            ref = "spec-%d" % spec
+            target = os.path.join(self.var, "old", seed["id"], ref)
+            rc, names = self.clone_git("grep", "-l", "-F", removed, commit,
+                                       "--", "pallets")
+            for line in names.splitlines() if rc == 0 else []:
+                path = line.split(":", 1)[1]
+                rc2, text = self.clone_git("show", "%s:%s" % (commit, path))
+                if rc2 != 0:
+                    continue
+                full = os.path.join(target, path)
+                os.makedirs(os.path.dirname(full), exist_ok=True)
+                with open(full, "w", encoding="utf-8") as handle:
+                    handle.write(text)
+            if os.path.isdir(target):
+                out[ref] = (target, commit)
+                self.seed_info[seed["id"]] = (ref, since)
+        return out
+
+    def cover_seeds(self, data: Dict[str, Any]) -> List[str]:
+        """Every seed has a claim: one the run returned, or an UNVERIFIED
+        placeholder naming the seed, so a known trap never goes missing."""
+        added = []
+        covered = {c.get("seed") for c in data["claims"]}
+        for seed in data.get("seeds") or []:
+            if seed["id"] in covered:
+                continue
+            claim = {"id": ledger.next_id(data, "traps"), "section": "traps",
+                     "statement": seed["topic"], "evidence": [],
+                     "live_since_spec": None, "status": "deprecated",
+                     "last_verified": None, "watched_paths": [],
+                     "stale": False, "seed": seed["id"],
+                     "review": {"reason": "the checking run returned no "
+                                "claim for seed %s" % seed["id"],
+                                "at": utc(self.now())}}
+            data["claims"].append(claim)
+            added.append(claim["id"])
+        return added
+
     def fit_budget(self, data: Dict[str, Any], section: str,
                    kept: set) -> List[str]:
         """Drop this run's new claims, last first and never-verified
@@ -847,7 +1087,7 @@ class Job:
         that existed before the run are never dropped for space."""
         budget = self.section_cfg(section)["budget"]
         new = [c for c in data["claims"] if c["section"] == section
-               and c["id"] not in kept]
+               and c["id"] not in kept and not c.get("seed")]
         order = ([c for c in reversed(new) if not c.get("last_verified")]
                  + [c for c in reversed(new) if c.get("last_verified")])
         dropped: List[str] = []
@@ -877,34 +1117,58 @@ class Job:
     def evidence(self, proposal: Dict[str, Any], tag: str,
                  anchor: str) -> List[Dict[str, Any]]:
         out = []
+        sources = getattr(self, "sources", {}) or {}
         for ev in proposal.get("evidence") or []:
+            ref = ev.get("ref") if ev.get("ref") in sources else tag
+            commit = sources[ref][1] if ref in sources else anchor
             out.append({"path": ev["path"],
                         "lines": "%d-%d" % (ev["start"], ev["end"]),
-                        "ref": tag, "commit": anchor})
+                        "ref": ref, "commit": commit})
         return out
+
+    def bumps(self, tag: str) -> List[Tuple[int, str]]:
+        """Release list at `tag` (history.release_bumps), cached per tag
+        commit in var/grounding: it takes about a minute to build."""
+        if getattr(self, "_bumps_tag", None) == tag:
+            return self._bumps
+        rc, sha = self.clone_git("rev-parse", "%s^{commit}" % tag)
+        cache = os.path.join(self.var, "bumps-%s.json" % sha.strip()[:12])
+        try:
+            with open(cache, "r", encoding="utf-8") as handle:
+                bumps = [tuple(b) for b in json.load(handle)]
+        except (FileNotFoundError, ValueError):
+            bumps = history.release_bumps(self.clone_git, tag)
+            if bumps:
+                os.makedirs(self.var, exist_ok=True)
+                with open(cache, "w", encoding="utf-8") as handle:
+                    json.dump(bumps, handle)
+        self._bumps, self._bumps_tag = bumps, tag
+        return bumps
 
     def date_evidence(self, evidence: List[Dict[str, Any]],
                       tag: str) -> Optional[int]:
-        """Fill `pr` and `changed_in` per evidence range; returns the
-        newest release in which any cited range last changed."""
+        """Fill `pr` and `changed_in` per live-tag evidence range; returns
+        the newest release in which any cited range last changed."""
         newest = None
+        bumps = self.bumps(tag)
         for ev in evidence:
+            if ev["ref"] != tag:
+                continue  # old code, cited for a trap
             start, end = (int(x) for x in ev["lines"].split("-"))
             sha = history.last_change(self.clone_git, tag, ev["path"],
                                       start, end)
             ev["changed_in"] = sha
             ev["pr"] = history.pr_of(self.clone_git, sha, tag) if sha \
                 else None
-            spec = history.first_release(self.clone_git, sha) if sha \
+            spec = history.release_of(self.clone_git, bumps, sha) if sha \
                 else None
             if spec is not None:
                 newest = spec if newest is None else max(newest, spec)
         return newest
 
-    def oldest_release(self) -> Optional[int]:
-        if not hasattr(self, "_oldest"):
-            self._oldest = history.oldest_release(self.clone_git)
-        return self._oldest
+    def oldest_release(self, tag: str) -> Optional[int]:
+        bumps = self.bumps(tag)
+        return bumps[0][0] if bumps else None
 
     def apply_agreed(self, data: Dict[str, Any],
                      existing: Dict[str, Dict[str, Any]],
@@ -919,7 +1183,7 @@ class Job:
             target = section
             claim = {"id": ledger.next_id(data, target), "section": target}
             data["claims"].append(claim)
-        oldest = self.oldest_release()
+        oldest = self.oldest_release(tag)
         claim.update(
             statement=proposal["statement"].strip(), evidence=evidence,
             live_since_spec=since,
@@ -927,24 +1191,36 @@ class Job:
             status="deprecated" if deprecated else "live",
             last_verified=utc(self.now()),
             watched_paths=sorted(set(proposal.get("watched_paths") or [])
-                                 | {e["path"] for e in evidence}),
+                                 | {e["path"] for e in evidence
+                                    if e["ref"] == tag}),
             stale=False, review=None)
         if section == "hyperparameters":
             claim.update(item=proposal.get("item"),
                          default=str(proposal.get("default")))
+        if proposal.get("seed"):
+            claim["seed"] = proposal["seed"]
         if deprecated:
-            marker = proposal.get("marker")
-            sha = history.marker_added(self.clone_git, tag, marker) \
-                if isinstance(marker, str) and marker.strip() else None
-            spec = history.first_release(self.clone_git, sha) if sha \
-                else None
-            claim["deprecated_since_spec"] = spec if spec is not None \
-                else since
-            claim["deprecated_since_floor"] = (
-                claim["deprecated_since_spec"] is not None
-                and claim["deprecated_since_spec"] == oldest)
-            if marker:
-                claim["marker"] = marker
+            # The stop release comes from the code tree, release by
+            # release: since when the removed string has been absent, or
+            # the replacement string present. A change that reached main
+            # twice (PR #2781 at 421, then #2769 at 423 for the tao-flow
+            # switch) is dated by when the code changed, not by commit.
+            bumps = self.bumps(tag)
+            removed, marker = proposal.get("removed"), proposal.get("marker")
+            spec, floor = None, False
+            for text, present in ((removed, False), (marker, True)):
+                if isinstance(text, str) and text.strip():
+                    spec, floor = history.marker_since(
+                        self.clone_git, bumps, text, present)
+                    if spec is not None:
+                        break
+            if spec is None:
+                spec, floor = since, since is not None and since == oldest
+            claim["deprecated_since_spec"] = spec
+            claim["deprecated_since_floor"] = floor
+            for key in ("marker", "removed"):
+                if proposal.get(key):
+                    claim[key] = proposal[key]
 
     def mark_unverified(self, data: Dict[str, Any],
                         existing: Dict[str, Dict[str, Any]],
@@ -959,6 +1235,8 @@ class Job:
             claim = existing[proposal["id"]]
             claim.update(review=review, stale=False)
             return claim["id"]
+        seed_fields = {k: proposal[k] for k in ("seed", "removed")
+                       if isinstance(proposal.get(k), str)}
         section = proposal["section"]
         claim = {"id": ledger.next_id(data, section), "section": section,
                  "statement": proposal.get("statement") or "",
@@ -969,7 +1247,7 @@ class Job:
                  "last_verified": None,
                  "watched_paths": [p for p in proposal.get("watched_paths")
                                    or [] if isinstance(p, str)],
-                 "stale": False, "review": review}
+                 "stale": False, "review": review, **seed_fields}
         data["claims"].append(claim)
         return claim["id"]
 
@@ -980,8 +1258,12 @@ class Job:
             if isinstance(ev, dict) and isinstance(ev.get("path"), str) and \
                     isinstance(ev.get("start"), int) and \
                     isinstance(ev.get("end"), int):
+                sources = getattr(self, "sources", {}) or {}
+                ref = ev.get("ref") if ev.get("ref") in sources else tag
                 out.append({"path": ev["path"], "lines": "%d-%d" % (
-                    ev["start"], ev["end"]), "ref": tag, "commit": anchor})
+                    ev["start"], ev["end"]), "ref": ref,
+                    "commit": sources[ref][1] if ref in sources
+                    else anchor})
         return out
 
     # -- outputs and push ---------------------------------------------------
@@ -1120,6 +1402,19 @@ def review(args: argparse.Namespace) -> int:
                                                 ev["lines"]))
         print("%d claims need review" % len(rows))
         return 0
+    if args.action == "seed":
+        if not args.topic:
+            print("review seed needs --topic")
+            return 1
+        seeds = [x for x in data.get("seeds") or [] if x["id"] != args.id]
+        seeds.append({"id": args.id, "topic": args.topic,
+                      **({"removed": args.removed} if args.removed else {}),
+                      "added": utc(time.time())[:10]})
+        data["seeds"] = seeds
+        ledger.save(path, data)
+        print("seed %s saved; the next `recheck --sections traps` covers it"
+              % args.id)
+        return 0
     claim = ledger.find(data, args.id)
     if claim is None:
         print("no claim %s" % args.id)
@@ -1170,11 +1465,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     boot.add_argument("--sections", nargs="*")
     boot.add_argument("--no-push", action="store_true")
     boot.add_argument("--target", help="write into this tree, no commits")
+    rec = sub.add_parser("recheck", help="re-check UNVERIFIED claims and "
+                         "uncovered seeds now")
+    rec.add_argument("--sections", nargs="*")
+    rec.add_argument("--no-push", action="store_true")
+    rec.add_argument("--target", help="write into this tree, no commits")
     rev = sub.add_parser("review", help="operator review of UNVERIFIED")
     rev.add_argument("action", choices=("list", "accept", "reject",
-                                        "recheck", "remove"))
+                                        "recheck", "remove", "seed"))
     rev.add_argument("id", nargs="?")
     rev.add_argument("--tree", default=ROOT)
+    rev.add_argument("--topic", help="seed: the mechanism, in one line")
+    rev.add_argument("--removed", help="seed: a literal string the old "
+                     "code had and the live code lacks")
     ren = sub.add_parser("render", help="re-render GROUNDING.md")
     ren.add_argument("--tree", default=ROOT)
     ren.add_argument("--check", action="store_true")
@@ -1196,6 +1499,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         sections = args.sections or [s["id"] for s in job.config["sections"]
                                      if s["id"] != "changelog"]
         return job.locked(lambda: job._run(bootstrap=sections))
+    if args.command == "recheck":
+        job = Job(no_push=args.no_push or bool(args.target),
+                  target=args.target)
+        sections = args.sections or [s["id"] for s in job.config["sections"]
+                                     if s["id"] != "changelog"]
+        return job.locked(lambda: job._run(recheck=sections))
     if args.command == "review":
         if args.action != "list" and not args.id:
             parser.error("review %s needs a claim id" % args.action)

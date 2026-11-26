@@ -74,6 +74,70 @@ def first_release(git: Git, sha: str) -> Optional[int]:
     return min(specs) if specs else None
 
 
+SPEC_LINE_RE = re.compile(r"spec_version:\s*(\d+),")
+
+
+def release_bumps(git: Git, tag: str) -> List[Tuple[int, str]]:
+    """(spec, commit) of every release at `tag`, by spec ascending: the
+    `v<N>` tag when it exists, else the first mainline commit that set
+    `spec_version: N,` in runtime/src/lib.rs.
+    It reaches back past the oldest release tag (v430), so changes before
+    it get an exact release rather than a floor."""
+    # Mainline only: a side branch can set a spec long before it merges
+    # (one set 497 on 2026-04-29). Merges are diffed against their first
+    # parent, so a merge that brings a bump in counts as the bump.
+    rc, out = git("log", "--reverse", "--first-parent",
+                  "--diff-merges=first-parent", "--format=%H", "-G",
+                  r"spec_version: [0-9]+,", tag, "--", "runtime/src/lib.rs")
+    if rc != 0:
+        return []
+    first: Dict[int, str] = {}
+    for sha in out.split():
+        rc, text = git("show", "%s:runtime/src/lib.rs" % sha)
+        match = SPEC_LINE_RE.search(text[:40000]) if rc == 0 else None
+        if match and int(match.group(1)) not in first:
+            first[int(match.group(1))] = sha
+    # A release tag is the release itself: it wins over the bump commit.
+    rc, out = git("tag", "-l", "v*")
+    for name in out.splitlines() if rc == 0 else []:
+        match = RELEASE_RE.match(name.strip())
+        if match and int(match.group(1)) in first:
+            rc2, sha = git("rev-parse", "%s^{commit}" % name.strip())
+            if rc2 == 0 and git("merge-base", "--is-ancestor", sha.strip(),
+                                tag)[0] == 0:
+                first[int(match.group(1))] = sha.strip()
+    return sorted(first.items())
+
+
+def release_of(git: Git, bumps: List[Tuple[int, str]],
+               sha: str) -> Optional[int]:
+    """The first release whose bump commit contains `sha`."""
+    found = None
+    for spec, bump in reversed(bumps):
+        if git("merge-base", "--is-ancestor", sha, bump)[0] == 0:
+            found = spec
+        elif found is not None:
+            break
+    return found
+
+
+def marker_since(git: Git, bumps: List[Tuple[int, str]], marker: str,
+                 present: bool, path: str = "pallets"
+                 ) -> Tuple[Optional[int], bool]:
+    """(release, floor): the release since which `marker` has been present
+    (or absent, with present=False) in every release up to the newest. When
+    the state holds back to the oldest release known, that release comes
+    back with floor True ("at or before"). (None, False) when the newest
+    release does not match."""
+    since = None
+    for spec, bump in reversed(bumps):
+        hit = git("grep", "-q", "-F", marker, bump, "--", path)[0] == 0
+        if hit != present:
+            return since, False
+        since = spec
+    return since, since is not None
+
+
 def oldest_release(git: Git) -> Optional[int]:
     """The lowest release spec tagged in the clone. A change dated to it
     may be older: history before it has no release tags."""

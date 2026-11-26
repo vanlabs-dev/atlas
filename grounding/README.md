@@ -100,6 +100,44 @@ the critic, code drops this run's new claims from the end (never-verified
 first) until the section fits. Claims that existed before the run are never
 dropped for space. The push fails closed if the file is still too large.
 
+## Citation retry
+
+The critic labels every rejection `missing_context` (the claim may be
+right, but the cited lines leave out a binding, constant, caller or body)
+or `wrong` (the lines show it false or overstated). A backticked name
+absent from the cited lines counts as `missing_context` too. Those claims
+get one worker run to extend their citations, which may narrow a statement
+but never widen it, then a second critic pass. A `wrong` rejection gets no
+retry and stays UNVERIFIED.
+
+## Traps, seeds and dating
+
+Section 8 lists mechanisms older docs still describe. A removed mechanism
+can leave no `Deprecated` error, so the operator keeps a seed list in
+`claims.yaml`; each seed is verified like any other claim:
+
+```bash
+python3 grounding/atlas_grounding.py review seed tao-flow \
+  --topic "TAO flow emission shares (get_shares_flow), replaced by EMA-price shares." \
+  --removed "Self::get_shares_flow("
+python3 grounding/atlas_grounding.py recheck --sections traps
+```
+
+`--removed` is a literal string the old code had and the live code lacks.
+The job finds the last release that still had it, exports those files, and
+the worker and the critic may cite them as `spec-<N>`. A seed with no claim
+shows as UNVERIFIED, so it never drops out.
+
+Releases are dated from mainline release bumps (the `v<N>` tag, else the
+first mainline commit that set `spec_version: N,`), back to spec 100. A
+trap's stop release is where its marker string vanished from (or appeared
+in) every later release. The tao-flow switch reached main twice (PR #2781
+at 421, PR #2769 at 423); the code-tree walk dates it at 421.
+
+`recheck [--sections ...]` re-checks every UNVERIFIED claim in those
+sections, plus the seeds that have no verified claim, in one run with no
+section cap.
+
 ## Reviewing UNVERIFIED claims
 
 On the workstation, in this repository:

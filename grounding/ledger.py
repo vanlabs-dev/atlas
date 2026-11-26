@@ -92,6 +92,16 @@ def validate(data: Dict[str, Any]) -> None:
                         cid, key))
         if not isinstance(claim.get("watched_paths"), list):
             raise ValueError("claim %s: watched_paths list expected" % cid)
+    seen_seeds = set()
+    for seed in data.get("seeds") or []:
+        sid = seed.get("id") if isinstance(seed, dict) else None
+        if not isinstance(sid, str) or not re.match(r"^[a-z0-9-]+$", sid) \
+                or sid in seen_seeds:
+            raise ValueError("seed id %r is not a unique kebab-case id"
+                             % (sid,))
+        seen_seeds.add(sid)
+        if not isinstance(seed.get("topic"), str) or not seed["topic"]:
+            raise ValueError("seed %s: no topic" % sid)
 
 
 def by_section(data: Dict[str, Any], section: str) -> List[Dict[str, Any]]:

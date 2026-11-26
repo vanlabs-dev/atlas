@@ -116,3 +116,35 @@ that treats 7 days as stale.
 #### Scenario: Quiet week
 - **WHEN** nothing changes for 3 days
 - **THEN** one heartbeat commit updates `last_updated` only
+
+### Requirement: Citation retry for missing links
+
+The critic SHALL label each rejection `missing_context` or `wrong`. A claim
+rejected only as `missing_context`, or by the code check only for a
+backticked name absent from its cited lines, SHALL get one worker run that
+extends its citations (narrowing the statement, never widening it) and a
+second critic pass. A `wrong` rejection SHALL get no retry.
+
+#### Scenario: Missing binding
+- **WHEN** the critic rejects a claim because a constant's binding is not
+  cited, and the retry cites it
+- **THEN** the second critic pass decides the claim
+
+#### Scenario: Substance
+- **WHEN** the critic rejects a claim as `wrong`
+- **THEN** it stays UNVERIFIED with no retry
+
+### Requirement: Seeded traps and dating by release
+
+`claims.yaml` SHALL hold an operator seed list of historical mechanisms.
+Each seed SHALL get exactly one claim in section 8, verified like any
+other; a seed without one SHALL show as UNVERIFIED. Old code for a seed
+SHALL come from an export at the last release that held the seed's removed
+string, citable as `spec-<N>`. Releases SHALL be dated from mainline
+release bumps, and a trap's stop release from where its marker string
+changed state in every later release.
+
+#### Scenario: Removed mechanism without a Deprecated error
+- **WHEN** the `tao-flow` seed is re-checked at v497
+- **THEN** section 8 holds a tao-flow claim dated by the release since
+  which `Self::get_shares_flow(` is absent

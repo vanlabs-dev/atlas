@@ -20,6 +20,8 @@ $claims
 
 - Extrinsics and storage items that are new in this release and fall in
   this section: $new_items
+- A stale claim may carry `last_check`: why its previous check failed.
+  Fix that cause; do not repeat it.$seeds
 
 ## Your task
 

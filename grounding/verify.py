@@ -99,13 +99,15 @@ def read_denials() -> List[str]:
 
 
 def worker_cmd(claude: str, model: str, prompt: str, source_dir: str,
-               corpus_dir: str, max_turns: int) -> List[str]:
+               corpus_dir: str, max_turns: int,
+               extra_dirs: Tuple[str, ...] = ()) -> List[str]:
     reads = ["Read(/%s/**)" % os.path.abspath(d)
-             for d in (source_dir, corpus_dir)]
+             for d in (source_dir, corpus_dir) + tuple(extra_dirs)]
     return ([claude, "-p", "--restricted", "--strict-mcp-config",
              "--model", model,
              "--output-format", "json", "--max-turns", str(max_turns),
-             "--tools", "Read,Grep,Glob", "--add-dir", corpus_dir,
+             "--tools", "Read,Grep,Glob", "--add-dir", corpus_dir]
+            + list(extra_dirs) + [
              "--allowedTools"] + reads
             + ["--disallowedTools", "WebFetch", "WebSearch", "Bash", "Edit",
                "Write"] + read_denials() + ["--", prompt])
@@ -206,10 +208,13 @@ def _normalise_default(value: Any) -> str:
 
 
 def check_claim(claim: Dict[str, Any], source_dir: str, max_lines: int,
-                pallets: Optional[Dict[str, Any]] = None
+                pallets: Optional[Dict[str, Any]] = None,
+                sources: Optional[Dict[str, str]] = None
                 ) -> Tuple[List[str], List[Dict[str, Any]]]:
     """(problems, cited) for one worker claim. `cited` holds each
-    evidence range with its text, for the critic."""
+    evidence range with its text, for the critic. An evidence `ref` other
+    than the live tag must name one of `sources` (ref -> exported dir):
+    old code exported for a trap seed."""
     problems: List[str] = []
     cited: List[Dict[str, Any]] = []
     evidence = claim.get("evidence")
@@ -217,7 +222,15 @@ def check_claim(claim: Dict[str, Any], source_dir: str, max_lines: int,
         return ["no citation"], []
     for ev in evidence:
         path, start, end = ev.get("path"), ev.get("start"), ev.get("end")
-        lines = cited_lines(source_dir, path, start, end)
+        ref = ev.get("ref")
+        base = source_dir
+        if ref is not None and sources is not None and ref in sources:
+            base = sources[ref]
+        elif ref is not None and (sources is None or ref not in sources):
+            problems.append("citation ref %r is not the live tag or an "
+                            "exported old release" % (ref,))
+            continue
+        lines = cited_lines(base, path, start, end)
         if lines is None:
             problems.append("citation %s:%s-%s is not a line range of a "
                             "file at the tag" % (path, start, end))
@@ -226,12 +239,12 @@ def check_claim(claim: Dict[str, Any], source_dir: str, max_lines: int,
             problems.append("citation %s:%d-%d is over %d lines" % (
                 path, start, end, max_lines))
         text = "\n".join(lines)
-        signature = enclosing_signature(source_dir, path, start)
+        signature = enclosing_signature(base, path, start)
         if signature and signature[0] < start:
             # Context only: the function this range sits in.
             text = "%s\n    ...\n%s" % (signature[1], text)
         cited.append({"path": path, "start": start, "end": end,
-                      "text": text,
+                      "text": text, "ref": ref,
                       "signature_line": signature[0] if signature else None})
     if problems:
         return problems, cited
@@ -293,15 +306,21 @@ def validate_worker(reply: Dict[str, Any], section: str,
 
 
 def critic_items(checked: List[Tuple[Dict[str, Any], List[Dict[str, Any]]]],
-                 tag: str) -> List[Dict[str, Any]]:
+                 tag: str, facts: Optional[Dict[int, List[str]]] = None
+                 ) -> List[Dict[str, Any]]:
+    """Critic input. `facts` maps a claim's index to statements code has
+    proved from git (for example that a string is absent at the tag); the
+    critic may rely on them as it relies on the cited lines."""
     items = []
     for index, (claim, cited) in enumerate(checked):
+        extra = (facts or {}).get(index)
         items.append({
+            **({"code_checked_facts": extra} if extra else {}),
             "key": "c%d" % index, "statement": claim["statement"],
             "kind": "deprecated" if claim.get("action") == "deprecate"
             else "current",
             "cited": [{"where": "%s %s:%d-%d%s" % (
-                tag, c["path"], c["start"], c["end"],
+                c.get("ref") or tag, c["path"], c["start"], c["end"],
                 " (first line: the enclosing fn, line %d)"
                 % c["signature_line"] if c.get("signature_line")
                 and c["signature_line"] < c["start"] else ""),
@@ -309,17 +328,36 @@ def critic_items(checked: List[Tuple[Dict[str, Any], List[Dict[str, Any]]]],
     return items
 
 
+KINDS = ("missing_context", "wrong")
+
+
 def parse_verdicts(reply: Dict[str, Any], keys: List[str]
-                   ) -> Dict[str, Tuple[str, str]]:
-    """{key: (verdict, reason)}. A key the critic left out is a
-    disagreement."""
+                   ) -> Dict[str, Tuple[str, str, str]]:
+    """{key: (verdict, reason, kind)}. A key the critic left out is a
+    disagreement. A disagreement without a valid kind counts as `wrong`:
+    only a labelled missing link earns the citation retry."""
     verdicts = {}
     for entry in reply.get("verdicts") or []:
         if not isinstance(entry, dict):
             continue
         key, verdict = entry.get("key"), entry.get("verdict")
         if key in keys and verdict in ("agree", "disagree"):
-            verdicts[key] = (verdict, str(entry.get("reason") or "")[:300])
+            kind = entry.get("kind") if entry.get("kind") in KINDS \
+                else "wrong"
+            verdicts[key] = (verdict, str(entry.get("reason") or "")[:300],
+                             "" if verdict == "agree" else kind)
     for key in keys:
-        verdicts.setdefault(key, ("disagree", "the critic gave no verdict"))
+        verdicts.setdefault(key, ("disagree", "the critic gave no verdict",
+                                  "wrong"))
     return verdicts
+
+
+def problem_kind(problems: List[str]) -> str:
+    """`missing_context` when every code-check problem is a backticked
+    name absent from the cited lines (the citation stops short); `wrong`
+    for a bad range, a number not in the lines or a default mismatch."""
+    if problems and all(p.startswith("`") and
+                        p.endswith("is not in the cited lines")
+                        for p in problems):
+        return "missing_context"
+    return "wrong"

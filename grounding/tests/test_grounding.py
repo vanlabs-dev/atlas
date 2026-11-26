@@ -336,6 +336,30 @@ class FixesTest(unittest.TestCase):
             deprecated_since_floor=True), {430: "2026-07-10"})
         self.assertIn("(stopped applying at or before spec 430)", line)
 
+    def test_marker_since_walks_releases(self):
+        trees = {"b419": True, "b421": False, "b423": False, "b497": False}
+
+        def git(*args):
+            if args[0] == "grep":
+                return (0 if trees[args[4]] else 1), ""
+            return 1, ""
+        bumps = [(419, "b419"), (421, "b421"), (423, "b423"), (497, "b497")]
+        self.assertEqual(history.marker_since(git, bumps, "call(", False),
+                         (421, False))
+        self.assertEqual(history.marker_since(git, bumps, "call(", True),
+                         (None, False))
+        trees["b419"] = False
+        self.assertEqual(history.marker_since(git, bumps, "call(", False),
+                         (419, True))
+
+    def test_release_of_takes_the_first_containing_release(self):
+        contains = {"b421": False, "b423": True, "b497": True}
+
+        def git(*args):
+            return (0 if contains[args[3]] else 1), ""
+        bumps = [(421, "b421"), (423, "b423"), (497, "b497")]
+        self.assertEqual(history.release_of(git, bumps, "sha"), 423)
+
     def test_oldest_release(self):
         git = lambda *a: (0, "v1.0.0\nv497\nv430\nv431\n")
         self.assertEqual(history.oldest_release(git), 430)
@@ -765,6 +789,168 @@ class VerifySectionTest(unittest.TestCase):
         self.assertEqual(unverified, ["emission-001"])
         self.assertEqual(ledger.find(self.data, "emission-001")["statement"],
                          "Old text.")
+
+
+class RetryAndSeedTest(unittest.TestCase):
+    """The citation retry, critic kinds, seeds and old-code citations."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.src = os.path.join(self.tmp, "src")
+        self.old = os.path.join(self.tmp, "old")
+        for base, text in ((self.src, "fn get_shares() {\n    price_ema()\n"
+                            "}\nfn price_ema() { 1 }\n"),
+                           (self.old, "fn get_shares() {\n    flow()\n}\n")):
+            os.makedirs(os.path.join(base, "p"))
+            with open(os.path.join(base, "p", "e.rs"), "w") as handle:
+                handle.write(text)
+        self.job = FakeJob(os.path.join(self.tmp, "tree"), {}, {})
+        self.job.seed_sources = lambda data, tag: {
+            "spec-420": (self.old, "b" * 40)}
+        self.data = ledger.empty()
+        self.data["claims"] = [claim("emission-001", stale=True,
+                                     statement="Old.")]
+        self.replies = []
+        self.calls = []
+
+        def run_model(cmd, cwd, timeout):
+            self.calls.append(cmd)
+            reply = self.replies.pop(0)
+            return 0, json.dumps({"result": json.dumps(reply),
+                                  "is_error": False}), ""
+        self.job.run_model = run_model
+
+    def verify(self, section="emission"):
+        return self.job.verify_section({}, self.data, section, 497, "v497",
+                                       "a" * 40, self.src, fresh=False)
+
+    def test_kinds(self):
+        self.assertEqual(verify.problem_kind(
+            ["`x` is not in the cited lines"]), "missing_context")
+        self.assertEqual(verify.problem_kind(
+            ["`x` is not in the cited lines",
+             "number 5 is not in the cited lines"]), "wrong")
+        v = verify.parse_verdicts({"verdicts": [
+            {"key": "c0", "verdict": "disagree", "kind": "missing_context"},
+            {"key": "c1", "verdict": "disagree", "kind": "bogus"}]},
+            ["c0", "c1"])
+        self.assertEqual(v["c0"][2], "missing_context")
+        self.assertEqual(v["c1"][2], "wrong")
+
+    def test_missing_link_gets_one_retry(self):
+        short = [{"path": "p/e.rs", "start": 2, "end": 2}]
+        full = [{"path": "p/e.rs", "start": 1, "end": 4}]
+        self.replies = [
+            {"claims": [{"id": "emission-001", "action": "rewrite",
+                         "statement": "`get_shares` uses `price_ema`.",
+                         "evidence": short}]},
+            {"verdicts": [{"key": "c0", "verdict": "disagree",
+                           "kind": "missing_context",
+                           "reason": "price_ema body not shown"}]},
+            {"claims": [{"key": "r0", "statement": "`get_shares` uses "
+                         "`price_ema`.", "evidence": full}]},
+            {"verdicts": [{"key": "c0", "verdict": "agree"}]}]
+        counts, unverified = self.verify()
+        self.assertEqual(len(self.calls), 4)  # worker, critic, retry, critic
+        self.assertEqual(counts["retried"], 1)
+        self.assertEqual(counts["retry_verified"], 1)
+        self.assertEqual(unverified, [])
+        self.assertEqual(ledger.find(self.data, "emission-001")[
+            "evidence"][0]["lines"], "1-4")
+        self.assertIn("price_ema body not shown", self.calls[2][-1])
+
+    def test_substantive_rejection_gets_no_retry(self):
+        self.replies = [
+            {"claims": [{"id": "emission-001", "action": "rewrite",
+                         "statement": "`get_shares` uses `price_ema`.",
+                         "evidence": [{"path": "p/e.rs", "start": 1,
+                                       "end": 4}]}]},
+            {"verdicts": [{"key": "c0", "verdict": "disagree",
+                           "kind": "wrong", "reason": "TAO enters the pool"}]}]
+        counts, unverified = self.verify()
+        self.assertEqual(len(self.calls), 2)
+        self.assertEqual(unverified, ["emission-001"])
+        self.assertIn("TAO enters the pool", ledger.find(
+            self.data, "emission-001")["review"]["reason"])
+
+    def test_failed_retry_says_so(self):
+        short = [{"path": "p/e.rs", "start": 2, "end": 2}]
+        self.replies = [
+            {"claims": [{"id": "emission-001", "action": "rewrite",
+                         "statement": "`get_shares` uses `price_ema`.",
+                         "evidence": short}]},
+            {"verdicts": [{"key": "c0", "verdict": "disagree",
+                           "kind": "missing_context", "reason": "x"}]},
+            {"claims": []},
+            {"verdicts": [{"key": "c0", "verdict": "disagree",
+                           "kind": "missing_context", "reason": "still x"}]}]
+        _, unverified = self.verify()
+        self.assertEqual(unverified, ["emission-001"])
+        self.assertTrue(ledger.find(self.data, "emission-001")["review"][
+            "reason"].startswith("after one citation retry: critic: still x"))
+
+    def test_seed_claim_cites_old_code_and_seeds_are_covered(self):
+        self.data["claims"] = []
+        self.data["seeds"] = [
+            {"id": "tao-flow", "topic": "TAO flow emission shares.",
+             "removed": "flow()"},
+            {"id": "other", "topic": "Something else."}]
+        self.data["meta"]["queued_items"] = {"traps": ["seed:tao-flow",
+                                                       "seed:other"]}
+        self.job.bumps = lambda tag: [(420, "b" * 40), (421, "c" * 40)]
+        self.replies = [
+            {"claims": [{"id": None, "action": "new", "seed": "tao-flow",
+                         "removed": "worker text, ignored",
+                         "statement": "`get_shares` no longer calls `flow`; "
+                         "it now calls `price_ema`.",
+                         "evidence": [
+                             {"path": "p/e.rs", "start": 1, "end": 3,
+                              "ref": "spec-420"},
+                             {"path": "p/e.rs", "start": 1, "end": 4}]}]},
+            {"verdicts": [{"key": "c0", "verdict": "agree"}]}]
+        counts, unverified = self.verify("traps")
+        seeded = [c for c in self.data["claims"] if c.get("seed")]
+        self.assertEqual(sorted(c["seed"] for c in seeded),
+                         ["other", "tao-flow"])
+        flow = [c for c in seeded if c["seed"] == "tao-flow"][0]
+        self.assertEqual(flow["status"], "deprecated")
+        self.assertEqual([e["ref"] for e in flow["evidence"]],
+                         ["spec-420", "v497"])
+        self.assertEqual(flow["evidence"][0]["commit"], "b" * 40)
+        other = [c for c in seeded if c["seed"] == "other"][0]
+        self.assertIn("no claim for seed other", other["review"]["reason"])
+        # The critic saw the old code under its ref, and the code-checked
+        # absence of the removed string; the seed's removed string came
+        # from the seed list.
+        self.assertIn("spec-420 p/e.rs:1-3", self.calls[1][-1])
+        self.assertIn("code_checked_facts", self.calls[1][-1])
+        self.assertEqual(flow["removed"], "flow()")
+        self.assertIn("flow()", self.calls[1][-1])
+        ledger.validate(self.data)
+
+    def test_unknown_ref_is_rejected(self):
+        problems, _ = verify.check_claim(
+            {"statement": "x", "evidence": [
+                {"path": "p/e.rs", "start": 1, "end": 2, "ref": "spec-1"}]},
+            self.src, 120, None, {"v497": self.src})
+        self.assertIn("not the live tag or an exported old release",
+                      problems[0])
+
+    def test_recheck_marks_unverified_and_queues_seeds(self):
+        self.data["claims"] = [
+            claim("emission-001"),
+            claim("emission-002", review={"reason": "critic: x"}),
+            claim("traps-001", status="deprecated", seed="tao-flow",
+                  last_verified=None, evidence=[],
+                  review={"reason": "no claim"})]
+        self.data["seeds"] = [{"id": "tao-flow", "topic": "TAO flow."}]
+        marked = self.job.mark_recheck(self.data, ["emission", "traps"])
+        self.assertEqual(marked, ["emission-002", "traps-001"])
+        self.assertFalse(ledger.find(self.data, "emission-001").get("stale"))
+        self.assertEqual(self.data["meta"]["queued_items"]["traps"],
+                         ["seed:tao-flow"])
+        self.assertIsNone(ledger.find(self.data, "traps-001"))  # placeholder
 
 
 class UnitFilesTest(unittest.TestCase):
