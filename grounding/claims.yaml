@@ -8,7 +8,7 @@ meta:
   subtensor_commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
   newest_tag: "v497"
   newest_tag_live: true
-  last_updated: "2026-11-26T22:00:54Z"
+  last_updated: "2026-11-26T22:08:15Z"
   content_changed: "2026-11-26T22:02:26Z"
   content_hash: "bda460ebc6fb5ea752c0bc3ac288fa58439045543886c323e139df83a1e8e1d5"
   pending_on_main: []
