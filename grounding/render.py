@@ -74,16 +74,35 @@ def spec_dates(meta: Dict[str, Any]) -> Dict[int, str]:
     return {e["spec"]: e["date"] for e in meta.get("spec_dates") or []}
 
 
-def _date(spec: Any, dates: Dict[int, str], floor: bool = False) -> str:
-    """`spec 481, 2026-10-19`; `or before spec 430` at the oldest release
-    tag, where git history cannot tell an older change apart."""
+def live_from(spec: int, meta: Dict[str, Any]) -> Any:
+    """(live spec, date) of the observed upgrade that first carried code
+    release `spec`: the upgrade with prev < spec <= new. None when Atlas's
+    chain history does not cover that release."""
+    for entry in sorted(meta.get("spec_dates") or [],
+                        key=lambda e: e["spec"]):
+        prev = entry.get("prev")
+        if isinstance(prev, int) and prev < spec <= entry["spec"]:
+            return entry["spec"], entry["date"]
+    return None
+
+
+def _date(spec: Any, meta: Dict[str, Any], floor: bool = False) -> str:
+    """`spec 481, 2026-10-19` when that release went live itself;
+    `spec 480, live from spec 481 (2026-10-19)` when mainnet skipped it;
+    `or before spec 100` at the oldest release known."""
     if floor:
         return "or before spec %s" % spec
-    when = dates.get(spec) if spec is not None else None
-    return "spec %s, %s" % (spec, when) if when else "spec %s" % spec
+    if not isinstance(spec, int):
+        return "spec %s" % spec
+    live = live_from(spec, meta)
+    if live and live[0] == spec:
+        return "spec %d, %s" % (spec, live[1])
+    if live:
+        return "spec %d, live from spec %d (%s)" % (spec, live[0], live[1])
+    return "spec %d" % spec
 
 
-def claim_line(claim: Dict[str, Any], dates: Dict[int, str]) -> str:
+def claim_line(claim: Dict[str, Any], meta: Dict[str, Any]) -> str:
     review = claim.get("review")
     if review or claim.get("stale"):
         reason = (review or {}).get("reason") or "re-check queued"
@@ -99,7 +118,7 @@ def claim_line(claim: Dict[str, Any], dates: Dict[int, str]) -> str:
     line = "- %s" % claim["statement"]
     if claim.get("status") == "deprecated":
         line += " (stopped applying at %s)" % _date(
-            claim.get("deprecated_since_spec"), dates,
+            claim.get("deprecated_since_spec"), meta,
             bool(claim.get("deprecated_since_floor")))
     elif claim.get("status") == "pending":
         line += " (pending: on main, not live)"
@@ -115,7 +134,6 @@ def front_matter(meta: Dict[str, Any]) -> str:
 
 def body(data: Dict[str, Any], config: Dict[str, Any]) -> str:
     meta = data["meta"]
-    dates = spec_dates(meta)
     out: List[str] = [INTRO]
     for number, section in enumerate(config["sections"], 1):
         out.append("## %d. %s\n" % (number, section["title"]))
@@ -129,7 +147,7 @@ def body(data: Dict[str, Any], config: Dict[str, Any]) -> str:
                 own = (claim["section"] == section["id"]
                        and claim.get("status") != "deprecated")
                 if in_traps or own:
-                    lines.append(claim_line(claim, dates))
+                    lines.append(claim_line(claim, meta))
         out.append("\n".join(lines or ["- No verified claims yet."]) + "\n")
     return "\n".join(out)
 
@@ -148,6 +166,5 @@ def render(data: Dict[str, Any], config: Dict[str, Any]) -> str:
 
 def section_bytes(data: Dict[str, Any], config: Dict[str, Any],
                   section: str) -> int:
-    dates = spec_dates(data["meta"])
-    return sum(len(claim_line(c, dates).encode("utf-8")) + 1
+    return sum(len(claim_line(c, data["meta"]).encode("utf-8")) + 1
                for c in data["claims"] if c["section"] == section)

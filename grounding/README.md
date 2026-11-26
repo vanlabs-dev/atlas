@@ -134,6 +134,16 @@ trap's stop release is where its marker string vanished from (or appeared
 in) every later release. The tao-flow switch reached main twice (PR #2781
 at 421, PR #2769 at 423); the code-tree walk dates it at 421.
 
+A trap shows the release where the code changed and, when Atlas's chain
+history covers it, the first live spec that carried it: release 461 never
+went live (mainnet moved 459 to 464), so it reads "spec 461, live from spec
+464 (2026-09-17)". `redate` re-dates every deprecated claim from its marker
+with no model run:
+
+```bash
+python3 grounding/atlas_grounding.py redate
+```
+
 `recheck [--sections ...]` re-checks every UNVERIFIED claim in those
 sections, plus the seeds that have no verified claim, in one run with no
 section cap.

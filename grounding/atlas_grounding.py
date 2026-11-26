@@ -106,6 +106,17 @@ def load_config() -> Dict[str, Any]:
         return json.load(handle)
 
 
+def spec_date_records(meta: Dict[str, Any],
+                      hist: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Observed live upgrades as [{spec, prev, date}], merged with what the
+    ledger already holds, by spec."""
+    records = {e["spec"]: dict(e) for e in meta.get("spec_dates") or []}
+    for entry in hist:
+        records[entry["new"]] = {"spec": entry["new"], "prev": entry["prev"],
+                                 "date": entry["date"]}
+    return [records[n] for n in sorted(records)]
+
+
 def _plain(value: Any) -> Optional[str]:
     if isinstance(value, dict):
         return None  # undecodable (hex): never shown as a value
@@ -645,11 +656,7 @@ class Job:
         head_spec = self.up.clone_spec()
         meta["pending_on_main"] = history.pending(
             self.clone_git, anchor, head, head_spec, spec)
-        dates = {e["spec"]: e["date"] for e in meta.get("spec_dates") or []}
-        for entry in hist:
-            dates[entry["new"]] = entry["date"]
-        meta["spec_dates"] = [{"spec": n, "date": dates[n]}
-                              for n in sorted(dates)]
+        meta["spec_dates"] = spec_date_records(meta, hist)
 
     def spec_history(self) -> List[Dict[str, Any]]:
         if self.spec_history_file:
@@ -1200,27 +1207,59 @@ class Job:
         if proposal.get("seed"):
             claim["seed"] = proposal["seed"]
         if deprecated:
-            # The stop release comes from the code tree, release by
-            # release: since when the removed string has been absent, or
-            # the replacement string present. A change that reached main
-            # twice (PR #2781 at 421, then #2769 at 423 for the tao-flow
-            # switch) is dated by when the code changed, not by commit.
-            bumps = self.bumps(tag)
-            removed, marker = proposal.get("removed"), proposal.get("marker")
-            spec, floor = None, False
-            for text, present in ((removed, False), (marker, True)):
-                if isinstance(text, str) and text.strip():
-                    spec, floor = history.marker_since(
-                        self.clone_git, bumps, text, present)
-                    if spec is not None:
-                        break
-            if spec is None:
-                spec, floor = since, since is not None and since == oldest
-            claim["deprecated_since_spec"] = spec
-            claim["deprecated_since_floor"] = floor
             for key in ("marker", "removed"):
                 if proposal.get(key):
                     claim[key] = proposal[key]
+            self.date_deprecated(claim, tag, since)
+
+    def date_deprecated(self, claim: Dict[str, Any], tag: str,
+                        since: Optional[int] = None) -> None:
+        """Set deprecated_since_spec and _floor from the code tree, release
+        by release: since when the claim's `removed` string has been absent,
+        else its `marker` string present. A change that reached main twice
+        (the tao-flow switch: PR #2781 at 421, PR #2769 at 423) is dated by
+        when the code changed, not by commit. With no marker, `since` (the
+        evidence date) stands."""
+        bumps = self.bumps(tag)
+        oldest = bumps[0][0] if bumps else None
+        spec, floor = None, False
+        for text, present in ((claim.get("removed"), False),
+                              (claim.get("marker"), True)):
+            if isinstance(text, str) and text.strip():
+                spec, floor = history.marker_since(self.clone_git, bumps,
+                                                   text, present)
+                if spec is not None:
+                    break
+        if spec is None:
+            spec, floor = since, since is not None and since == oldest
+        claim["deprecated_since_spec"] = spec
+        claim["deprecated_since_floor"] = floor
+
+    def redate(self) -> int:
+        """Model-free: re-date every deprecated claim that has a marker,
+        then re-render. Prints each change."""
+        data = ledger.load(self.path(CLAIMS))
+        tag = data["meta"]["subtensor_tag"]
+        data["meta"]["spec_dates"] = spec_date_records(data["meta"],
+                                                       self.spec_history())
+        changed = 0
+        for claim in data["claims"]:
+            if claim.get("status") != "deprecated" or not (
+                    claim.get("marker") or claim.get("removed")):
+                continue
+            before = (claim.get("deprecated_since_spec"),
+                      bool(claim.get("deprecated_since_floor")))
+            self.date_deprecated(claim, tag, before[0])
+            after = (claim["deprecated_since_spec"],
+                     claim["deprecated_since_floor"])
+            if after != before:
+                changed += 1
+            print("%s: %s%s -> %s%s" % (
+                claim["id"], "or before " if before[1] else "", before[0],
+                "or before " if after[1] else "", after[0]))
+        self.write_outputs(data, content_only=False, heartbeat=False)
+        print("%d claims re-dated" % changed)
+        return 0
 
     def mark_unverified(self, data: Dict[str, Any],
                         existing: Dict[str, Dict[str, Any]],
@@ -1478,6 +1517,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     rev.add_argument("--topic", help="seed: the mechanism, in one line")
     rev.add_argument("--removed", help="seed: a literal string the old "
                      "code had and the live code lacks")
+    red = sub.add_parser("redate", help="re-date deprecated claims from "
+                         "release history (no model)")
+    red.add_argument("--target", help="tree to rewrite (default: the "
+                     "grounding worktree's live tree, this checkout)")
     ren = sub.add_parser("render", help="re-render GROUNDING.md")
     ren.add_argument("--tree", default=ROOT)
     ren.add_argument("--check", action="store_true")
@@ -1505,6 +1548,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         sections = args.sections or [s["id"] for s in job.config["sections"]
                                      if s["id"] != "changelog"]
         return job.locked(lambda: job._run(recheck=sections))
+    if args.command == "redate":
+        return Job(no_push=True, target=args.target or ROOT).redate()
     if args.command == "review":
         if args.action != "list" and not args.id:
             parser.error("review %s needs a claim id" % args.action)

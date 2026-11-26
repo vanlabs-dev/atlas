@@ -250,7 +250,8 @@ class RenderTest(unittest.TestCase):
                             pending_on_main=["#1 org/x"],
                             changelog=["spec 497 live 2026-11-26 (from 495):"
                                        " 1 PRs: #3367"],
-                            spec_dates=[{"spec": 490, "date": "2026-11-12"}])
+                            spec_dates=[{"spec": 490, "prev": 488,
+                                         "date": "2026-11-12"}])
         data["claims"] = [
             claim("emission-001", statement="Emission is X."),
             claim("emission-002", review={"reason": "critic: wrong",
@@ -333,7 +334,7 @@ class FixesTest(unittest.TestCase):
     def test_date_floor_at_oldest_tag(self):
         line = render.claim_line(claim(
             "traps-001", status="deprecated", deprecated_since_spec=430,
-            deprecated_since_floor=True), {430: "2026-07-10"})
+            deprecated_since_floor=True), {"spec_dates": []})
         self.assertIn("(stopped applying at or before spec 430)", line)
 
     def test_marker_since_walks_releases(self):
@@ -359,6 +360,18 @@ class FixesTest(unittest.TestCase):
             return (0 if contains[args[3]] else 1), ""
         bumps = [(421, "b421"), (423, "b423"), (497, "b497")]
         self.assertEqual(history.release_of(git, bumps, "sha"), 423)
+
+    def test_skipped_release_shows_first_live_spec(self):
+        meta = {"spec_dates": [{"spec": 464, "prev": 459,
+                                "date": "2026-09-17"},
+                               {"spec": 481, "prev": 479,
+                                "date": "2026-10-19"}]}
+        line = lambda n: render.claim_line(claim(
+            "traps-001", status="deprecated", deprecated_since_spec=n), meta)
+        self.assertIn("(stopped applying at spec 461, live from spec 464 "
+                      "(2026-09-17))", line(461))
+        self.assertIn("(stopped applying at spec 481, 2026-10-19)", line(481))
+        self.assertIn("(stopped applying at spec 391)", line(391))
 
     def test_oldest_release(self):
         git = lambda *a: (0, "v1.0.0\nv497\nv430\nv431\n")
@@ -951,6 +964,34 @@ class RetryAndSeedTest(unittest.TestCase):
         self.assertEqual(self.data["meta"]["queued_items"]["traps"],
                          ["seed:tao-flow"])
         self.assertIsNone(ledger.find(self.data, "traps-001"))  # placeholder
+
+
+class RedateTest(unittest.TestCase):
+    def test_redate_uses_release_history(self):
+        tree = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tree)
+        os.makedirs(os.path.join(tree, "grounding"))
+        data = ledger.empty()
+        data["meta"]["subtensor_tag"] = "v497"
+        data["claims"] = [
+            claim("traps-001", status="deprecated", marker="notice",
+                  deprecated_since_spec=430, deprecated_since_floor=True),
+            claim("traps-002", status="deprecated",
+                  deprecated_since_spec=464)]  # no marker: untouched
+        ledger.save(os.path.join(tree, "grounding", "claims.yaml"), data)
+        job = FakeJob(tree, {}, {})
+        job.bumps = lambda tag: [(300, "b300"), (412, "b412"), (497, "b497")]
+        job.clone_git = lambda *a: ((0, "") if a[0] == "grep" and
+                                    a[4] in ("b412", "b497") else (1, ""))
+        job.redate()
+        out = ledger.load(os.path.join(tree, "grounding", "claims.yaml"))
+        first = ledger.find(out, "traps-001")
+        self.assertEqual((first["deprecated_since_spec"],
+                          first["deprecated_since_floor"]), (412, False))
+        self.assertEqual(ledger.find(out, "traps-002")[
+            "deprecated_since_spec"], 464)
+        with open(os.path.join(tree, "GROUNDING.md")) as handle:
+            self.assertIn("stopped applying at spec 412", handle.read())
 
 
 class UnitFilesTest(unittest.TestCase):
