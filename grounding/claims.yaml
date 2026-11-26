@@ -8,9 +8,9 @@ meta:
   subtensor_commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
   newest_tag: "v497"
   newest_tag_live: true
-  last_updated: "2026-11-26T22:34:33Z"
-  content_changed: "2026-11-26T22:34:33Z"
-  content_hash: "2d79efdb23e37e551e189e4aa2c3f6e785496b178ca235cbeff17407bab8edf9"
+  last_updated: "2026-11-26T23:40:34Z"
+  content_changed: "2026-11-26T23:40:34Z"
+  content_hash: "ab9ebd43c5cd30ae6482998737e9479db1daff93782873bd93a4c5f9487156fe"
   pending_on_main: []
   verified_through: null
   queued_items: {}
@@ -121,43 +121,28 @@ meta:
 claims:
   - id: "emission-001"
     section: "emission"
-    statement: "`get_shares` divides each eligible subnet's EMA price (`get_moving_alpha_price`) by the sum of those prices, so spot price is not used; at v497 nothing calls the TAO-flow `get_shares_flow`."
+    statement: "`get_shares` starts from `get_shares_price_ema`, which divides each subnet's EMA price `get_moving_alpha_price` (not spot) by their sum, then applies the miner-burn reweight and the gate; it never calls `get_shares_flow`."
     evidence:
       - path: "pallets/subtensor/src/coinbase/subnet_emissions.rs"
-        lines: "34-41"
+        lines: "255-361"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      - path: "pallets/subtensor/src/coinbase/subnet_emissions.rs"
-        lines: "350-361"
-        ref: "v497"
-        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "d3f40e44bda9019c606aeb0c907bb52ba7fe386c"
+        pr: 3071
       - path: "pallets/subtensor/src/coinbase/subnet_emissions.rs"
         lines: "511-538"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-    live_since_spec: null
+        changed_in: "061559c23cd391e3db1be0cf19e4c441c04692f6"
+        pr: 2781
+    live_since_spec: 445
     status: "live"
-    last_verified: null
+    last_verified: "2026-11-26T23:22:22Z"
     watched_paths:
       - "pallets/subtensor/src/coinbase/subnet_emissions.rs"
     stale: false
-    review:
-      reason: "critic: The cited code shows the EMA-price normalization inside `get_shares_price_ema`, but `get_shares` then reweights by miner burn and the gate; `#[allow(dead_code)]` only hints that `get_shares_flow` is unused and does not prove nothing calls it."
-      proposed: "`get_shares` divides each eligible subnet's EMA price (`get_moving_alpha_price`) by the sum of those prices, so spot price is not used; at v497 nothing calls the TAO-flow `get_shares_flow`."
-      proposed_evidence:
-        - path: "pallets/subtensor/src/coinbase/subnet_emissions.rs"
-          lines: "255-257"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/coinbase/subnet_emissions.rs"
-          lines: "350-361"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/coinbase/subnet_emissions.rs"
-          lines: "511-538"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T22:12:32Z"
+    review: null
+    live_since_floor: false
   - id: "emission-002"
     section: "emission"
     statement: "`apply_emission_gate` multiplies each share by 1 / (1 + (theta/s)^h), where h is `EmissionGateExponent` (default 3), then renormalizes; a zero `EmissionGateBar` turns the gate off."
@@ -289,35 +274,34 @@ claims:
     review: null
   - id: "emission-008"
     section: "emission"
-    statement: "`inject_and_maybe_swap` uses `excess_tao` for a chain buy through `swap_tao_for_alpha` and adds the bought alpha to `SubnetProtocolAlpha`; only the price-active part from `adjust_protocol_liquidity` enters the pool reserves."
+    statement: "`inject_and_maybe_swap` spends `excess_tao` on a chain buy via `swap_tao_for_alpha` (its TAO enters the pool, bought alpha goes to `SubnetProtocolAlpha`); `tao_in` and `alpha_in` reach reserves only as the price-active part from `adjust_protocol_liquidity`."
     evidence:
       - path: "pallets/subtensor/src/coinbase/run_coinbase.rs"
-        lines: "109-142"
+        lines: "94-142"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "8d92576105e483a5214612142a7ed3db3f31a67c"
+        pr: 2857
       - path: "pallets/subtensor/src/coinbase/run_coinbase.rs"
-        lines: "193-221"
+        lines: "143-192"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-    live_since_spec: null
+        changed_in: "8d92576105e483a5214612142a7ed3db3f31a67c"
+        pr: 2857
+      - path: "pallets/subtensor/src/coinbase/run_coinbase.rs"
+        lines: "193-231"
+        ref: "v497"
+        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "447ca995a325ba6ab2720237f70576d3e4e3936e"
+        pr: 2857
+    live_since_spec: 428
     status: "live"
-    last_verified: null
+    last_verified: "2026-11-26T23:22:29Z"
     watched_paths:
       - "pallets/subtensor/src/coinbase/run_coinbase.rs"
     stale: false
-    review:
-      reason: "critic: The chain buy itself puts excess TAO into the pool (the code records the excess TAO 'that entered pool'), so it is not true that only the price-active part enters the pool reserves."
-      proposed: "`inject_and_maybe_swap` uses `excess_tao` for a chain buy through `swap_tao_for_alpha` and adds the bought alpha to `SubnetProtocolAlpha`; only the price-active part from `adjust_protocol_liquidity` enters the pool reserves."
-      proposed_evidence:
-        - path: "pallets/subtensor/src/coinbase/run_coinbase.rs"
-          lines: "94-142"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/coinbase/run_coinbase.rs"
-          lines: "193-221"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T22:12:35Z"
+    review: null
+    live_since_floor: false
   - id: "emission-009"
     section: "emission"
     statement: "A subnet with `SubnetEmissionEnabled` false gets zero TAO-side emission and its share is redistributed to enabled subnets, but its alpha_out path still runs."
@@ -333,14 +317,18 @@ claims:
       - "pallets/subtensor/src/coinbase/subnet_emissions.rs"
     stale: false
     review:
-      reason: "critic: The zeroing and redistribution are shown, but that the alpha_out path still runs is only asserted in a comment and depends on downstream code that is not cited."
-      proposed: "A subnet with `SubnetEmissionEnabled` false gets zero TAO-side emission and its share is redistributed to enabled subnets, but its alpha_out path still runs."
+      reason: "after one citation retry: critic: The cited lines show disabled subnets getting a zero, renormalised share while staying in the map, and alpha_out being computed from get_block_emission_for_issuance and minted, but they don't show the caller that passes get_subnet_block_emissions' output and the sam"
+      proposed: "A subnet with `SubnetEmissionEnabled` false gets a zero TAO share (redistributed to enabled subnets) but stays in the map, so `emit_to_subnets` still mints its `alpha_out` from `get_block_emission_for_issuance`."
       proposed_evidence:
         - path: "pallets/subtensor/src/coinbase/subnet_emissions.rs"
           lines: "34-76"
           ref: "v497"
           commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T21:44:44Z"
+        - path: "pallets/subtensor/src/coinbase/run_coinbase.rs"
+          lines: "233-322"
+          ref: "v497"
+          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+      at: "2026-11-26T23:22:30Z"
   - id: "emission-010"
     section: "emission"
     statement: "A subnet's `alpha_out` comes from `get_block_emission_for_issuance` on its own alpha issuance, not from its TAO share, and is split by the vector `[burn, recycle, owner, validator, miner]`."
@@ -368,8 +356,14 @@ claims:
     review: null
   - id: "emission-012"
     section: "emission"
-    statement: "New subnets get `default_emission_weights`: owner `InitialSubnetOwnerCut` (11_796 on mainnet, 18 percent), validator half the remainder, miner the rest; the global `SubnetOwnerCut` is frozen legacy."
+    statement: "`init_new_network` seeds the canonical `default_emission_weights` `[0, 0, owner, validator, miner]`: owner is `InitialSubnetOwnerCut`, validator half the remainder, miner the rest."
     evidence:
+      - path: "pallets/subtensor/src/subnets/subnet.rs"
+        lines: "542-556"
+        ref: "v497"
+        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "1f958113af444b772b3a0da4d53fc86adf5ad719"
+        pr: 3101
       - path: "pallets/subtensor/src/subnets/emission_weights.rs"
         lines: "236-263"
         ref: "v497"
@@ -377,147 +371,101 @@ claims:
         changed_in: "73d831ced14b716965f915d955c84c940c601ad5"
         pr: 3264
       - path: "pallets/subtensor/src/subnets/emission_weights.rs"
-        lines: "405-424"
+        lines: "411-419"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
         changed_in: "bb845ca1b975065be587630f5d529440ba132703"
         pr: 3264
-      - path: "runtime/src/lib.rs"
-        lines: "1057-1057"
-        ref: "v497"
-        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        changed_in: "672d40a1851b1770dc864a0f045ff8ee2af4fd98"
-        pr: 187
-    live_since_spec: 481
+    live_since_spec: 484
     live_since_floor: false
     status: "live"
-    last_verified: "2026-11-26T21:44:45Z"
+    last_verified: "2026-11-26T23:22:30Z"
     watched_paths:
       - "pallets/subtensor/src/subnets/emission_weights.rs"
+      - "pallets/subtensor/src/subnets/subnet.rs"
       - "runtime/src/lib.rs"
     stale: false
-    review:
-      reason: "critic: The cited lines do not show the runtime constant 11_796 wired to `T::InitialSubnetOwnerCut`, and they do not show `seed_subnet_emission_weights` being called at registration."
-      proposed: "New subnets get `default_emission_weights`: owner `InitialSubnetOwnerCut` (11_796 on mainnet, 18 percent), validator half the remainder, miner the rest; the global `SubnetOwnerCut` is frozen legacy."
-      proposed_evidence:
-        - path: "pallets/subtensor/src/subnets/emission_weights.rs"
-          lines: "236-263"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/subnets/emission_weights.rs"
-          lines: "405-424"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "runtime/src/lib.rs"
-          lines: "1057-1057"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T22:12:36Z"
+    review: null
   - id: "yuma-001"
     section: "yuma"
-    statement: "Unless `Yuma3On` (default false), bonds use a fixed EMA alpha = 1 − `BondsMovingAverage`/1_000_000 and `LiquidAlphaOn` is ignored; liquid alpha only runs via `compute_bonds_sparse` under Yuma3."
+    statement: "In the sparse epoch, without `Yuma3On` bonds use `compute_ema_bonds_normal_sparse` with fixed alpha = 1 − `get_bonds_moving_average`/1_000_000, ignoring `LiquidAlphaOn`; liquid alpha runs only via `compute_bonds_sparse` under Yuma3."
     evidence:
       - path: "pallets/subtensor/src/epoch/run_epoch.rs"
         lines: "1043-1134"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "3c8492a5b75e753574770d0ba9d69c8d6e5ba80e"
+        pr: 3206
       - path: "pallets/subtensor/src/epoch/run_epoch.rs"
         lines: "1477-1495"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      - path: "pallets/subtensor/src/lib.rs"
-        lines: "1538-1546"
+        changed_in: "27ddaffc0a8d721613a90ae0751fadfacc7cd697"
+        pr: 1984
+      - path: "pallets/subtensor/src/epoch/run_epoch.rs"
+        lines: "1586-1613"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-    live_since_spec: null
+        changed_in: "479868e8834ff8a09ebc4e6f804cdddace82815d"
+        pr: 3070
+    live_since_spec: 474
     status: "live"
-    last_verified: null
+    last_verified: "2026-11-26T23:25:19Z"
     watched_paths:
       - "pallets/subtensor/src/epoch/run_epoch.rs"
-      - "pallets/subtensor/src/lib.rs"
     stale: false
-    review:
-      reason: "critic: The cited lines show the non-Yuma3 path uses a fixed alpha of 1 − moving_average/1_000_000 and ignores LiquidAlphaOn, but they do not show that `Yuma3On` takes `DefaultYuma3` as its default, and the dense `compute_bonds` also reads LiquidAlphaOn, so the claim that liquid alpha runs only via "
-      proposed: "Unless `Yuma3On` (default false), bonds use a fixed EMA alpha = 1 − `get_bonds_moving_average`/1_000_000 and `LiquidAlphaOn` is ignored; liquid alpha only runs via `compute_bonds_sparse` under Yuma3."
-      proposed_evidence:
-        - path: "pallets/subtensor/src/epoch/run_epoch.rs"
-          lines: "1043-1134"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/epoch/run_epoch.rs"
-          lines: "1477-1595"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/lib.rs"
-          lines: "1538-1546"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T22:14:34Z"
+    review: null
+    live_since_floor: false
   - id: "yuma-002"
     section: "yuma"
-    statement: "Each block a subnet's `alpha_out` is split by its `SubnetEmissionWeights` vector `[burn, recycle, owner, validator, miner]`; `SubnetOwnerCut` is deprecated and no emission path reads it."
+    statement: "Each block `run_coinbase` calls `emit_to_subnets`, which splits each subnet's `alpha_out` by `get_subnet_emission_weights` `[burn, recycle, owner, validator, miner]`; owner accrues to `PendingOwnerCut`, miner to `PendingServerEmission`."
     evidence:
       - path: "pallets/subtensor/src/coinbase/run_coinbase.rs"
-        lines: "324-362"
+        lines: "24-67"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      - path: "pallets/subtensor/src/lib.rs"
-        lines: "2577-2615"
+        changed_in: "62306601f64406ed5e9642d9abd97a705e7e04fe"
+        pr: 3359
+      - path: "pallets/subtensor/src/coinbase/run_coinbase.rs"
+        lines: "289-381"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-    live_since_spec: null
+        changed_in: "8b2a978a98c0d94300dd7c68b190b24b974b7d02"
+        pr: 3294
+    live_since_spec: 495
     status: "live"
-    last_verified: null
+    last_verified: "2026-11-26T23:25:19Z"
     watched_paths:
       - "pallets/subtensor/src/coinbase/run_coinbase.rs"
       - "pallets/subtensor/src/subnets/emission_weights.rs"
-      - "pallets/subtensor/src/lib.rs"
     stale: false
-    review:
-      reason: "critic: The split by weight vector plus gamma shares is shown, but 'each block' and 'no emission path reads `SubnetOwnerCut`' rest only on a doc comment, and no code covering every emission path is cited."
-      proposed: "Each block a subnet's `alpha_out` is split by its `SubnetEmissionWeights` vector `[burn, recycle, owner, validator, miner]` plus any `SubnetGammaEmission` shares; `SubnetOwnerCut` is deprecated and no emission path reads it."
-      proposed_evidence:
-        - path: "pallets/subtensor/src/coinbase/run_coinbase.rs"
-          lines: "324-396"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/lib.rs"
-          lines: "2577-2615"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T22:14:34Z"
+    review: null
+    live_since_floor: false
   - id: "yuma-003"
     section: "yuma"
-    statement: "`default_emission_weights` is `[0, 0, owner, validator, miner]`: owner from `InitialSubnetOwnerCut` (`SubtensorInitialSubnetOwnerCut` = 11_796), validator half the remainder, miner the rest."
+    statement: "`default_emission_weights` is `[0, 0, owner, validator, miner]`: owner is `InitialSubnetOwnerCut` (`SubtensorInitialSubnetOwnerCut` = 11_796 of `u16::MAX`) scaled, validator half the remainder, miner the rest."
     evidence:
       - path: "pallets/subtensor/src/subnets/emission_weights.rs"
-        lines: "236-263"
+        lines: "229-263"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "ea7f6d163117915ed8cb27d8866a93d8f6f9a34c"
+        pr: 3264
       - path: "runtime/src/lib.rs"
-        lines: "1057-1057"
+        lines: "1057-1138"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-    live_since_spec: null
+        changed_in: "8b2a978a98c0d94300dd7c68b190b24b974b7d02"
+        pr: 3294
+    live_since_spec: 488
     status: "live"
-    last_verified: null
+    last_verified: "2026-11-26T23:25:19Z"
     watched_paths:
       - "pallets/subtensor/src/subnets/emission_weights.rs"
       - "runtime/src/lib.rs"
     stale: false
-    review:
-      reason: "critic: The `[0, 0, owner, validator, miner]` construction is shown, but the runtime binding of `T::InitialSubnetOwnerCut` to `SubtensorInitialSubnetOwnerCut` is not cited."
-      proposed: "`default_emission_weights` is `[0, 0, owner, validator, miner]`: owner from `InitialSubnetOwnerCut` (`SubtensorInitialSubnetOwnerCut` = 11_796), validator half the remainder, miner the rest."
-      proposed_evidence:
-        - path: "pallets/subtensor/src/subnets/emission_weights.rs"
-          lines: "236-263"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "runtime/src/lib.rs"
-          lines: "1057-1057"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T22:14:34Z"
+    review: null
+    live_since_floor: false
   - id: "yuma-004"
     section: "yuma"
     statement: "Root is paid off the top of the validator slot: `alpha_out` × `get_root_emission_share` (baseline at default validator share and global `TaoWeight`, capped at the slot); without `root_sell_flag` it is recycled."
@@ -545,37 +493,36 @@ claims:
     review: null
   - id: "yuma-005"
     section: "yuma"
-    statement: "Consensus is the active-stake-weighted median of weights at `get_float_kappa` (`SubtensorInitialKappa` = 32_767); weights are clipped to it, incentive is normalized clipped-weight × stake."
+    statement: "Consensus is the `active_stake`-weighted column median of weights at `get_float_kappa` (`get_kappa`/`u16::MAX`); weights are clipped to it and incentive is normalized clipped weights × `active_stake`."
     evidence:
       - path: "pallets/subtensor/src/epoch/run_epoch.rs"
         lines: "999-1027"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      - path: "runtime/src/lib.rs"
-        lines: "1007-1007"
+        changed_in: "96dbbb1717c30c7f26e112d16c7090e269b1e9bc"
+        pr: 3206
+      - path: "pallets/subtensor/src/epoch/run_epoch.rs"
+        lines: "1319-1322"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-    live_since_spec: null
+        changed_in: "c19138464045b321881d576eca6f5205fe8d52a8"
+        pr: 1740
+      - path: "pallets/subtensor/src/utils/misc.rs"
+        lines: "609-611"
+        ref: "v497"
+        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "c19138464045b321881d576eca6f5205fe8d52a8"
+        pr: 1740
+    live_since_spec: 474
     status: "live"
-    last_verified: null
+    last_verified: "2026-11-26T23:25:25Z"
     watched_paths:
-      - "pallets/subtensor/src/epoch/run_epoch.rs"
       - "pallets/subtensor/src/epoch/math.rs"
-      - "runtime/src/lib.rs"
+      - "pallets/subtensor/src/epoch/run_epoch.rs"
+      - "pallets/subtensor/src/utils/misc.rs"
     stale: false
-    review:
-      reason: "critic: The consensus, clipping and incentive computation are shown, but nothing cited links `get_float_kappa` to `SubtensorInitialKappa` (the kappa storage default and the runtime config are not shown)."
-      proposed: "Consensus is the active-stake-weighted median of weights at `get_float_kappa` (`SubtensorInitialKappa` = 32_767); weights are clipped to it, incentive is normalized clipped-weight × stake."
-      proposed_evidence:
-        - path: "pallets/subtensor/src/epoch/run_epoch.rs"
-          lines: "999-1027"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "runtime/src/lib.rs"
-          lines: "1007-1007"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T22:14:34Z"
+    review: null
+    live_since_floor: false
   - id: "yuma-009"
     section: "yuma"
     statement: "Owner vectors are bounded: `MAX_OWNER_EMISSION` and `MAX_BURN_RECYCLE_EMISSION` are `emission_fraction(33, 100)`, `MAX_VALIDATOR_EMISSION` (50, 100), `MIN_MINER_EMISSION` (33, 100)."
@@ -614,45 +561,35 @@ claims:
     review: null
   - id: "dtao-001"
     section: "dtao"
-    statement: "On dynamic subnets (`SubnetMechanism` 1) `current_price` is a weighted Balancer price p = (w1*y)/(w2*x), x = alpha reserve, y = TAO reserve, quote weight stored in `SwapBalancer`; other mechanisms return 1."
+    statement: "On dynamic subnets (mechanism 1) `current_price` is `calculate_price` = (w1/w2)*(y/x), x = alpha reserve, y = TAO reserve, quote weight w2 stored in `SwapBalancer`; it returns 0 if the alpha reserve is zero, other mechanisms 1."
     evidence:
-      - path: "pallets/swap/src/pallet/balancer.rs"
-        lines: "1-40"
-        ref: "v497"
-        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
       - path: "pallets/swap/src/pallet/impls.rs"
         lines: "22-36"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      - path: "pallets/subtensor/src/staking/stake_utils.rs"
-        lines: "996-1009"
+        changed_in: "211007c596bbdb0908d45bbfa44d17979684f5ae"
+        pr: 2505
+      - path: "pallets/swap/src/pallet/balancer.rs"
+        lines: "220-228"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-    live_since_spec: null
+        changed_in: "211007c596bbdb0908d45bbfa44d17979684f5ae"
+        pr: 2505
+      - path: "pallets/swap/src/pallet/balancer.rs"
+        lines: "1-12"
+        ref: "v497"
+        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "211007c596bbdb0908d45bbfa44d17979684f5ae"
+        pr: 2505
+    live_since_spec: 423
     status: "live"
-    last_verified: null
+    last_verified: "2026-11-26T23:27:00Z"
     watched_paths:
       - "pallets/swap/src/pallet/balancer.rs"
       - "pallets/swap/src/pallet/impls.rs"
-      - "pallets/subtensor/src/staking/stake_utils.rs"
     stale: false
-    review:
-      reason: "critic: The body of `calculate_price` is not cited, so the formula rests only on a comment; the cited code also returns 0 when the alpha reserve is zero, which the claim leaves out."
-      proposed: "On dynamic subnets (`SubnetMechanism` 1) `current_price` is a weighted Balancer price p = (w1*y)/(w2*x), x = alpha reserve, y = TAO reserve, quote weight stored in `SwapBalancer`; other mechanisms return 1."
-      proposed_evidence:
-        - path: "pallets/swap/src/pallet/balancer.rs"
-          lines: "1-40"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/swap/src/pallet/impls.rs"
-          lines: "22-36"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/staking/stake_utils.rs"
-          lines: "996-1009"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T22:16:05Z"
+    review: null
+    live_since_floor: false
   - id: "dtao-002"
     section: "dtao"
     statement: "Swap `price_limit` is RAO per alpha, divided by 1_000_000_000 into a price; if the current price is already past the limit the swap fails `PriceLimitExceeded`, otherwise it fills only up to the limit and recomputes the fee."
@@ -861,117 +798,97 @@ claims:
     review: null
   - id: "staking-001"
     section: "staking"
-    statement: "`set_perpetual_lock` stores `DecayingLock` = false for (coldkey, netuid), so that lock's mass stops decaying while conviction still matures; a lock on the subnet owner hotkey has conviction equal to its locked mass."
+    statement: "`do_set_perpetual_lock` stores `DecayingLock` = false, which `is_perpetual_lock` reads, so that lock's mass stops decaying while conviction still matures; a lock on the `SubnetOwnerHotkey` has conviction equal to its locked mass."
     evidence:
-      - path: "pallets/subtensor/src/macros/dispatches.rs"
-        lines: "2937-2951"
-        ref: "v497"
-        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
       - path: "pallets/subtensor/src/staking/lock.rs"
-        lines: "326-337"
+        lines: "526-637"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "be3a11b1a5300bb58d6fbad3c629e4a926bb2f44"
+        pr: 3327
       - path: "pallets/subtensor/src/staking/lock.rs"
-        lines: "402-435"
+        lines: "84-196"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-    live_since_spec: null
+        changed_in: "be3a11b1a5300bb58d6fbad3c629e4a926bb2f44"
+        pr: 3327
+      - path: "pallets/subtensor/src/staking/lock.rs"
+        lines: "320-435"
+        ref: "v497"
+        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "c6ab4733762201e04bee0ba8c8f27a3d09f75fb2"
+        pr: 3158
+    live_since_spec: 491
     status: "live"
-    last_verified: null
+    last_verified: "2026-11-26T23:29:57Z"
     watched_paths:
       - "pallets/subtensor/src/staking/lock.rs"
-      - "pallets/subtensor/src/macros/dispatches.rs"
     stale: false
-    review:
-      reason: "critic: The cited lines do not show that `is_perpetual_lock` reads `DecayingLock`, and they do not show how the `owner_lock` flag is derived from the subnet owner hotkey, so the link from the stored flag to the decay and owner-conviction behaviour cannot be confirmed."
-      proposed: "`set_perpetual_lock` stores `DecayingLock` = false for (coldkey, netuid), so that lock's mass stops decaying while conviction still matures; a lock on the subnet owner hotkey has conviction equal to its locked mass."
-      proposed_evidence:
-        - path: "pallets/subtensor/src/macros/dispatches.rs"
-          lines: "2937-2951"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/staking/lock.rs"
-          lines: "326-435"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/staking/lock.rs"
-          lines: "607-650"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T22:19:00Z"
+    review: null
+    live_since_floor: false
   - id: "staking-002"
     section: "staking"
     statement: "`lock_stake` locks alpha per coldkey per subnet to one hotkey; the lock is subnet-wide, so `validate_remove_stake` rejects unstaking more than total minus locked minus miner collateral with `StakeUnavailable`."
     evidence:
       - path: "pallets/subtensor/src/macros/dispatches.rs"
-        lines: "2902-2912"
+        lines: "2891-2912"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "e50454a01ff491d1cd5ce6312902a5d0383fb67a"
+        pr: 2867
       - path: "pallets/subtensor/src/staking/lock.rs"
-        lines: "701-727"
+        lines: "693-754"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "a822e3deff9f88f9bb5b7e079af38cac4d9cc4e6"
+        pr: 2953
       - path: "pallets/subtensor/src/staking/stake_utils.rs"
         lines: "1910-1964"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-    live_since_spec: null
+        changed_in: "8b9d55c723e00d0d713eed799de627e94603dfd4"
+        pr: 2968
+    live_since_spec: 441
     status: "live"
-    last_verified: null
+    last_verified: "2026-11-26T23:29:57Z"
     watched_paths:
+      - "pallets/subtensor/src/macros/dispatches.rs"
       - "pallets/subtensor/src/staking/lock.rs"
       - "pallets/subtensor/src/staking/stake_utils.rs"
-      - "pallets/subtensor/src/macros/dispatches.rs"
     stale: false
-    review:
-      reason: "critic: The cited lines show the total-minus-locked-minus-collateral check and `StakeUnavailable` in `validate_remove_stake`, but nothing here shows that `do_lock_stake` restricts the lock to a single hotkey."
-      proposed: "`lock_stake` locks alpha per coldkey per subnet to one hotkey; the lock is subnet-wide, so `validate_remove_stake` rejects unstaking more than total minus locked minus miner collateral with `StakeUnavailable`."
-      proposed_evidence:
-        - path: "pallets/subtensor/src/macros/dispatches.rs"
-          lines: "2902-2912"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/staking/lock.rs"
-          lines: "701-727"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/staking/stake_utils.rs"
-          lines: "1910-1964"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T21:52:03Z"
+    review: null
+    live_since_floor: false
   - id: "staking-003"
     section: "staking"
-    statement: "Locked mass decays as exp(-dt/`UnlockRate`) and conviction matures from it with timescale `MaturityRate`; both default to 934_866 blocks (code comment: 50% in ~90 days)."
+    statement: "Non-perpetual locked mass decays by `exp_decay` = exp(-dt/`UnlockRate`) and conviction matures from it with timescale `MaturityRate`; both default to 934_866 blocks (code comment: 50% in ~90 days)."
     evidence:
       - path: "pallets/subtensor/src/lib.rs"
         lines: "2399-2417"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "e50454a01ff491d1cd5ce6312902a5d0383fb67a"
+        pr: 2867
       - path: "pallets/subtensor/src/staking/lock.rs"
-        lines: "315-367"
+        lines: "300-419"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-    live_since_spec: null
+        changed_in: "c6ab4733762201e04bee0ba8c8f27a3d09f75fb2"
+        pr: 3158
+      - path: "pallets/subtensor/src/staking/lock.rs"
+        lines: "913-947"
+        ref: "v497"
+        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "be3a11b1a5300bb58d6fbad3c629e4a926bb2f44"
+        pr: 3327
+    live_since_spec: 491
     status: "live"
-    last_verified: null
+    last_verified: "2026-11-26T23:29:58Z"
     watched_paths:
-      - "pallets/subtensor/src/staking/lock.rs"
       - "pallets/subtensor/src/lib.rs"
+      - "pallets/subtensor/src/staking/lock.rs"
     stale: false
-    review:
-      reason: "critic: The defaults of 934_866 and the 90-day comments are shown, but the body of `exp_decay` is not, so the exp(-dt/UnlockRate) form cannot be confirmed."
-      proposed: "Locked mass decays as exp(-dt/`UnlockRate`) and conviction matures from it with timescale `MaturityRate`; both default to 934_866 blocks (code comment: 50% in ~90 days)."
-      proposed_evidence:
-        - path: "pallets/subtensor/src/lib.rs"
-          lines: "2399-2417"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/staking/lock.rs"
-          lines: "315-367"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T21:52:03Z"
+    review: null
+    live_since_floor: false
   - id: "staking-004"
     section: "staking"
     statement: "Stake weight per hotkey is inherited alpha plus inherited root TAO times `get_tao_weight` (`TaoWeight` / u64::MAX); default `SubtensorInitialTaoWeight` is 971_718_665_099_567_868 (~5.27%)."
@@ -1115,28 +1032,30 @@ claims:
     review: null
   - id: "registration-002"
     section: "registration"
-    statement: "A dissolved subnet refunds its owner's lock only if `NetworkRegisteredAt` is before `NetworkRegistrationStartBlock`, as lock minus the owner's `SubnetOwnerCutAccrued` valued at the current price; newer subnets get no refund."
+    statement: "A dissolved subnet refunds its owner only if `NetworkRegisteredAt` < `NetworkRegistrationStartBlock`: the `refund` starts as lock minus owner alpha at `current_alpha_price`, the alpha being `SubnetOwnerCutAccrued`, or `legacy_owner_cut_accrued` if no entry exists, before it is adjusted and transferred to the owner."
     evidence:
       - path: "pallets/subtensor/src/staking/remove_stake.rs"
-        lines: "610-670"
+        lines: "610-704"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-    live_since_spec: null
+        changed_in: "6adb3bbed9d70c57c943f4cd31c9c2dcfa363fb4"
+        pr: 3264
+      - path: "pallets/subtensor/src/subnets/emission_weights.rs"
+        lines: "421-446"
+        ref: "v497"
+        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "6adb3bbed9d70c57c943f4cd31c9c2dcfa363fb4"
+        pr: 3264
+    live_since_spec: 480
     status: "live"
-    last_verified: null
+    last_verified: "2026-11-26T23:32:37Z"
     watched_paths:
       - "pallets/subtensor/src/staking/remove_stake.rs"
       - "pallets/subtensor/src/subnets/dissolution.rs"
+      - "pallets/subtensor/src/subnets/emission_weights.rs"
     stale: false
-    review:
-      reason: "critic: The owner alpha comes from `owner_cut_alpha_for_lock_refund`, whose body is not cited, and the comment says it falls back to the legacy `issuance × SubnetOwnerCut` when no accrued entry exists, so 'SubnetOwnerCutAccrued' is not the whole story."
-      proposed: "A dissolved subnet refunds its owner's lock only if `NetworkRegisteredAt` is before `NetworkRegistrationStartBlock`, as lock minus the owner's `SubnetOwnerCutAccrued` valued at the current price; newer subnets get no refund."
-      proposed_evidence:
-        - path: "pallets/subtensor/src/staking/remove_stake.rs"
-          lines: "610-670"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T21:54:03Z"
+    review: null
+    live_since_floor: false
   - id: "registration-003"
     section: "registration"
     statement: "The neuron burn decays every block by a factor `f` where `f ^ BurnHalfLife = 1/2`, clamped to [`MinBurn`, `MaxBurn`]; each successful burned registration multiplies it by `BurnIncreaseMult` (at least 1)."
@@ -1156,18 +1075,22 @@ claims:
       - "pallets/subtensor/src/subnets/registration.rs"
     stale: false
     review:
-      reason: "critic: Decay is skipped when `half_life == 0` or at block ≤ 1, the clamping happens in the uncited `decayed_registration_price`, and the lines do not show that burned registrations call `bump_registration_price_after_registration`."
-      proposed: "The neuron burn decays every block by a factor `f` where `f ^ BurnHalfLife = 1/2`, clamped to [`MinBurn`, `MaxBurn`]; each successful burned registration multiplies it by `BurnIncreaseMult` (at least 1)."
+      reason: "after one citation retry: critic: When `half_life` is 0 or block ≤ 1 only the multiplication is skipped: `decayed_registration_price` with `factor = None` still clamps the burn to min and max, so saying the whole step is skipped is inaccurate."
+      proposed: "Each block (skipped if `half_life` is 0 or block ≤ 1) the burn is multiplied by a Q32 factor `f`, found by binary search as the value whose power `BurnHalfLife` is at most 0.5, and clamped to the subnet's min and max burn; `execute_registration` then multiplies it by `BurnIncreaseMult` (at least 1) and clamps it to the same bounds again."
       proposed_evidence:
         - path: "pallets/subtensor/src/subnets/registration.rs"
-          lines: "815-850"
+          lines: "394-409"
           ref: "v497"
           commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
         - path: "pallets/subtensor/src/subnets/registration.rs"
-          lines: "909-918"
+          lines: "829-948"
           ref: "v497"
           commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T21:54:03Z"
+        - path: "pallets/subtensor/src/utils/misc.rs"
+          lines: "1050-1116"
+          ref: "v497"
+          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+      at: "2026-11-26T23:32:37Z"
   - id: "registration-004"
     section: "registration"
     statement: "Of the burn price, the `(1 - p)` share is burned and `p` (`get_collateral_requirement_tao`) is locked to the hotkey as miner collateral; a returning hotkey pays only the shortfall, valued at `get_moving_alpha_price`."
@@ -1231,27 +1154,28 @@ claims:
     review: null
   - id: "registration-007"
     section: "registration"
-    statement: "Up to `ImmuneOwnerUidsLimit` hotkeys of the owner coldkey (earliest `BlockAtRegistration` first, `SubnetOwnerHotkey` placed first) are never pruned."
+    statement: "`get_neuron_to_prune` skips `get_immune_owner_hotkeys`: up to `ImmuneOwnerUidsLimit` owner-coldkey uids on the subnet, earliest `BlockAtRegistration` first, `SubnetOwnerHotkey` inserted first; `get_neuron_to_prune` never returns these, even when it falls back to an immune uid."
     evidence:
       - path: "pallets/subtensor/src/subnets/registration.rs"
-        lines: "548-623"
+        lines: "534-589"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-    live_since_spec: null
+        changed_in: "757e4c8f1dea43b85b80b7c2bc6e6ab8f133b37a"
+        pr: 3206
+      - path: "pallets/subtensor/src/subnets/registration.rs"
+        lines: "591-671"
+        ref: "v497"
+        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "757e4c8f1dea43b85b80b7c2bc6e6ab8f133b37a"
+        pr: 3206
+    live_since_spec: 474
     status: "live"
-    last_verified: null
+    last_verified: "2026-11-26T23:32:37Z"
     watched_paths:
       - "pallets/subtensor/src/subnets/registration.rs"
     stale: false
-    review:
-      reason: "critic: Pruning skips hotkeys from `get_immune_owner_hotkeys`, whose link to `get_immune_owner_tuples` is not cited, so 'never pruned' depends on unseen code."
-      proposed: "Up to `ImmuneOwnerUidsLimit` hotkeys of the owner coldkey (earliest `BlockAtRegistration` first, `SubnetOwnerHotkey` placed first) are never pruned."
-      proposed_evidence:
-        - path: "pallets/subtensor/src/subnets/registration.rs"
-          lines: "548-623"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T21:54:04Z"
+    review: null
+    live_since_floor: false
   - id: "registration-010"
     section: "registration"
     statement: "`get_lock_reduction_interval` multiplies `NetworkLockReductionInterval` by block emission / 1_000_000_000, so each emission halving halves the lock-cost decay window."
@@ -1303,44 +1227,38 @@ claims:
     review: null
   - id: "hyperparameters-001"
     section: "hyperparameters"
-    statement: "`Tempo` defaults to `INITIAL_SUBNET_TEMPO`, which is `prod_or_fast!(360, 10)`, so 360 blocks on mainnet; owner-set tempo is bounded by `MIN_TEMPO` 360 and `MAX_TEMPO` 50_400."
+    statement: "`Tempo` defaults to `DefaultTempo` = `InitialTempo` = `SubtensorInitialTempo` = `INITIAL_SUBNET_TEMPO`, which is `prod_or_fast!(360, 10)`, so 360 blocks on mainnet."
     evidence:
       - path: "runtime/src/lib.rs"
         lines: "996-1101"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "8b2a978a98c0d94300dd7c68b190b24b974b7d02"
+        pr: 3294
       - path: "pallets/subtensor/src/lib.rs"
-        lines: "1294-1296"
+        lines: "1292-1296"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "78359ccebab02edf76505f25e73e6c49e580d867"
+        pr: 2144
       - path: "pallets/subtensor/src/lib.rs"
-        lines: "2658-2666"
+        lines: "2658-2661"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-    live_since_spec: null
+        changed_in: "e50454a01ff491d1cd5ce6312902a5d0383fb67a"
+        pr: 2867
+    live_since_spec: 488
     status: "live"
-    last_verified: null
+    last_verified: "2026-11-26T23:34:25Z"
     watched_paths:
-      - "runtime/src/lib.rs"
       - "pallets/subtensor/src/lib.rs"
+      - "runtime/src/lib.rs"
     stale: false
-    review:
-      reason: "critic: The cited runtime lines define `SubtensorInitialTempo` but not the `type InitialTempo = SubtensorInitialTempo` binding that links it to `DefaultTempo`, and the MIN_TEMPO/MAX_TEMPO bounds appear only in doc comments, with no enforcement code shown."
-      proposed: "`Tempo` defaults to `INITIAL_SUBNET_TEMPO`, which is `prod_or_fast!(360, 10)`, so 360 blocks on mainnet; owner-set tempo is bounded by `MIN_TEMPO` 360 and `MAX_TEMPO` 50_400."
-      proposed_evidence:
-        - path: "runtime/src/lib.rs"
-          lines: "996-1015"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/lib.rs"
-          lines: "1292-1296"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/lib.rs"
-          lines: "2658-2666"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T22:20:31Z"
+    review: null
+    live_since_floor: false
+    item: "Tempo"
+    default: "360"
+    live_value: "360 on 125 of 129 subnets"
   - id: "hyperparameters-003"
     section: "hyperparameters"
     statement: "`CommitRevealWeightsEnabled` defaults to true on every subnet."
@@ -1696,45 +1614,28 @@ claims:
     live_value: "1 on all 129 subnets"
   - id: "safety-001"
     section: "safety"
-    statement: "`announce_coldkey_swap` and `announce_coldkey_swap_v2` set the earliest execution block to now + `ColdkeySwapAnnouncementDelay` (mainnet `5 * 24 * 60 * 60 / 12` blocks); earlier `swap_coldkey_announced` fails `ColdkeySwapTooEarly`."
+    statement: "`announce_coldkey_swap` and `announce_coldkey_swap_v2` set the swap's `when` to now plus `ColdkeySwapAnnouncementDelay`; `swap_coldkey_announced` before `when` fails `ColdkeySwapTooEarly`."
     evidence:
       - path: "pallets/subtensor/src/macros/dispatches.rs"
-        lines: "2453-2483"
+        lines: "2453-2539"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "541a50d38764acdce23578bd8ba54f80156ffb2a"
+        pr: 3333
       - path: "pallets/subtensor/src/macros/dispatches.rs"
         lines: "2559-2600"
         ref: "v497"
         commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      - path: "runtime/src/lib.rs"
-        lines: "1065-1066"
-        ref: "v497"
-        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-    live_since_spec: null
+        changed_in: "541a50d38764acdce23578bd8ba54f80156ffb2a"
+        pr: 3333
+    live_since_spec: 492
     status: "live"
-    last_verified: null
+    last_verified: "2026-11-26T23:35:56Z"
     watched_paths:
       - "pallets/subtensor/src/macros/dispatches.rs"
-      - "runtime/src/lib.rs"
-      - "pallets/subtensor/src/lib.rs"
     stale: false
-    review:
-      reason: "critic: The cited lines show both announce calls setting `when = now + ColdkeySwapAnnouncementDelay` and `swap_coldkey_announced` failing `ColdkeySwapTooEarly` when `now < when`, but the runtime line only defines `InitialColdkeySwapAnnouncementDelay`; nothing cited links that constant to the `Coldke"
-      proposed: "`announce_coldkey_swap` and `announce_coldkey_swap_v2` set the earliest execution block to now + `ColdkeySwapAnnouncementDelay` (mainnet `5 * 24 * 60 * 60 / 12` blocks); earlier `swap_coldkey_announced` fails `ColdkeySwapTooEarly`."
-      proposed_evidence:
-        - path: "pallets/subtensor/src/macros/dispatches.rs"
-          lines: "2453-2483"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/macros/dispatches.rs"
-          lines: "2504-2600"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "runtime/src/lib.rs"
-          lines: "1065-1066"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T22:21:55Z"
+    review: null
+    live_since_floor: false
   - id: "safety-002"
     section: "safety"
     statement: "While an announcement exists, `CheckColdkeySwap` rejects the coldkey's calls with `ColdkeySwapAnnounced` (stake, transfers, weights) except announce, `swap_coldkey_announced`, `dispute_coldkey_swap`, `submit_encrypted`, `clear_coldkey_swap_announcement`."
@@ -1750,14 +1651,14 @@ claims:
       - "pallets/subtensor/src/guards/check_coldkey_swap.rs"
     stale: false
     review:
-      reason: "`CheckColdkeySwap` is not in the cited lines"
-      proposed: "With an announcement pending, `CheckColdkeySwap` fails the coldkey's calls with `ColdkeySwapAnnounced` except swap-related calls and `submit_encrypted`; once disputed, every call fails `ColdkeySwapDisputed`."
+      reason: "critic: The exception list leaves out the proxy pallet's `remove_announcement`, which `check` always allows, including while disputed, so the stated set of allowed calls is incomplete."
+      proposed: "While an announcement is pending, `CheckColdkeySwap` fails the coldkey's calls with `ColdkeySwapAnnounced`, except the announce, swap, dispute, clear and reservation-release calls and `submit_encrypted`; once disputed, nearly all fail `ColdkeySwapDisputed`."
       proposed_evidence:
         - path: "pallets/subtensor/src/guards/check_coldkey_swap.rs"
-          lines: "41-82"
+          lines: "12-82"
           ref: "v497"
           commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T22:21:39Z"
+      at: "2026-11-26T23:35:56Z"
   - id: "safety-006"
     section: "safety"
     statement: "`clear_coldkey_swap_announcement` works only after when + `ColdkeySwapReannouncementDelay` (else `ColdkeySwapClearTooEarly`), so a victim cannot cancel a fresh malicious announcement; they must dispute."
@@ -1801,22 +1702,22 @@ claims:
       - "runtime/src/lib.rs"
     stale: false
     review:
-      reason: "critic: The single-subnet check matches, but the all-subnets path only checks `cooldown_netuids`, whose contents are not shown, and the binding of `T::HotkeySwapOnSubnetInterval` to the runtime constant is not cited."
-      proposed: "Single-subnet and all-subnets hotkey swaps fail `HotKeySwapOnSubnetIntervalNotPassed` unless the coldkey's `LastHotkeySwapOnNetuid` for that subnet is 0 or older than `HotkeySwapOnSubnetInterval` (mainnet `24 * 60 * 60 / 12` blocks)."
+      reason: "critic: The all-subnet path checks every subnet where the hotkey is a member or has child keys (`IsNetworkMember || !ChildKeys.is_empty()`), which is not the same as 'each subnet the hotkey is on'."
+      proposed: "Hotkey swaps fail `HotKeySwapOnSubnetIntervalNotPassed` if the coldkey's `LastHotkeySwapOnNetuid` on a subnet is nonzero and within `HotkeySwapOnSubnetInterval` (mainnet `24 * 60 * 60 / 12` blocks); all-subnet swaps check each subnet the hotkey is on."
       proposed_evidence:
+        - path: "pallets/subtensor/src/swap/swap_hotkey.rs"
+          lines: "479-515"
+          ref: "v497"
+          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
         - path: "pallets/subtensor/src/swap/swap_hotkey.rs"
           lines: "769-784"
           ref: "v497"
           commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-        - path: "pallets/subtensor/src/swap/swap_hotkey.rs"
-          lines: "502-515"
-          ref: "v497"
-          commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
         - path: "runtime/src/lib.rs"
-          lines: "1073-1073"
+          lines: "1073-1154"
           ref: "v497"
           commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
-      at: "2026-11-26T22:21:55Z"
+      at: "2026-11-26T23:35:56Z"
   - id: "traps-002"
     section: "traps"
     statement: "`set_root_weights` no longer applies (`RootWeightSettingDisabled` is kept only for index stability); now `Weights[ROOT]` is cleared, `RootWeightSettingEnabled` is killed, and basket composition changes only through `swap_basket`."
@@ -1971,3 +1872,41 @@ claims:
     deprecated_since_spec: 430
     deprecated_since_floor: true
     marker: "Use calculate_block_emission() or the block emission RPC instead."
+  - id: "traps-012"
+    section: "traps"
+    statement: "TAO-flow emission shares (`get_shares_flow`) no longer apply; now `get_subnet_block_emissions` takes shares from `get_shares`, which uses `get_shares_price_ema`, scales by `(1 - MinerBurned)` and applies the emission gate."
+    evidence:
+      - path: "pallets/subtensor/src/coinbase/subnet_emissions.rs"
+        lines: "332-336"
+        ref: "spec-419"
+        commit: "fa83646297f45a1a8108f70ba2ebf32d4f35b5c2"
+      - path: "pallets/subtensor/src/coinbase/subnet_emissions.rs"
+        lines: "34-40"
+        ref: "v497"
+        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "bb3591e715a4e283e4d3996b8c12058e0c7d8f3a"
+        pr: 2800
+      - path: "pallets/subtensor/src/coinbase/subnet_emissions.rs"
+        lines: "350-394"
+        ref: "v497"
+        commit: "24e1fc7b12ea7ce9d390925dac602ba961997824"
+        changed_in: "d3f40e44bda9019c606aeb0c907bb52ba7fe386c"
+        pr: 3071
+    live_since_spec: 445
+    status: "deprecated"
+    last_verified: "2026-11-26T23:40:33Z"
+    watched_paths:
+      - "pallets/subtensor/src/coinbase/subnet_emissions.rs"
+    stale: false
+    review: null
+    seed: "tao-flow"
+    removed: "Self::get_shares_flow("
+    live_since_floor: false
+    deprecated_since_spec: 421
+    deprecated_since_floor: false
+    marker: "let price_shares = Self::get_shares_price_ema(subnets_to_emit_to);"
+seeds:
+  - id: "tao-flow"
+    topic: "TAO flow (net TAO flow) emission: subnet emission shares set from TAO flows by get_shares_flow, replaced by EMA-price shares."
+    removed: "Self::get_shares_flow("
+    added: "2026-11-26"
