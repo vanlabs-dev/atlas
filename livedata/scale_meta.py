@@ -2,10 +2,11 @@
 """Stdlib SCALE decoder for runtime metadata V14 and V15 (change:
 runtime-upgrade-pipeline).
 
-Decodes only what the chain-read probe needs: the type registry and each
-pallet's storage entries (name, modifier, key hashers, key type, value type,
-default bytes). It stops after the pallet list, so the extrinsic and API
-sections are never read.
+Decodes what the chain-read probe and the grounding snapshot need: the type
+registry, each pallet's storage entries (name, modifier, key hashers, key
+type, value type, default bytes) and the type id of its call enum
+(change: chain-grounding). It stops after the pallet list, so the extrinsic
+and API sections are never read.
 Every malformed input raises ValueError; the probe turns that into a fail,
 never a pass.
 """
@@ -87,9 +88,9 @@ def _type_def(r: _Reader) -> Dict[str, Any]:
         def variant() -> Dict[str, Any]:
             name = r.text()
             fields = r.vec(lambda: _field(r))
-            r.u8()  # index
+            index = r.u8()
             r.vec(r.text)  # docs
-            return {"name": name, "fields": fields}
+            return {"name": name, "fields": fields, "index": index}
         return {"kind": "variant", "variants": r.vec(variant)}
     if kind == 2:
         return {"kind": "sequence", "ty": r.compact()}
@@ -151,7 +152,7 @@ def _storage_entry(r: _Reader) -> Dict[str, Any]:
 def _pallet(r: _Reader, version: int) -> Dict[str, Any]:
     name = r.text()
     storage = r.option(lambda: (r.text(), r.vec(lambda: _storage_entry(r))))
-    r.option(r.compact)  # calls
+    calls = r.option(r.compact)
     r.option(r.compact)  # event
     r.vec(lambda: (r.text(), r.compact(), r.vec(r.u8), r.vec(r.text)))
     r.option(r.compact)  # error
@@ -160,7 +161,26 @@ def _pallet(r: _Reader, version: int) -> Dict[str, Any]:
         r.vec(r.text)  # docs
     entries = {entry["name"]: entry for entry in (storage[1] if storage
                                                   else [])}
-    return {"name": name, "storage": entries}
+    return {"name": name, "storage": entries, "calls": calls}
+
+
+def pallet_calls(meta: Dict[str, Any], pallet: str) -> List[Dict[str, Any]]:
+    """The extrinsics of one pallet: [{name, args: [[arg, type]]}], in
+    call-index order. An empty list when the pallet has no calls."""
+    entry = meta["pallets"].get(pallet)
+    if entry is None:
+        raise ValueError("pallet %s is not in the metadata" % pallet)
+    if entry.get("calls") is None:
+        return []
+    types = meta["types"]
+    definition = types[entry["calls"]]["def"]
+    if definition["kind"] != "variant":
+        raise ValueError("call type of %s is not an enum" % pallet)
+    return [{"name": v["name"],
+             "args": [[f["name"] or "", type_name(types, f["ty"])]
+                      for f in v["fields"]]}
+            for v in sorted(definition["variants"],
+                            key=lambda v: v["index"])]
 
 
 def decode_metadata(raw: bytes) -> Dict[str, Any]:

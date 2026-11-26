@@ -1,0 +1,24 @@
+# Atlas chain grounding job (change: chain-grounding). Publishes
+# GROUNDING.md for cloud sessions. It holds the upgrade job's lock, so it
+# never runs beside atlas-upgrade. The job keeps its own run deadline
+# (run_budget_seconds in grounding/config.json, 50 min); TimeoutStartSec
+# is a backstop above it. Telegram credentials come from the Hermes .env
+# through the telegram module, so no EnvironmentFile.
+# Install (user-level, as pi), from the live tree /home/pi/atlas:
+#   cp grounding/systemd/atlas-grounding.{service,timer} \
+#     /home/pi/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now atlas-grounding.timer
+[Unit]
+Description=Atlas chain grounding job (user-level; no root)
+Wants=network-online.target
+After=network-online.target
+OnFailure=atlas-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/pi/atlas
+Environment=ATLAS_CLAUDE_BIN=/home/pi/.local/bin/claude
+Environment=PATH=/home/pi/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 /home/pi/atlas/grounding/atlas_grounding.py run
+TimeoutStartSec=58min

@@ -1442,3 +1442,42 @@ at `607fa54`, battery markers re-pinned at `6fe8f30`.
   grounded, 3 ungrounded (all before the deploy).
 - Open for WP15: Telegram answers are correct but too long (operator,
   2026-11-05).
+
+## Chain grounding for cloud sessions (2026-11-27, change: chain-grounding)
+
+**Decided by the operator:** Atlas publishes `GROUNDING.md` at the repo
+root, at most 25 KB, for Claude sessions that cannot reach the Pi. Field
+names and the raw URL are fixed by the operator brief.
+
+- **1A:** the grounding job pushes with the Atlas deploy key, through the
+  same gates as the upgrade job, with its own scope
+  (`grounding/grounding_scope.py`: `GROUNDING.md`, `grounding/claims.yaml`,
+  `snapshots/<spec>/`). The key now has two callers.
+- **2A:** gitleaks 8.30.1 (release binary, checksum verified) is in
+  `~/.local/bin` on the Pi and the workstation. `tools/git-hooks/pre-commit`
+  runs it first and fails closed when it is missing. The operator had
+  believed it was already a hook; it was not.
+- **3:** the front matter adds `newest_tag` and `newest_tag_live`. Tags
+  lead enactment (v494: tagged 2026-11-21, live 2026-11-23; v496 never
+  went live), so a newer tag alone is not staleness.
+
+Choices made during apply:
+
+- The job holds the upgrade job's lock for its whole run, and never pulls
+  the live tree, so the upgrade job's pull still sees every code commit.
+- Only the live spec counts. `v<spec>` tags map to `spec_version` (checked
+  in `runtime/src/lib.rs` at v494 to v497).
+- Numbers and backticked names in a claim must appear in the cited lines,
+  and hyperparameter defaults must equal the runtime metadata, before the
+  critic is asked.
+
+**2026-11-27, model pin (same change):** every Atlas `claude -p` call (the
+upgrade job, the grounding job, the alert rewrite, the econ judge) passes
+`--model` from `tools/claude-model.json`, set to `claude-opus-5-5` by the
+operator. `--restricted` and `--setting-sources ""` ignore the settings
+files, so the `"model": "opus"` in `~/.claude/settings.json` never applied:
+the grounding bootstrap ran on the account default model (Fable) and hit
+its usage limit, and the upgrade job had run on the account default since
+it started. This supersedes the 2026-11-03 note above that no model id is
+set. The id stays in config, not code, so the model-validation scan
+(`scan_repo_for_model_id`) still finds no hard-coded id.

@@ -38,6 +38,7 @@ COMPONENTS: Dict[str, str] = {
     "fleet": "Clones every subnet's repository, indexes it, scores rotation and mining signals, serves the LAN board and `atlas-fleet`",
     "telegram": "Alert classes, tiers, delivery ledger, plain-English rewrite, daily briefing",
     "upgrade": "Runtime upgrade job: detects a new spec, edits the corpus in a worktree, gates and pushes",
+    "grounding": "Publishes GROUNDING.md: chain snapshots, a cited claims ledger, model-checked claims, hourly",
     "subnt": "Old subnt.dev exporter (retired, code kept; the site is now `web/`)",
     "hermes": "Read-only verifiers for the Hermes agent baseline, memory and model",
     "inventory": "Read-only device inventory collector",

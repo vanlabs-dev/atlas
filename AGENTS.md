@@ -30,7 +30,7 @@ Every commit and every push uses the personal identity:
 | GitHub account | `vanlabs-dev` |
 | Remote, workstation | `git@github.com:vanlabs-dev/atlas.git` (SSH, read and write) |
 | Remote, Pi reads | `https://github.com/vanlabs-dev/atlas.git` (anonymous HTTPS) |
-| Remote, Pi upgrade pushes | `git@github.com:vanlabs-dev/atlas.git` (Atlas-only deploy key) |
+| Remote, Pi job pushes | `git@github.com:vanlabs-dev/atlas.git` (Atlas-only deploy key; upgrade and grounding jobs) |
 
 The runtime upgrade job (`upgrade/atlas_upgrade.py`, change
 `runtime-upgrade-pipeline`, 2026-09-24) runs on the Pi every 30 minutes.
@@ -45,6 +45,12 @@ with the Atlas deploy key, activate the corpus, and report on Telegram. It never
 add files. Since 2026-11-03 (change `upgrade-sandbox-scope`) that excludes
 the chain readers in `livedata/`: a reader fix is the operator's.
 It replaced Hermes cron job `fb98152a3fa1`, removed 2026-09-24.
+
+The chain grounding job (`grounding/atlas_grounding.py`, change
+`chain-grounding`, 2026-11-27) runs hourly on the Pi and pushes with the
+same key through the same gates. It may commit only `GROUNDING.md`,
+`grounding/claims.yaml` and `snapshots/<spec>/` (`grounding/grounding_scope.py`).
+See `grounding/README.md`.
 
 Supply the personal identity explicitly for automated commits, even when
 repo-local Git identity is configured. Do not rely on global configuration.

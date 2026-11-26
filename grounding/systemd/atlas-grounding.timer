@@ -1,0 +1,10 @@
+[Unit]
+Description=Atlas chain grounding job timer (hourly at :45)
+
+[Timer]
+OnCalendar=*:45
+RandomizedDelaySec=2m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

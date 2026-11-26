@@ -30,7 +30,9 @@ All three are user units under `~/.config/systemd/user/` (linger is on).
 ## The upgrade job
 
 Each run holds `var/upgrade/lock` and keeps its state in
-`var/upgrade/state.json`. It runs from `~/atlas` (trusted `origin/main`
+`var/upgrade/state.json`. The grounding job holds the same lock for its
+whole run; an upgrade run that finds it held exits and tries again next
+run. It runs from `~/atlas` (trusted `origin/main`
 code) and never edits that tree.
 
 0. **Recover.** Runs first, on every run (see Recovery below).
@@ -104,9 +106,10 @@ code) and never edits that tree.
     has no local commits. Save the commit and run id to state, then
     `git push origin HEAD:main` (never forced). Read back the remote
     `main`, then `git -C ~/atlas pull --ff-only`.
-    Only this push gets the deploy key (`GIT_SSH_COMMAND` with
-    `~/.ssh/atlas_maintenance_ed25519`). The live tree has no
-    `core.sshCommand`, so no other push from the Pi can use it. The Pi's
+    Only this push and the grounding job's push (change
+    `chain-grounding`, `grounding/README.md`) get the deploy key
+    (`GIT_SSH_COMMAND` with `~/.ssh/atlas_maintenance_ed25519`). The live
+    tree has no `core.sshCommand`, so no other push from the Pi can use it. The Pi's
     `core.hooksPath` points at `tools/git-hooks`, whose `pre-commit`
     rejects any author or committer other than `vaNlabs <vanlabs@pm.me>`.
 14. **Activate.** `knowledge/atlas_kb.py activate --actor atlas-upgrade`,

@@ -103,6 +103,7 @@ livedata stores, and deploys to Vercel from `main`.
 | [`fleet/`](fleet/README.md) | Clones every subnet's repository, indexes it, scores rotation and mining signals, serves the LAN board and `atlas-fleet` |
 | [`telegram/`](telegram/README.md) | Alert classes, tiers, delivery ledger, plain-English rewrite, daily briefing |
 | [`upgrade/`](upgrade/README.md) | Runtime upgrade job: detects a new spec, edits the corpus in a worktree, gates and pushes |
+| [`grounding/`](grounding/README.md) | Publishes GROUNDING.md: chain snapshots, a cited claims ledger, model-checked claims, hourly |
 | [`subnt/`](subnt/README.md) | Old subnt.dev exporter (retired, code kept; the site is now `web/`) |
 | [`hermes/`](hermes/README.md) | Read-only verifiers for the Hermes agent baseline, memory and model |
 | [`inventory/`](inventory/README.md) | Read-only device inventory collector |
@@ -157,6 +158,7 @@ every change are in [`openspec/changes/archive/`](openspec/changes/archive/).
 |---|---|---|
 | `atlas-backup` | `*-*-* 03:40:00` | Nightly backup |
 | `atlas-fleet` | `*:20` | Subnet-repo-fleet reconcile |
+| `atlas-grounding` | `*:45` | Chain grounding job |
 | `atlas-poll-chain-head` | Every hour | Live chain-head poll |
 | `atlas-probe` | Every hour | Chain-read probe |
 | `atlas-repotrack-update` | Every hour | Subtensor repository update |
@@ -166,6 +168,31 @@ every change are in [`openspec/changes/archive/`](openspec/changes/archive/).
 | `atlas-health` | Every 5 minutes | Health watch |
 | `atlas-upgrade` | Every 30 minutes | Runtime upgrade job |
 <!-- END:schedule -->
+
+## GROUNDING.md
+
+[`GROUNDING.md`](GROUNDING.md) is a short, machine-checked summary of how
+the Bittensor chain works on mainnet now, for Claude sessions that cannot
+reach the Pi. Read it at
+`https://raw.githubusercontent.com/vanlabs-dev/atlas/main/GROUNDING.md`.
+
+- **What it holds.** One-sentence claims in nine sections (emission, Yuma,
+  dTAO pools, staking, registration, defaults, safety delays, common traps,
+  changelog). Each claim cites source lines at the live release tag.
+- **How it is checked.** A model drafts each claim from the source at the
+  tag. Code checks that the cited lines exist and hold every number and
+  name in the claim. A second model, shown only the claim and the cited
+  lines, must agree. Anything else shows as `UNVERIFIED (pending review)`.
+- **Freshness.** `atlas-grounding` checks every hour. Treat the file as
+  stale when `last_updated` is over 7 days old, or when `spec_version` is
+  behind `newest_tag` and `newest_tag_live` is true. With no change, a
+  heartbeat commit refreshes `last_updated` every 3 days.
+- **Manual run.** On the Pi: `systemctl --user start atlas-grounding.service`
+  (logs: `journalctl --user -u atlas-grounding.service`).
+- **Review UNVERIFIED claims.** `python3 grounding/atlas_grounding.py review
+  list`, then `accept`, `reject` or `recheck` an id, and commit the result.
+
+Details: [`grounding/README.md`](grounding/README.md).
 
 ## Getting started
 
