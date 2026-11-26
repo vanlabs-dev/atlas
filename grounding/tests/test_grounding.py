@@ -584,6 +584,10 @@ class FakeJob(ag.Job):
     def __init__(self, target, refs, live):
         super().__init__(root=ROOT, no_push=True, target=target)
         self.var = os.path.join(target, "var")
+        # Never the real subtensor clone: on the Pi it exists, and git
+        # history calls on it take minutes.
+        self.clone = os.path.join(target, "no-clone")
+        self.up.clone = self.clone
         self.state_path = os.path.join(self.var, "state.json")
         self.refs, self.live = refs, live
         self.worked = 0
